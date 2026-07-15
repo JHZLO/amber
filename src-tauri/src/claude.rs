@@ -84,6 +84,176 @@ const ASK_SYSTEM_PROMPT: &str = r#"너는 사용자가 자기 필기노트를 �
 - JSON 이나 코드펜스로 전체를 감싸지 말고, "좋은 질문이네요" 같은 머리말 없이 첫 글자부터 답변.
 - 노트의 주 언어(대개 한국어)를 따른다. 선택한 부분과 노트 문맥을 우선 근거로 삼고, 불확실하면 그 한계를 한 줄로 밝힌다."#;
 
+// ---- 프로바이더 추상화 ----
+// AI 를 특정 벤더에 묶지 않는다. claude 는 풍부한 경로(JSON 봉투 + 스트리밍)를 쓰고,
+// codex/gemini 는 "stdin 프롬프트 → 최종 텍스트" 공통 경로를 쓴다.
+// (codex: `exec -` 가 stdin 을 프롬프트로 읽고 최종 메시지만 stdout, 진행 로그는 stderr.
+//  gemini: non-TTY stdin 파이프 + --output-format json 의 .response 가 최종 텍스트.)
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ProviderKind {
+    Claude,
+    Codex,
+    Gemini,
+}
+
+fn provider_kind(p: Option<&str>) -> ProviderKind {
+    match p {
+        Some("codex") => ProviderKind::Codex,
+        Some("gemini") => ProviderKind::Gemini,
+        _ => ProviderKind::Claude,
+    }
+}
+
+fn default_binary(kind: ProviderKind) -> &'static str {
+    match kind {
+        ProviderKind::Claude => "claude",
+        ProviderKind::Codex => "codex",
+        ProviderKind::Gemini => "gemini",
+    }
+}
+
+/// 모델 결정: claude 는 기본 모델 폴백, codex/gemini 는 빈 값 = CLI 기본 모델 사용(-m 미전달)
+fn resolve_model(kind: ProviderKind, model: Option<String>) -> String {
+    let m = model.filter(|m| !m.is_empty());
+    match kind {
+        ProviderKind::Claude => m.unwrap_or_else(|| DEFAULT_MODEL.to_string()),
+        _ => m.unwrap_or_default(),
+    }
+}
+
+/// 프로바이더 공용 실행: 시스템 프롬프트 + 입력 → 최종 텍스트(.result 상당) + 메타
+async fn run_provider_text(
+    kind: ProviderKind,
+    program: String,
+    model: String,
+    dur: Duration,
+    system_prompt: &str,
+    input: String,
+) -> Result<(String, MetaOut), ClaudeError> {
+    match kind {
+        ProviderKind::Claude => {
+            spawn_claude_result(program, model, dur, system_prompt, input).await
+        }
+        _ => spawn_simple_cli_result(kind, program, model, dur, system_prompt, input).await,
+    }
+}
+
+/// codex/gemini 공용: 시스템 프롬프트를 프롬프트 상단에 합쳐(전용 플래그 없음) stdin 으로 전달.
+async fn spawn_simple_cli_result(
+    kind: ProviderKind,
+    program: String,
+    model: String,
+    dur: Duration,
+    system_prompt: &str,
+    input: String,
+) -> Result<(String, MetaOut), ClaudeError> {
+    let combined = format!("[지시사항 — 반드시 그대로 따를 것]\n{system_prompt}\n\n{input}");
+    let started = std::time::Instant::now();
+
+    let mut cmd = Command::new(&program);
+    match kind {
+        ProviderKind::Codex => {
+            // `-` = stdin 프롬프트. --ephemeral: 세션 파일 미저장, --skip-git-repo-check: repo 밖 실행 허용.
+            // exec 기본 샌드박스는 read-only 라 순수 텍스트 변환에 안전.
+            cmd.args(["exec", "-", "--ephemeral", "--skip-git-repo-check"]);
+            if !model.is_empty() {
+                cmd.args(["-m", &model]);
+            }
+        }
+        ProviderKind::Gemini => {
+            cmd.args(["--output-format", "json"]);
+            if !model.is_empty() {
+                cmd.args(["-m", &model]);
+            }
+        }
+        ProviderKind::Claude => unreachable!("claude 는 spawn_claude_result 경로"),
+    }
+
+    let mut child = cmd
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                ClaudeError::new(
+                    "CLAUDE_NOT_FOUND",
+                    format!("AI CLI 를 찾을 수 없습니다: {program}"),
+                )
+            } else {
+                ClaudeError::new("SPAWN_ERROR", e.to_string())
+            }
+        })?;
+
+    {
+        let mut stdin = child.stdin.take().expect("stdin piped");
+        stdin
+            .write_all(combined.as_bytes())
+            .await
+            .map_err(|e| ClaudeError::new("STDIN_ERROR", e.to_string()))?;
+        let _ = stdin.shutdown().await;
+    }
+
+    let output = match timeout(dur, child.wait_with_output()).await {
+        Err(_) => {
+            return Err(ClaudeError::new(
+                "CLAUDE_TIMEOUT",
+                format!("{}초 안에 응답이 없습니다.", dur.as_secs()),
+            ))
+        }
+        Ok(r) => r.map_err(|e| ClaudeError::new("WAIT_ERROR", e.to_string()))?,
+    };
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_lowercase();
+        let (code, msg) = if stderr.contains("auth")
+            || stderr.contains("login")
+            || stderr.contains("unauthorized")
+            || stderr.contains("credential")
+        {
+            (
+                "CLAUDE_AUTH",
+                "AI CLI 인증이 필요합니다. 터미널에서 로그인 후 다시 시도하세요.",
+            )
+        } else if stderr.contains("rate") || stderr.contains("quota") || stderr.contains("limit") {
+            (
+                "CLAUDE_RATE_LIMIT",
+                "사용량 한도에 도달했습니다. 잠시 후 다시 시도하세요.",
+            )
+        } else {
+            ("CLAUDE_ERROR", "AI CLI 실행이 실패했습니다.")
+        };
+        let detail = String::from_utf8_lossy(&output.stderr);
+        return Err(ClaudeError::new(code, format!("{msg}\n{}", detail.trim())));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let text = match kind {
+        // gemini: JSON 봉투의 .response 가 최종 텍스트 (파싱 실패 시 raw 폴백)
+        ProviderKind::Gemini => serde_json::from_str::<serde_json::Value>(stdout.trim())
+            .ok()
+            .and_then(|v| v.get("response").and_then(|r| r.as_str()).map(String::from))
+            .unwrap_or_else(|| stdout.trim().to_string()),
+        // codex: 최종 메시지만 stdout 에 나온다
+        _ => stdout.trim().to_string(),
+    };
+    if text.is_empty() {
+        return Err(ClaudeError::new("CLAUDE_ERROR", "빈 응답입니다."));
+    }
+
+    let meta = MetaOut {
+        model,
+        session_id: None,
+        cost_usd: None,
+        input_tokens: None,
+        output_tokens: None,
+        duration_ms: Some(started.elapsed().as_millis() as i64),
+    };
+    Ok((text, meta))
+}
+
 /// 프론트에 돌려줄 결과 = 노트 + 호출 메타(로깅용)
 #[derive(Debug, Serialize)]
 pub struct GenerateResult {
@@ -198,7 +368,8 @@ pub async fn claude_generate(
     transcript: String,
     instruction: Option<String>,
     model: Option<String>,
-    claude_path: Option<String>,
+    cli_path: Option<String>,
+    provider: Option<String>,
     timeout_secs: Option<u64>,
 ) -> Result<GenerateResult, ClaudeError> {
     if transcript.trim().chars().count() < MIN_INPUT_CHARS {
@@ -208,10 +379,10 @@ pub async fn claude_generate(
         ));
     }
 
-    let program = claude_path.unwrap_or_else(|| "claude".to_string());
-    let model = model
-        .filter(|m| !m.is_empty())
-        .unwrap_or_else(|| DEFAULT_MODEL.to_string());
+    let kind = provider_kind(provider.as_deref());
+    let program =
+        cli_path.filter(|p| !p.is_empty()).unwrap_or_else(|| default_binary(kind).to_string());
+    let model = resolve_model(kind, model);
     let dur = Duration::from_secs(timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS));
 
     // 사용자 지시문이 있으면 원문 앞에 섹션으로 덧붙인다 (시스템 프롬프트가 이를 최우선 반영).
@@ -220,7 +391,7 @@ pub async fn claude_generate(
         None => transcript,
     };
 
-    run_claude(program, model, dur, SYSTEM_PROMPT, input).await
+    run_claude(kind, program, model, dur, SYSTEM_PROMPT, input).await
 }
 
 /// 이미 정리된 노트 + 사용자 프롬프트 → 보강된 노트(JSON).
@@ -233,7 +404,8 @@ pub async fn claude_augment(
     markdown: String,
     instruction: String,
     model: Option<String>,
-    claude_path: Option<String>,
+    cli_path: Option<String>,
+    provider: Option<String>,
     timeout_secs: Option<u64>,
 ) -> Result<GenerateResult, ClaudeError> {
     let instr = instruction.trim();
@@ -250,10 +422,10 @@ pub async fn claude_augment(
         ));
     }
 
-    let program = claude_path.unwrap_or_else(|| "claude".to_string());
-    let model = model
-        .filter(|m| !m.is_empty())
-        .unwrap_or_else(|| DEFAULT_MODEL.to_string());
+    let kind = provider_kind(provider.as_deref());
+    let program =
+        cli_path.filter(|p| !p.is_empty()).unwrap_or_else(|| default_binary(kind).to_string());
+    let model = resolve_model(kind, model);
     let dur = Duration::from_secs(timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS));
 
     let tags_line = tags.join(", ");
@@ -261,7 +433,7 @@ pub async fn claude_augment(
         "[보강 요청]\n{instr}\n\n[현재 노트]\n제목: {title}\n요약: {summary}\n태그: {tags_line}\n\n[현재 상세 노트 (Markdown)]\n{markdown}"
     );
 
-    run_claude(program, model, dur, AUGMENT_SYSTEM_PROMPT, input).await
+    run_claude(kind, program, model, dur, AUGMENT_SYSTEM_PROMPT, input).await
 }
 
 /// 필기노트 작성/보강: 자유 형식 마크다운 + 지시 → 완성본(raw 마크다운).
@@ -273,7 +445,8 @@ pub async fn claude_note_compose(
     markdown: String,
     instruction: String,
     model: Option<String>,
-    claude_path: Option<String>,
+    cli_path: Option<String>,
+    provider: Option<String>,
     timeout_secs: Option<u64>,
 ) -> Result<NoteComposeResult, ClaudeError> {
     let instr = instruction.trim();
@@ -281,10 +454,10 @@ pub async fn claude_note_compose(
         return Err(ClaudeError::new("EMPTY_INPUT", "작성 지시를 입력해 주세요."));
     }
 
-    let program = claude_path.unwrap_or_else(|| "claude".to_string());
-    let model = model
-        .filter(|m| !m.is_empty())
-        .unwrap_or_else(|| DEFAULT_MODEL.to_string());
+    let kind = provider_kind(provider.as_deref());
+    let program =
+        cli_path.filter(|p| !p.is_empty()).unwrap_or_else(|| default_binary(kind).to_string());
+    let model = resolve_model(kind, model);
     let dur = Duration::from_secs(timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS));
 
     let body = markdown.trim();
@@ -294,7 +467,7 @@ pub async fn claude_note_compose(
     );
 
     let (result_str, meta) =
-        spawn_claude_result(program, model, dur, NOTE_SYSTEM_PROMPT, input).await?;
+        run_provider_text(kind, program, model, dur, NOTE_SYSTEM_PROMPT, input).await?;
 
     // 전체를 감싼 코드펜스만 벗기고(본문 내부 코드블록은 보존) 그대로 마크다운 본문으로 사용
     let md = strip_outer_fence(&result_str).trim().to_string();
@@ -316,7 +489,8 @@ pub async fn claude_note_compose_stream(
     markdown: String,
     instruction: String,
     model: Option<String>,
-    claude_path: Option<String>,
+    cli_path: Option<String>,
+    provider: Option<String>,
     timeout_secs: Option<u64>,
     on_delta: Channel<String>,
 ) -> Result<NoteComposeResult, ClaudeError> {
@@ -325,10 +499,10 @@ pub async fn claude_note_compose_stream(
         return Err(ClaudeError::new("EMPTY_INPUT", "작성 지시를 입력해 주세요."));
     }
 
-    let program = claude_path.unwrap_or_else(|| "claude".to_string());
-    let model = model
-        .filter(|m| !m.is_empty())
-        .unwrap_or_else(|| DEFAULT_MODEL.to_string());
+    let kind = provider_kind(provider.as_deref());
+    let program =
+        cli_path.filter(|p| !p.is_empty()).unwrap_or_else(|| default_binary(kind).to_string());
+    let model = resolve_model(kind, model);
     let dur = Duration::from_secs(timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS));
 
     let body = markdown.trim();
@@ -337,8 +511,14 @@ pub async fn claude_note_compose_stream(
         "[작성 요청]\n{instr}\n\n[현재 노트]\n제목: {title}\n\n[현재 본문 (Markdown)]\n{body}"
     );
 
-    let (result_str, meta) =
-        stream_claude_result(program, model, dur, NOTE_SYSTEM_PROMPT, input, &on_delta).await?;
+    let (result_str, meta) = if kind == ProviderKind::Claude {
+        stream_claude_result(program, model, dur, NOTE_SYSTEM_PROMPT, input, &on_delta).await?
+    } else {
+        // codex/gemini 는 스트리밍 미지원 경로 — 완료 후 전체 텍스트를 한 번에 전송
+        let r = run_provider_text(kind, program, model, dur, NOTE_SYSTEM_PROMPT, input).await?;
+        let _ = on_delta.send(r.0.clone());
+        r
+    };
 
     let md = strip_outer_fence(&result_str).trim().to_string();
     if md.is_empty() {
@@ -358,7 +538,8 @@ pub async fn claude_note_ask(
     question: String,
     note_markdown: String,
     model: Option<String>,
-    claude_path: Option<String>,
+    cli_path: Option<String>,
+    provider: Option<String>,
     timeout_secs: Option<u64>,
 ) -> Result<NoteAskResult, ClaudeError> {
     let q = question.trim();
@@ -370,10 +551,10 @@ pub async fn claude_note_ask(
         return Err(ClaudeError::new("EMPTY_INPUT", "선택한 문장이 비어 있습니다."));
     }
 
-    let program = claude_path.unwrap_or_else(|| "claude".to_string());
-    let model = model
-        .filter(|m| !m.is_empty())
-        .unwrap_or_else(|| DEFAULT_MODEL.to_string());
+    let kind = provider_kind(provider.as_deref());
+    let program =
+        cli_path.filter(|p| !p.is_empty()).unwrap_or_else(|| default_binary(kind).to_string());
+    let model = resolve_model(kind, model);
     let dur = Duration::from_secs(timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS));
 
     let note = note_markdown.trim();
@@ -383,7 +564,7 @@ pub async fn claude_note_ask(
     );
 
     let (result_str, meta) =
-        spawn_claude_result(program, model, dur, ASK_SYSTEM_PROMPT, input).await?;
+        run_provider_text(kind, program, model, dur, ASK_SYSTEM_PROMPT, input).await?;
 
     let answer = strip_outer_fence(&result_str).trim().to_string();
     if answer.is_empty() {
@@ -666,6 +847,7 @@ async fn spawn_claude_result(
 
 /// 개념 정리 파이프라인: 공용 실행 후 .result 를 우리 JSON 계약(Contract)으로 이중 파싱·정규화.
 async fn run_claude(
+    kind: ProviderKind,
     program: String,
     model: String,
     dur: Duration,
@@ -673,7 +855,7 @@ async fn run_claude(
     input: String,
 ) -> Result<GenerateResult, ClaudeError> {
     let (result_str, meta) =
-        spawn_claude_result(program, model, dur, system_prompt, input).await?;
+        run_provider_text(kind, program, model, dur, system_prompt, input).await?;
 
     let contract: Contract = serde_json::from_str(strip_outer_fence(&result_str)).map_err(|e| {
         ClaudeError::new(
@@ -716,8 +898,8 @@ async fn run_claude(
 
 /// claude CLI 사전 헬스체크: 경로/설치 확인 (버전 문자열 반환)
 #[tauri::command]
-pub async fn claude_health(claude_path: Option<String>) -> Result<String, ClaudeError> {
-    let program = claude_path.unwrap_or_else(|| "claude".to_string());
+pub async fn claude_health(cli_path: Option<String>) -> Result<String, ClaudeError> {
+    let program = cli_path.unwrap_or_else(|| "claude".to_string());
     let output = Command::new(&program)
         .arg("--version")
         .output()
