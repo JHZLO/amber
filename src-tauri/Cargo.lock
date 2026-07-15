@@ -50,6 +50,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
+name = "amber"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-fs",
+ "tauri-plugin-opener",
+ "tauri-plugin-shell",
+ "tauri-plugin-sql",
+ "tauri-plugin-window-state",
+ "tokio",
+ "trash",
+]
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4552,23 +4569,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.118",
-]
-
-[[package]]
-name = "til-desktop"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-fs",
- "tauri-plugin-opener",
- "tauri-plugin-shell",
- "tauri-plugin-sql",
- "tauri-plugin-window-state",
- "tokio",
- "trash",
 ]
 
 [[package]]

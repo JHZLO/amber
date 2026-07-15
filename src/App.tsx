@@ -178,7 +178,7 @@ function App() {
     <div className="app">
       {/* 좌측 레일 = 최상위 작업공간 전환(세로축). 상단 필터 탭(가로축)과 축을 분리해 계층 혼동 제거 */}
       <nav className="rail">
-        <div className="rail-brand">TIL</div>
+        <div className="rail-brand">Amber</div>
         {RAIL.map((r) => (
           <button
             key={r.id}
