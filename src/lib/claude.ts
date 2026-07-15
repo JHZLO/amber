@@ -72,14 +72,16 @@ export async function claudeGenerate(params: {
   transcript: string;
   instruction?: string | null;
   model?: string | null;
-  claudePath?: string | null;
+  cliPath?: string | null;
+  provider?: string | null;
   timeoutSecs?: number | null;
 }): Promise<GenerateResult> {
   return invoke<GenerateResult>("claude_generate", {
     transcript: params.transcript,
     instruction: params.instruction ?? null,
     model: params.model ?? null,
-    claudePath: params.claudePath ?? null,
+    cliPath: params.cliPath ?? null,
+    provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
   });
 }
@@ -92,7 +94,8 @@ export async function claudeAugment(params: {
   markdown: string;
   instruction: string;
   model?: string | null;
-  claudePath?: string | null;
+  cliPath?: string | null;
+  provider?: string | null;
   timeoutSecs?: number | null;
 }): Promise<GenerateResult> {
   return invoke<GenerateResult>("claude_augment", {
@@ -102,7 +105,8 @@ export async function claudeAugment(params: {
     markdown: params.markdown,
     instruction: params.instruction,
     model: params.model ?? null,
-    claudePath: params.claudePath ?? null,
+    cliPath: params.cliPath ?? null,
+    provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
   });
 }
@@ -120,7 +124,8 @@ export async function claudeNoteCompose(params: {
   markdown: string;
   instruction: string;
   model?: string | null;
-  claudePath?: string | null;
+  cliPath?: string | null;
+  provider?: string | null;
   timeoutSecs?: number | null;
 }): Promise<NoteComposeResult> {
   return invoke<NoteComposeResult>("claude_note_compose", {
@@ -128,7 +133,8 @@ export async function claudeNoteCompose(params: {
     markdown: params.markdown,
     instruction: params.instruction,
     model: params.model ?? null,
-    claudePath: params.claudePath ?? null,
+    cliPath: params.cliPath ?? null,
+    provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
   });
 }
@@ -141,7 +147,8 @@ export async function claudeNoteComposeStream(
     markdown: string;
     instruction: string;
     model?: string | null;
-    claudePath?: string | null;
+    cliPath?: string | null;
+    provider?: string | null;
     timeoutSecs?: number | null;
   },
   onDelta: (text: string) => void,
@@ -153,7 +160,8 @@ export async function claudeNoteComposeStream(
     markdown: params.markdown,
     instruction: params.instruction,
     model: params.model ?? null,
-    claudePath: params.claudePath ?? null,
+    cliPath: params.cliPath ?? null,
+    provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
     onDelta: channel,
   });
@@ -170,7 +178,8 @@ export async function claudeNoteAsk(params: {
   question: string;
   noteMarkdown: string;
   model?: string | null;
-  claudePath?: string | null;
+  cliPath?: string | null;
+  provider?: string | null;
   timeoutSecs?: number | null;
 }): Promise<NoteAskResult> {
   return invoke<NoteAskResult>("claude_note_ask", {
@@ -178,11 +187,26 @@ export async function claudeNoteAsk(params: {
     question: params.question,
     noteMarkdown: params.noteMarkdown,
     model: params.model ?? null,
-    claudePath: params.claudePath ?? null,
+    cliPath: params.cliPath ?? null,
+    provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
   });
 }
 
-export async function claudeHealth(claudePath?: string | null): Promise<string> {
-  return invoke<string>("claude_health", { claudePath: claudePath ?? null });
+export async function claudeHealth(cliPath?: string | null): Promise<string> {
+  return invoke<string>("claude_health", { cliPath: cliPath ?? null });
+}
+
+// ---- AI CLI 자동 감지 (온보딩/설정) ----
+
+export interface DetectedCli {
+  id: "claude" | "codex" | "gemini";
+  name: string;
+  path: string;
+  version: string;
+}
+
+/** 로그인 셸 PATH 에서 설치된 AI CLI 를 감지 (경로 + 버전) */
+export async function detectAiClis(): Promise<DetectedCli[]> {
+  return invoke<DetectedCli[]>("detect_ai_clis");
 }
