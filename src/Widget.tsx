@@ -1,0 +1,213 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { emitTo, listen } from "@tauri-apps/api/event";
+import type { ConceptWithTags, Confidence } from "./types";
+import { adjustConfidence, learningQueue, markSeen, setStatus } from "./lib/db";
+import { ConfidenceDots } from "./ui";
+import { Icon } from "./icons";
+
+async function showMain() {
+  const main = await WebviewWindow.getByLabel("main");
+  if (main) {
+    await main.show();
+    await main.unminimize();
+    await main.setFocus();
+  }
+}
+
+export function Widget() {
+  const [queue, setQueue] = useState<ConceptWithTags[]>([]);
+  const [idx, setIdx] = useState(0);
+  const [ready, setReady] = useState(false);
+  const dirty = useRef(false);
+  const curIdRef = useRef<number | null>(null);
+
+  const snapshot = useCallback(async (keepId?: number | null) => {
+    const q = await learningQueue();
+    setQueue(q);
+    setReady(true);
+    dirty.current = false;
+    if (keepId != null) {
+      const i = q.findIndex((c) => c.id === keepId);
+      setIdx(i >= 0 ? i : 0);
+    } else {
+      setIdx((prev) => (prev < q.length ? prev : 0));
+    }
+    return q;
+  }, []);
+
+  useEffect(() => {
+    snapshot();
+  }, [snapshot]);
+
+  // 다른 창의 변경 → 다음 이동 때 재스냅샷하도록 dirty 표시
+  useEffect(() => {
+    const un = listen("concept-changed", () => {
+      dirty.current = true;
+    });
+    return () => {
+      un.then((f) => f());
+    };
+  }, []);
+
+  const current = queue[idx] ?? null;
+  curIdRef.current = current?.id ?? null;
+
+  // seen 추적: 활성 카드가 3초 유지 + 창이 보일 때만 1회 기록
+  useEffect(() => {
+    if (!current) return;
+    const id = current.id;
+    const t = setTimeout(() => {
+      if (document.visibilityState === "visible") markSeen(id);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [current?.id]);
+
+  // 이동: dirty면 현재 카드 유지한 채 최신 큐로 재스냅샷 후, 최신 길이/위치 기준으로 delta 적용
+  const go = useCallback(
+    async (delta: number) => {
+      const curId = curIdRef.current;
+      let q = queue;
+      if (dirty.current) q = await snapshot(curId);
+      const n = q.length;
+      if (n === 0) return;
+      const base = curId != null ? q.findIndex((c) => c.id === curId) : -1;
+      const from = base >= 0 ? base : idx;
+      setIdx((((from + delta) % n) + n) % n);
+    },
+    [queue, idx, snapshot],
+  );
+
+  // ←/→ 키로 순환
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") go(-1);
+      else if (e.key === "ArrowRight") go(1);
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [go]);
+
+  async function complete() {
+    if (!current) return;
+    await setStatus(current.id, "learned");
+    await emitTo("main", "concept-changed", {});
+    await snapshot(); // 큐에서 빠지고 현재 인덱스가 다음 카드를 가리킴
+  }
+
+  async function conf(delta: number) {
+    if (!current) return;
+    await adjustConfidence(current.id, delta);
+    await emitTo("main", "concept-changed", {});
+    dirty.current = true; // 순서 재계산은 다음 이동부터
+    setQueue((q) =>
+      q.map((c) =>
+        c.id === current.id
+          ? {
+              ...c,
+              confidence: Math.min(3, Math.max(1, c.confidence + delta)) as Confidence,
+            }
+          : c,
+      ),
+    );
+  }
+
+  async function openDetail() {
+    if (!current) return;
+    await emitTo("main", "open-concept", { id: current.id });
+    await showMain();
+  }
+
+  function hideWidget() {
+    getCurrentWindow().hide();
+  }
+
+  function onHeadMouseDown(e: ReactMouseEvent) {
+    if ((e.target as HTMLElement).closest("button")) return;
+    getCurrentWindow().startDragging();
+  }
+
+  if (ready && queue.length === 0) {
+    return (
+      <div className="widget-card">
+        <div className="widget-head" onMouseDown={onHeadMouseDown}>
+          <span className="widget-eyebrow">TIL</span>
+          <span className="widget-count" />
+          <button className="widget-x" onClick={hideWidget} aria-label="숨기기">
+            <Icon name="x" size={13} />
+          </button>
+        </div>
+        <div className="widget-empty">
+          학습 중인 개념이 없어요
+          <button
+            className="widget-btn"
+            style={{ width: "auto", padding: "0 10px" }}
+            onClick={showMain}
+          >
+            메인 열기
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="widget-card">
+      <div className="widget-head" onMouseDown={onHeadMouseDown}>
+        <span className="widget-eyebrow">TIL</span>
+        <span className="widget-count">
+          {current ? idx + 1 : 0} / {queue.length}
+        </span>
+        <button className="widget-x" onClick={hideWidget} aria-label="숨기기">
+          <Icon name="x" size={13} />
+        </button>
+      </div>
+
+      <div className="widget-mid">
+        <button className="widget-nav" onClick={() => go(-1)} aria-label="이전">
+          <span>
+            <Icon name="chevron-left" size={18} />
+          </span>
+        </button>
+        <div className="widget-main">
+          <div className="widget-title">{current?.title}</div>
+          <div className="widget-summary">{current?.summary}</div>
+        </div>
+        <button className="widget-nav" onClick={() => go(1)} aria-label="다음">
+          <span>
+            <Icon name="chevron-right" size={18} />
+          </span>
+        </button>
+      </div>
+
+      <div className="widget-foot">
+        {current && <ConfidenceDots value={current.confidence} />}
+        <span className="spacer" />
+        <button className="widget-btn" onClick={complete} aria-label="학습완료">
+          <Icon name="check" size={15} />
+        </button>
+        <button
+          className="widget-btn"
+          onClick={() => conf(-1)}
+          disabled={!current || current.confidence <= 1}
+          aria-label="자신감 낮추기"
+        >
+          <Icon name="minus" size={15} />
+        </button>
+        <button
+          className="widget-btn"
+          onClick={() => conf(1)}
+          disabled={!current || current.confidence >= 3}
+          aria-label="자신감 높이기"
+        >
+          <Icon name="plus" size={15} />
+        </button>
+        <button className="widget-btn" onClick={openDetail} aria-label="상세 열기">
+          <Icon name="expand" size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
