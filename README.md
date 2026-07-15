@@ -86,13 +86,6 @@ pnpm tauri build
 > AI 기능은 설정(⚙)에서 `claude` 실행 경로와 모델을 지정할 수 있습니다.
 > 위젯의 투명 창은 `macOSPrivateApi`를 사용하므로 App Store 배포 대상이 아닙니다.
 
-## 기여
-
-이슈와 PR을 환영합니다.
-
-- 커밋 메시지: `type(scope): Subject` 컨벤션 (imperative, 70자 이내)
-- 검증: `pnpm exec tsc --noEmit && pnpm build`, Rust는 `cargo check`
-
 ## 라이선스
 
 [MIT](./LICENSE)
