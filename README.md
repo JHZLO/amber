@@ -1,20 +1,40 @@
-# Amber
+<div align="center">
+  <img src="docs/logo.svg" width="108" alt="Amber" />
 
-**호박(amber) 속에 보존하듯 — 배움을 잊히지 않게 붙잡아두는 로컬 지식 보관함.**
+  <h1>Amber</h1>
 
-AI와의 Q&A로 학습한 개념을 카드로 정리해 바탕화면 위젯으로 반복 노출하고,
-마크다운 필기노트와 mermaid 다이어그램까지 한곳에서 관리하는 macOS 데스크톱 앱입니다.
-모든 데이터는 로컬에 순수 텍스트로 저장됩니다(local-first).
+  <p><b>배움을 잊히지 않게 — 호박(amber) 속에 보존하듯.</b></p>
 
-`Tauri v2` · `React 19` · `TypeScript` · `SQLite` · `mermaid`
+  <p>
+    개념 학습 카드 · 필기노트 · mermaid 다이어그램을 한곳에서.<br/>
+    내가 쓰는 AI를 그대로 연결하고, 모든 데이터는 내 컴퓨터의 순수 텍스트로.
+  </p>
+
+  <p>
+    <img src="https://img.shields.io/badge/platform-macOS-18181b" alt="platform" />
+    <img src="https://img.shields.io/badge/Tauri-v2-FFC131?logo=tauri&logoColor=white" alt="tauri" />
+    <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="react" />
+    <img src="https://img.shields.io/badge/AI-BYO%20(Claude·Codex·Gemini)-8b5cf6" alt="byo-ai" />
+    <img src="https://img.shields.io/badge/license-MIT-3da639" alt="license" />
+  </p>
+</div>
 
 ---
 
-## 주요 기능
+**Amber**는 학습을 위한 로컬 우선(local-first) 지식 보관함입니다.
+AI와의 Q&A로 배운 개념을 카드로 정리해 바탕화면 위젯으로 반복 노출하고,
+마크다운 필기노트와 mermaid 다이어그램까지 하나의 데스크톱 앱에서 관리합니다.
+
+- **Local-first** — 콘텐츠는 순수 Markdown/텍스트 파일. 앱 없이도 읽히고, 폴더 복사로 백업이 끝납니다.
+- **Bring your own AI** — 이미 쓰고 있는 AI CLI(Claude Code · OpenAI Codex · Gemini CLI)를
+  온보딩에서 자동 감지해 연결합니다. API 키를 앱에 저장하지 않습니다.
+- **잊지 않는 구조** — 새로 배운 것일수록 자주 보이는 순환 위젯과 졸업(learned) 모델.
+
+## ✨ 주요 기능
 
 ### 🧠 개념 카드 — 잊기 전에 다시 만나기
 
-- AI Q&A 원문을 붙여넣으면 로컬 `claude` CLI가 **제목·요약·상세 노트**를 자동 생성 (저장 전 검토·수정 가능)
+- AI Q&A 원문을 붙여넣으면 연결된 AI가 **제목·요약·상세 노트**를 자동 생성 (저장 전 검토·수정 가능)
 - **바탕화면 스티커 위젯**(always-on-top)이 학습 중인 카드를 자신감 낮은 순으로 순환 노출
 - 자신감 3단계(`● ○ ○`) + **졸업(learned)** 모델 — 완전히 익힌 개념은 아카이브로
 - 기존 노트를 지시 한 줄로 **AI 보강** (예: "예시 코드 추가해줘")
@@ -35,13 +55,18 @@ AI와의 Q&A로 학습한 개념을 카드로 정리해 바탕화면 위젯으�
 - **svg-pan-zoom 캔버스**: 휠 줌 · 드래그 팬 · 더블클릭 줌 · 화면 맞춤(단축키 `+` `-` `0` `1`)
 - 편집 시 라이브 렌더, 흔한 문법 실수(`\"` 이스케이프) 자동 복구, 오류 원인 표시
 
+### 🤖 AI 연결 — 내 구독을 그대로
+
+- 최초 실행 시 로그인 셸 PATH에서 설치된 AI CLI를 **자동 감지**해 카드로 제시, 클릭 한 번으로 연결
+- **Claude Code**(스트리밍 지원) · **OpenAI Codex CLI** · **Gemini CLI** 지원 — 각 CLI의 로그인 세션 재사용
+- 설정에서 언제든 다시 감지·전환. AI 없이도 노트/다이어그램 기능은 전부 동작
+
 ### 그 외
 
 - 라이트/다크 테마 (시스템 추종 + 원클릭 토글, 창 간 동기화)
 - 삭제는 macOS **휴지통으로 이동** — 실수해도 복구 가능
-- 콘텐츠는 순수 Markdown/텍스트 — 앱 없이도 읽히고, vault 폴더 복사만으로 백업 완결
 
-## 아키텍처
+## 🏗 아키텍처
 
 | 영역 | 선택 | 이유 |
 |---|---|---|
@@ -49,7 +74,7 @@ AI와의 Q&A로 학습한 개념을 카드로 정리해 바탕화면 위젯으�
 | UI | React 19 + TypeScript + Vite | |
 | 메타 저장 | SQLite (`tauri-plugin-sql`) | 정렬·검색·설정 등 구조화 데이터 |
 | 콘텐츠 저장 | 순수 Markdown/`.mmd` 파일 | 앱 독립성, git 버전 관리 |
-| AI | 로컬 `claude` CLI (headless) | API 키를 앱에 저장하지 않음 — CLI 인증 재사용 |
+| AI | 로컬 AI CLI (headless) | API 키 미저장 — CLI 로그인 세션 재사용 |
 
 데이터 위치 (`~/Library/Application Support/dev.jhzlo.til/`):
 
@@ -61,14 +86,16 @@ vault/
 └── diagrams/**/*.mmd           # mermaid 다이어그램
 ```
 
-## 시작하기
+## 🚀 시작하기
 
 ### 요구 사항
 
 - macOS
 - Node.js 20+ · [pnpm](https://pnpm.io)
 - [Rust](https://rustup.rs) (stable)
-- AI 기능 사용 시: [claude CLI](https://claude.com/claude-code) 설치 및 로그인
+- AI 기능 사용 시: [Claude Code](https://claude.com/claude-code) ·
+  [Codex CLI](https://developers.openai.com/codex) ·
+  [Gemini CLI](https://github.com/google-gemini/gemini-cli) 중 하나 이상 설치·로그인
 
 ### 개발 실행
 
@@ -83,7 +110,7 @@ pnpm tauri dev
 pnpm tauri build
 ```
 
-> AI 기능은 설정(⚙)에서 `claude` 실행 경로와 모델을 지정할 수 있습니다.
+> 첫 실행 시 온보딩이 설치된 AI CLI를 자동 감지해 연결을 안내합니다.
 > 위젯의 투명 창은 `macOSPrivateApi`를 사용하므로 App Store 배포 대상이 아닙니다.
 
 ## 라이선스
