@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# 로컬 시크릿/환경 (방어적 — 실수로 생겨도 커밋되지 않게)
+.env
+.env.*
+*.pem
+*.key
+
+# 로컬 에이전트/개인 도구 설정
+.claude/
