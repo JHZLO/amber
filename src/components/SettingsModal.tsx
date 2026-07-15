@@ -1,9 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { appDataDir } from "@tauri-apps/api/path";
-import type { AppConfig } from "../lib/config";
-import { MODELS, loadConfig, saveConfig } from "../lib/config";
-import { claudeHealth, isClaudeError } from "../lib/claude";
+import type { AiProvider, AppConfig } from "../lib/config";
+import {
+  PROVIDER_LABELS,
+  PROVIDER_MODELS,
+  connectProvider,
+  loadConfig,
+} from "../lib/config";
+import {
+  claudeHealth,
+  detectAiClis,
+  isClaudeError,
+  type DetectedCli,
+} from "../lib/claude";
 import {
   loadPrompts,
   makePrompt,
@@ -29,8 +39,11 @@ export function SettingsModal({
   onClose: () => void;
   onSaved: (c: AppConfig) => void;
 }) {
+  const [provider, setProvider] = useState<AiProvider | null>(null);
   const [path, setPath] = useState("");
   const [model, setModel] = useState("");
+  const [detected, setDetected] = useState<DetectedCli[] | null>(null);
+  const [detecting, setDetecting] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(
     null,
@@ -57,10 +70,12 @@ export function SettingsModal({
   useEffect(() => {
     if (open) {
       loadConfig().then((c) => {
-        setPath(c.claudePath);
+        setProvider(c.provider);
+        setPath(c.cliPath);
         setModel(c.model);
         setTestResult(null);
       });
+      setDetected(null);
       loadPrompts().then(setPrompts);
       setEditing(null);
       setTheme(getThemePref());
@@ -122,10 +137,28 @@ export function SettingsModal({
   }
 
   async function save() {
-    const c: AppConfig = { claudePath: path.trim(), model };
-    await saveConfig(c);
-    onSaved(c);
+    if (provider) {
+      const c = await connectProvider(provider, path.trim(), model);
+      onSaved(c);
+    }
     onClose();
+  }
+
+  // AI CLI 재감지 → 카드 목록 표시. 카드 클릭 = 해당 프로바이더로 전환
+  async function redetect() {
+    setDetecting(true);
+    try {
+      setDetected(await detectAiClis());
+    } finally {
+      if (alive.current) setDetecting(false);
+    }
+  }
+
+  function pickDetected(d: DetectedCli) {
+    setProvider(d.id as AiProvider);
+    setPath(d.path);
+    setModel(PROVIDER_MODELS[d.id as AiProvider][0]?.id ?? "");
+    setTestResult(null);
   }
 
   async function openFolder() {
@@ -206,48 +239,98 @@ export function SettingsModal({
       ) : (
         <>
           <div className="field">
-            <label>claude CLI 경로</label>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input
-                className="input"
-                style={{ flex: 1, minWidth: 0 }}
-                value={path}
-                onChange={(e) => setPath(e.target.value)}
-                placeholder="/opt/homebrew/bin/claude"
-              />
+            <label style={{ display: "flex", alignItems: "center" }}>
+              AI 연결
+              <span className="spacer" />
               <button
-                className="btn"
-                style={{ flexShrink: 0 }}
-                onClick={test}
-                disabled={testing}
+                className="btn btn-sm"
+                onClick={() => void redetect()}
+                disabled={detecting}
               >
-                {testing ? <Spinner /> : "연결 테스트"}
+                <Icon name="refresh" size={13} />
+                {detecting ? "감지 중…" : "다시 감지"}
               </button>
+            </label>
+            <div className="hint" style={{ marginTop: 0, marginBottom: 8 }}>
+              {provider
+                ? `현재 ${PROVIDER_LABELS[provider]} 에 연결돼 있어요. 로컬 CLI 의 로그인 세션을 사용합니다.`
+                : "연결된 AI 가 없어요. 다시 감지를 눌러 설치된 CLI 를 찾아보세요."}
             </div>
-            {testResult && (
-              <div
-                className={testResult.ok ? "ok-note" : "error-note"}
-                style={{ marginTop: 8 }}
-              >
-                {testResult.msg}
+            {detected !== null &&
+              (detected.length > 0 ? (
+                <div className="onb-grid">
+                  {detected.map((d) => (
+                    <button
+                      key={d.id}
+                      className={`onb-card ${provider === d.id ? "selected" : ""}`}
+                      onClick={() => pickDetected(d)}
+                    >
+                      <span className="onb-dot" />
+                      <span className="onb-name">{d.name}</span>
+                      <span className="onb-version">{d.version}</span>
+                      <span className="onb-path" title={d.path}>
+                        {d.path}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="error-note">
+                  설치된 AI CLI 를 찾지 못했어요. claude · codex · gemini 중
+                  하나를 설치하고 로그인한 뒤 다시 감지하세요.
+                </div>
+              ))}
+          </div>
+
+          {provider && (
+            <>
+              <div className="field">
+                <label>{PROVIDER_LABELS[provider]} 경로</label>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    className="input"
+                    style={{ flex: 1, minWidth: 0 }}
+                    value={path}
+                    onChange={(e) => setPath(e.target.value)}
+                    placeholder={`/opt/homebrew/bin/${provider}`}
+                  />
+                  <button
+                    className="btn"
+                    style={{ flexShrink: 0 }}
+                    onClick={test}
+                    disabled={testing}
+                  >
+                    {testing ? <Spinner /> : "연결 테스트"}
+                  </button>
+                </div>
+                {testResult && (
+                  <div
+                    className={testResult.ok ? "ok-note" : "error-note"}
+                    style={{ marginTop: 8 }}
+                  >
+                    {testResult.msg}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          <div className="field">
-            <label>기본 모델</label>
-            <Select
-              block
-              value={model}
-              options={MODELS.map((m) => ({ value: m.id, label: m.label }))}
-              onChange={setModel}
-            />
-          </div>
+              <div className="field">
+                <label>모델</label>
+                <Select
+                  block
+                  value={model}
+                  options={PROVIDER_MODELS[provider].map((m) => ({
+                    value: m.id,
+                    label: m.label,
+                  }))}
+                  onChange={setModel}
+                />
+              </div>
 
-          <div className="hint">
-            정리 호출은 사용 중인 Claude 플랜/크레딧을 소모해요. 비용을 아끼려면
-            Sonnet 을 선택하세요.
-          </div>
+              <div className="hint">
+                AI 호출은 연결된 CLI 의 플랜/크레딧을 소모해요.
+              </div>
+            </>
+          )}
 
           <div className="field">
             <label>테마</label>
