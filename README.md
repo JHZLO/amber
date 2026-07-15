@@ -1,9 +1,9 @@
-# TIL Desktop
+# Amber
 
-**배운 것을 잊지 않게 만드는 macOS 데스크톱 앱.**
+**호박(amber) 속에 보존하듯 — 배움을 잊히지 않게 붙잡아두는 로컬 지식 보관함.**
 
 AI와의 Q&A로 학습한 개념을 카드로 정리해 바탕화면 위젯으로 반복 노출하고,
-마크다운 필기노트와 mermaid 다이어그램까지 한곳에서 관리합니다.
+마크다운 필기노트와 mermaid 다이어그램까지 한곳에서 관리하는 macOS 데스크톱 앱입니다.
 모든 데이터는 로컬에 순수 텍스트로 저장됩니다(local-first).
 
 `Tauri v2` · `React 19` · `TypeScript` · `SQLite` · `mermaid`
