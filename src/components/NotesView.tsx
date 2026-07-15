@@ -534,7 +534,7 @@ export function NotesView({
                     <button
                       className="btn btn-sm"
                       onClick={() => setAiOpen(true)}
-                      disabled={busy || !config}
+                      disabled={busy || !config?.provider}
                       title="현재 초안을 바탕으로 AI가 작성/보강"
                     >
                       <Icon name="sparkles" size={14} />
@@ -557,7 +557,7 @@ export function NotesView({
                     <button
                       className="btn btn-sm"
                       onClick={() => setAiOpen(true)}
-                      disabled={busy || loadingBody || !config}
+                      disabled={busy || loadingBody || !config?.provider}
                       title="현재 노트를 바탕으로 AI가 작성/보강"
                     >
                       <Icon name="sparkles" size={14} />

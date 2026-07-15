@@ -84,7 +84,8 @@ export function NoteAiModal({
           markdown: currentBody,
           instruction,
           model: config.model,
-          claudePath: config.claudePath,
+          cliPath: config.cliPath,
+        provider: config.provider,
         },
         (delta) => setStreamText((prev) => prev + delta),
       );
@@ -113,7 +114,7 @@ export function NoteAiModal({
         <button
           className="btn btn-primary"
           onClick={run}
-          disabled={tooShort || !config}
+          disabled={tooShort || !config?.provider}
           title={!config ? "설정을 불러오는 중이에요" : undefined}
         >
           <Icon name="sparkles" size={15} />

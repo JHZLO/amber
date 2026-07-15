@@ -318,7 +318,8 @@ export function NoteCommentLayer({
         question: q,
         noteMarkdown: body,
         model: config.model,
-        claudePath: config.claudePath,
+        cliPath: config.cliPath,
+        provider: config.provider,
       });
       const cm: NoteComment = {
         id: newCommentId(),
@@ -428,7 +429,7 @@ export function NoteCommentLayer({
                 <button
                   className="btn btn-primary btn-sm"
                   onClick={() => void submitAsk()}
-                  disabled={asking || question.trim().length < 2 || !config}
+                  disabled={asking || question.trim().length < 2 || !config?.provider}
                 >
                   <Icon name="sparkles" size={13} />
                   {asking ? "답변 생성 중…" : "AI에게 질문"}

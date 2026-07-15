@@ -72,7 +72,8 @@ export function AddConceptModal({
         transcript,
         instruction,
         model: config.model,
-        claudePath: config.claudePath,
+        cliPath: config.cliPath,
+        provider: config.provider,
       });
       setTitle(note.title);
       setSummary(note.summary);

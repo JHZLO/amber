@@ -84,7 +84,8 @@ export function AugmentModal({
         markdown: currentBody,
         instruction,
         model: config.model,
-        claudePath: config.claudePath,
+        cliPath: config.cliPath,
+        provider: config.provider,
       });
       setTitle(note.title);
       setSummary(note.summary);
@@ -133,7 +134,7 @@ export function AugmentModal({
         <button
           className="btn btn-primary"
           onClick={run}
-          disabled={tooShort || !config}
+          disabled={tooShort || !config?.provider}
           title={!config ? "설정을 불러오는 중이에요" : undefined}
         >
           <Icon name="sparkles" size={15} />

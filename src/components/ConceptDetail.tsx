@@ -235,7 +235,7 @@ export function ConceptDetail({
             <button
               className="btn btn-sm"
               onClick={() => setAugmenting(true)}
-              disabled={busy || loadingBody || !config}
+              disabled={busy || loadingBody || !config?.provider}
               title="현재 노트를 프롬프트로 AI가 보강"
             >
               <Icon name="sparkles" size={14} />
