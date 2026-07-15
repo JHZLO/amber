@@ -1,4 +1,5 @@
 mod claude;
+mod detect;
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -108,7 +109,8 @@ pub fn run() {
             claude::claude_note_compose,
             claude::claude_note_compose_stream,
             claude::claude_note_ask,
-            claude::claude_health
+            claude::claude_health,
+            detect::detect_ai_clis
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
