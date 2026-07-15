@@ -12,11 +12,12 @@ import type {
 } from "./types";
 import { allTags, listConcepts, statusCounts } from "./lib/db";
 import { ConfidenceDots, Select, StatusBadge, TagChip } from "./ui";
-import { Icon } from "./icons";
+import { AmberMark, Icon } from "./icons";
 import { ConceptDetail } from "./components/ConceptDetail";
 import { AddConceptModal } from "./components/AddConceptModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { NotesView } from "./components/NotesView";
+import { AiOnboarding } from "./components/AiOnboarding";
 import { DiagramsView } from "./components/DiagramsView";
 import { THEME_EVENT, resolvedTheme, toggleTheme } from "./lib/theme";
 
@@ -178,7 +179,10 @@ function App() {
     <div className="app">
       {/* 좌측 레일 = 최상위 작업공간 전환(세로축). 상단 필터 탭(가로축)과 축을 분리해 계층 혼동 제거 */}
       <nav className="rail">
-        <div className="rail-brand">Amber</div>
+        <div className="rail-brand" title="Amber">
+          <AmberMark size={30} />
+          <span>Amber</span>
+        </div>
         {RAIL.map((r) => (
           <button
             key={r.id}
@@ -226,7 +230,7 @@ function App() {
           <button
             className="btn btn-primary"
             onClick={() => setAddOpen(true)}
-            disabled={!config}
+            disabled={!config?.provider}
           >
             <Icon name="plus" size={15} />
             추가
@@ -365,6 +369,10 @@ function App() {
           }}
           config={config}
         />
+      )}
+      {/* 최초 실행 시 AI CLI 감지·연결 온보딩 */}
+      {config && !settingsOpen && (
+        <AiOnboarding open={!config.onboarded} onDone={setConfig} />
       )}
       <SettingsModal
         open={settingsOpen}

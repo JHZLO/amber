@@ -134,11 +134,20 @@ select {
   background: var(--surface);
 }
 .rail-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
   font-weight: 800;
-  font-size: 13px;
-  letter-spacing: -0.02em;
+  font-size: 11px;
+  letter-spacing: -0.01em;
   color: var(--text);
   margin-bottom: 14px;
+  user-select: none;
+}
+.rail-brand svg {
+  border-radius: 7px; /* 스쿼클 모서리와 일치 — 서브픽셀 삐져나옴 방지 */
+  box-shadow: var(--shadow-sm);
 }
 .rail-item {
   position: relative;
@@ -2052,4 +2061,80 @@ html.widget-root #root {
   padding: 6px 14px 7px;
   border-top: 1px solid var(--border);
   background: var(--surface);
+}
+
+/* ---- AI 온보딩 / 연결 카드 ---- */
+.onb-lead {
+  margin: 0 0 14px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--text-2);
+}
+.onb-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.onb-card {
+  display: grid;
+  grid-template-columns: 10px auto 1fr;
+  grid-template-areas:
+    "dot name version"
+    ".   path path";
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 2px;
+  text-align: left;
+  padding: 11px 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.onb-card:hover {
+  background: var(--surface-2);
+}
+.onb-card.selected {
+  border-color: var(--text);
+  box-shadow: 0 0 0 1px var(--text);
+}
+.onb-dot {
+  grid-area: dot;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e; /* 감지됨 = 초록 */
+}
+.onb-name {
+  grid-area: name;
+  font-weight: 700;
+  font-size: 13.5px;
+}
+.onb-version {
+  grid-area: version;
+  font-size: 11.5px;
+  color: var(--text-3);
+  font-family: var(--mono);
+  justify-self: start;
+}
+.onb-path {
+  grid-area: path;
+  font-size: 11px;
+  color: var(--text-3);
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.onb-empty p {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.7;
+}
+.onb-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
