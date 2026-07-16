@@ -340,27 +340,31 @@ export function TodoView({ active }: { active: boolean }) {
       <section className="detail">
         <div className="detail-head todo-head">
           <h1 className="detail-title">{formatDayLong(selected)}</h1>
-          {isToday && <span className="badge learned">오늘</span>}
           <span className="spacer" />
-          {!isToday && (
-            <button className="btn btn-sm" onClick={() => goDate(today)}>
-              오늘로
+          {/* 캘린더 앱 표준: [오늘] ‹ › — 오늘이면 '오늘' 버튼 비활성(이미 오늘임을 표시) */}
+          <div className="todo-nav">
+            <button
+              className="btn btn-sm"
+              onClick={() => goDate(today)}
+              disabled={isToday}
+            >
+              오늘
             </button>
-          )}
-          <button
-            className="icon-btn ghost"
-            title="전날"
-            onClick={() => goDate(shiftDay(selected, -1))}
-          >
-            <Icon name="chevron-left" size={16} />
-          </button>
-          <button
-            className="icon-btn ghost"
-            title="다음날"
-            onClick={() => goDate(shiftDay(selected, 1))}
-          >
-            <Icon name="chevron-right" size={16} />
-          </button>
+            <button
+              className="icon-btn ghost"
+              title="전날"
+              onClick={() => goDate(shiftDay(selected, -1))}
+            >
+              <Icon name="chevron-left" size={16} />
+            </button>
+            <button
+              className="icon-btn ghost"
+              title="다음날"
+              onClick={() => goDate(shiftDay(selected, 1))}
+            >
+              <Icon name="chevron-right" size={16} />
+            </button>
+          </div>
         </div>
 
         {error && <div className="error-note">{error}</div>}

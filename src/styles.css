@@ -2653,6 +2653,12 @@ body.resizing-col .todo-resizer::after {
   row-gap: 8px;
   margin-bottom: 18px;
 }
+/* 날짜 네비게이션 그룹: [오늘] ‹ › */
+.todo-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 
 /* 빠른 추가 */
 /* 인라인 추가 (Todoist 풍 — 큰 입력창 대신 은은한 plus + 무테 입력) */
