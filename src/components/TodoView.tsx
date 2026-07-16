@@ -51,8 +51,6 @@ export function TodoView({ active }: { active: boolean }) {
   const [cursor, setCursor] = useState(() => monthOf(todayStr()));
 
   const [todos, setTodos] = useState<Todo[]>([]);
-  // 완료 가라앉힘 구분선 위치는 로드 시점에 고정 — 체크 토글로 행이 튀지 않게(제자리 유지)
-  const [dividerAt, setDividerAt] = useState<number | null>(null);
   const [counts, setCounts] = useState<Record<string, DayTodoCount>>({});
   const [overdue, setOverdue] = useState<Todo[]>([]);
   const [overdueOpen, setOverdueOpen] = useState(false);
@@ -98,8 +96,6 @@ export function TodoView({ active }: { active: boolean }) {
       const today = todayStr();
       const rows = await listTodos(selected);
       setTodos(rows);
-      const firstDone = rows.findIndex((r) => r.done === 1);
-      setDividerAt(firstDone > 0 ? firstDone : null);
       setOverdue(selected === today ? await listOverdueOpen(today) : []);
       const [start, end] = dayRangeMs(selected);
       setLearned(await conceptsLearnedOn(start, end));
@@ -429,12 +425,7 @@ export function TodoView({ active }: { active: boolean }) {
               이 날의 할 일이 없어요 — 위 입력창에 적고 Enter.
             </div>
           ) : (
-            todos.map((t, i) => (
-              <Fragment key={t.id}>
-                {dividerAt === i && <hr className="todo-divider" />}
-                {renderRow(t)}
-              </Fragment>
-            ))
+            todos.map((t) => <Fragment key={t.id}>{renderRow(t)}</Fragment>)
           )}
         </div>
 

@@ -2698,8 +2698,8 @@ body.resizing-col .todo-resizer::after {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 11px 8px;
-  border-bottom: 1px solid var(--border); /* Todoist 풍 얇은 구분선 */
+  padding: 10px 8px;
+  border-radius: 8px; /* 구분선 없이 여백+hover 로만 구분 (선 과다 방지) */
   transition: background 0.12s;
 }
 .todo-row:hover {
@@ -2729,11 +2729,6 @@ body.resizing-col .todo-resizer::after {
   height: 30px;
   padding: 4px 8px;
   font-size: 13.5px;
-}
-.todo-divider {
-  border: none;
-  border-top: 1px solid var(--border);
-  margin: 6px 10px;
 }
 /* 메인 목록 액션: 행 위에 겹쳐 페이드인 (tree-row 오버레이와 동일 패턴) */
 .todo-row .row-actions {
