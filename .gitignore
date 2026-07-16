@@ -29,5 +29,6 @@ dist-ssr
 *.pem
 *.key
 
-# 로컬 에이전트/개인 도구 설정
-.claude/
+# 로컬 에이전트/개인 도구 설정 (단, 공유 슬래시 커맨드는 추적)
+.claude/*
+!.claude/commands/
