@@ -686,6 +686,7 @@ export function DiagramsView({ active }: { active: boolean }) {
       <Modal
         open={!!confirmDelete}
         title={confirmDelete?.isDir ? "폴더 삭제" : "다이어그램 삭제"}
+        narrow
         onClose={() => setConfirmDelete(null)}
         footer={
           <>
@@ -710,8 +711,6 @@ export function DiagramsView({ active }: { active: boolean }) {
           <b>{confirmDelete?.name}</b>{" "}
           {confirmDelete?.isDir ? "폴더와 안의 모든 다이어그램을" : "다이어그램을"}{" "}
           삭제할까요?
-          <br />
-          macOS 휴지통으로 이동돼요.
         </p>
       </Modal>
 
@@ -719,6 +718,7 @@ export function DiagramsView({ active }: { active: boolean }) {
       <Modal
         open={!!pendingOpen}
         title="저장하지 않은 변경"
+        narrow
         onClose={() => setPendingOpen(null)}
         footer={
           <>

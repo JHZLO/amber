@@ -633,6 +633,10 @@ select {
 .modal.wide {
   max-width: 820px;
 }
+/* 확인/삭제 등 짧은 문구용 — 640px 는 과하게 넓다 */
+.modal.narrow {
+  max-width: 440px;
+}
 .modal-head {
   display: flex;
   align-items: center;

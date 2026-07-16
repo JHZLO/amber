@@ -304,6 +304,7 @@ export function ConceptDetail({
       <Modal
         open={confirmingDelete}
         title="개념 삭제"
+        narrow
         onClose={() => setConfirmingDelete(false)}
         footer={
           <>

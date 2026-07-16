@@ -130,6 +130,7 @@ export function Modal({
   children,
   footer,
   wide,
+  narrow,
 }: {
   open: boolean;
   title: string;
@@ -137,6 +138,7 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
+  narrow?: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -160,7 +162,7 @@ export function Modal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className={`modal ${wide ? "wide" : ""}`}>
+      <div className={`modal ${wide ? "wide" : ""} ${narrow ? "narrow" : ""}`}>
         <div className="modal-head">
           <h2>{title}</h2>
           <button className="icon-btn" onClick={onClose} aria-label="닫기">

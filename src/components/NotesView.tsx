@@ -841,6 +841,7 @@ export function NotesView({
       <Modal
         open={!!confirmDelete}
         title={confirmDelete?.isDir ? "폴더 삭제" : "노트 삭제"}
+        narrow
         onClose={() => setConfirmDelete(null)}
         footer={
           <>
@@ -903,6 +904,7 @@ export function NotesView({
       <Modal
         open={!!pendingOpen}
         title="저장하지 않은 변경"
+        narrow
         onClose={() => setPendingOpen(null)}
         footer={
           <>
