@@ -50,3 +50,22 @@ export type ConceptSort =
   | "recent_updated"
   | "recent_created"
   | "title";
+
+// ---- 할 일 (todos 테이블 한 행, DB 정본) ----
+
+export interface Todo {
+  id: number;
+  content: string;
+  due_date: string; // 'YYYY-MM-DD' — 사용자 로컬 달력 날짜 (UTC ms 아님, lib/date.ts 참조)
+  done: 0 | 1;
+  completed_at: number | null; // UTC ms, 트리거가 관리
+  created_at: number; // UTC ms
+  updated_at: number; // UTC ms
+}
+
+/** 캘린더 날짜별 개수 (점·월 요약용) */
+export interface DayTodoCount {
+  due_date: string; // 'YYYY-MM-DD'
+  total: number;
+  done: number;
+}

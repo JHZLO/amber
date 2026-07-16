@@ -30,7 +30,8 @@ export type IconName =
   | "sun"
   | "moon"
   | "workflow"
-  | "message";
+  | "message"
+  | "calendar-check";
 
 const PATHS: Record<IconName, ReactNode> = {
   "chevron-left": <path d="M15 18l-6-6 6-6" />,
@@ -168,6 +169,15 @@ const PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   message: <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />,
+  "calendar-check": (
+    <>
+      <path d="M8 2v4" />
+      <path d="M16 2v4" />
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M3 10h18" />
+      <path d="m9 16 2 2 4-4" />
+    </>
+  ),
 };
 
 export function Icon({

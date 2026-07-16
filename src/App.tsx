@@ -19,11 +19,12 @@ import { SettingsModal } from "./components/SettingsModal";
 import { NotesView } from "./components/NotesView";
 import { AiOnboarding } from "./components/AiOnboarding";
 import { DiagramsView } from "./components/DiagramsView";
+import { TodoView } from "./components/TodoView";
 import { THEME_EVENT, resolvedTheme, toggleTheme } from "./lib/theme";
 import { OPEN_CONCEPT, OPEN_NOTE } from "./lib/nav";
 
 type StatusTab = ConceptStatus | "all";
-type Section = "til" | "notes" | "diagrams";
+type Section = "til" | "notes" | "diagrams" | "todo";
 
 const SORTS: { id: ConceptSort; label: string }[] = [
   { id: "canonical", label: "자신감 낮은 순" },
@@ -51,7 +52,7 @@ function App() {
   const [section, setSection] = useState<Section>(() =>
     ((): Section => {
       const s = localStorage.getItem("til.section");
-      return s === "notes" || s === "diagrams" ? s : "til";
+      return s === "notes" || s === "diagrams" || s === "todo" ? s : "til";
     })(),
   );
   useEffect(() => {
@@ -184,8 +185,9 @@ function App() {
   const RAIL: {
     id: Section;
     label: string;
-    icon: "layers" | "book" | "workflow";
+    icon: "layers" | "book" | "workflow" | "calendar-check";
   }[] = [
+    { id: "todo", label: "할 일", icon: "calendar-check" },
     { id: "til", label: "개념", icon: "layers" },
     { id: "notes", label: "필기노트", icon: "book" },
     { id: "diagrams", label: "다이어그램", icon: "workflow" },
@@ -228,7 +230,9 @@ function App() {
             ? "개념"
             : section === "notes"
               ? "필기노트"
-              : "다이어그램"}
+              : section === "diagrams"
+                ? "다이어그램"
+                : "할 일"}
         </span>
         {section === "til" && (
           <div className="search-wrap">
@@ -372,6 +376,11 @@ function App() {
       {/* 다이어그램 섹션 — 편집 초안 보존을 위해 항상 마운트 */}
       <div className={`section-wrap ${section === "diagrams" ? "" : "hidden"}`}>
         <DiagramsView active={section === "diagrams"} />
+      </div>
+
+      {/* 할 일 섹션 — 선택 날짜/스크롤 보존을 위해 항상 마운트 */}
+      <div className={`section-wrap ${section === "todo" ? "" : "hidden"}`}>
+        <TodoView active={section === "todo"} />
       </div>
       </div>
 

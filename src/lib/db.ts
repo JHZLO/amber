@@ -106,6 +106,21 @@ export async function getConcept(id: number): Promise<ConceptWithTags | null> {
   return rows.length ? toWithTags(rows[0]) : null;
 }
 
+/** 주어진 시각 범위 [startMs, endMs) 에 학습완료된 개념 (할 일 탭의 "이날 학습완료" 칩용).
+ *  로컬 날짜 → ms 범위 변환은 호출부(lib/date.ts dayRangeMs)가 담당한다. */
+export async function conceptsLearnedOn(
+  startMs: number,
+  endMs: number,
+): Promise<{ id: number; title: string }[]> {
+  const db = await getDb();
+  return db.select<{ id: number; title: string }[]>(
+    `SELECT id, title FROM concepts
+     WHERE status = 'learned' AND learned_at >= $1 AND learned_at < $2
+     ORDER BY learned_at DESC`,
+    [startMs, endMs],
+  );
+}
+
 export interface CreateConceptInput {
   ulid: string;
   title: string;

@@ -65,6 +65,32 @@ export function AiThinking({
   );
 }
 
+/** 체크박스 primitive — 모노톤 채움/아웃라인 문법(꺼짐=아웃라인, 켜짐=primary 필+체크).
+ *  색으로 상태를 칠하지 않는다(docs/DESIGN.md §3). */
+export function Checkbox({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={label}
+      className={`checkbox ${checked ? "checked" : ""}`}
+      onClick={onChange}
+    >
+      {/* 항상 렌더하고 색으로 표시 — 체크 시 primary-fg, 미체크 hover 시 옅은 힌트 */}
+      <Icon name="check" size={12} />
+    </button>
+  );
+}
+
 export function TagChip({
   label,
   active,

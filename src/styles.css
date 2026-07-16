@@ -2435,3 +2435,438 @@ html.widget-root #root {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ==== 공유 primitive: 체크박스 (모노톤 채움/아웃라인, docs/DESIGN.md §3) ==== */
+.checkbox {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%; /* Todoist 풍 원형 체크박스 */
+  background: transparent;
+  color: transparent;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.checkbox:hover {
+  border-color: var(--text-2);
+}
+.checkbox.checked {
+  background: var(--primary-bg);
+  border-color: var(--primary-bg);
+  color: var(--primary-fg);
+}
+.checkbox:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.12);
+}
+
+/* ==== 할 일 탭 ==== */
+
+/* 가로 비중은 사용자가 드래그로 조절 — columns 는 인라인 style(캘린더 px + 1fr)로 지정. */
+.body.todo-body {
+  position: relative;
+}
+.todo-body .detail {
+  min-width: 0; /* 캘린더를 넓게 드래그해도 오른쪽 목록이 넘치지 않게 */
+}
+.todo-cal-pane {
+  overflow-y: auto;
+}
+/* 드래그 핸들 — pane 경계에 얹힌 얇은 선(평소 숨김, hover/드래그 시 강조) */
+.todo-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  margin-left: -5px;
+  cursor: col-resize;
+  z-index: 5;
+}
+.todo-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background 0.12s;
+}
+.todo-resizer:hover::after {
+  background: var(--border-strong);
+}
+body.resizing-col {
+  cursor: col-resize;
+}
+body.resizing-col * {
+  user-select: none !important;
+}
+body.resizing-col .todo-resizer::after {
+  background: var(--text-3);
+}
+
+/* 좌: 미니 캘린더 — Notion/Linear 풍 미니멀 월. 고정 행 높이라 넓어져도 세로로 안 커지고,
+   적정 폭으로 캡 + 가운데 정렬해 화면을 꽉 채우지 않는다. */
+.todo-cal {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto; /* 가로 중앙, 상단 정렬 */
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cal-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.cal-title {
+  flex: 1;
+  text-align: center;
+  padding: 5px 0;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.cal-title:hover {
+  background: var(--surface-2);
+}
+.cal-title:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.12);
+}
+/* 요일 헤더 + 그리드: minmax(0,1fr) 로 7열이 폭 안에서 항상 균등 분할(좁아도 안 넘침) */
+.cal-dow {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  margin-bottom: 4px;
+}
+.cal-dow span {
+  text-align: center;
+  padding: 4px 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+/* 고정 행 높이 — 세로로 늘려 채우지 않는다(넓어져도 정상 높이의 월 그리드 유지) */
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+.cal-cell {
+  position: relative;
+  height: 48px;
+  padding: 0; /* UA 버튼 패딩 제거(열 넘침 방지) */
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+.cal-cell:focus-visible {
+  outline: none;
+  border-radius: 10px;
+  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.12);
+}
+.cal-num {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  transition: background 0.12s, color 0.12s;
+}
+.cal-cell:hover .cal-num {
+  background: var(--surface-2);
+}
+.cal-cell.adjacent .cal-num {
+  color: var(--text-3);
+}
+/* 선택=surface-3 원, 오늘=primary 반전 필 (색 아닌 채움/명암, §3) */
+.cal-cell.selected .cal-num {
+  background: var(--surface-3);
+  font-weight: 600;
+}
+.cal-cell.today .cal-num,
+.cal-cell.today:hover .cal-num {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+  font-weight: 700;
+}
+/* 날짜 점: 미완료 남음=빈 점(아웃라인), 전부 완료=채운 점 (.dot 문법과 동일) */
+.cal-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  border: 1px solid var(--text-3);
+  background: transparent;
+}
+.cal-dot.on {
+  background: var(--text);
+  border-color: var(--text);
+}
+.cal-dot.none {
+  visibility: hidden;
+}
+.cal-month-sum {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 우: 상세 헤더(날짜 + 이동) — 기본 detail-head 는 flex-start 라 여기선 center + wrap */
+.detail-head.todo-head {
+  align-items: center;
+  flex-wrap: wrap;
+  row-gap: 8px;
+  margin-bottom: 18px;
+}
+
+/* 빠른 추가 */
+/* 인라인 추가 (Todoist 풍 — 큰 입력창 대신 은은한 plus + 무테 입력) */
+.todo-quick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 8px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  transition: background 0.12s;
+}
+.todo-quick:focus-within {
+  background: var(--surface-2);
+}
+.todo-quick-ico {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--text-3);
+  pointer-events: none;
+  transition: color 0.12s;
+}
+.todo-quick:focus-within .todo-quick-ico {
+  color: var(--text);
+}
+.todo-quick-input {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  border: none;
+  background: transparent;
+  padding: 2px 0;
+  font-size: 14px;
+}
+
+/* 목록 */
+.todo-listing {
+  display: flex;
+  flex-direction: column;
+}
+.todo-row {
+  position: relative; /* row-actions 오버레이 기준 */
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 8px;
+  border-bottom: 1px solid var(--border); /* Todoist 풍 얇은 구분선 */
+  transition: background 0.12s;
+}
+.todo-row:hover {
+  background: var(--surface-2);
+}
+.todo-row:hover .checkbox:not(.checked) {
+  color: var(--text-3); /* hover 시 옅은 체크 힌트 (Todoist) */
+}
+.todo-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+  transition: color 0.12s;
+}
+.todo-row.done .todo-text {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+.todo-edit {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 4px 8px;
+  font-size: 13.5px;
+}
+.todo-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 6px 10px;
+}
+/* 메인 목록 액션: 행 위에 겹쳐 페이드인 (tree-row 오버레이와 동일 패턴) */
+.todo-row .row-actions {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 18px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+  background: linear-gradient(to right, transparent, var(--surface-2) 16px);
+}
+.todo-row:hover .row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.todo-row .row-actions .icon-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+}
+.todo-row .row-actions .icon-btn:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+/* 삭제(파괴)는 danger 시그니처 유지 — 오버레이 톤다운 규칙(위)보다 높은 특이도로 이겨야 함.
+   밀린-스트립 삭제 버튼(.todo-overdue-actions)과 hover 색을 일치시킨다(§8). */
+.todo-row .row-actions .icon-btn.danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* 밀린 할 일 스트립 (오늘 뷰 한정, 접힘 기본) */
+.todo-overdue {
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.todo-overdue-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.todo-overdue-caret {
+  display: inline-flex;
+  color: var(--text-3);
+  transition: transform 0.24s cubic-bezier(0.33, 1, 0.68, 1);
+}
+.todo-overdue.open .todo-overdue-caret {
+  transform: rotate(90deg);
+}
+.todo-overdue-head b {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.todo-overdue-cnt {
+  font-size: 12px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+/* 펼침: 높이 측정 없이 grid 0fr↔1fr (tree-children 과 동일) */
+.todo-overdue-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.24s cubic-bezier(0.33, 1, 0.68, 1);
+}
+.todo-overdue.open .todo-overdue-body {
+  grid-template-rows: 1fr;
+}
+.todo-overdue-inner {
+  overflow: hidden;
+  min-height: 0;
+  padding: 0 6px 6px;
+}
+.todo-overdue-inner .todo-row:hover {
+  background: var(--surface-2);
+}
+.todo-overdue-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.todo-row-date {
+  font-size: 12px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.todo-overdue-more {
+  padding: 6px 10px;
+}
+.todo-day-empty {
+  padding: 16px 10px;
+}
+
+/* 이날 학습완료 (learned_at 재사용, 읽기 전용 칩) */
+.todo-learned {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.todo-learned-label {
+  margin-bottom: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.todo-learned-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checkbox,
+  .cal-cell,
+  .cal-num,
+  .cal-title,
+  .todo-row,
+  .todo-text,
+  .todo-row .row-actions,
+  .todo-overdue-caret,
+  .todo-overdue-body {
+    transition: none;
+  }
+}
