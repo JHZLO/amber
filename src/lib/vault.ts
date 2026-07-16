@@ -1,5 +1,5 @@
 // vault: 상세 정리본(.md)의 정본 저장소.
-// 물리 위치: $APPDATA/dev.jhzlo.til/vault/concepts/<ulid>/index.md
+// 물리 위치: $APPDATA/dev.jhzlo.amber/vault/concepts/<ulid>/index.md
 // DB 의 detail_path 는 vault 기준 상대경로('concepts/<ulid>/index.md')만 저장한다.
 // frontmatter 는 id(=ulid) 만 둔다. status/confidence/seen 같은 휘발성 메타는 절대 파일에 안 넣음
 // → 위젯 조작이 파일/ git diff 를 오염시키지 않게 (PRD §7.3).

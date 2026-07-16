@@ -76,7 +76,7 @@ AI와의 Q&A로 배운 개념을 카드로 정리해 바탕화면 위젯으로 �
 | 콘텐츠 저장 | 순수 Markdown/`.mmd` 파일 | 앱 독립성, git 버전 관리 |
 | AI | 로컬 AI CLI (headless) | API 키 미저장 — CLI 로그인 세션 재사용 |
 
-데이터 위치 (`~/Library/Application Support/dev.jhzlo.til/`):
+데이터 위치 (`~/Library/Application Support/dev.jhzlo.amber/`):
 
 ```
 til.db                          # 메타 (개념 카드·설정)
