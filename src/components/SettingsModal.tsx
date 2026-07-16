@@ -76,10 +76,12 @@ export function SettingsModal({
         setTestResult(null);
       });
       setDetected(null);
+      void redetect(); // 열자마자 설치된 CLI 를 감지해 카드로 보여준다
       loadPrompts().then(setPrompts);
       setEditing(null);
       setTheme(getThemePref());
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   function changeTheme(t: ThemePref) {
@@ -238,9 +240,10 @@ export function SettingsModal({
         </>
       ) : (
         <>
-          <div className="field">
-            <label style={{ display: "flex", alignItems: "center" }}>
-              AI 연결
+          {/* ── AI 연결 ── */}
+          <section className="set-section">
+            <div className="set-head">
+              <span className="set-eyebrow">AI 연결</span>
               <span className="spacer" />
               <button
                 className="btn btn-sm"
@@ -250,110 +253,115 @@ export function SettingsModal({
                 <Icon name="refresh" size={13} />
                 {detecting ? "감지 중…" : "다시 감지"}
               </button>
-            </label>
-            <div className="hint" style={{ marginTop: 0, marginBottom: 8 }}>
-              {provider
-                ? `현재 ${PROVIDER_LABELS[provider]} 에 연결돼 있어요. 로컬 CLI 의 로그인 세션을 사용합니다.`
-                : "연결된 AI 가 없어요. 다시 감지를 눌러 설치된 CLI 를 찾아보세요."}
             </div>
-            {detected !== null &&
-              (detected.length > 0 ? (
-                <div className="onb-grid">
-                  {detected.map((d) => (
-                    <button
-                      key={d.id}
-                      className={`onb-card ${provider === d.id ? "selected" : ""}`}
-                      onClick={() => pickDetected(d)}
-                    >
-                      <span className="onb-dot" />
-                      <span className="onb-name">{d.name}</span>
-                      <span className="onb-version">{d.version}</span>
-                      <span className="onb-path" title={d.path}>
-                        {d.path}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="error-note">
-                  설치된 AI CLI 를 찾지 못했어요. claude · codex · gemini 중
-                  하나를 설치하고 로그인한 뒤 다시 감지하세요.
-                </div>
-              ))}
-          </div>
+            <p className="set-desc">
+              {provider
+                ? `현재 ${PROVIDER_LABELS[provider]} 에 연결돼 있어요. 로컬 CLI 의 로그인 세션을 그대로 사용합니다.`
+                : "연결된 AI 가 없어요. 설치된 CLI 를 감지해 연결하세요."}
+            </p>
 
-          {provider && (
-            <>
-              <div className="field">
-                <label>{PROVIDER_LABELS[provider]} 경로</label>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input
-                    className="input"
-                    style={{ flex: 1, minWidth: 0 }}
-                    value={path}
-                    onChange={(e) => setPath(e.target.value)}
-                    placeholder={`/opt/homebrew/bin/${provider}`}
-                  />
+            {detecting && detected === null ? (
+              <div className="loading-box" style={{ padding: "22px 0" }}>
+                <Spinner />
+                <div className="hint">설치된 CLI 를 찾는 중…</div>
+              </div>
+            ) : detected !== null && detected.length === 0 ? (
+              <div className="error-note">
+                설치된 AI CLI 를 찾지 못했어요. claude · codex · gemini 중 하나를
+                설치하고 로그인한 뒤 다시 감지하세요.
+              </div>
+            ) : (
+              <div className="onb-grid">
+                {(detected ?? []).map((d) => (
                   <button
-                    className="btn"
-                    style={{ flexShrink: 0 }}
-                    onClick={test}
-                    disabled={testing}
+                    key={d.id}
+                    className={`onb-card ${provider === d.id ? "selected" : ""}`}
+                    onClick={() => pickDetected(d)}
                   >
-                    {testing ? <Spinner /> : "연결 테스트"}
+                    <span className="onb-dot" />
+                    <span className="onb-name">{d.name}</span>
+                    <span className="onb-version">{d.version}</span>
+                    <span className="onb-path" title={d.path}>
+                      {d.path}
+                    </span>
                   </button>
-                </div>
-                {testResult && (
-                  <div
-                    className={testResult.ok ? "ok-note" : "error-note"}
-                    style={{ marginTop: 8 }}
-                  >
-                    {testResult.msg}
+                ))}
+              </div>
+            )}
+
+            {provider && (
+              <div className="set-provider">
+                <div className="field">
+                  <label>{PROVIDER_LABELS[provider]} 경로</label>
+                  <div className="set-inline">
+                    <input
+                      className="input"
+                      value={path}
+                      onChange={(e) => setPath(e.target.value)}
+                      placeholder={`/opt/homebrew/bin/${provider}`}
+                    />
+                    <button className="btn" onClick={test} disabled={testing}>
+                      {testing ? <Spinner /> : "연결 테스트"}
+                    </button>
                   </div>
-                )}
+                  {testResult && (
+                    <div
+                      className={testResult.ok ? "ok-note" : "error-note"}
+                      style={{ marginTop: 8 }}
+                    >
+                      {testResult.msg}
+                    </div>
+                  )}
+                </div>
+
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>모델</label>
+                  <Select
+                    block
+                    value={model}
+                    options={PROVIDER_MODELS[provider].map((m) => ({
+                      value: m.id,
+                      label: m.label,
+                    }))}
+                    onChange={setModel}
+                  />
+                  <div className="hint" style={{ marginTop: 6 }}>
+                    AI 호출은 연결된 CLI 의 플랜/크레딧을 소모해요.
+                  </div>
+                </div>
               </div>
+            )}
+          </section>
 
-              <div className="field">
-                <label>모델</label>
-                <Select
-                  block
-                  value={model}
-                  options={PROVIDER_MODELS[provider].map((m) => ({
-                    value: m.id,
-                    label: m.label,
-                  }))}
-                  onChange={setModel}
-                />
-              </div>
+          {/* ── 모양 ── */}
+          <section className="set-section">
+            <div className="set-head">
+              <span className="set-eyebrow">모양</span>
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>테마</label>
+              <Select
+                block
+                value={theme}
+                options={THEMES.map((t) => ({ value: t.id, label: t.label }))}
+                onChange={changeTheme}
+              />
+            </div>
+          </section>
 
-              <div className="hint">
-                AI 호출은 연결된 CLI 의 플랜/크레딧을 소모해요.
-              </div>
-            </>
-          )}
-
-          <div className="field">
-            <label>테마</label>
-            <Select
-              block
-              value={theme}
-              options={THEMES.map((t) => ({ value: t.id, label: t.label }))}
-              onChange={changeTheme}
-            />
-          </div>
-
-          <div className="field">
-            <label style={{ display: "flex", alignItems: "center" }}>
-              저장 프롬프트
+          {/* ── 저장 프롬프트 ── */}
+          <section className="set-section">
+            <div className="set-head">
+              <span className="set-eyebrow">저장 프롬프트</span>
               <span className="spacer" />
               <button className="btn btn-sm" onClick={startNew}>
                 <Icon name="plus" size={13} />새 프롬프트
               </button>
-            </label>
-            <div className="hint" style={{ marginTop: 0, marginBottom: 8 }}>
+            </div>
+            <p className="set-desc">
               자주 쓰는 지시를 저장해 두면 <b>AI로 노트 작성</b> 모달에서 칩으로
               바로 넣을 수 있어요.
-            </div>
+            </p>
 
             {prompts.length === 0 ? (
               <div className="prompt-empty">
@@ -381,7 +389,7 @@ export function SettingsModal({
                 ))}
               </div>
             )}
-          </div>
+          </section>
         </>
       )}
     </Modal>

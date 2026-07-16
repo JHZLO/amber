@@ -658,6 +658,56 @@ select {
   border-top: 1px solid var(--border);
 }
 
+/* ---- 설정 모달: 섹션 레이아웃 (평평한 필드 나열 대신 구획으로 묶음) ---- */
+.set-section {
+  padding-top: 20px;
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.set-section:first-child {
+  padding-top: 0;
+  margin-top: 0;
+  border-top: none;
+}
+.set-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  margin-bottom: 10px;
+}
+.set-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+.set-desc {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-3);
+}
+/* 선택된 프로바이더의 경로·모델 — 카드 아래에 점선으로 구분해 딸린 설정임을 보인다 */
+.set-provider {
+  margin-top: 12px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border);
+}
+.set-inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.set-inline .input {
+  flex: 1;
+  min-width: 0;
+}
+.set-inline .btn {
+  flex-shrink: 0;
+}
+
 /* ---- 스피너 ---- */
 .spinner {
   width: 18px;
@@ -2215,12 +2265,12 @@ html.widget-root #root {
 }
 .onb-card {
   display: grid;
-  grid-template-columns: 10px auto 1fr;
+  grid-template-columns: 16px auto 1fr;
   grid-template-areas:
     "dot name version"
     ".   path path";
   align-items: center;
-  column-gap: 8px;
+  column-gap: 9px;
   row-gap: 2px;
   text-align: left;
   padding: 11px 13px;
@@ -2237,12 +2287,22 @@ html.widget-root #root {
   border-color: var(--text);
   box-shadow: 0 0 0 1px var(--text);
 }
+/* 선택 표시는 색이 아니라 채움/아웃라인(§3): 선택=필 디스크, 미선택=아웃라인 링 */
 .onb-dot {
   grid-area: dot;
-  width: 8px;
-  height: 8px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: #22c55e; /* 감지됨 = 초록 */
+  border: 1.5px solid var(--border-strong);
+  background: transparent;
+  transition: background 0.12s, border-color 0.12s;
+}
+.onb-card:hover .onb-dot {
+  border-color: var(--text-2);
+}
+.onb-card.selected .onb-dot {
+  border-color: var(--text);
+  background: var(--text);
 }
 .onb-name {
   grid-area: name;

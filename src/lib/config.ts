@@ -12,13 +12,17 @@ export const PROVIDER_LABELS: Record<AiProvider, string> = {
   gemini: "Gemini CLI",
 };
 
-/** 프로바이더별 모델 선택지. 빈 id = CLI 기본 모델 사용 */
+/** 프로바이더별 모델 선택지. 빈 id = CLI 기본 모델 사용(설정 파일의 model 값을 따름) */
 export const PROVIDER_MODELS: Record<AiProvider, { id: string; label: string }[]> = {
   claude: [
     { id: "claude-opus-4-8", label: "Opus (품질 우선)" },
     { id: "claude-sonnet-5", label: "Sonnet (속도·비용 절약)" },
   ],
-  codex: [{ id: "", label: "CLI 기본 모델" }],
+  codex: [
+    { id: "gpt-5.6-sol", label: "GPT-5.6 (최신)" },
+    { id: "gpt-5.5", label: "GPT-5.5" },
+    { id: "", label: "CLI 기본 모델" },
+  ],
   gemini: [{ id: "", label: "CLI 기본 모델" }],
 };
 
