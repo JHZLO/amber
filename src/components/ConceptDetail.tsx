@@ -13,12 +13,29 @@ import { deleteConceptDir, readNote, writeNote } from "../lib/vault";
 import { ConfidenceDots, Modal, Spinner, StatusBadge, timeAgo } from "../ui";
 import { Icon } from "../icons";
 import { AugmentModal } from "./AugmentModal";
+import { openNoteInApp } from "../lib/nav";
 
 function parseTags(raw: string): string[] {
   return raw
     .split(/[,\n]/)
     .map((t) => t.trim().replace(/^#/, ""))
     .filter(Boolean);
+}
+
+/** 필기노트 승격으로 만든 개념이면 source(JSON)에서 출처 노트를 파싱 */
+function parseSourceNote(
+  concept: ConceptWithTags,
+): { noteRel: string; anchor: string } | null {
+  if (concept.source_kind !== "file" || !concept.source) return null;
+  try {
+    const d = JSON.parse(concept.source);
+    if (d && typeof d.noteRel === "string") {
+      return { noteRel: d.noteRel, anchor: String(d.anchor ?? "") };
+    }
+  } catch {
+    /* 구형/비JSON source 는 무시 */
+  }
+  return null;
 }
 
 export function ConceptDetail({
@@ -36,6 +53,8 @@ export function ConceptDetail({
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [augmenting, setAugmenting] = useState(false);
+
+  const sourceNote = parseSourceNote(concept);
 
   const [dTitle, setDTitle] = useState(concept.title);
   const [dSummary, setDSummary] = useState(concept.summary);
@@ -259,6 +278,20 @@ export function ConceptDetail({
         ) : (
           <div className="markdown">
             <Markdown>{body}</Markdown>
+          </div>
+        )}
+
+        {sourceNote && (
+          <div className="concept-source">
+            <button
+              className="btn btn-sm"
+              onClick={() => openNoteInApp(sourceNote.noteRel)}
+              title={sourceNote.anchor}
+            >
+              <Icon name="book" size={13} />
+              출처 노트 열기
+            </button>
+            <span className="concept-source-name">{sourceNote.noteRel}</span>
           </div>
         )}
 

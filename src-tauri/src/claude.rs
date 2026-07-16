@@ -77,6 +77,8 @@ const NOTE_SYSTEM_PROMPT: &str = r#"너는 사용자의 필기노트를 대신 �
 // 노트 본문을 불리지 않는 별도 Q&A 라 "간결함"을 프롬프트로 강제한다.
 const ASK_SYSTEM_PROMPT: &str = r#"너는 사용자가 자기 필기노트를 읽다가 생긴 질문에 답하는 조수다.
 입력(stdin)에는 [질문], [선택한 부분](노트에서 드래그한 문장), [노트 전체](문맥)가 들어 있다.
+[이전 문답]이 있으면 같은 선택 부분을 두고 방금까지 나눈 대화다 — [질문]은 그 흐름을 잇는
+후속 질문이니 이미 설명한 내용을 반복하지 말고 이어서 답한다.
 
 출력은 답변 텍스트만 낸다.
 - 간결하게: 핵심만 2~5문장. 꼭 필요할 때만 3줄 이내의 아주 짧은 코드 1개.
@@ -531,12 +533,20 @@ pub async fn claude_note_compose_stream(
     Ok(NoteComposeResult { markdown: md, meta })
 }
 
-/// 필기노트 인라인 질문: 선택 문장 + 질문 + 노트 문맥 → 짧은 답변(raw 텍스트).
+/// 후속 질문에 실어 보내는 이전 문답 한 쌍 (프론트 사이드카의 스레드에서 옴)
+#[derive(Debug, Deserialize)]
+pub struct AskExchange {
+    pub question: String,
+    pub answer: String,
+}
+
+/// 필기노트 인라인 질문: 선택 문장 + 질문 (+ 이전 문답) + 노트 문맥 → 짧은 답변(raw 텍스트).
 #[tauri::command]
 pub async fn claude_note_ask(
     selection: String,
     question: String,
     note_markdown: String,
+    history: Option<Vec<AskExchange>>,
     model: Option<String>,
     cli_path: Option<String>,
     provider: Option<String>,
@@ -559,9 +569,18 @@ pub async fn claude_note_ask(
 
     let note = note_markdown.trim();
     let note = if note.is_empty() { "(비어 있음)" } else { note };
-    let input = format!(
-        "[질문]\n{q}\n\n[선택한 부분]\n{sel}\n\n[노트 전체 (Markdown)]\n{note}"
-    );
+    let mut input = format!("[질문]\n{q}\n\n[선택한 부분]\n{sel}\n\n");
+    if let Some(hist) = history.as_deref().filter(|h| !h.is_empty()) {
+        input.push_str("[이전 문답]\n");
+        for turn in hist {
+            input.push_str(&format!(
+                "Q: {}\nA: {}\n\n",
+                turn.question.trim(),
+                turn.answer.trim()
+            ));
+        }
+    }
+    input.push_str(&format!("[노트 전체 (Markdown)]\n{note}"));
 
     let (result_str, meta) =
         run_provider_text(kind, program, model, dur, ASK_SYSTEM_PROMPT, input).await?;

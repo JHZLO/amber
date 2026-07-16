@@ -10,9 +10,17 @@ import {
   remove,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
+import { getRoot } from "./workspace";
 
 const BASE = BaseDirectory.AppData;
-const ROOT = "vault/notes";
+
+/** 첫 문답 이후 이어지는 후속 문답 한 턴 */
+export interface AskTurn {
+  question: string;
+  answer: string;
+  createdAt: number; // UTC ms
+  model?: string;
+}
 
 export interface NoteComment {
   id: string;
@@ -24,6 +32,8 @@ export interface NoteComment {
   answer: string;
   createdAt: number; // UTC ms
   model?: string;
+  /** 후속 티키타카 (v1 파일엔 없음 — 없으면 첫 문답 하나짜리 스레드) */
+  followUps?: AskTurn[];
 }
 
 /** 노트 상대경로 → 사이드카 상대경로 */
@@ -31,7 +41,8 @@ export function commentsPathFor(noteRel: string): string {
   return noteRel.replace(/\.md$/i, "") + ".comments.json";
 }
 
-const full = (rel: string) => `${ROOT}/${rel}`;
+// 사이드카는 항상 노트와 같은 워크스페이스 루트에 놓인다 (폴더 열기 시에도 동행)
+const full = (rel: string) => `${getRoot("notes")}/${rel}`;
 
 export function newCommentId(): string {
   try {
@@ -48,12 +59,26 @@ export async function loadComments(noteRel: string): Promise<NoteComment[]> {
     if (!(await exists(p, { baseDir: BASE }))) return [];
     const d = JSON.parse(await readTextFile(p, { baseDir: BASE }));
     if (!Array.isArray(d?.comments)) return [];
-    return d.comments.filter(
+    const valid = d.comments.filter(
       (c: unknown): c is NoteComment =>
         !!c &&
         typeof (c as NoteComment).anchor === "string" &&
         typeof (c as NoteComment).question === "string",
     );
+    // 손으로 편집됐을 수 있는 사이드카라 후속 문답도 형태를 검증해 걸러낸다
+    for (const c of valid) {
+      if (c.followUps !== undefined && !Array.isArray(c.followUps)) {
+        delete c.followUps;
+      } else if (c.followUps) {
+        c.followUps = c.followUps.filter(
+          (t: unknown): t is AskTurn =>
+            !!t &&
+            typeof (t as AskTurn).question === "string" &&
+            typeof (t as AskTurn).answer === "string",
+        );
+      }
+    }
+    return valid;
   } catch {
     return [];
   }

@@ -1,0 +1,143 @@
+// 트리 헤더의 워크스페이스 루트 전환기 — VS Code 의 "폴더 열기 / Open Recent" 대응.
+// 현재 루트 이름을 보여주고, 클릭하면 최근 폴더 목록 + 기본 보관함 + 폴더 열기 메뉴.
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import {
+  DEFAULT_ROOTS,
+  getRecentRoots,
+  getRoot,
+  isDefaultRoot,
+  rootDisplayName,
+  setRoot,
+  WORKSPACE_EVENT,
+  type SectionKey,
+} from "../lib/workspace";
+import { Icon } from "../icons";
+
+export function RootPicker({ section }: { section: SectionKey }) {
+  const [root, setRootState] = useState(() => getRoot(section));
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // 외부(다른 뷰/토글)에서 루트가 바뀌어도 표시 동기화
+  useEffect(() => {
+    const h = () => setRootState(getRoot(section));
+    window.addEventListener(WORKSPACE_EVENT, h);
+    return () => window.removeEventListener(WORKSPACE_EVENT, h);
+  }, [section]);
+
+  const place = useCallback(() => {
+    const r = triggerRef.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 6, left: r.left });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (triggerRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, place]);
+
+  function choose(r: string) {
+    setOpen(false);
+    if (r !== root) setRoot(section, r);
+  }
+
+  async function pickFolder() {
+    setOpen(false);
+    const dir = await openDialog({
+      directory: true,
+      multiple: false,
+      title: "작업 폴더 열기",
+    });
+    if (typeof dir === "string" && dir) setRoot(section, dir);
+  }
+
+  const recents = getRecentRoots(section).filter((r) => r !== root);
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        className="root-picker"
+        onClick={() => setOpen((v) => !v)}
+        title={isDefaultRoot(section, root) ? "기본 보관함 (앱 데이터 폴더)" : root}
+      >
+        <Icon name="folder-open" size={14} />
+        <span className="root-picker-name">
+          {rootDisplayName(section, root)}
+        </span>
+        <svg className="select-caret" width="10" height="6" viewBox="0 0 10 6">
+          <path
+            d="M1 1l4 4 4-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="select-menu root-menu"
+            style={{ top: pos.top, left: pos.left }}
+          >
+            {!isDefaultRoot(section, root) && (
+              <button
+                className="select-item"
+                onClick={() => choose(DEFAULT_ROOTS[section])}
+              >
+                <span className="select-check" />
+                <span className="root-menu-item">
+                  <span>기본 보관함</span>
+                  <span className="root-menu-path">앱 데이터 폴더</span>
+                </span>
+              </button>
+            )}
+            {recents.map((r) => (
+              <button key={r} className="select-item" onClick={() => choose(r)}>
+                <span className="select-check" />
+                <span className="root-menu-item">
+                  <span>{r.split("/").filter(Boolean).pop()}</span>
+                  <span className="root-menu-path">{r}</span>
+                </span>
+              </button>
+            ))}
+            {(recents.length > 0 || !isDefaultRoot(section, root)) && (
+              <div className="root-menu-divider" />
+            )}
+            <button className="select-item" onClick={() => void pickFolder()}>
+              <span className="select-check" />
+              <span className="root-menu-item">
+                <span>폴더 열기…</span>
+                <span className="root-menu-path">
+                  로컬 폴더를 워크스페이스로 사용
+                </span>
+              </span>
+            </button>
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}

@@ -196,3 +196,38 @@ export function Icon({
     </svg>
   );
 }
+
+/** Amber 브랜드 마크 — 앱 아이콘과 동일한 지오메트리(스쿼클 + 호박 방울 + 인클루전 점).
+ *  테마 토큰(primary)을 따라 라이트=다크 스쿼클/밝은 방울, 다크=반전. */
+export function AmberMark({
+  size = 28,
+  className,
+}: {
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <svg
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect x="0" y="0" width="32" height="32" rx="7.2" fill="var(--primary-bg)" />
+      <path
+        d="M 16 8.8
+           C 13.9 11.6 11.8 14.96 11.8 18.74
+           C 11.8 21.06 13.68 22.94 16 22.94
+           C 18.32 22.94 20.2 21.06 20.2 18.74
+           C 20.2 14.96 18.1 11.6 16 8.8 Z"
+        stroke="var(--primary-fg)"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <circle cx="16" cy="18.2" r="1.15" fill="var(--primary-fg)" />
+    </svg>
+  );
+}

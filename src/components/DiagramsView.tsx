@@ -21,6 +21,8 @@ import {
 import { DiagramCanvas } from "./DiagramCanvas";
 import { Modal, Select, Spinner, timeAgo } from "../ui";
 import { Icon } from "../icons";
+import { RootPicker } from "./RootPicker";
+import { rootDisplayName, WORKSPACE_EVENT } from "../lib/workspace";
 
 // 이동/생성 위치 Select 값 인코딩 (루트 '' ↔ '/')
 const encodeDir = (d: string) => (d ? `/${d}` : "/");
@@ -96,6 +98,21 @@ export function DiagramsView({ active }: { active: boolean }) {
   useEffect(() => {
     if (active) void reload();
   }, [active, reload]);
+
+  // 워크스페이스 루트("폴더 열기") 변경 → 선택/트리 상태 초기화 후 새 루트 로드
+  useEffect(() => {
+    const h = (e: Event) => {
+      if ((e as CustomEvent).detail !== "diagrams") return;
+      setSelected(null);
+      setEditing(false);
+      setExpanded(new Set());
+      setActiveDir("");
+      setOpError(null);
+      void reload();
+    };
+    window.addEventListener(WORKSPACE_EVENT, h);
+    return () => window.removeEventListener(WORKSPACE_EVENT, h);
+  }, [reload]);
 
   // 편집 중 타이핑 → 350ms 디바운스로 프리뷰 갱신 (mermaid 재렌더 비용 절약)
   useEffect(() => {
@@ -400,7 +417,7 @@ export function DiagramsView({ active }: { active: boolean }) {
     <div className="body">
       <aside className="list">
         <div className="notes-tree-head">
-          <span className="title">다이어그램</span>
+          <RootPicker section="diagrams" />
           <span className="spacer" />
           <button
             className="icon-btn sm"
@@ -536,7 +553,7 @@ export function DiagramsView({ active }: { active: boolean }) {
             )}
 
             <div className="detail-meta">
-              diagrams/{selected}
+              {rootDisplayName("diagrams")}/{selected}
               {mtime !== null && <> · 수정 {timeAgo(mtime)}</>}
             </div>
           </div>

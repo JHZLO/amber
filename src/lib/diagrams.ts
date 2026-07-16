@@ -1,7 +1,8 @@
-// 다이어그램: $APPDATA/vault/diagrams/ 아래 실제 디렉토리 + .mmd(mermaid) 파일이 정본.
-// 필기노트와 같은 vaultTree 계층을 mermaid 설정으로 감싼 것.
+// 다이어그램: 현재 워크스페이스 루트(기본 = $APPDATA/vault/diagrams, "폴더 열기"로 임의 로컬 폴더)
+// 아래 실제 디렉토리 + .mmd(mermaid) 파일이 정본. 필기노트와 같은 vaultTree 계층을 감싼 것.
 
 import { createVaultTree } from "./vaultTree";
+import { getRoot } from "./workspace";
 
 export {
   parentOf,
@@ -28,7 +29,7 @@ const STARTER = `erDiagram
 `;
 
 const tree = createVaultTree({
-  root: "vault/diagrams",
+  root: () => getRoot("diagrams"),
   exts: [".mmd", ".mermaid"],
   template: () => STARTER,
 });

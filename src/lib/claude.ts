@@ -172,11 +172,13 @@ export interface NoteAskResult {
   meta: InvocationMeta;
 }
 
-/** 필기노트 인라인 질문: 드래그한 문장 + 질문 + 노트 문맥 → 짧은 답변 */
+/** 필기노트 인라인 질문: 드래그한 문장 + 질문 + 노트 문맥 → 짧은 답변.
+ *  history 를 주면 같은 선택 부분에 대한 이전 문답을 이어받아 후속 질문으로 답한다. */
 export async function claudeNoteAsk(params: {
   selection: string;
   question: string;
   noteMarkdown: string;
+  history?: { question: string; answer: string }[];
   model?: string | null;
   cliPath?: string | null;
   provider?: string | null;
@@ -186,6 +188,9 @@ export async function claudeNoteAsk(params: {
     selection: params.selection,
     question: params.question,
     noteMarkdown: params.noteMarkdown,
+    history: params.history?.length
+      ? params.history.map((t) => ({ question: t.question, answer: t.answer }))
+      : null,
     model: params.model ?? null,
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,

@@ -1,7 +1,8 @@
 // 필기노트 인라인 질문(노션 댓글식) 레이어 — 읽기 모드 전용.
-// 드래그 선택 → "질문" 플로팅 버튼 → 팝오버에서 질문 → AI 짧은 답변 → 사이드카에 저장.
+// 드래그 선택 → "질문" 플로팅 버튼 → 우측 고정 패널에서 질문 → AI 짧은 답변 → 사이드카에 저장.
 // 저장된 질문은 본문 텍스트에 하이라이트(CSS Custom Highlight API, DOM 무변경)로 표시되고
-// 클릭하면 팝오버로 질문/답변을 본다. 앵커 = "렌더된 텍스트 문자열 + n번째 출현".
+// 클릭하면 우측 패널(항상 1개)로 스레드를 본다. 패널에서 후속 질문을 이어갈 수 있고
+// 이전 문답이 AI 에 문맥으로 전달된다. 앵커 = "렌더된 텍스트 문자열 + n번째 출현".
 
 import {
   useCallback,
@@ -17,6 +18,7 @@ import {
   loadComments,
   newCommentId,
   saveComments,
+  type AskTurn,
   type NoteComment,
 } from "../lib/comments";
 import { Markdown } from "./Markdown";
@@ -24,11 +26,11 @@ import { timeAgo } from "../ui";
 import { Icon } from "../icons";
 
 const HIGHLIGHT_KEY = "note-q";
-const POP_W = 380;
 
+// 패널은 우측 여백에 고정(CSS)이라 좌표를 들고 다니지 않는다 — 상태 하나 = 패널 최대 1개
 type Pop =
-  | { kind: "ask"; x: number; y: number; anchor: string; occurrence: number }
-  | { kind: "view"; x: number; y: number; id: string };
+  | { kind: "ask"; anchor: string; occurrence: number }
+  | { kind: "view"; id: string };
 
 /** container 기준 텍스트 오프셋 (Range.toString 은 블록 개행을 추가하지 않아 textContent 와 동일 공간) */
 function offsetIn(container: Node, node: Node, offset: number): number {
@@ -100,12 +102,15 @@ export function NoteCommentLayer({
   containerRef,
   config,
   onCountChange,
+  onPromote,
 }: {
   noteRel: string;
   body: string;
   containerRef: RefObject<HTMLDivElement | null>;
   config: AppConfig | null;
   onCountChange?: (n: number) => void;
+  /** 선택 영역을 개념으로 승격 (NotesView 가 모달을 연다). 선택 텍스트를 넘긴다 */
+  onPromote?: (selection: string) => void;
 }) {
   const [comments, setComments] = useState<NoteComment[]>([]);
   // 선택 정보는 "선택하는 순간" 미리 계산해 둔다 — 버튼 클릭 시점의 라이브 셀렉션에
@@ -121,8 +126,14 @@ export function NoteCommentLayer({
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const [askError, setAskError] = useState<string | null>(null);
+  // 답변 대기 중인 후속 질문 — 해당 스레드 끝에 말풍선으로 먼저 보여준다
+  const [pendingQ, setPendingQ] = useState<{ id: string; q: string } | null>(
+    null,
+  );
 
   const popRef = useRef<HTMLDivElement>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
+  const followUpRef = useRef<HTMLTextAreaElement>(null);
   const rangesRef = useRef<{ id: string; range: Range }[]>([]);
   const relRef = useRef(noteRel);
   relRef.current = noteRel;
@@ -250,7 +261,9 @@ export function NoteCommentLayer({
       for (const { id, range } of rangesRef.current) {
         try {
           if (range.isPointInRange(caret.startContainer, caret.startOffset)) {
-            setPop({ kind: "view", x: e.clientX, y: e.clientY, id });
+            setQuestion("");
+            setAskError(null);
+            setPop({ kind: "view", id });
             return;
           }
         } catch {
@@ -262,7 +275,8 @@ export function NoteCommentLayer({
     return () => document.removeEventListener("click", onClick);
   }, [containerRef]);
 
-  // 팝오버 닫기: 바깥 클릭 / Esc / 스크롤 (답변 생성 중엔 유지)
+  // 패널 닫기: 바깥 클릭 / Esc (답변 생성 중 Esc 는 무시).
+  // 우측에 고정된 패널이라 스크롤로는 닫지 않는다 — 본문을 훑으며 스레드를 이어갈 수 있게.
   useEffect(() => {
     if (!pop) return;
     const down = (e: MouseEvent) => {
@@ -272,34 +286,30 @@ export function NoteCommentLayer({
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !asking) setPop(null);
     };
-    // 스크롤 시엔 '보기' 팝오버만 닫는다 — '질문 작성'은 autoFocus 가 유발하는
-    // 미세 스크롤에 곧바로 닫히는 경합이 있어 열어 둔다(fixed 라 위치는 유지됨).
-    const scroll = () => {
-      setPop((p) => (p && p.kind === "view" ? null : p));
-    };
     document.addEventListener("mousedown", down);
     window.addEventListener("keydown", key);
-    window.addEventListener("scroll", scroll, true);
     return () => {
       document.removeEventListener("mousedown", down);
       window.removeEventListener("keydown", key);
-      window.removeEventListener("scroll", scroll, true);
     };
   }, [pop, asking]);
 
-  // "질문" 버튼: 선택 시점에 계산해 둔 정보로 팝오버를 연다 (라이브 셀렉션에 의존하지 않음)
+  // "질문" 버튼: 선택 시점에 계산해 둔 정보로 패널을 연다 (라이브 셀렉션에 의존하지 않음)
   function openAsk() {
     const si = selInfo;
     if (!si) return;
     setQuestion("");
     setAskError(null);
-    setPop({
-      kind: "ask",
-      x: si.x,
-      y: si.bottom,
-      anchor: si.anchor,
-      occurrence: si.occurrence,
-    });
+    setPop({ kind: "ask", anchor: si.anchor, occurrence: si.occurrence });
+    setSelInfo(null);
+    window.getSelection()?.removeAllRanges();
+  }
+
+  // "개념으로": 선택 텍스트를 위로 넘겨 승격 모달을 연다
+  function openPromote() {
+    const si = selInfo;
+    if (!si || !onPromote) return;
+    onPromote(si.anchor);
     setSelInfo(null);
     window.getSelection()?.removeAllRanges();
   }
@@ -337,14 +347,80 @@ export function NoteCommentLayer({
       if (relRef.current === rel) {
         setComments(next);
         notifyCount(next);
-        setPop((p) =>
-          p && p.kind === "ask" ? { kind: "view", x: p.x, y: p.y, id: cm.id } : p,
-        );
+        setQuestion("");
+        setPop((p) => (p && p.kind === "ask" ? { kind: "view", id: cm.id } : p));
       }
     } catch (e) {
       setAskError(friendlyError(e));
     } finally {
       setAsking(false);
+    }
+  }
+
+  // 후속 질문: 스레드의 이전 문답 전체를 문맥으로 실어 보내고, 답을 스레드 끝에 붙인다
+  async function submitFollowUp() {
+    if (!pop || pop.kind !== "view" || !config || asking) return;
+    const target = comments.find((c) => c.id === pop.id);
+    if (!target) return;
+    const q = question.trim();
+    if (q.length < 2) return;
+    const rel = noteRel;
+    const history = [
+      { question: target.question, answer: target.answer },
+      ...(target.followUps ?? []).map((t) => ({
+        question: t.question,
+        answer: t.answer,
+      })),
+    ];
+    setAsking(true);
+    setAskError(null);
+    setPendingQ({ id: target.id, q });
+    setQuestion("");
+    // 방금 보낸 질문(pending 말풍선)이 보이게 스레드 맨 아래로
+    requestAnimationFrame(() => {
+      const t = threadRef.current;
+      if (t) t.scrollTop = t.scrollHeight;
+    });
+    try {
+      const { answer, meta } = await claudeNoteAsk({
+        selection: target.anchor,
+        question: q,
+        noteMarkdown: body,
+        history,
+        model: config.model,
+        cliPath: config.cliPath,
+        provider: config.provider,
+      });
+      const turn: AskTurn = {
+        question: q,
+        answer,
+        createdAt: Date.now(),
+        model: meta.model,
+      };
+      // 디스크 기준 병합 — 요청 중 다른 저장이 있었어도 해당 스레드에만 덧붙인다
+      const list = await loadComments(rel);
+      const next = list.map((c) =>
+        c.id === target.id
+          ? { ...c, followUps: [...(c.followUps ?? []), turn] }
+          : c,
+      );
+      await saveComments(rel, next);
+      if (relRef.current === rel) {
+        setComments(next);
+        notifyCount(next);
+        // 새로 달린 답변이 보이게 스레드 맨 아래로 + 바로 이어서 물을 수 있게 포커스 복원
+        requestAnimationFrame(() => {
+          const t = threadRef.current;
+          if (t) t.scrollTop = t.scrollHeight;
+          followUpRef.current?.focus();
+        });
+      }
+    } catch (e) {
+      setAskError(friendlyError(e));
+      setQuestion(q); // 실패한 질문은 입력으로 되돌려 바로 다시 보낼 수 있게
+    } finally {
+      setAsking(false);
+      setPendingQ(null);
     }
   }
 
@@ -365,38 +441,65 @@ export function NoteCommentLayer({
       }
     : undefined;
 
-  const popStyle = pop
-    ? {
-        left: Math.min(Math.max(12, pop.x - 40), window.innerWidth - POP_W - 12),
-        top: Math.min(pop.y + 10, window.innerHeight - 280),
-      }
-    : undefined;
-
   const viewComment =
     pop?.kind === "view" ? comments.find((c) => c.id === pop.id) : undefined;
+  // 스레드 = 첫 문답 + 후속 문답들 (v1 사이드카는 첫 문답 하나)
+  const turns: AskTurn[] = viewComment
+    ? [
+        {
+          question: viewComment.question,
+          answer: viewComment.answer,
+          createdAt: viewComment.createdAt,
+          model: viewComment.model,
+        },
+        ...(viewComment.followUps ?? []),
+      ]
+    : [];
 
   return createPortal(
     <>
       {selInfo && !pop && (
-        <button
-          className="cmt-fab"
-          style={fabStyle}
-          title="선택한 부분에 질문 달기"
-          // mousedown 은 선택 해제 방지만, 열기는 click 에서 (앵커는 이미 캡처됨)
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={openAsk}
-        >
-          <Icon name="message" size={13} />
-          질문
-        </button>
+        <div className="cmt-fab-bar" style={fabStyle}>
+          <button
+            className="cmt-fab"
+            title="선택한 부분에 질문 달기"
+            // mousedown 은 선택 해제 방지만, 열기는 click 에서 (앵커는 이미 캡처됨)
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={openAsk}
+          >
+            <Icon name="message" size={13} />
+            질문
+          </button>
+          {onPromote && (
+            <button
+              className="cmt-fab"
+              title="선택한 부분을 개념 카드로 만들기"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={openPromote}
+            >
+              <Icon name="layers" size={13} />
+              개념으로
+            </button>
+          )}
+        </div>
       )}
 
       {pop && (
-        <div ref={popRef} className="cmt-pop" style={popStyle}>
+        <div ref={popRef} className="cmt-pop">
           {pop.kind === "ask" ? (
             <>
-              <div className="cmt-anchor" title={pop.anchor}>
-                “{pop.anchor}”
+              <div className="cmt-pop-head">
+                <div className="cmt-anchor" title={pop.anchor}>
+                  “{pop.anchor}”
+                </div>
+                <button
+                  className="icon-btn ghost sm"
+                  title="닫기"
+                  onClick={() => setPop(null)}
+                  disabled={asking}
+                >
+                  <Icon name="x" size={14} />
+                </button>
               </div>
               <textarea
                 className="textarea"
@@ -438,23 +541,80 @@ export function NoteCommentLayer({
             </>
           ) : viewComment ? (
             <>
-              <div className="cmt-anchor" title={viewComment.anchor}>
-                “{viewComment.anchor}”
+              <div className="cmt-pop-head">
+                <div className="cmt-anchor" title={viewComment.anchor}>
+                  “{viewComment.anchor}”
+                </div>
+                <button
+                  className="icon-btn ghost sm"
+                  title="닫기"
+                  onClick={() => setPop(null)}
+                >
+                  <Icon name="x" size={14} />
+                </button>
               </div>
-              <div className="cmt-q">
-                <Icon name="message" size={12} />
-                {viewComment.question}
+              <div className="cmt-thread" ref={threadRef}>
+                {turns.map((t, i) => (
+                  <div className="cmt-turn" key={i}>
+                    <div className="cmt-q">
+                      <Icon name="message" size={12} />
+                      {t.question}
+                    </div>
+                    <div className="cmt-a markdown">
+                      <Markdown>{t.answer}</Markdown>
+                    </div>
+                  </div>
+                ))}
+                {pendingQ?.id === viewComment.id && (
+                  <div className="cmt-turn">
+                    <div className="cmt-q">
+                      <Icon name="message" size={12} />
+                      {pendingQ.q}
+                    </div>
+                    <div className="cmt-a cmt-pending">답변 생성 중…</div>
+                  </div>
+                )}
               </div>
-              <div className="cmt-a markdown">
-                <Markdown>{viewComment.answer}</Markdown>
+              {askError && (
+                <div className="error-note" style={{ marginTop: 8 }}>
+                  {askError}
+                </div>
+              )}
+              <div className="cmt-followup">
+                <textarea
+                  ref={followUpRef}
+                  className="textarea"
+                  style={{ fontFamily: "var(--font)" }}
+                  rows={1}
+                  autoFocus
+                  placeholder="이어서 질문하기…"
+                  value={question}
+                  disabled={asking}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      void submitFollowUp();
+                    }
+                  }}
+                />
+                <button
+                  className="btn btn-primary btn-sm"
+                  title="후속 질문 보내기"
+                  onClick={() => void submitFollowUp()}
+                  disabled={asking || question.trim().length < 2 || !config?.provider}
+                >
+                  <Icon name="sparkles" size={13} />
+                </button>
               </div>
               <div className="cmt-meta">
-                {timeAgo(viewComment.createdAt)}
+                {timeAgo(turns[turns.length - 1]?.createdAt ?? viewComment.createdAt)}
                 <span className="spacer" />
                 <button
                   className="icon-btn ghost sm danger"
-                  title="질문 삭제"
+                  title="질문 스레드 삭제"
                   onClick={() => void deleteComment(viewComment.id)}
+                  disabled={asking}
                 >
                   <Icon name="trash" size={13} />
                 </button>

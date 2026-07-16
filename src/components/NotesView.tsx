@@ -23,6 +23,15 @@ import { Modal, Select, Spinner, timeAgo } from "../ui";
 import { Icon } from "../icons";
 import type { AppConfig } from "../lib/config";
 import { NoteAiModal } from "./NoteAiModal";
+import { RootPicker } from "./RootPicker";
+import { rootDisplayName, WORKSPACE_EVENT } from "../lib/workspace";
+import {
+  PromoteConceptModal,
+  type PromoteTarget,
+} from "./PromoteConceptModal";
+import { loadNoteConcepts, type NoteConceptLink } from "../lib/noteConcepts";
+import { openConceptInApp, OPEN_NOTE } from "../lib/nav";
+import { emit } from "@tauri-apps/api/event";
 
 // 이동/생성 위치 Select 값 인코딩 (루트 '' ↔ '/')
 const encodeDir = (d: string) => (d ? `/${d}` : "/");
@@ -63,6 +72,8 @@ export function NotesView({
   const [confirmDelete, setConfirmDelete] = useState<DeleteTarget | null>(null);
   const [pendingOpen, setPendingOpen] = useState<string | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
+  const [promote, setPromote] = useState<PromoteTarget | null>(null);
+  const [madeConcepts, setMadeConcepts] = useState<NoteConceptLink[]>([]);
 
   // 우측 플로팅 목차 (읽기 모드, h1~h3)
   const detailRef = useRef<HTMLElement | null>(null);
@@ -148,6 +159,21 @@ export function NotesView({
     if (active) void reload();
   }, [active, reload]);
 
+  // 워크스페이스 루트("폴더 열기") 변경 → 선택/트리 상태 초기화 후 새 루트 로드
+  useEffect(() => {
+    const h = (e: Event) => {
+      if ((e as CustomEvent).detail !== "notes") return;
+      setSelected(null);
+      setEditing(false);
+      setExpanded(new Set());
+      setActiveDir("");
+      setOpError(null);
+      void reload();
+    };
+    window.addEventListener(WORKSPACE_EVENT, h);
+    return () => window.removeEventListener(WORKSPACE_EVENT, h);
+  }, [reload]);
+
   /** dir 와 그 조상 폴더를 모두 펼침 */
   function expandTo(dir: string) {
     if (!dir) return;
@@ -202,6 +228,32 @@ export function NotesView({
     }
     void doOpen(path);
   }
+
+  // 선택된 노트에서 만든 개념(역참조) 로드
+  const loadMade = useCallback((rel: string | null) => {
+    if (!rel) {
+      setMadeConcepts([]);
+      return;
+    }
+    loadNoteConcepts(rel)
+      .then(setMadeConcepts)
+      .catch(() => setMadeConcepts([]));
+  }, []);
+  useEffect(() => {
+    loadMade(selected);
+  }, [selected, loadMade]);
+
+  // 개념 상세의 "출처 노트 열기" → 이 노트를 연다 (섹션 전환은 App 이 처리)
+  const openNoteRef = useRef(openNote);
+  openNoteRef.current = openNote;
+  useEffect(() => {
+    const h = (e: Event) => {
+      const path = (e as CustomEvent<{ path: string }>).detail?.path;
+      if (typeof path === "string") openNoteRef.current(path);
+    };
+    window.addEventListener(OPEN_NOTE, h);
+    return () => window.removeEventListener(OPEN_NOTE, h);
+  }, []);
 
   function toggleDir(n: NoteNode) {
     setExpanded((prev) => {
@@ -439,7 +491,7 @@ export function NotesView({
     <div className="body">
       <aside className="list">
         <div className="notes-tree-head">
-          <span className="title">필기노트</span>
+          <RootPicker section="notes" />
           <span className="spacer" />
           <button
             className="icon-btn sm"
@@ -604,7 +656,7 @@ export function NotesView({
                 <div className="markdown" ref={mdRef}>
                   <Markdown>{body}</Markdown>
                 </div>
-                {/* 드래그 → 질문 → AI 답변 (노션 댓글식). 본문 밖 사이드카에 저장 */}
+                {/* 드래그 → 질문(AI 답변) / 개념으로(승격). 본문 밖 사이드카에 저장 */}
                 <NoteCommentLayer
                   key={selected}
                   noteRel={selected}
@@ -612,6 +664,9 @@ export function NotesView({
                   containerRef={mdRef}
                   config={config}
                   onCountChange={setCommentCount}
+                  onPromote={(selection) =>
+                    setPromote({ noteRel: selected, selection, noteBody: body })
+                  }
                 />
                 {toc.length >= 2 && (
                   <nav className="note-toc">
@@ -633,8 +688,26 @@ export function NotesView({
               </div>
             )}
 
+            {!editing && madeConcepts.length > 0 && (
+              <div className="note-made-concepts">
+                <span className="note-made-label">
+                  <Icon name="layers" size={12} />이 노트에서 만든 개념
+                </span>
+                {madeConcepts.map((c) => (
+                  <button
+                    key={c.conceptId}
+                    className="chip btn-like"
+                    title={`개념 열기 — “${c.anchor}”`}
+                    onClick={() => openConceptInApp(c.conceptId)}
+                  >
+                    {c.title}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="detail-meta">
-              notes/{selected}
+              {rootDisplayName("notes")}/{selected}
               {mtime !== null && <> · 수정 {timeAgo(mtime)}</>}
               {commentCount > 0 && <> · 질문 {commentCount}개</>}
             </div>
@@ -811,6 +884,20 @@ export function NotesView({
           }}
         />
       )}
+
+      {/* 선택 영역 → 개념 승격 */}
+      <PromoteConceptModal
+        target={promote}
+        config={config}
+        onClose={() => setPromote(null)}
+        onDone={(_id, title) => {
+          setPromote(null);
+          loadMade(selected); // 노트 푸터의 "만든 개념" 갱신
+          void emit("concept-changed"); // 개념 탭·위젯 반영
+          setOpError(null);
+          void title;
+        }}
+      />
 
       {/* 저장 안 된 변경 → 다른 노트로 이동 */}
       <Modal

@@ -22,6 +22,15 @@
     "fs:allow-appdata-read-recursive",
     "fs:allow-appdata-write-recursive",
     "fs:allow-appdata-meta-recursive",
-    "shell:default"
+    "shell:default",
+    "dialog:allow-open",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        {
+          "path": "$HOME/**"
+        }
+      ]
+    }
   ]
 }

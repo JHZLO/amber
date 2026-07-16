@@ -77,8 +77,9 @@ export function flattenDirs(tree: VaultNode[]): string[] {
 }
 
 export interface VaultTreeConfig {
-  /** appDataDir 기준 루트 (예: 'vault/notes') */
-  root: string;
+  /** 루트 폴더. appdata 상대경로('vault/notes') 또는 절대경로('/Users/…').
+   *  getter 를 주면 호출 시점마다 해석 — "폴더 열기"로 루트가 바뀌어도 인스턴스 재생성 불필요. */
+  root: string | (() => string);
   /** 트리에 보일 파일 확장자(소문자, 점 포함). 첫 항목이 생성 시 기본 확장자 */
   exts: string[];
   /** 새 파일 초기 내용 (파일명 기반) */
@@ -86,7 +87,8 @@ export interface VaultTreeConfig {
 }
 
 export function createVaultTree(cfg: VaultTreeConfig) {
-  const full = (rel: string) => (rel ? `${cfg.root}/${rel}` : cfg.root);
+  const rootOf = typeof cfg.root === "function" ? cfg.root : () => cfg.root as string;
+  const full = (rel: string) => (rel ? `${rootOf()}/${rel}` : rootOf());
   const mainExt = cfg.exts[0];
 
   const stripExt = (name: string) => {
@@ -102,7 +104,12 @@ export function createVaultTree(cfg: VaultTreeConfig) {
   };
 
   async function ensureRoot(): Promise<void> {
-    await mkdir(cfg.root, { baseDir: BASE, recursive: true });
+    // 기본 보관함(appdata 상대)만 자동 생성. 사용자가 연 절대경로 폴더는 이미 존재한다고 가정
+    // (사라졌으면 트리 로드가 에러를 내고 뷰가 안내).
+    const root = rootOf();
+    if (!root.startsWith("/")) {
+      await mkdir(root, { baseDir: BASE, recursive: true });
+    }
   }
 
   function sortNodes(nodes: VaultNode[]): VaultNode[] {

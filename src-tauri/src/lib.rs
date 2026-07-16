@@ -18,15 +18,21 @@ fn greet(name: &str) -> String {
 /// vault 밖 경로는 거부한다. 대상이 없으면 멱등 성공.
 #[tauri::command]
 fn move_to_trash(app: tauri::AppHandle, rel_path: String) -> Result<(), String> {
+    // rel_path 는 appdata 상대경로(기본 보관함) 또는 절대경로("폴더 열기"로 연 워크스페이스).
     let base = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let target = base.join(&rel_path);
+    let p = std::path::PathBuf::from(&rel_path);
+    let target = if p.is_absolute() { p } else { base.join(&p) };
     if !target.exists() {
         return Ok(());
     }
-    let vault = base.join("vault");
     let canon_target = target.canonicalize().map_err(|e| e.to_string())?;
-    let canon_vault = vault.canonicalize().map_err(|e| e.to_string())?;
-    if !canon_target.starts_with(&canon_vault) {
+    let canon_base = base.canonicalize().map_err(|e| e.to_string())?;
+    let home = app.path().home_dir().map_err(|e| e.to_string())?;
+    let canon_home = home.canonicalize().map_err(|e| e.to_string())?;
+    // 허용: appdata 하위, 또는 홈 하위(홈 자체는 금지) — 시스템 경로 오삭제 방지
+    let allowed = canon_target.starts_with(&canon_base)
+        || (canon_target.starts_with(&canon_home) && canon_target != canon_home);
+    if !allowed {
         return Err("허용되지 않은 경로입니다.".into());
     }
     trash::delete(&canon_target).map_err(|e| e.to_string())?;
@@ -45,6 +51,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(
             tauri_plugin_sql::Builder::new()

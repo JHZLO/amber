@@ -20,6 +20,7 @@ import { NotesView } from "./components/NotesView";
 import { AiOnboarding } from "./components/AiOnboarding";
 import { DiagramsView } from "./components/DiagramsView";
 import { THEME_EVENT, resolvedTheme, toggleTheme } from "./lib/theme";
+import { OPEN_CONCEPT, OPEN_NOTE } from "./lib/nav";
 
 type StatusTab = ConceptStatus | "all";
 type Section = "til" | "notes" | "diagrams";
@@ -125,21 +126,36 @@ function App() {
   const reloadRef = useRef(reload);
   reloadRef.current = reload;
 
+  // 개념 선택 이동 공통 로직 (필터에 가려 안 보이는 일 없게 전체 탭 + 필터 초기화)
+  const goToConcept = (id: number) => {
+    setSection("til");
+    setStatus("all");
+    setActiveTags([]);
+    setSearchInput("");
+    setSearch("");
+    setSelectedId(id);
+  };
+
   // 위젯 등 다른 창에서의 변경/열기 요청 수신
   useEffect(() => {
     const uns = [
       listen("concept-changed", () => reloadRef.current()),
-      listen<{ id: number }>("open-concept", (e) => {
-        // 필터에 가려 안 보이는 일이 없도록 전체 탭 + 필터 초기화 후 선택
-        setSection("til");
-        setStatus("all");
-        setActiveTags([]);
-        setSearchInput("");
-        setSearch("");
-        setSelectedId(e.payload.id);
-      }),
+      listen<{ id: number }>("open-concept", (e) => goToConcept(e.payload.id)),
     ];
     return () => uns.forEach((u) => u.then((f) => f()));
+  }, []);
+
+  // 앱 내 노트↔개념 상호 이동 (같은 창, window CustomEvent)
+  useEffect(() => {
+    const onConcept = (e: Event) =>
+      goToConcept((e as CustomEvent<{ id: number }>).detail.id);
+    const onNote = () => setSection("notes"); // NotesView 가 실제 파일 열기 처리
+    window.addEventListener(OPEN_CONCEPT, onConcept);
+    window.addEventListener(OPEN_NOTE, onNote);
+    return () => {
+      window.removeEventListener(OPEN_CONCEPT, onConcept);
+      window.removeEventListener(OPEN_NOTE, onNote);
+    };
   }, []);
 
   const selected = concepts.find((c) => c.id === selectedId) ?? null;
