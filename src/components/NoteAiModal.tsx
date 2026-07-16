@@ -7,7 +7,7 @@ import { DiffView } from "./DiffView";
 import type { AppConfig } from "../lib/config";
 import { claudeNoteComposeStream, friendlyError } from "../lib/claude";
 import { loadPrompts, type SavedPrompt } from "../lib/prompts";
-import { Modal, Spinner } from "../ui";
+import { AiThinking, Modal } from "../ui";
 import { Icon } from "../icons";
 
 type Step = "prompt" | "loading" | "preview";
@@ -206,17 +206,16 @@ export function NoteAiModal({
 
       {step === "loading" && (
         <div className="note-stream">
-          <div className="note-stream-head">
-            <Spinner />
-            <span>Claude가 작성하는 중…</span>
-          </div>
-          {streamText ? (
+          <AiThinking
+            compact={!!streamText}
+            label="Claude가 작성하는 중…"
+            hint={streamText ? undefined : "응답을 기다리는 중…"}
+          />
+          {streamText && (
             <pre className="note-stream-body" ref={streamRef}>
               {streamText}
               <span className="stream-caret" />
             </pre>
-          ) : (
-            <div className="hint">응답을 기다리는 중…</div>
           )}
         </div>
       )}

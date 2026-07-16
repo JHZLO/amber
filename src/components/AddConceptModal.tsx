@@ -6,7 +6,7 @@ import type { Confidence } from "../types";
 import { claudeGenerate, friendlyError } from "../lib/claude";
 import { createConcept, getSetting, setSetting } from "../lib/db";
 import { detailPathFor, writeNote } from "../lib/vault";
-import { Modal, Spinner } from "../ui";
+import { AiThinking, Modal } from "../ui";
 import { Icon } from "../icons";
 
 type Step = "paste" | "loading" | "preview";
@@ -198,11 +198,10 @@ export function AddConceptModal({
       )}
 
       {step === "loading" && (
-        <div className="loading-box">
-          <Spinner />
-          <div>Claude가 정리하는 중…</div>
-          <div className="hint">원문에서 핵심 개념 → 요약 → 상세 노트</div>
-        </div>
+        <AiThinking
+          label="Claude가 정리하는 중…"
+          hint="원문에서 핵심 개념 → 요약 → 상세 노트"
+        />
       )}
 
       {step === "preview" && (

@@ -22,7 +22,7 @@ import {
   type NoteComment,
 } from "../lib/comments";
 import { Markdown } from "./Markdown";
-import { timeAgo } from "../ui";
+import { AiThinking, timeAgo } from "../ui";
 import { Icon } from "../icons";
 
 const HIGHLIGHT_KEY = "note-q";
@@ -556,23 +556,23 @@ export function NoteCommentLayer({
                   {askError}
                 </div>
               )}
-              <div className="cmt-actions">
-                <button
-                  className="btn btn-sm"
-                  onClick={() => setPop(null)}
-                  disabled={asking}
-                >
-                  취소
-                </button>
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() => void submitAsk()}
-                  disabled={asking || question.trim().length < 2 || !config?.provider}
-                >
-                  <Icon name="sparkles" size={13} />
-                  {asking ? "답변 생성 중…" : "AI에게 질문"}
-                </button>
-              </div>
+              {asking ? (
+                <AiThinking compact label="답변 생성 중…" />
+              ) : (
+                <div className="cmt-actions">
+                  <button className="btn btn-sm" onClick={() => setPop(null)}>
+                    취소
+                  </button>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => void submitAsk()}
+                    disabled={question.trim().length < 2 || !config?.provider}
+                  >
+                    <Icon name="sparkles" size={13} />
+                    AI에게 질문
+                  </button>
+                </div>
+              )}
             </>
           ) : viewComment ? (
             <>
@@ -606,7 +606,9 @@ export function NoteCommentLayer({
                       <Icon name="message" size={12} />
                       {pendingQ.q}
                     </div>
-                    <div className="cmt-a cmt-pending">답변 생성 중…</div>
+                    <div className="cmt-a">
+                      <AiThinking compact label="답변 생성 중…" />
+                    </div>
                   </div>
                 )}
               </div>

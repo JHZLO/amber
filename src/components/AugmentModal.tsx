@@ -5,7 +5,7 @@ import type { ConceptWithTags } from "../types";
 import { claudeAugment, friendlyError } from "../lib/claude";
 import { setConceptTags, updateConceptContent } from "../lib/db";
 import { writeNote } from "../lib/vault";
-import { Modal, Spinner } from "../ui";
+import { AiThinking, Modal } from "../ui";
 import { Icon } from "../icons";
 
 type Step = "prompt" | "loading" | "preview";
@@ -202,11 +202,10 @@ export function AugmentModal({
       )}
 
       {step === "loading" && (
-        <div className="loading-box">
-          <Spinner />
-          <div>Claude가 노트를 보강하는 중…</div>
-          <div className="hint">현재 노트 + 지시 → 보강된 상세 노트</div>
-        </div>
+        <AiThinking
+          label="Claude가 노트를 보강하는 중…"
+          hint="현재 노트 + 지시 → 보강된 상세 노트"
+        />
       )}
 
       {step === "preview" && (

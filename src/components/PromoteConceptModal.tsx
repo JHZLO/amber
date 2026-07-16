@@ -11,7 +11,7 @@ import { claudeGenerate, friendlyError } from "../lib/claude";
 import { createConcept } from "../lib/db";
 import { detailPathFor, writeNote } from "../lib/vault";
 import { addNoteConcept } from "../lib/noteConcepts";
-import { Modal, Spinner } from "../ui";
+import { AiThinking, Modal } from "../ui";
 import { Icon } from "../icons";
 
 type Step = "loading" | "preview";
@@ -166,11 +166,10 @@ export function PromoteConceptModal({
   return (
     <Modal open={open} title="개념으로 만들기" onClose={onClose} footer={footer} wide>
       {step === "loading" && (
-        <div className="loading-box">
-          <Spinner />
-          <div>선택한 내용을 개념 카드로 정리하는 중…</div>
-          <div className="hint">선택 부분을 중심으로 요약·상세를 만들어요</div>
-        </div>
+        <AiThinking
+          label="선택한 내용을 개념 카드로 정리하는 중…"
+          hint="선택 부분을 중심으로 요약·상세를 만들어요"
+        />
       )}
 
       {step === "preview" && (

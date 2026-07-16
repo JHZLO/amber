@@ -681,6 +681,97 @@ select {
   color: var(--text-2);
 }
 
+/* ---- AI 응답 대기 공통 로딩 (ui.tsx <AiThinking>) — 인디터미닛 스윕 바 + 펄스 스파클 ----
+   모든 AI 기능이 이걸로 통일. 디자인 시스템(§3)대로 색이 아닌 채움/명암·모션으로만 표현. */
+.ai-thinking {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 36px 24px;
+  text-align: center;
+  color: var(--text-2);
+}
+.ai-thinking-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.ai-thinking-spark {
+  display: inline-flex;
+  color: var(--text-3);
+  animation: ai-spark 1.4s ease-in-out infinite;
+}
+@keyframes ai-spark {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.9) rotate(-6deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1) rotate(8deg);
+  }
+}
+.ai-progress {
+  position: relative;
+  width: 100%;
+  max-width: 240px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.ai-progress-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 40%;
+  border-radius: 999px;
+  background: var(--text);
+  animation: ai-sweep 1.15s ease-in-out infinite;
+}
+@keyframes ai-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+.ai-thinking-hint {
+  margin-top: -2px;
+}
+/* compact: 스레드 말풍선 등 인라인 — 좌측정렬·여백 최소·바 꽉 채움 */
+.ai-thinking.compact {
+  align-items: stretch;
+  gap: 6px;
+  padding: 2px 0 4px;
+  text-align: left;
+}
+.ai-thinking.compact .ai-thinking-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+.ai-thinking.compact .ai-progress {
+  max-width: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-thinking-spark,
+  .ai-progress-bar {
+    animation: none;
+  }
+  .ai-progress-bar {
+    width: 100%;
+    opacity: 0.4;
+  }
+}
+
 /* ---- empty / 상태 메시지 ---- */
 .empty {
   display: flex;
@@ -1688,14 +1779,6 @@ html.widget-root #root {
   flex-direction: column;
   gap: 10px;
 }
-.note-stream-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-2);
-  font-weight: 600;
-}
 .note-stream-body {
   margin: 0;
   max-height: 420px;
@@ -2012,19 +2095,6 @@ html.widget-root #root {
 }
 .cmt-a p {
   margin: 6px 0;
-}
-.cmt-pending {
-  color: var(--text-3);
-  animation: cmt-pending-pulse 1.2s ease-in-out infinite;
-}
-@keyframes cmt-pending-pulse {
-  0%,
-  100% {
-    opacity: 0.9;
-  }
-  50% {
-    opacity: 0.45;
-  }
 }
 /* 후속 질문 입력 줄 (스레드 아래 고정) */
 .cmt-followup {

@@ -33,6 +33,38 @@ export function Spinner() {
   return <span className="spinner" />;
 }
 
+/** AI 응답 대기 공통 로딩 — 생동감 있는 인디터미닛 스윕 바 + 펄스 스파클.
+ *  모든 AI 기능(질문·작성·개념 생성/보강)에서 이 컴포넌트로 통일한다.
+ *  compact: 스레드 말풍선 등 인라인 자리(중앙정렬·큰 여백 없이 좌측·꽉 찬 바). */
+export function AiThinking({
+  label,
+  hint,
+  compact,
+}: {
+  label: string;
+  hint?: string;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={`ai-thinking ${compact ? "compact" : ""}`}
+      role="status"
+      aria-live="polite"
+    >
+      <div className="ai-thinking-label">
+        <span className="ai-thinking-spark">
+          <Icon name="sparkles" size={compact ? 12 : 14} />
+        </span>
+        <span>{label}</span>
+      </div>
+      <div className="ai-progress" aria-hidden="true">
+        <span className="ai-progress-bar" />
+      </div>
+      {hint && <div className="hint ai-thinking-hint">{hint}</div>}
+    </div>
+  );
+}
+
 export function TagChip({
   label,
   active,
