@@ -130,6 +130,8 @@ export function NoteCommentLayer({
   const [pendingQ, setPendingQ] = useState<{ id: string; q: string } | null>(
     null,
   );
+  // 패널을 놓을 자리: 본문 오른쪽 끝 ~ 목차 왼쪽 끝 사이의 여백(실측). 좁으면 null(우측 오버레이 폴백)
+  const [dock, setDock] = useState<{ left: number; width: number } | null>(null);
 
   const popRef = useRef<HTMLDivElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -294,6 +296,34 @@ export function NoteCommentLayer({
     };
   }, [pop, asking]);
 
+  // 패널 자리 실측: 본문(.markdown) 오른쪽 끝 ~ 목차(.note-toc) 왼쪽 끝 사이 여백에 끼운다.
+  // 그 여백을 넘치지 않게 폭을 줄이고, 여백이 너무 좁으면(좁은 창·목차 숨김) 우측 오버레이로 폴백.
+  useEffect(() => {
+    if (!pop) return;
+    const GAP = 24; // 본문/목차와 띄울 간격
+    const MIN = 260; // 이보다 좁은 여백이면 폴백(우측 오버레이) — 너무 좁은 패널 방지
+    const MAX = 380; // 패널 최대 폭
+    const measure = () => {
+      const content = containerRef.current;
+      if (!content) return setDock(null);
+      const cRect = content.getBoundingClientRect();
+      const toc = content
+        .closest(".note-read-wrap")
+        ?.querySelector(".note-toc") as HTMLElement | null;
+      const leftBound = cRect.right + GAP;
+      const rightBound =
+        toc && toc.offsetParent !== null
+          ? toc.getBoundingClientRect().left - GAP
+          : window.innerWidth - 16;
+      const avail = rightBound - leftBound;
+      if (avail < MIN) return setDock(null);
+      setDock({ left: leftBound, width: Math.min(MAX, avail) });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [pop, containerRef]);
+
   // "질문" 버튼: 선택 시점에 계산해 둔 정보로 패널을 연다 (라이브 셀렉션에 의존하지 않음)
   function openAsk() {
     const si = selInfo;
@@ -441,6 +471,11 @@ export function NoteCommentLayer({
       }
     : undefined;
 
+  // 실측한 여백이 있으면 그 자리에(폭 제한), 없으면 CSS 기본값(우측 오버레이 폴백)
+  const popStyle = dock
+    ? { left: dock.left, width: dock.width, right: "auto" as const }
+    : undefined;
+
   const viewComment =
     pop?.kind === "view" ? comments.find((c) => c.id === pop.id) : undefined;
   // 스레드 = 첫 문답 + 후속 문답들 (v1 사이드카는 첫 문답 하나)
@@ -485,7 +520,7 @@ export function NoteCommentLayer({
       )}
 
       {pop && (
-        <div ref={popRef} className="cmt-pop">
+        <div ref={popRef} className="cmt-pop" style={popStyle}>
           {pop.kind === "ask" ? (
             <>
               <div className="cmt-pop-head">

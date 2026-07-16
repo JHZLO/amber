@@ -1932,7 +1932,8 @@ html.widget-root #root {
   color: var(--text-3);
 }
 
-/* 질문 작성/스레드 패널 — 클릭 위치가 아니라 우측 여백에 고정(항상 최대 1개) */
+/* 질문 작성/스레드 패널 — 클릭 위치가 아니라 본문·목차 사이 여백에 고정(항상 최대 1개).
+   left/width 는 JS 가 여백을 실측해 인라인으로 넣고, 여백이 좁으면 아래 right 폴백으로 우측에 뜬다. */
 .cmt-pop {
   position: fixed;
   z-index: 95;
