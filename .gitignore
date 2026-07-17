@@ -33,3 +33,5 @@ dist-ssr
 .claude/
 .codex/
 .gemini/
+/AGENTS.md
+/CLAUDE.md
