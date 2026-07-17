@@ -63,7 +63,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(
             tauri_plugin_sql::Builder::new()
-                .add_migrations("sqlite:til.db", migrations)
+                .add_migrations("sqlite:amber.db", migrations)
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
@@ -75,6 +75,24 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // 구 프로젝트명(til) 잔재 정리: til.db → amber.db 로 이전.
+            // DB 는 프론트의 Database.load 시점에 열리므로, 그 전(setup)에 파일명을 바꿔 데이터를 보존한다.
+            // amber.db 가 아직 없을 때만(최초 1회), WAL/SHM 까지 함께 옮긴다.
+            if let Ok(dir) = app.path().app_config_dir() {
+                if dir.join("til.db").exists() && !dir.join("amber.db").exists() {
+                    for (old, new) in [
+                        ("til.db", "amber.db"),
+                        ("til.db-wal", "amber.db-wal"),
+                        ("til.db-shm", "amber.db-shm"),
+                    ] {
+                        let from = dir.join(old);
+                        if from.exists() {
+                            let _ = std::fs::rename(&from, dir.join(new));
+                        }
+                    }
+                }
+            }
+
             let handle = app.handle();
             let toggle_widget = MenuItem::with_id(
                 handle,

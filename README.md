@@ -79,7 +79,7 @@ AI와의 Q&A로 배운 개념을 카드로 정리해 바탕화면 위젯으로 �
 데이터 위치 (`~/Library/Application Support/dev.jhzlo.amber/`):
 
 ```
-til.db                          # 메타 (개념 카드·설정)
+amber.db                        # 메타 (개념 카드·할 일·설정)
 vault/
 ├── concepts/<ulid>/index.md    # 개념 상세 노트
 ├── notes/**/*.md               # 필기노트 (+ *.comments.json 질문 사이드카)
