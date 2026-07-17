@@ -29,8 +29,7 @@ dist-ssr
 *.pem
 *.key
 
-# 로컬 에이전트/개인 도구 설정 (단, 공유 슬래시 커맨드는 추적)
-.claude/*
-!.claude/commands/
+# 로컬 에이전트/개인 도구 설정 — 원격에 올리지 않는다 (AI 지침·커맨드 전부 로컬 전용)
+.claude/
 .codex/
 .gemini/
