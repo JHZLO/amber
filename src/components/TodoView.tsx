@@ -17,6 +17,7 @@ import {
   listOverdueOpen,
   listTodos,
   moveTodos,
+  reorderTodos,
   toggleTodo,
   updateTodoContent,
 } from "../lib/todos";
@@ -61,9 +62,13 @@ export function TodoView({ active }: { active: boolean }) {
   const [editText, setEditText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dragId, setDragId] = useState<number | null>(null);
 
   const quickRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const todosRef = useRef(todos);
+  todosRef.current = todos;
 
   const [calWidth, setCalWidth] = useState(() => {
     const s = Number(localStorage.getItem(CAL_W_KEY));
@@ -85,6 +90,50 @@ export function TodoView({ active }: { active: boolean }) {
       document.body.classList.remove("resizing-col");
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  // 할 일 순서 드래그 (포인터 기반 — WKWebView 에서 HTML5 DnD 보다 안정적).
+  // 커서 Y 로 대상 행을 찾아 배열을 실시간 재배치하고, 놓을 때 sort_order 를 저장.
+  function startDrag(e: ReactMouseEvent, id: number) {
+    e.preventDefault();
+    setDragId(id);
+    document.body.classList.add("dragging-rows");
+    const onMove = (ev: MouseEvent) => {
+      const rows = Array.from(
+        listRef.current?.querySelectorAll<HTMLElement>("[data-todo-id]") ?? [],
+      );
+      let targetId: number | null = null;
+      for (const row of rows) {
+        const r = row.getBoundingClientRect();
+        if (ev.clientY < r.top + r.height / 2) {
+          targetId = Number(row.dataset.todoId);
+          break;
+        }
+      }
+      setTodos((prev) => {
+        const from = prev.findIndex((x) => x.id === id);
+        const to =
+          targetId === null
+            ? prev.length - 1
+            : prev.findIndex((x) => x.id === targetId);
+        if (from === -1 || to === -1 || from === to) return prev;
+        const next = prev.slice();
+        const [moved] = next.splice(from, 1);
+        next.splice(from < to ? to - 1 : to, 0, moved);
+        return next;
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.classList.remove("dragging-rows");
+      setDragId(null);
+      void reorderTodos(todosRef.current.map((t) => t.id)).catch((err) =>
+        setError(errMsg(err)),
+      );
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -244,7 +293,20 @@ export function TodoView({ active }: { active: boolean }) {
   function renderRow(t: Todo, opts?: { overdue?: boolean }) {
     const isOverdue = opts?.overdue ?? false;
     return (
-      <div className={`todo-row ${t.done === 1 ? "done" : ""}`}>
+      <div
+        className={`todo-row ${t.done === 1 ? "done" : ""} ${dragId === t.id ? "dragging" : ""}`}
+        data-todo-id={t.id}
+      >
+        {!isOverdue && (
+          <span
+            className="todo-grip"
+            title="드래그해서 순서 변경"
+            aria-hidden="true"
+            onMouseDown={(e) => startDrag(e, t.id)}
+          >
+            <Icon name="grip" size={14} />
+          </span>
+        )}
         <Checkbox
           checked={t.done === 1}
           onChange={() => (isOverdue ? toggleOverdue(t) : toggle(t))}
@@ -423,7 +485,7 @@ export function TodoView({ active }: { active: boolean }) {
           </div>
         )}
 
-        <div className="todo-listing">
+        <div className="todo-listing" ref={listRef}>
           {todos.length === 0 ? (
             <div className="hint todo-day-empty">
               이 날의 할 일이 없어요 — 위 입력창에 적고 Enter.

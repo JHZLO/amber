@@ -31,7 +31,8 @@ export type IconName =
   | "moon"
   | "workflow"
   | "message"
-  | "calendar-check";
+  | "calendar-check"
+  | "grip";
 
 const PATHS: Record<IconName, ReactNode> = {
   "chevron-left": <path d="M15 18l-6-6 6-6" />,
@@ -176,6 +177,16 @@ const PATHS: Record<IconName, ReactNode> = {
       <rect x="3" y="4" width="18" height="18" rx="2" />
       <path d="M3 10h18" />
       <path d="m9 16 2 2 4-4" />
+    </>
+  ),
+  grip: (
+    <>
+      <circle cx="9" cy="6" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="18" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="6" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="18" r="1.4" fill="currentColor" stroke="none" />
     </>
   ),
 };

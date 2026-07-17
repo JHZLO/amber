@@ -2714,6 +2714,34 @@ body.resizing-col .todo-resizer::after {
 .todo-row:hover .checkbox:not(.checked) {
   color: var(--text-3); /* hover 시 옅은 체크 힌트 (Todoist) */
 }
+/* 드래그 순서 조정 핸들 — 좌측 여백에 hover 시만 표시(레이아웃 안 밀림) */
+.todo-grip {
+  position: absolute;
+  left: -16px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  color: var(--text-3);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.todo-row:hover .todo-grip {
+  opacity: 1;
+}
+.todo-grip:active {
+  cursor: grabbing;
+}
+.todo-row.dragging {
+  opacity: 0.55;
+  background: var(--surface-2);
+}
+body.dragging-rows {
+  cursor: grabbing;
+}
+body.dragging-rows * {
+  user-select: none !important;
+}
 .todo-text {
   flex: 1;
   min-width: 0;
@@ -2870,6 +2898,7 @@ body.resizing-col .todo-resizer::after {
   .todo-row,
   .todo-text,
   .todo-row .row-actions,
+  .todo-grip,
   .todo-overdue-caret,
   .todo-overdue-body {
     transition: none;

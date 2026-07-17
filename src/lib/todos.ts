@@ -7,11 +7,11 @@ import type { DayTodoCount, Todo } from "../types";
 
 const now = () => Date.now();
 
-/** 특정 날짜의 할 일. 미완료가 위, 그다음 생성순 (idx_todos_day 에 대응) */
+/** 특정 날짜의 할 일. 사용자가 정한 순서(sort_order) → 생성순 (idx_todos_sort 에 대응) */
 export async function listTodos(date: string): Promise<Todo[]> {
   const db = await getDb();
   return db.select<Todo[]>(
-    `SELECT * FROM todos WHERE due_date = $1 ORDER BY done, id`,
+    `SELECT * FROM todos WHERE due_date = $1 ORDER BY sort_order, id`,
     [date],
   );
 }
@@ -45,10 +45,23 @@ export async function createTodo(
 ): Promise<number> {
   const db = await getDb();
   const res = await db.execute(
-    `INSERT INTO todos (content, due_date) VALUES ($1, $2)`,
-    [content, dueDate],
+    `INSERT INTO todos (content, due_date, sort_order)
+     VALUES ($1, $2, (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM todos WHERE due_date = $3))`,
+    [content, dueDate, dueDate],
   );
   return res.lastInsertId as number;
+}
+
+/** 드래그로 정한 순서를 저장 — orderedIds 의 위치(0..n)를 각 항목의 sort_order 로 */
+export async function reorderTodos(orderedIds: number[]): Promise<void> {
+  if (!orderedIds.length) return;
+  const db = await getDb();
+  for (let i = 0; i < orderedIds.length; i++) {
+    await db.execute(`UPDATE todos SET sort_order = $1 WHERE id = $2`, [
+      i,
+      orderedIds[i],
+    ]);
+  }
 }
 
 /** 완료 토글. 이미 해당 상태면 no-op → 멱등(setStatus 패턴). completed_at 은 트리거가 스탬프 */

@@ -54,6 +54,12 @@ pub fn run() {
             sql: include_str!("../migrations/0002_todos.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "add_todo_sort_order",
+            sql: include_str!("../migrations/0003_todo_order.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
