@@ -59,7 +59,8 @@ export interface Todo {
   due_date: string; // 'YYYY-MM-DD' — 사용자 로컬 달력 날짜 (UTC ms 아님, lib/date.ts 참조)
   done: 0 | 1;
   completed_at: number | null; // UTC ms, 트리거가 관리
-  sort_order: number; // 표시 순서(드래그로 조정), 오름차순
+  parent_id: number | null; // 상위 항목 id (null=최상위). 1단계 중첩
+  sort_order: number; // 표시 순서(드래그로 조정), 형제 그룹 내 오름차순
   created_at: number; // UTC ms
   updated_at: number; // UTC ms
 }

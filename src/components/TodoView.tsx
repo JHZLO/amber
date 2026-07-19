@@ -17,7 +17,9 @@ import {
   listOverdueOpen,
   listTodos,
   moveTodos,
+  recomputeParentDone,
   reorderTodos,
+  setDoneWithChildren,
   toggleTodo,
   updateTodoContent,
 } from "../lib/todos";
@@ -60,11 +62,14 @@ export function TodoView({ active }: { active: boolean }) {
   const [quick, setQuick] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
+  const [addingChildFor, setAddingChildFor] = useState<number | null>(null);
+  const [childInput, setChildInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragId, setDragId] = useState<number | null>(null);
 
   const quickRef = useRef<HTMLInputElement>(null);
+  const childInputRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const todosRef = useRef(todos);
@@ -102,9 +107,15 @@ export function TodoView({ active }: { active: boolean }) {
     setDragId(id);
     document.body.classList.add("dragging-rows");
     const onMove = (ev: MouseEvent) => {
+      // 최상위 항목끼리만 순서 조정 (자식은 그립 없음) — 후보를 최상위 행으로 한정
       const rows = Array.from(
         listRef.current?.querySelectorAll<HTMLElement>("[data-todo-id]") ?? [],
-      );
+      ).filter((row) => {
+        const td = todosRef.current.find(
+          (x) => x.id === Number(row.dataset.todoId),
+        );
+        return td != null && td.parent_id == null;
+      });
       let targetId: number | null = null;
       for (const row of rows) {
         const r = row.getBoundingClientRect();
@@ -131,9 +142,9 @@ export function TodoView({ active }: { active: boolean }) {
       window.removeEventListener("mouseup", onUp);
       document.body.classList.remove("dragging-rows");
       setDragId(null);
-      void reorderTodos(todosRef.current.map((t) => t.id)).catch((err) =>
-        setError(errMsg(err)),
-      );
+      void reorderTodos(
+        todosRef.current.filter((t) => t.parent_id == null).map((t) => t.id),
+      ).catch((err) => setError(errMsg(err)));
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -223,19 +234,20 @@ export function TodoView({ active }: { active: boolean }) {
     }
   }
 
-  // 메인 목록 토글 — 낙관적 반영 후 실패 시 롤백. 행 재정렬 없음(제자리 유지), 캘린더 점만 갱신.
+  // 메인 목록 토글 — 상하위 완료 전파. 부모 체크 → 자식 전부, 자식 체크 → 부모 자동완료 재계산.
+  // 전파 결과를 정확히 반영하려고 토글 후 reloadDay (정렬은 sort_order 고정이라 행 안 튐).
   async function toggle(t: Todo) {
     const next: 0 | 1 = t.done === 1 ? 0 : 1;
-    setTodos((prev) =>
-      prev.map((x) => (x.id === t.id ? { ...x, done: next } : x)),
-    );
     try {
-      await toggleTodo(t.id, next);
+      if (t.parent_id == null) {
+        await setDoneWithChildren(t.id, next);
+      } else {
+        await toggleTodo(t.id, next);
+        await recomputeParentDone(t.parent_id);
+      }
+      await reloadDay();
       void reloadCounts();
     } catch (e) {
-      setTodos((prev) =>
-        prev.map((x) => (x.id === t.id ? { ...x, done: t.done } : x)),
-      );
       setError(errMsg(e));
     }
   }
@@ -286,18 +298,42 @@ export function TodoView({ active }: { active: boolean }) {
     }
   }
 
+  // 하위 항목 추가 (부모 hover '+하위'). 추가 후 부모 완료 재계산 + 입력 유지(연속 추가)
+  async function addChild(parentId: number) {
+    const content = childInput.trim();
+    if (!content || busy) return;
+    setBusy(true);
+    try {
+      await createTodo(content, selected, parentId);
+      await recomputeParentDone(parentId);
+      setChildInput("");
+      await reloadDay();
+      void reloadCounts();
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setBusy(false);
+      childInputRef.current?.focus();
+    }
+  }
+
   const today = todayStr();
   const isToday = selected === today;
-  const doneCount = todos.filter((t) => t.done === 1).length;
+  const topLevel = todos.filter((t) => t.parent_id == null);
+  const childrenOf = (pid: number) => todos.filter((t) => t.parent_id === pid);
+  const doneTop = topLevel.filter((t) => t.done === 1).length;
 
-  function renderRow(t: Todo, opts?: { overdue?: boolean }) {
+  function renderRow(t: Todo, opts?: { overdue?: boolean; child?: boolean }) {
     const isOverdue = opts?.overdue ?? false;
+    const isChild = opts?.child ?? false;
+    const kids = !isOverdue && !isChild ? childrenOf(t.id) : [];
+    const kidsDone = kids.filter((k) => k.done === 1).length;
     return (
       <div
-        className={`todo-row ${t.done === 1 ? "done" : ""} ${dragId === t.id ? "dragging" : ""}`}
+        className={`todo-row ${t.done === 1 ? "done" : ""} ${isChild ? "todo-child" : ""} ${dragId === t.id ? "dragging" : ""}`}
         data-todo-id={t.id}
       >
-        {!isOverdue && (
+        {!isOverdue && !isChild && (
           <span
             className="todo-grip"
             title="드래그해서 순서 변경"
@@ -334,6 +370,12 @@ export function TodoView({ active }: { active: boolean }) {
           </span>
         )}
 
+        {kids.length > 0 && (
+          <span className="todo-progress" title="완료 하위 / 전체">
+            {kidsDone}/{kids.length}
+          </span>
+        )}
+
         {isOverdue ? (
           // 밀린 스트립: 원래 날짜 + 가져오기/버리기 — 발견성 위해 항상 표시(hover 오버레이 아님)
           <span className="todo-overdue-actions">
@@ -350,8 +392,20 @@ export function TodoView({ active }: { active: boolean }) {
             </button>
           </span>
         ) : (
-          // 메인 목록: 편집/삭제는 hover 오버레이(레이아웃을 밀지 않음)
+          // 메인 목록: 하위추가/편집/삭제는 hover 오버레이(레이아웃을 밀지 않음)
           <span className="row-actions" onClick={(e) => e.stopPropagation()}>
+            {!isChild && (
+              <button
+                className="icon-btn sm"
+                title="하위 추가"
+                onClick={() => {
+                  setAddingChildFor(t.id);
+                  setChildInput("");
+                }}
+              >
+                <Icon name="plus" size={13} />
+              </button>
+            )}
             <button
               className="icon-btn sm"
               title="이름 변경"
@@ -491,13 +545,44 @@ export function TodoView({ active }: { active: boolean }) {
               이 날의 할 일이 없어요 — 위 입력창에 적고 Enter.
             </div>
           ) : (
-            todos.map((t) => <Fragment key={t.id}>{renderRow(t)}</Fragment>)
+            topLevel.map((p) => (
+              <Fragment key={p.id}>
+                {renderRow(p)}
+                {childrenOf(p.id).map((c) => (
+                  <Fragment key={c.id}>{renderRow(c, { child: true })}</Fragment>
+                ))}
+                {addingChildFor === p.id && (
+                  <div className="todo-row todo-child todo-subadd">
+                    <input
+                      ref={childInputRef}
+                      className="input todo-edit"
+                      autoFocus
+                      placeholder="하위 항목 — Enter 로 추가"
+                      value={childInput}
+                      onChange={(e) => setChildInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.nativeEvent.isComposing) return;
+                        if (e.key === "Enter") void addChild(p.id);
+                        if (e.key === "Escape") {
+                          setAddingChildFor(null);
+                          setChildInput("");
+                        }
+                      }}
+                      onBlur={() => {
+                        setAddingChildFor(null);
+                        setChildInput("");
+                      }}
+                    />
+                  </div>
+                )}
+              </Fragment>
+            ))
           )}
         </div>
 
-        {todos.length > 0 && (
+        {topLevel.length > 0 && (
           <div className="detail-meta">
-            {todos.length}개 중 {doneCount}개 완료
+            {topLevel.length}개 중 {doneTop}개 완료
           </div>
         )}
 

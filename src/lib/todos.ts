@@ -38,16 +38,18 @@ export async function listOverdueOpen(before: string): Promise<Todo[]> {
   );
 }
 
-/** 할 일 추가. 생성된 id 반환 (createConcept 방식) */
+/** 할 일 추가. parentId 를 주면 그 항목의 하위로. sort_order 는 형제 그룹 내 맨 끝 */
 export async function createTodo(
   content: string,
   dueDate: string,
+  parentId: number | null = null,
 ): Promise<number> {
   const db = await getDb();
   const res = await db.execute(
-    `INSERT INTO todos (content, due_date, sort_order)
-     VALUES ($1, $2, (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM todos WHERE due_date = $3))`,
-    [content, dueDate, dueDate],
+    `INSERT INTO todos (content, due_date, parent_id, sort_order)
+     VALUES ($1, $2, $3,
+       (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM todos WHERE due_date = $4 AND parent_id IS $5))`,
+    [content, dueDate, parentId, dueDate, parentId],
   );
   return res.lastInsertId as number;
 }
@@ -73,6 +75,34 @@ export async function toggleTodo(id: number, done: 0 | 1): Promise<void> {
   );
 }
 
+/** 부모 토글 → 부모와 모든 자식을 같은 상태로 (하향 전파). 트리거가 각 행 completed_at 관리 */
+export async function setDoneWithChildren(
+  id: number,
+  done: 0 | 1,
+): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `UPDATE todos SET done = $1 WHERE (id = $2 OR parent_id = $2) AND done <> $1`,
+    [done, id],
+  );
+}
+
+/** 자식 상태로 부모 완료 재계산 — 자식이 있고 전부 완료면 부모도 완료, 아니면 미완료 */
+export async function recomputeParentDone(parentId: number): Promise<void> {
+  const db = await getDb();
+  const rows = await db.select<{ open: number; total: number }[]>(
+    `SELECT COALESCE(SUM(done = 0), 0) AS open, COUNT(*) AS total
+       FROM todos WHERE parent_id = $1`,
+    [parentId],
+  );
+  const r = rows[0] ?? { open: 0, total: 0 };
+  const done: 0 | 1 = r.total > 0 && r.open === 0 ? 1 : 0;
+  await db.execute(`UPDATE todos SET done = $1 WHERE id = $2 AND done <> $1`, [
+    done,
+    parentId,
+  ]);
+}
+
 /** 내용 수정 (updated_at 갱신) */
 export async function updateTodoContent(
   id: number,
@@ -96,8 +126,8 @@ export async function moveTodos(ids: number[], dueDate: string): Promise<void> {
   );
 }
 
-/** 삭제 (즉시, 확인 모달 없음 — 값싼 대상) */
+/** 삭제 (즉시, 확인 모달 없음 — 값싼 대상). 부모를 지우면 자식(parent_id=id)도 함께 */
 export async function deleteTodo(id: number): Promise<void> {
   const db = await getDb();
-  await db.execute(`DELETE FROM todos WHERE id = $1`, [id]);
+  await db.execute(`DELETE FROM todos WHERE id = $1 OR parent_id = $1`, [id]);
 }

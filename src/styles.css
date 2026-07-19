@@ -2757,6 +2757,23 @@ body.dragging-rows * {
   color: var(--text-3);
   text-decoration: line-through;
 }
+/* 상하위: 자식 행 들여쓰기 (부모 텍스트 아래 정렬) */
+.todo-child {
+  padding-left: 40px;
+}
+/* 부모 진행률 — 완료 하위/전체 (모노톤, tabular) */
+.todo-progress {
+  flex-shrink: 0;
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+/* 하위 추가 입력 행 (자식 들여쓰기 유지) */
+.todo-subadd {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
 .todo-edit {
   flex: 1;
   min-width: 0;

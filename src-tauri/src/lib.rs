@@ -60,6 +60,12 @@ pub fn run() {
             sql: include_str!("../migrations/0003_todo_order.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "add_todo_parent",
+            sql: include_str!("../migrations/0004_todo_parent.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
