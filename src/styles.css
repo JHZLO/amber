@@ -2963,19 +2963,16 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   font-size: 13.5px;
 }
 /* 메인 목록 액션: 행 위에 겹쳐 페이드인 (tree-row 오버레이와 동일 패턴) */
+/* 흐름 안에 두어 항상 자리를 확보 → 줄바꿈된 텍스트가 아이콘을 피해 접힌다(덮이지 않음).
+   opacity 로만 숨겨 공간은 늘 차지하므로 hover 시 레이아웃이 밀리지 않는다. */
 .todo-row .row-actions {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding-left: 18px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.12s;
-  background: linear-gradient(to right, transparent, var(--surface-2) 16px);
 }
 .todo-row:hover .row-actions {
   opacity: 1;
