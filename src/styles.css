@@ -2039,6 +2039,14 @@ html.widget-root #root {
 .dgm-canvas-wrap {
   position: relative;
 }
+/* 전체화면 — 앱 전체를 덮어 다이어그램만 크게 본다 (툴바 유지, Esc/버튼으로 닫기) */
+.dgm-canvas-wrap.fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  border: none;
+  border-radius: 0;
+}
 /* 선택 가능한 노드에 포인터 커서 */
 .dgm-canvas svg .node,
 .dgm-canvas svg .actor,

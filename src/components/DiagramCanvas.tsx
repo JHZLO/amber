@@ -112,6 +112,9 @@ export function DiagramCanvas({
   const [zoomPct, setZoomPct] = useState(100);
   const [error, setError] = useState<string | null>(null);
   const [hasSvg, setHasSvg] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const fullscreenRef = useRef(false);
+  fullscreenRef.current = fullscreen;
 
   // 노드 선택 (스튜디오의 selectNode/deselectNode 대응)
   const selectedElRef = useRef<Element | null>(null);
@@ -222,13 +225,32 @@ export function DiagramCanvas({
     [],
   );
 
-  // 스튜디오 단축키: + / - / 1(100%) / 0(맞춤) — 캔버스에 마우스가 있을 때만
+  // 전체화면 토글 시 컨테이너 크기가 바뀌므로 pan-zoom 을 다시 맞춘다(레이아웃 반영 후 2프레임 뒤).
+  useEffect(() => {
+    if (!pzRef.current) return;
+    const raf = requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        pzRef.current?.resize();
+        pzRef.current?.fit();
+        pzRef.current?.center();
+      }),
+    );
+    return () => cancelAnimationFrame(raf);
+  }, [fullscreen]);
+
+  // 스튜디오 단축키: + / - / 1(100%) / 0(맞춤) — 캔버스에 마우스가 있을 때만.
+  // Esc 는 전체화면을 먼저 닫는다(호버 여부와 무관).
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if (!hoverRef.current || !pzRef.current) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable))
         return;
+      if (e.key === "Escape" && fullscreenRef.current) {
+        setFullscreen(false);
+        e.preventDefault();
+        return;
+      }
+      if (!hoverRef.current || !pzRef.current) return;
       if (e.key === "+" || e.key === "=") pzRef.current.zoomIn();
       else if (e.key === "-") pzRef.current.zoomOut();
       else if (e.key === "1") {
@@ -264,7 +286,7 @@ export function DiagramCanvas({
 
   return (
     <div
-      className="dgm-canvas-wrap"
+      className={`dgm-canvas-wrap ${fullscreen ? "fullscreen" : ""}`}
       onMouseEnter={() => {
         hoverRef.current = true;
       }}
@@ -287,6 +309,13 @@ export function DiagramCanvas({
         </button>
         <button className="btn btn-sm" title="화면에 맞춤 (0)" onClick={fit}>
           맞춤
+        </button>
+        <button
+          className="icon-btn ghost sm"
+          title={fullscreen ? "전체화면 닫기 (Esc)" : "전체화면"}
+          onClick={() => setFullscreen((f) => !f)}
+        >
+          <Icon name={fullscreen ? "x" : "expand"} size={15} />
         </button>
       </div>
       <div
