@@ -3060,8 +3060,15 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
 }
 
 /* ---- 데일리 리포트 (할 일 아래 블록) ---- */
+/* 할 일 목록 요약(3개 중 N개 완료)은 목록의 조용한 푸터 — 구분선 없이 목록 아래 붙인다.
+   (안 그러면 이 선 + 아래 데일리 리포트 선이 나란히 겹쳐 어색하다) */
+.todo-body .detail-meta {
+  margin-top: 14px;
+  padding-top: 0;
+  border-top: none;
+}
 .report {
-  margin-top: 26px;
+  margin-top: 22px;
   padding-top: 18px;
   border-top: 1px solid var(--border);
 }
