@@ -80,6 +80,9 @@ pub struct GithubCfg {
     pub path: Option<String>,
     #[serde(default)]
     pub repos: Vec<String>,
+    /// 조회할 gh 계정 로그인 (빈 값/None = 활성 계정). 여러 계정 로그인 시 특정 계정으로 조회.
+    #[serde(default)]
+    pub account: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -196,12 +199,15 @@ fn truncate_line(s: &str, max: usize) -> String {
 
 // ---- GitHub 수집: gh CLI 로 연결된 계정의 활동 이력(events) ----
 
-async fn run_gh(program: &str, args: &[&str]) -> Result<Vec<u8>, AiError> {
-    let out = timeout(
-        Duration::from_secs(COLLECT_TIMEOUT_SECS),
-        Command::new(program).args(args).output(),
-    )
-    .await
+// token 이 Some 이면 GH_TOKEN 으로 그 계정 인증(전역 활성 계정을 바꾸지 않고 특정 계정으로 조회).
+async fn run_gh(program: &str, args: &[&str], token: Option<&str>) -> Result<Vec<u8>, AiError> {
+    let mut cmd = Command::new(program);
+    cmd.args(args);
+    if let Some(t) = token {
+        cmd.env("GH_TOKEN", t);
+    }
+    let out = timeout(Duration::from_secs(COLLECT_TIMEOUT_SECS), cmd.output())
+        .await
     .map_err(|_| AiError::new("REPORT_TIMEOUT", "gh 응답이 없습니다."))?
     .map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
@@ -240,19 +246,40 @@ async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDi
         error: Some(e.message),
     };
 
-    // 1) 로그인 계정 확인(인증 검증 겸)
-    let login_out = match run_gh(&program, &["api", "user", "--jq", ".login"]).await {
-        Ok(o) => o,
-        Err(e) => return mk_err(e),
+    // 1) 조회할 로그인 + 토큰 결정.
+    //    account 지정 시: 그 계정 토큰을 GH_TOKEN 으로 써 전역 활성 계정을 안 바꾸고 조회(private 포함).
+    //    미지정 시: 활성 계정 (gh api user).
+    let account = cfg.account.as_deref().map(str::trim).filter(|a| !a.is_empty());
+    let (login, token) = if let Some(acc) = account {
+        let tok_out = match run_gh(&program, &["auth", "token", "--user", acc], None).await {
+            Ok(o) => o,
+            Err(_) => {
+                return mk_err(AiError::new(
+                    "GH_AUTH",
+                    format!("gh 계정 '{acc}' 의 토큰을 가져오지 못했어요. `gh auth login` 으로 그 계정에 로그인했는지 확인하세요."),
+                ))
+            }
+        };
+        let token = String::from_utf8_lossy(&tok_out).trim().to_string();
+        if token.is_empty() {
+            return mk_err(AiError::new("GH_AUTH", format!("gh 계정 '{acc}' 토큰이 비어 있어요.")));
+        }
+        (acc.to_string(), Some(token))
+    } else {
+        let login_out = match run_gh(&program, &["api", "user", "--jq", ".login"], None).await {
+            Ok(o) => o,
+            Err(e) => return mk_err(e),
+        };
+        let login = String::from_utf8_lossy(&login_out).trim().to_string();
+        if login.is_empty() {
+            return mk_err(AiError::new("GH_AUTH", "gh 로그인 계정을 확인하지 못했습니다."));
+        }
+        (login, None)
     };
-    let login = String::from_utf8_lossy(&login_out).trim().to_string();
-    if login.is_empty() {
-        return mk_err(AiError::new("GH_AUTH", "gh 로그인 계정을 확인하지 못했습니다."));
-    }
 
-    // 2) 계정 활동 이벤트 (private 포함 — 본인 인증 상태)
+    // 2) 계정 활동 이벤트 (private 포함 — 해당 계정 인증 상태)
     let path = format!("/users/{login}/events?per_page=100");
-    let events_out = match run_gh(&program, &["api", &path]).await {
+    let events_out = match run_gh(&program, &["api", &path], token.as_deref()).await {
         Ok(o) => o,
         Err(e) => return mk_err(e),
     };
@@ -1012,9 +1039,82 @@ pub async fn report_mcp_servers(cli_path: Option<String>) -> Vec<McpServer> {
     }
 }
 
+// ---- 커맨드: gh 계정 목록 (여러 계정 로그인 시 리포트 조회 계정 선택용) ----
+
+#[derive(Debug, Serialize)]
+pub struct GhAccount {
+    pub login: String,
+    pub active: bool,
+}
+
+/// `gh auth status` 파싱 — "Logged in to github.com account <login>" + 다음 줄 "Active account: true".
+fn parse_gh_accounts(text: &str) -> Vec<GhAccount> {
+    let mut out: Vec<GhAccount> = Vec::new();
+    for line in text.lines() {
+        let l = line.trim();
+        if l.contains("Logged in to") {
+            let login = l
+                .split(" account ")
+                .nth(1)
+                .or_else(|| l.split(" as ").nth(1))
+                .and_then(|r| r.split_whitespace().next())
+                .unwrap_or("")
+                .to_string();
+            if !login.is_empty() {
+                out.push(GhAccount {
+                    login,
+                    active: false,
+                });
+            }
+        } else if l.contains("Active account:") && l.contains("true") {
+            // "- Active account: true" 처럼 앞에 불릿(-)이 붙어 오므로 contains 로 본다
+            if let Some(last) = out.last_mut() {
+                last.active = true;
+            }
+        }
+    }
+    out
+}
+
+/// gh 에 로그인된 계정 목록 (설정에서 리포트 조회 계정 선택용). gh 없거나 미인증이면 빈 목록.
+#[tauri::command]
+pub async fn report_gh_accounts(cli_path: Option<String>) -> Vec<GhAccount> {
+    let program = cli_path
+        .filter(|p| !p.is_empty())
+        .unwrap_or_else(|| "gh".to_string());
+    match timeout(
+        Duration::from_secs(15),
+        Command::new(&program).args(["auth", "status"]).output(),
+    )
+    .await
+    {
+        Ok(Ok(o)) => {
+            // gh auth status 는 버전에 따라 stdout/stderr 로 나뉘어 나온다 — 둘 다 본다
+            let mut s = String::from_utf8_lossy(&o.stdout).to_string();
+            s.push_str(&String::from_utf8_lossy(&o.stderr));
+            parse_gh_accounts(&s)
+        }
+        _ => Vec::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_gh_accounts_with_active() {
+        let sample = "  ✓ Logged in to github.com account JHZLO (keyring)\n\
+    - Active account: true\n\
+  ✓ Logged in to github.com account junhyoung-kim-dev (keyring)\n\
+    - Active account: false\n";
+        let accts = parse_gh_accounts(sample);
+        assert_eq!(accts.len(), 2);
+        assert_eq!(accts[0].login, "JHZLO");
+        assert!(accts[0].active);
+        assert_eq!(accts[1].login, "junhyoung-kim-dev");
+        assert!(!accts[1].active);
+    }
 
     #[test]
     fn parses_mcp_list_names_with_colons() {

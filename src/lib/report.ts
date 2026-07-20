@@ -48,10 +48,21 @@ export function reportMcpServers(cliPath: string | null): Promise<McpServer[]> {
   return invoke<McpServer[]>("report_mcp_servers", { cliPath: cliPath ?? null });
 }
 
+/** gh 에 로그인된 계정 목록 (여러 계정일 때 조회 계정 선택용) */
+export interface GhAccount {
+  login: string;
+  active: boolean;
+}
+export function reportGhAccounts(cliPath: string | null): Promise<GhAccount[]> {
+  return invoke<GhAccount[]>("report_gh_accounts", { cliPath: cliPath ?? null });
+}
+
 export interface GithubCollectCfg {
   rank: number;
   path: string | null;
   repos: string[];
+  /** 조회할 gh 계정 로그인 (null = 활성 계정) */
+  account: string | null;
 }
 export interface SessionsCollectCfg {
   rank: number;
@@ -134,6 +145,8 @@ export interface ReportConfig {
   sources: ReportSourcePref[];
   githubPath: string;
   githubRepos: string[];
+  /** 조회할 gh 계정 로그인 (빈 문자열 = 활성 계정). 여러 계정 로그인 시 선택 */
+  githubAccount: string;
   sessionsClaude: boolean;
   sessionsCodex: boolean;
   /** P2 — 선택한 등록 MCP 서버 이름 (빈 문자열 = 미선택) */
@@ -169,12 +182,13 @@ function parseSources(raw: string | null): ReportSourcePref[] {
 }
 
 export async function loadReportConfig(): Promise<ReportConfig> {
-  const [onb, sources, ghPath, ghRepos, sesClaude, sesCodex, slackSrv, notionSrv] =
+  const [onb, sources, ghPath, ghRepos, ghAccount, sesClaude, sesCodex, slackSrv, notionSrv] =
     await Promise.all([
       getSetting("report_onboarded"),
       getSetting("report_sources"),
       getSetting("report_github_path"),
       getSetting("report_github_repos"),
+      getSetting("report_github_account"),
       getSetting("report_sessions_claude"),
       getSetting("report_sessions_codex"),
       getSetting("report_slack_server"),
@@ -188,6 +202,7 @@ export async function loadReportConfig(): Promise<ReportConfig> {
       .split(",")
       .map((r) => r.trim())
       .filter(Boolean),
+    githubAccount: ghAccount ?? "",
     // 기본 on (감지되면 사용). 명시적으로 "0" 저장했을 때만 off
     sessionsClaude: sesClaude !== "0",
     sessionsCodex: sesCodex !== "0",
@@ -202,6 +217,7 @@ export async function saveReportConfig(c: ReportConfig): Promise<void> {
     setSetting("report_sources", JSON.stringify(c.sources)),
     setSetting("report_github_path", c.githubPath.trim()),
     setSetting("report_github_repos", c.githubRepos.join(",")),
+    setSetting("report_github_account", c.githubAccount.trim()),
     setSetting("report_sessions_claude", c.sessionsClaude ? "1" : "0"),
     setSetting("report_sessions_codex", c.sessionsCodex ? "1" : "0"),
     setSetting("report_slack_server", c.slackServer.trim()),

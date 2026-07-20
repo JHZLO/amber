@@ -8,8 +8,10 @@ import { loadConfig, type AppConfig } from "../lib/config";
 import {
   detectReportTools,
   loadReportConfig,
+  reportGhAccounts,
   reportMcpServers,
   saveReportConfig,
+  type GhAccount,
   type ReportConfig,
   type ReportTools,
 } from "../lib/report";
@@ -43,6 +45,7 @@ export function ReportSettings() {
   const [cfg, setCfg] = useState<ReportConfig | null>(null);
   const [appCfg, setAppCfg] = useState<AppConfig | null>(null);
   const [tools, setTools] = useState<ReportTools | null>(null);
+  const [ghAccounts, setGhAccounts] = useState<GhAccount[] | null>(null);
   const [detecting, setDetecting] = useState(false);
   const [mcpServers, setMcpServers] = useState<McpServer[] | null>(null);
   const [mcpLoading, setMcpLoading] = useState(false);
@@ -94,6 +97,9 @@ export function ReportSettings() {
     try {
       const t = await detectReportTools();
       if (alive.current) setTools(t);
+      // gh 로그인 계정 목록도 함께 (여러 계정일 때 조회 계정 선택용)
+      const accts = await reportGhAccounts(t.gh?.path ?? null);
+      if (alive.current) setGhAccounts(accts);
     } finally {
       if (alive.current) setDetecting(false);
     }
@@ -264,6 +270,26 @@ export function ReportSettings() {
                 <div className="rep-src-body">
                   {s.id === "github" ? (
                     <>
+                      {ghAccounts && ghAccounts.length > 0 && (
+                        <div className="field">
+                          <label>조회 계정</label>
+                          <Select
+                            block
+                            value={cfg.githubAccount}
+                            options={[
+                              { value: "", label: "활성 계정 (기본)" },
+                              ...ghAccounts.map((a) => ({
+                                value: a.login,
+                                label: a.active ? `${a.login} · 활성` : a.login,
+                              })),
+                            ]}
+                            onChange={(v) => update({ ...cfg, githubAccount: v })}
+                          />
+                          <div className="hint">
+                            gh 에 계정이 여러 개면 리포트에 쓸 계정을 고르세요. 그 계정으로 조회해요(전역 활성 계정은 안 바뀜).
+                          </div>
+                        </div>
+                      )}
                       <div className="field">
                         <label>gh CLI 경로</label>
                         <input

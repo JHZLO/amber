@@ -172,7 +172,8 @@ pub fn run() {
             report::report_collect,
             report::report_generate,
             report::detect_report_tools,
-            report::report_mcp_servers
+            report::report_mcp_servers,
+            report::report_gh_accounts
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -150,6 +150,7 @@ export function DailyReportPanel({
                 rank: githubR.rank,
                 path: rc.githubPath || null,
                 repos: rc.githubRepos,
+                account: rc.githubAccount || null,
               }
             : null,
           aiSessions: sessR
