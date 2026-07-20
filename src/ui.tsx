@@ -66,7 +66,7 @@ export function AiThinking({
 }
 
 /** 체크박스 primitive — 모노톤 채움/아웃라인 문법(꺼짐=아웃라인, 켜짐=primary 필+체크).
- *  색으로 상태를 칠하지 않는다(docs/DESIGN.md §3). */
+ *  색으로 상태를 칠하지 않는다(.claude/DESIGN.md §3). */
 export function Checkbox({
   checked,
   onChange,

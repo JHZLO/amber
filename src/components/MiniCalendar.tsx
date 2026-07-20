@@ -1,5 +1,5 @@
 // 미니 월 캘린더 (할 일 탭 좌측). 순수 프레젠테이션 — 상태(cursor/selected)는 부모가 소유.
-// 상태 표현은 모노톤 문법(docs/DESIGN.md §3): 오늘=primary 필, 선택=surface-3, 점=채움/아웃라인.
+// 상태 표현은 모노톤 문법(.claude/DESIGN.md §3): 오늘=primary 필, 선택=surface-3, 점=채움/아웃라인.
 
 import type { DayTodoCount } from "../types";
 import {
