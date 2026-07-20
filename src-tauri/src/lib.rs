@@ -132,7 +132,10 @@ pub fn run() {
             let menu = Menu::with_items(handle, &[&toggle_widget, &open_main, &quit])?;
 
             let _tray = TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+                // 메뉴바(macOS)용 단색 template 아이콘 — 앱 컬러 아이콘과 별도.
+                // icon_as_template=true 면 macOS 가 알파를 마스크로 라이트/다크 메뉴바에 맞춰 렌더한다.
+                .icon(tauri::include_image!("icons/tray.png"))
+                .icon_as_template(true)
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "toggle_widget" => {
