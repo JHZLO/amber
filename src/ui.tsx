@@ -6,10 +6,56 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
 import type { Confidence, ConceptStatus } from "./types";
-import { Icon } from "./icons";
+import { Icon, type IconName } from "./icons";
+
+/** 파일 트리 드래그 중 커서를 따라오는 오버레이(원본 행 복제본, dnd-kit DragOverlay 패턴).
+ *  body 로 portal → 중첩 폴더의 overflow:hidden 을 벗어나므로 하위 뎁스에서도 안 잘린다.
+ *  잡는 순간의 원본 위치/크기를 그대로 써서 '그 자리에서 들린' 것처럼 보인다. 위치 추적은 훅이 담당. */
+export function TreeDragOverlay({
+  drag,
+  leafIcon,
+  overlayRef,
+}: {
+  drag: {
+    name: string;
+    isDir: boolean;
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    padLeft: number;
+  };
+  leafIcon: IconName;
+  overlayRef: RefObject<HTMLDivElement | null>;
+}) {
+  return createPortal(
+    <div
+      ref={overlayRef}
+      className="tree-drag-overlay"
+      style={{
+        left: drag.left,
+        top: drag.top,
+        width: drag.width,
+        height: drag.height,
+        paddingLeft: drag.padLeft,
+      }}
+    >
+      {/* caret 자리(13px)를 비워 원본 행의 아이콘/라벨 위치와 정확히 겹치게 */}
+      <span style={{ width: 13, flexShrink: 0 }} aria-hidden="true" />
+      <Icon
+        name={drag.isDir ? "folder" : leafIcon}
+        size={14}
+        className="tree-ico"
+      />
+      <span className="label">{drag.name}</span>
+    </div>,
+    document.body,
+  );
+}
 
 export function ConfidenceDots({ value }: { value: Confidence }) {
   return (
@@ -238,15 +284,20 @@ export function Select<T extends string>({
       if (e.key === "Escape") setOpen(false);
     };
     const onReflow = () => setOpen(false);
+    // 드롭다운 '내부' 스크롤(긴 목록)은 닫지 않는다 — 바깥(모달 본문 등) 스크롤에만 닫아 앵커 이탈 방지
+    const onScroll = (e: Event) => {
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
     document.addEventListener("mousedown", onDown);
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", onReflow);
-    window.addEventListener("scroll", onReflow, true);
+    window.addEventListener("scroll", onScroll, true);
     return () => {
       document.removeEventListener("mousedown", onDown);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", onReflow);
-      window.removeEventListener("scroll", onReflow, true);
+      window.removeEventListener("scroll", onScroll, true);
     };
   }, [open, place]);
 

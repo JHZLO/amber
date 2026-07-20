@@ -69,6 +69,27 @@ function conceptsOrCommentsTarget(sc: string, oldRel: string, newRel: string): s
     : conceptsPathFor(newRel);
 }
 
+/** 다른 폴더로 이동 — 노트 파일이면 사이드카(질문/개념링크)도 함께.
+ *  폴더 이동 시 사이드카는 폴더 하위 파일이라 디렉터리째 함께 이동한다(별도 처리 불필요). */
+export async function moveEntry(
+  relPath: string,
+  targetDir: string,
+): Promise<string> {
+  const newRel = await tree.moveEntry(relPath, targetDir);
+  if (/\.md$/i.test(relPath)) {
+    for (const sc of sidecarsFor(relPath)) {
+      const oldSc = full(sc);
+      if (await exists(oldSc, { baseDir: BASE })) {
+        await rename(oldSc, full(conceptsOrCommentsTarget(sc, relPath, newRel)), {
+          oldPathBaseDir: BASE,
+          newPathBaseDir: BASE,
+        });
+      }
+    }
+  }
+  return newRel;
+}
+
 /** 삭제(휴지통) — 노트 파일이면 사이드카(질문/개념링크)도 함께 (없으면 멱등 성공) */
 export async function deleteEntry(relPath: string): Promise<void> {
   await tree.deleteEntry(relPath);

@@ -204,6 +204,25 @@ export function createVaultTree(cfg: VaultTreeConfig) {
     return newRel;
   }
 
+  /** 다른 폴더로 이동 (드래그 앤 드롭). targetDir='' = 루트. 새 상대경로 반환.
+   *  파일명/폴더명은 유지하고 상위 경로만 바꾼다. 자기 자신/하위로의 이동, 같은 폴더 이동은 거부/무시. */
+  async function moveEntry(relPath: string, targetDir: string): Promise<string> {
+    const dir = normalizePath(targetDir); // '' = 루트
+    const curParent = parentOf(relPath);
+    if (dir === curParent) return relPath; // 같은 폴더 = no-op
+    if (dir === relPath || dir.startsWith(`${relPath}/`))
+      throw new Error("폴더를 자기 자신 안으로 옮길 수 없어요.");
+    const name = relPath.slice(relPath.lastIndexOf("/") + 1); // 파일은 확장자 포함, 폴더는 폴더명
+    const newRel = dir ? `${dir}/${name}` : name;
+    if (await exists(full(newRel), { baseDir: BASE }))
+      throw new Error("대상 폴더에 같은 이름이 이미 있어요.");
+    await rename(full(relPath), full(newRel), {
+      oldPathBaseDir: BASE,
+      newPathBaseDir: BASE,
+    });
+    return newRel;
+  }
+
   /** 삭제 (폴더면 하위 전체 포함). 영구 삭제 대신 macOS 휴지통으로 이동 → 복구 가능 */
   async function deleteEntry(relPath: string): Promise<void> {
     await invoke("move_to_trash", { relPath: full(relPath) });
@@ -217,6 +236,7 @@ export function createVaultTree(cfg: VaultTreeConfig) {
     createFolder,
     createFile,
     renameEntry,
+    moveEntry,
     deleteEntry,
   };
 }

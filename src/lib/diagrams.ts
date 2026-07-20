@@ -41,4 +41,5 @@ export const diagramMtime = tree.fileMtime;
 export const createFolder = tree.createFolder;
 export const createDiagram = tree.createFile;
 export const renameEntry = tree.renameEntry;
+export const moveEntry = tree.moveEntry;
 export const deleteEntry = tree.deleteEntry;

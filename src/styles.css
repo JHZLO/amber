@@ -662,12 +662,43 @@ select {
   border-top: 1px solid var(--border);
 }
 
+/* ---- 설정 모달: 카테고리 탭 (한 화면에 다 쌓지 않게 갈래로) ---- */
+.set-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.set-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-3);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px; /* 밑줄이 컨테이너 보더 위에 겹치게 */
+  transition:
+    color 0.12s,
+    border-color 0.12s;
+}
+.set-tab:hover {
+  color: var(--text-2);
+}
+.set-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--text);
+}
+
 /* ---- 설정 모달: 섹션 레이아웃 (평평한 필드 나열 대신 구획으로 묶음) ---- */
 .set-section {
   padding-top: 20px;
   margin-top: 20px;
   border-top: 1px solid var(--border);
 }
+/* 스택 첫 섹션(또는 탭 안 단독 섹션)은 위 구분선/여백 제거 */
 .set-section:first-child {
   padding-top: 0;
   margin-top: 0;
@@ -2763,6 +2794,79 @@ body.dragging-rows * {
 /* 드래그 중엔 hover 배경을 끈다 — 들어올린 유닛의 카드 배경이 깔끔히 보이도록 */
 body.dragging-rows .todo-row:hover {
   background: transparent;
+}
+
+/* 파일 트리 드래그 '폴더 이동' (dnd-kit DragOverlay 패턴) */
+/* 원본 행: 자리에 흐리게 남는다 (transform 을 안 줘서 중첩 overflow 클리핑 문제 없음) */
+.tree-row.dragging {
+  opacity: 0.4;
+}
+body.dragging-rows .tree-row:hover {
+  background: transparent; /* 드래그 중엔 hover 배경 끔 — drop-target 만 강조되게 */
+}
+/* 드롭 대상 폴더: 채움 + 굵은 링 + '받아들이는' 펄스(들어올 때 살짝 커졌다 돌아옴). */
+body.dragging-rows .tree-row.drop-target {
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 2px var(--text-3);
+  color: var(--text);
+  animation: tree-folder-receive 0.22s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+body.dragging-rows .tree-row.drop-target .tree-ico {
+  color: var(--text);
+}
+@keyframes tree-folder-receive {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+/* 루트(트리 여백)로 드롭 */
+.tree.drop-root {
+  box-shadow: inset 0 0 0 2px var(--text-3);
+  border-radius: 8px;
+}
+
+/* 떠 있는 오버레이(원본 복제본) — body 로 portal 되어 모든 overflow 를 벗어난다.
+   위치/크기는 잡을 때 원본 그대로, transform(추적·흡수)은 훅이 명령형으로 준다. */
+.tree-drag-overlay {
+  position: fixed;
+  z-index: 200;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border-radius: 6px;
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.18),
+    0 2px 6px rgba(0, 0, 0, 0.12);
+  pointer-events: none; /* 밑 행이 elementFromPoint 로 잡히도록 */
+  will-change: transform;
+}
+.tree-drag-overlay .tree-ico {
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+.tree-drag-overlay .label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  body.dragging-rows .tree-row.drop-target {
+    animation: none;
+  }
 }
 .todo-text {
   flex: 1;

@@ -12,6 +12,7 @@ import {
   invalidNameReason,
   invalidPathReason,
   listNoteTree,
+  moveEntry,
   noteMtime,
   parentOf,
   readNoteFile,
@@ -19,7 +20,8 @@ import {
   writeNoteFile,
   type NoteNode,
 } from "../lib/notes";
-import { Modal, Select, Spinner, timeAgo } from "../ui";
+import { useTreeDnd } from "../lib/useTreeDnd";
+import { Modal, Select, Spinner, TreeDragOverlay, timeAgo } from "../ui";
 import { Icon } from "../icons";
 import type { AppConfig } from "../lib/config";
 import { NoteAiModal } from "./NoteAiModal";
@@ -388,6 +390,19 @@ export function NotesView({
     }
   }
 
+  // 파일 트리 드래그 이동 — 다른 폴더/루트로 놓으면 파일·폴더를 옮긴다 (사이드카 함께).
+  const dnd = useTreeDnd({
+    move: moveEntry,
+    onMoved: (fromPath, newPath, isDir) => {
+      if (isDir) remapPrefix(fromPath, newPath);
+      else if (selected === fromPath) setSelected(newPath);
+      expandTo(parentOf(newPath)); // 옮겨간 위치를 펼쳐 보여준다
+      setOpError(null);
+      void reload();
+    },
+    onError: setOpError,
+  });
+
   // 컴포넌트가 아닌 렌더 함수 — 렌더마다 트리 DOM 이 리마운트되지 않게.
   // 하위는 조건부 언마운트 대신 항상 렌더하고 CSS grid(0fr↔1fr)로 펼침 → 부드러운 전개 애니메이션.
   function renderRows(nodes: NoteNode[], depth: number) {
@@ -400,9 +415,13 @@ export function NotesView({
               <div
                 className={`tree-row ${n.isDir ? "dir" : ""} ${
                   !n.isDir && selected === n.path ? "selected" : ""
-                } ${n.isDir && activeDir === n.path ? "active" : ""}`}
+                } ${n.isDir && activeDir === n.path ? "active" : ""} ${dnd.rowClass(n)}`}
                 style={{ paddingLeft: 8 + depth * 14 }}
-                onClick={() => (n.isDir ? toggleDir(n) : openNote(n.path))}
+                {...dnd.rowProps(n)}
+                onClick={() => {
+                  if (dnd.consumeClick()) return;
+                  n.isDir ? toggleDir(n) : openNote(n.path);
+                }}
               >
                 {n.isDir ? (
                   <span className={`caret ${isOpen ? "open" : ""}`}>
@@ -412,7 +431,13 @@ export function NotesView({
                   <span className="caret leaf" />
                 )}
                 <Icon
-                  name={n.isDir ? (isOpen ? "folder-open" : "folder") : "file"}
+                  name={
+                    n.isDir
+                      ? isOpen || dnd.isDropTarget(n)
+                        ? "folder-open"
+                        : "folder"
+                      : "file"
+                  }
                   size={14}
                   className="tree-ico"
                 />
@@ -542,7 +567,7 @@ export function NotesView({
           // (행은 user-select:none 이라 선택이 상위로 "탈출"함 → mousedown 기본동작 자체를 막음.
           //  클릭 이벤트는 별개라 토글/열기/버튼은 정상 동작.)
           <div
-            className="tree"
+            className={`tree ${dnd.treeClass}`}
             onMouseDown={(e) => {
               if (e.detail > 1) e.preventDefault();
             }}
@@ -551,6 +576,10 @@ export function NotesView({
           </div>
         )}
       </aside>
+
+      {dnd.drag && (
+        <TreeDragOverlay drag={dnd.drag} leafIcon="file" overlayRef={dnd.overlayRef} />
+      )}
 
       <section className="detail" ref={detailRef}>
         {selected ? (

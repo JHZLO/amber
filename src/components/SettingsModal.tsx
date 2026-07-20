@@ -31,6 +31,15 @@ const THEMES: { id: ThemePref; label: string }[] = [
   { id: "dark", label: "다크" },
 ];
 
+// 설정 카테고리 탭 — 한 화면에 다 쌓지 않고 갈래로 나눈다
+type SetTab = "ai" | "prompts" | "report" | "appearance";
+const SETTING_TABS: { id: SetTab; label: string }[] = [
+  { id: "ai", label: "AI" },
+  { id: "prompts", label: "프롬프트" },
+  { id: "report", label: "데일리 리포트" },
+  { id: "appearance", label: "모양" },
+];
+
 export function SettingsModal({
   open,
   onClose,
@@ -51,6 +60,7 @@ export function SettingsModal({
   );
 
   const [theme, setTheme] = useState<ThemePref>("system");
+  const [tab, setTab] = useState<SetTab>("ai");
 
   // 저장 프롬프트: 목록 + 포커스 에디터(한 번에 하나만 편집)
   const [prompts, setPrompts] = useState<SavedPrompt[]>([]);
@@ -80,6 +90,7 @@ export function SettingsModal({
       void redetect(); // 열자마자 설치된 CLI 를 감지해 카드로 보여준다
       loadPrompts().then(setPrompts);
       setEditing(null);
+      setTab("ai");
       setTheme(getThemePref());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -241,7 +252,19 @@ export function SettingsModal({
         </>
       ) : (
         <>
-          {/* ── AI 연결 ── */}
+          <div className="set-tabs">
+            {SETTING_TABS.map((t) => (
+              <button
+                key={t.id}
+                className={`set-tab ${tab === t.id ? "active" : ""}`}
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="set-tab-content">
+          {tab === "ai" && (
           <section className="set-section">
             <div className="set-head">
               <span className="set-eyebrow">AI 연결</span>
@@ -333,11 +356,9 @@ export function SettingsModal({
               </div>
             )}
           </section>
-
-          {/* ── 데일리 리포트 ── */}
-          <ReportSettings />
-
-          {/* ── 모양 ── */}
+          )}
+          {tab === "report" && <ReportSettings />}
+          {tab === "appearance" && (
           <section className="set-section">
             <div className="set-head">
               <span className="set-eyebrow">모양</span>
@@ -352,8 +373,8 @@ export function SettingsModal({
               />
             </div>
           </section>
-
-          {/* ── 저장 프롬프트 ── */}
+          )}
+          {tab === "prompts" && (
           <section className="set-section">
             <div className="set-head">
               <span className="set-eyebrow">저장 프롬프트</span>
@@ -394,6 +415,8 @@ export function SettingsModal({
               </div>
             )}
           </section>
+          )}
+          </div>
         </>
       )}
     </Modal>

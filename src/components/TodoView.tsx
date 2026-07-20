@@ -670,7 +670,10 @@ export function TodoView({
           </div>
         )}
 
+        {/* key={selected} — 날짜별로 패널을 격리. 생성 중 다른 날짜로 넘어가도 로딩/스트리밍 상태가
+            새 날짜로 새지 않는다(진행 중 생성은 백그라운드에서 계속 저장됨) */}
         <DailyReportPanel
+          key={selected}
           date={selected}
           config={config}
           active={active}

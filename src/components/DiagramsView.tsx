@@ -12,14 +12,16 @@ import {
   invalidNameReason,
   invalidPathReason,
   listDiagramTree,
+  moveEntry,
   parentOf,
   readDiagramFile,
   renameEntry,
   writeDiagramFile,
   type DiagramNode,
 } from "../lib/diagrams";
+import { useTreeDnd } from "../lib/useTreeDnd";
 import { DiagramCanvas } from "./DiagramCanvas";
-import { Modal, Select, Spinner, timeAgo } from "../ui";
+import { Modal, Select, Spinner, TreeDragOverlay, timeAgo } from "../ui";
 import { Icon } from "../icons";
 import { RootPicker } from "./RootPicker";
 import { rootDisplayName, WORKSPACE_EVENT } from "../lib/workspace";
@@ -311,6 +313,19 @@ export function DiagramsView({ active }: { active: boolean }) {
     }
   }
 
+  // 파일 트리 드래그 이동 — 다른 폴더/루트로 놓으면 파일·폴더를 옮긴다
+  const dnd = useTreeDnd({
+    move: moveEntry,
+    onMoved: (fromPath, newPath, isDir) => {
+      if (isDir) remapPrefix(fromPath, newPath);
+      else if (selected === fromPath) setSelected(newPath);
+      expandTo(parentOf(newPath));
+      setOpError(null);
+      void reload();
+    },
+    onError: setOpError,
+  });
+
   // 컴포넌트가 아닌 렌더 함수 — 렌더마다 트리 DOM 이 리마운트되지 않게
   function renderRows(nodes: DiagramNode[], depth: number) {
     return (
@@ -322,9 +337,13 @@ export function DiagramsView({ active }: { active: boolean }) {
               <div
                 className={`tree-row ${n.isDir ? "dir" : ""} ${
                   !n.isDir && selected === n.path ? "selected" : ""
-                } ${n.isDir && activeDir === n.path ? "active" : ""}`}
+                } ${n.isDir && activeDir === n.path ? "active" : ""} ${dnd.rowClass(n)}`}
                 style={{ paddingLeft: 8 + depth * 14 }}
-                onClick={() => (n.isDir ? toggleDir(n) : openFile(n.path))}
+                {...dnd.rowProps(n)}
+                onClick={() => {
+                  if (dnd.consumeClick()) return;
+                  n.isDir ? toggleDir(n) : openFile(n.path);
+                }}
               >
                 {n.isDir ? (
                   <span className={`caret ${isOpen ? "open" : ""}`}>
@@ -334,7 +353,13 @@ export function DiagramsView({ active }: { active: boolean }) {
                   <span className="caret leaf" />
                 )}
                 <Icon
-                  name={n.isDir ? (isOpen ? "folder-open" : "folder") : "workflow"}
+                  name={
+                    n.isDir
+                      ? isOpen || dnd.isDropTarget(n)
+                        ? "folder-open"
+                        : "folder"
+                      : "workflow"
+                  }
                   size={14}
                   className="tree-ico"
                 />
@@ -465,7 +490,7 @@ export function DiagramsView({ active }: { active: boolean }) {
         )}
         {tree && tree.length > 0 && (
           <div
-            className="tree"
+            className={`tree ${dnd.treeClass}`}
             onMouseDown={(e) => {
               if (e.detail > 1) e.preventDefault();
             }}
@@ -474,6 +499,10 @@ export function DiagramsView({ active }: { active: boolean }) {
           </div>
         )}
       </aside>
+
+      {dnd.drag && (
+        <TreeDragOverlay drag={dnd.drag} leafIcon="workflow" overlayRef={dnd.overlayRef} />
+      )}
 
       <section className="detail dgm">
         {selected ? (
