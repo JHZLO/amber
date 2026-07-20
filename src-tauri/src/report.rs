@@ -24,6 +24,8 @@ const DEFAULT_GEN_TIMEOUT_SECS: u64 = 300;
 // 한 소스에서 뽑아올 항목 상한(잡음 컷). 표시·요약엔 충분.
 const MAX_EVENTS: usize = 60;
 const MAX_SESSIONS: usize = 40;
+// push 당 head 커밋 메시지 조회 상한 (events 엔 메시지가 없어 따로 조회 — 지연 방지용 캡)
+const MAX_COMMIT_FETCH: usize = 25;
 
 const REPORT_SYSTEM_PROMPT: &str = r#"너는 사용자의 하루 업무를 정리해 '데일리 리포트'로 써 주는 조수다.
 입력(stdin)에는 [리포트 대상 날짜], [투두 — 오늘의 계획], 그리고 활성화된 플랫폼별 활동 요약이
@@ -45,6 +47,10 @@ const REPORT_SYSTEM_PROMPT: &str = r#"너는 사용자의 하루 업무를 정�
 (의사결정·이슈. 없으면 이 섹션 생략)
 
 규칙:
+- **git 활동은 '동작'이 아니라 '한 일'로 정리한다.** 'X 레포에 푸시', 'Y 브랜치 생성' 처럼 어디에
+  무엇을 했다는 나열이 아니라, **커밋 메시지·PR 제목/본문에서 읽히는 실제 작업 내용**을 중심으로 쓴다.
+  레포명·브랜치명·푸시 위치는 필요할 때만 괄호로 덧붙이는 부차 정보다. 같은 작업을 가리키는 여러
+  커밋/PR 은 하나의 항목으로 묶어 "무슨 기능/수정을 했는지"로 표현한다.
 - 입력에 실제로 있는 근거만 쓴다. 없는 활동을 지어내지 마라. 불확실하면 적지 않는다.
 - 우선순위(rank)가 높은 소스의 내용을 리포트의 중심 서사로 삼고, 낮은 소스는 보조로 엮는다.
 - PR/이슈 번호나 URL 이 있으면 마크다운 링크로 보존한다.
@@ -230,6 +236,37 @@ async fn run_gh(program: &str, args: &[&str], token: Option<&str>) -> Result<Vec
     Ok(out.stdout)
 }
 
+/// head 커밋의 제목(첫 줄) 조회 — push 의 '한 일'을 채운다. 실패하면 None.
+async fn fetch_commit_subject(
+    program: &str,
+    token: Option<&str>,
+    repo: &str,
+    sha: &str,
+) -> Option<String> {
+    let path = format!("/repos/{repo}/commits/{sha}");
+    let out = run_gh(program, &["api", &path, "--jq", ".commit.message"], token)
+        .await
+        .ok()?;
+    let msg = String::from_utf8_lossy(&out);
+    let subject = msg.lines().next().unwrap_or("").trim();
+    if subject.is_empty() {
+        None
+    } else {
+        Some(truncate_line(subject, 140))
+    }
+}
+
+/// PR/이슈 본문 스니펫 (한 줄로 정규화 + 절삭). 비어 있으면 None.
+fn body_snippet(v: Option<&serde_json::Value>, max: usize) -> Option<String> {
+    let s = v?.as_str()?;
+    let t = truncate_line(s, max);
+    if t.is_empty() {
+        None
+    } else {
+        Some(t)
+    }
+}
+
 async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDigest {
     let program = cfg
         .path
@@ -294,6 +331,7 @@ async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDi
 
     let repo_filter: Vec<String> = cfg.repos.iter().map(|r| r.trim().to_lowercase()).filter(|r| !r.is_empty()).collect();
     let mut lines: Vec<String> = Vec::new();
+    let mut commit_fetches = 0usize;
     for ev in arr {
         let created = ev.get("created_at").and_then(|v| v.as_str()).and_then(parse_iso_ms);
         let Some(ts) = created else { continue };
@@ -304,7 +342,33 @@ async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDi
         if !repo_filter.is_empty() && !repo_filter.iter().any(|f| repo.to_lowercase() == *f) {
             continue;
         }
-        if let Some(line) = format_gh_event(ev, repo) {
+
+        if ev.get("type").and_then(|t| t.as_str()) == Some("PushEvent") {
+            // 실제 '한 일' = 커밋 메시지. events 엔 메시지가 없어 head 커밋을 조회해 채운다(캡 내에서).
+            // 레포·브랜치는 부차 정보라 뒤 괄호로 (푸시 위치가 아니라 작업 내용이 중심).
+            let p = ev.get("payload");
+            let branch = p
+                .and_then(|p| p.get("ref"))
+                .and_then(|r| r.as_str())
+                .map(|r| r.trim_start_matches("refs/heads/").to_string())
+                .unwrap_or_default();
+            let head = p.and_then(|p| p.get("head")).and_then(|h| h.as_str()).unwrap_or("");
+            let msg = if commit_fetches < MAX_COMMIT_FETCH && !head.is_empty() {
+                commit_fetches += 1;
+                fetch_commit_subject(&program, token.as_deref(), repo, head).await
+            } else {
+                None
+            };
+            let loc = if branch.is_empty() {
+                format!("({repo})")
+            } else {
+                format!("({repo} · {branch})")
+            };
+            lines.push(match msg {
+                Some(m) => format!("- {m} {loc}"),
+                None => format!("- 커밋 push {loc}"),
+            });
+        } else if let Some(line) = format_gh_event(ev, repo) {
             lines.push(line);
         }
         if lines.len() >= MAX_EVENTS {
@@ -339,25 +403,7 @@ fn format_gh_event(ev: &serde_json::Value, repo: &str) -> Option<String> {
     let p = ev.get("payload");
     let get_str = |key: &str| p.and_then(|p| p.get(key)).and_then(|v| v.as_str());
     match kind {
-        "PushEvent" => {
-            // 계정 events 의 PushEvent payload 엔 commits/size 가 없다(ref/head 만) → 브랜치+짧은 SHA 로.
-            let branch = get_str("ref")
-                .map(|r| r.trim_start_matches("refs/heads/").to_string())
-                .unwrap_or_default();
-            let sha: String = get_str("head").unwrap_or("").chars().take(7).collect();
-            let mut detail = branch;
-            if !sha.is_empty() {
-                if detail.is_empty() {
-                    detail = sha;
-                } else {
-                    detail = format!("{detail} {sha}");
-                }
-            }
-            Some(format!(
-                "- push → {repo}{}",
-                if detail.is_empty() { String::new() } else { format!(" ({detail})") }
-            ))
-        }
+        // PushEvent 는 커밋 메시지 조회가 필요해 collect_github 루프에서 직접 처리한다.
         "ReleaseEvent" => {
             let action = get_str("action").unwrap_or("published");
             let rel = p.and_then(|p| p.get("release"));
@@ -368,12 +414,17 @@ fn format_gh_event(ev: &serde_json::Value, repo: &str) -> Option<String> {
             let action = get_str("action").unwrap_or("");
             let pr = p.and_then(|p| p.get("pull_request"));
             let num = pr.and_then(|pr| pr.get("number")).and_then(|n| n.as_u64());
-            let title = pr.and_then(|pr| pr.get("title")).and_then(|t| t.as_str()).map(|t| truncate_line(t, 90)).unwrap_or_default();
+            let title = pr.and_then(|pr| pr.get("title")).and_then(|t| t.as_str()).map(|t| truncate_line(t, 120)).unwrap_or_default();
             let merged = pr.and_then(|pr| pr.get("merged")).and_then(|m| m.as_bool()).unwrap_or(false);
             let verb = if action == "closed" && merged { "머지" } else { action };
-            match num {
-                Some(n) => Some(format!("- PR {verb} [#{n}](https://github.com/{repo}/pull/{n}) {title} — {repo}")),
-                None => Some(format!("- PR {verb}: {title} — {repo}")),
+            let head = match num {
+                Some(n) => format!("- PR {verb} [#{n}](https://github.com/{repo}/pull/{n}) {title} — {repo}"),
+                None => format!("- PR {verb}: {title} — {repo}"),
+            };
+            // PR 본문 = 무슨 작업인지의 근거 → 스니펫으로 덧붙인다
+            match body_snippet(pr.and_then(|pr| pr.get("body")), 240) {
+                Some(b) => Some(format!("{head}\n    {b}")),
+                None => Some(head),
             }
         }
         "PullRequestReviewEvent" | "PullRequestReviewCommentEvent" => {
@@ -388,10 +439,14 @@ fn format_gh_event(ev: &serde_json::Value, repo: &str) -> Option<String> {
             let action = get_str("action").unwrap_or("");
             let issue = p.and_then(|p| p.get("issue"));
             let num = issue.and_then(|i| i.get("number")).and_then(|n| n.as_u64());
-            let title = issue.and_then(|i| i.get("title")).and_then(|t| t.as_str()).map(|t| truncate_line(t, 90)).unwrap_or_default();
-            match num {
-                Some(n) => Some(format!("- 이슈 {action} [#{n}](https://github.com/{repo}/issues/{n}) {title} — {repo}")),
-                None => Some(format!("- 이슈 {action}: {title} — {repo}")),
+            let title = issue.and_then(|i| i.get("title")).and_then(|t| t.as_str()).map(|t| truncate_line(t, 120)).unwrap_or_default();
+            let head = match num {
+                Some(n) => format!("- 이슈 {action} [#{n}](https://github.com/{repo}/issues/{n}) {title} — {repo}"),
+                None => format!("- 이슈 {action}: {title} — {repo}"),
+            };
+            match body_snippet(issue.and_then(|i| i.get("body")), 200) {
+                Some(b) => Some(format!("{head}\n    {b}")),
+                None => Some(head),
             }
         }
         "IssueCommentEvent" => {
