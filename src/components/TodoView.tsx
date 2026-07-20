@@ -1,4 +1,4 @@
-// 할 일 섹션: 좌측 미니 캘린더 + 우측 선택 날짜 체크리스트 (2-pane, docs/DESIGN.md §7).
+// 할 일 섹션: 좌측 미니 캘린더 + 우측 선택 날짜 체크리스트 (2-pane, .claude/DESIGN.md §7).
 // 오늘 우선 — 탭을 열면 오늘 + 빠른 추가 입력에 포커스. 정본은 til.db 의 todos 테이블(lib/todos.ts).
 
 import {
@@ -115,50 +115,102 @@ export function TodoView({ active }: { active: boolean }) {
   }
 
   // 할 일 순서 드래그 (포인터 기반 — WKWebView 에서 HTML5 DnD 보다 안정적).
-  // 커서 Y 로 대상 행을 찾아 배열을 실시간 재배치하고, 놓을 때 sort_order 를 저장.
+  // 노션식: 집어 든 유닛(부모+자식 묶음)이 커서를 따라 "들린 채" 이동하고, 나머지 유닛은
+  // 유닛 높이만큼 밀려 자리를 비운다. 드래그 중엔 배열을 건드리지 않고 transform 만 쓰고
+  // (집은 유닛=translateY(커서 이동량) → 커서 정확 추적), 놓을 때만 실제 순서를 커밋한다.
   function startDrag(e: ReactMouseEvent, id: number) {
     e.preventDefault();
+    const listEl = listRef.current;
+    if (!listEl) return;
+
+    // 시작 시 각 유닛의 위치를 실측 (드래그 중 배열은 안 바뀌므로 좌표가 유효하다)
+    const units = Array.from(
+      listEl.querySelectorAll<HTMLElement>(".todo-unit"),
+    ).map((el) => {
+      const r = el.getBoundingClientRect();
+      return { el, top: r.top, height: r.height, center: r.top + r.height / 2 };
+    });
+    const fromIndex = units.findIndex(
+      (u) => Number(u.el.dataset.unitId) === id,
+    );
+    if (fromIndex === -1) return;
+    const dragged = units[fromIndex];
+    const draggedH = dragged.height;
+    const startY = e.clientY;
+    const listRect = listEl.getBoundingClientRect();
+
     setDragId(id);
     document.body.classList.add("dragging-rows");
-    const onMove = (ev: MouseEvent) => {
-      // 최상위 항목끼리만 순서 조정 (자식은 그립 없음) — 후보를 최상위 행으로 한정
-      const rows = Array.from(
-        listRef.current?.querySelectorAll<HTMLElement>("[data-todo-id]") ?? [],
-      ).filter((row) => {
-        const td = todosRef.current.find(
-          (x) => x.id === Number(row.dataset.todoId),
-        );
-        return td != null && td.parent_id == null;
-      });
-      let targetId: number | null = null;
-      for (const row of rows) {
-        const r = row.getBoundingClientRect();
-        if (ev.clientY < r.top + r.height / 2) {
-          targetId = Number(row.dataset.todoId);
-          break;
-        }
+    listEl.classList.add("reordering"); // 드래그 중에만 밀림 트랜지션 활성
+
+    // 들어올린 유닛의 커서 이동량(dy)으로 삽입 위치를 계산하고 각 유닛에 transform 적용.
+    let dropIndex = fromIndex;
+    const apply = (clientY: number) => {
+      // 커서를 따라 이동하되, 리스트 범위를 벗어나 날아가지 않게 clamp
+      const dy = Math.max(
+        listRect.top - dragged.top,
+        Math.min(listRect.bottom - (dragged.top + draggedH), clientY - startY),
+      );
+      const currentCenter = dragged.center + dy;
+      // 들어올린 유닛의 중심이 넘어선 다른 유닛 수 = 재배치 후 앞에 올 유닛 수 = 삽입 index
+      let above = 0;
+      for (let i = 0; i < units.length; i++) {
+        if (i !== fromIndex && currentCenter > units[i].center) above++;
       }
-      setTodos((prev) => {
-        const from = prev.findIndex((x) => x.id === id);
-        const to =
-          targetId === null
-            ? prev.length - 1
-            : prev.findIndex((x) => x.id === targetId);
-        if (from === -1 || to === -1 || from === to) return prev;
-        const next = prev.slice();
-        const [moved] = next.splice(from, 1);
-        next.splice(from < to ? to - 1 : to, 0, moved);
-        return next;
-      });
+      dropIndex = above;
+      for (let i = 0; i < units.length; i++) {
+        const { el } = units[i];
+        if (i === fromIndex) {
+          el.style.transition = "none"; // 집은 유닛은 커서를 지연 없이 1:1 추적
+          el.style.transform = `translateY(${dy}px)`;
+          el.style.zIndex = "5";
+          continue;
+        }
+        // from~drop 사이 유닛만 유닛 높이만큼 밀어 gap 을 연다 (CSS 트랜지션으로 부드럽게)
+        const shift =
+          above > fromIndex && i > fromIndex && i <= above
+            ? -draggedH
+            : above < fromIndex && i >= above && i < fromIndex
+              ? draggedH
+              : 0;
+        el.style.transition = "";
+        el.style.transform = shift ? `translateY(${shift}px)` : "";
+        el.style.zIndex = "";
+      }
     };
+    apply(startY);
+
+    const onMove = (ev: MouseEvent) => apply(ev.clientY);
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       document.body.classList.remove("dragging-rows");
+      // 트랜지션을 먼저 끄고(즉시 스냅) 인라인 transform 제거 → setTodos 재정렬 결과가 정본
+      listEl.classList.remove("reordering");
+      for (const u of units) {
+        u.el.style.transition = "";
+        u.el.style.transform = "";
+        u.el.style.zIndex = "";
+      }
       setDragId(null);
-      void reorderTodos(
-        todosRef.current.filter((t) => t.parent_id == null).map((t) => t.id),
-      ).catch((err) => setError(errMsg(err)));
+
+      const cur = todosRef.current;
+      const tops = cur.filter((t) => t.parent_id == null);
+      const from = tops.findIndex((t) => t.id === id);
+      if (from === -1 || dropIndex === from) return; // 제자리면 커밋 생략
+      const nextTops = tops.slice();
+      const [moved] = nextTops.splice(from, 1);
+      nextTops.splice(dropIndex, 0, moved);
+      // 부모 순서만 재배치, 자식은 각 부모 뒤에 그대로 유지
+      const rebuilt: Todo[] = [];
+      for (const p of nextTops) {
+        rebuilt.push(p);
+        for (const c of cur.filter((t) => t.parent_id === p.id)) rebuilt.push(c);
+      }
+      setTodos(rebuilt);
+      void reorderTodos(nextTops.map((t) => t.id)).catch((err) =>
+        setError(errMsg(err)),
+      );
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -348,7 +400,7 @@ export function TodoView({ active }: { active: boolean }) {
     const kidsDone = kids.filter((k) => k.done === 1).length;
     return (
       <div
-        className={`todo-row ${t.done === 1 ? "done" : ""} ${isChild ? "todo-child" : ""} ${dragId === t.id ? "dragging" : ""}`}
+        className={`todo-row ${t.done === 1 ? "done" : ""} ${isChild ? "todo-child" : ""}`}
         data-todo-id={t.id}
       >
         {!isOverdue && !isChild && (
@@ -564,7 +616,11 @@ export function TodoView({ active }: { active: boolean }) {
             </div>
           ) : (
             topLevel.map((p) => (
-              <Fragment key={p.id}>
+              <div
+                key={p.id}
+                className={`todo-unit ${dragId === p.id ? "dragging" : ""}`}
+                data-unit-id={p.id}
+              >
                 {renderRow(p)}
                 {childrenOf(p.id).map((c) => (
                   <Fragment key={c.id}>{renderRow(c, { child: true })}</Fragment>
@@ -593,7 +649,7 @@ export function TodoView({ active }: { active: boolean }) {
                     />
                   </div>
                 )}
-              </Fragment>
+              </div>
             ))
           )}
         </div>

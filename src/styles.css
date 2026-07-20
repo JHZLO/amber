@@ -2440,7 +2440,7 @@ html.widget-root #root {
   white-space: nowrap;
 }
 
-/* ==== 공유 primitive: 체크박스 (모노톤 채움/아웃라인, docs/DESIGN.md §3) ==== */
+/* ==== 공유 primitive: 체크박스 (모노톤 채움/아웃라인, .claude/DESIGN.md §3) ==== */
 .checkbox {
   width: 20px;
   height: 20px;
@@ -2732,16 +2732,25 @@ body.resizing-col .todo-resizer::after {
 .todo-grip:active {
   cursor: grabbing;
 }
-/* 드래그로 집어 든 행 — 노션처럼 선명하게 "들린" 느낌(솔리드 배경 + 그림자 + 살짝 확대).
-   흐려지지 않는다 = 지금 쥐고 있는 대상 */
-.todo-row.dragging {
+/* 최상위 유닛(부모+자식 묶음) = 드래그 순서 조정의 단위. */
+.todo-unit {
+  position: relative;
+}
+/* 드래그 중 밀려나는 유닛만 부드럽게 이동 (집은 유닛은 인라인 transition:none 으로 1:1 추적).
+   드롭 때 .reordering 을 떼면 트랜지션이 사라져 최종 배열로 즉시 스냅 — 재배치와 겹쳐 튀는 잔상 방지. */
+.todo-listing.reordering .todo-unit {
+  transition: transform 0.18s cubic-bezier(0.33, 1, 0.68, 1);
+}
+/* 드래그로 집어 든 유닛 — 커서를 따라 "들린 채" 움직인다(이동량은 인라인 transform).
+   노션처럼 솔리드 배경 + 그림자로 들린 느낌. 흐려지지 않는다 = 지금 쥐고 있는 대상 */
+.todo-unit.dragging {
   background: var(--surface);
+  border-radius: 8px;
   box-shadow: var(--shadow);
-  transform: scale(1.01);
   z-index: 5;
   cursor: grabbing;
 }
-.todo-row.dragging .todo-grip {
+.todo-unit.dragging .todo-grip {
   opacity: 1;
   color: var(--text);
 }
@@ -2750,6 +2759,10 @@ body.dragging-rows {
 }
 body.dragging-rows * {
   user-select: none !important;
+}
+/* 드래그 중엔 hover 배경을 끈다 — 들어올린 유닛의 카드 배경이 깔끔히 보이도록 */
+body.dragging-rows .todo-row:hover {
+  background: transparent;
 }
 .todo-text {
   flex: 1;
@@ -2922,6 +2935,7 @@ body.dragging-rows * {
   .cal-num,
   .cal-title,
   .todo-row,
+  .todo-listing.reordering .todo-unit,
   .todo-text,
   .todo-row .row-actions,
   .todo-grip,
