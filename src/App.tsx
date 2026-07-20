@@ -4,6 +4,7 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import "./styles.css";
 import type { AppConfig } from "./lib/config";
 import { loadConfig } from "./lib/config";
+import { useAnyReportGenerating } from "./lib/reportRun";
 import type {
   ConceptFilter,
   ConceptSort,
@@ -76,6 +77,8 @@ function App() {
 
   const [addOpen, setAddOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // 리포트가 백그라운드로 생성 중이면 어느 탭에 있든 할 일 레일에 표시(진행이 안 끊김을 알림)
+  const reportBusy = useAnyReportGenerating();
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -206,10 +209,13 @@ function App() {
             key={r.id}
             className={`rail-item ${section === r.id ? "active" : ""}`}
             onClick={() => setSection(r.id)}
-            title={r.label}
+            title={r.id === "todo" && reportBusy ? `${r.label} · 리포트 생성 중…` : r.label}
           >
             <Icon name={r.icon} size={20} />
             <span>{r.label}</span>
+            {r.id === "todo" && reportBusy && (
+              <span className="rail-busy" aria-label="리포트 생성 중" />
+            )}
           </button>
         ))}
         <span className="rail-spacer" />

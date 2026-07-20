@@ -180,6 +180,32 @@ select {
   outline: none;
   box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.12);
 }
+/* 리포트 백그라운드 생성 중 표시 — 할 일 아이콘 우상단 맥동 점 (어느 탭에서든 보임) */
+.rail-busy {
+  position: absolute;
+  top: 7px;
+  right: 11px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text);
+  animation: rail-busy-pulse 1.1s ease-in-out infinite;
+}
+@keyframes rail-busy-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail-busy {
+    animation: none;
+    opacity: 0.85;
+  }
+}
 .rail-spacer {
   flex: 1;
 }

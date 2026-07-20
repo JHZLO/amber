@@ -1,32 +1,30 @@
 // 데일리 리포트 패널 — 할 일 체크리스트 아래(TodoView detail)에 사는 4상태 블록.
 // ① 미생성(버튼) → ② 수집(소스별 칩) → 요약 스트리밍 → ③ 완성(마크다운+메타) / ④ 에러·활동없음.
+// 생성 '실행'은 lib/reportRun 스토어가 백그라운드로 돌린다 — 이 컴포넌트는 구독·표시만 한다.
+// 그래서 탭/날짜를 바꿔도 생성이 안 끊기고, 응답 올 때까지 로딩이 유지된다.
 // 정본: 본문 = vault/reports/<date>.md, 메타 = daily_reports 테이블 (lib/report.ts).
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { AppConfig } from "../lib/config";
-import type { CollectProgress, DailyReport, SourceDigest } from "../types";
+import type { DailyReport } from "../types";
 import {
-  buildTodosDigest,
   deleteReport,
   getReport,
   loadReportConfig,
-  mcpSourcesFrom,
-  rankedSources,
   readReportFile,
-  reportCollect,
-  reportGenerate,
-  upsertReport,
-  writeReportFile,
 } from "../lib/report";
-import { dayRangeMs, todayStr } from "../lib/date";
-import { friendlyError } from "../lib/ai";
+import {
+  clearRun,
+  isRunning,
+  startReport,
+  useReportRun,
+  type RunChip,
+  type RunPhase,
+} from "../lib/reportRun";
+import { todayStr } from "../lib/date";
 import { Markdown } from "./Markdown";
 import { AiThinking, Modal, Spinner } from "../ui";
 import { Icon } from "../icons";
-
-const errMsg = (e: unknown) => friendlyError(e);
-
-type Phase = "idle" | "collecting" | "streaming" | "done" | "empty" | "error";
 
 const SRC_LABEL: Record<string, string> = {
   todos: "투두",
@@ -35,13 +33,6 @@ const SRC_LABEL: Record<string, string> = {
   slack: "Slack",
   notion: "Notion",
 };
-
-type ChipStatus = "ok" | "pending" | "error" | "mcp";
-interface Chip {
-  id: string;
-  status: ChipStatus;
-  items: number;
-}
 
 function hhmm(ms: number): string {
   return new Date(ms).toLocaleTimeString("ko-KR", {
@@ -62,47 +53,40 @@ export function DailyReportPanel({
   active: boolean;
   onOpenSettings: () => void;
 }) {
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [report, setReport] = useState<DailyReport | null>(null);
-  const [body, setBody] = useState<string>("");
-  const [stream, setStream] = useState<string>("");
-  const [chips, setChips] = useState<Chip[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const run = useReportRun(date); // 백그라운드 실행 상태 (없으면 undefined)
+  const [loaded, setLoaded] = useState<{ report: DailyReport; body: string } | null>(
+    null,
+  );
   const [confirmRegen, setConfirmRegen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [opError, setOpError] = useState<string | null>(null);
 
-  const busyRef = useRef(false);
   const isFuture = date > todayStr();
 
-  // 날짜 변경 시 기존 리포트 로드 (생성 중이면 건드리지 않음)
-  const load = useCallback(async () => {
-    if (busyRef.current) return;
-    try {
-      const [r, md] = await Promise.all([getReport(date), readReportFile(date)]);
-      if (r && md != null) {
-        setReport(r);
-        setBody(md);
-        setPhase("done");
-      } else {
-        setReport(null);
-        setBody("");
-        setPhase("idle");
-      }
-      setStream("");
-      setError(null);
-    } catch (e) {
-      setError(errMsg(e));
-    }
-  }, [date]);
-
+  // 스토어에 실행이 없을 때만 디스크에서 기존 리포트 로드(실행이 있으면 그게 정본).
   useEffect(() => {
-    if (active) void load();
-  }, [active, load]);
+    if (!active || run) return;
+    let cancelled = false;
+    void Promise.all([getReport(date), readReportFile(date)]).then(([r, md]) => {
+      if (cancelled) return;
+      setLoaded(r && md != null ? { report: r, body: md } : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [active, date, run]);
+
+  // 표시값: 실행 중이면 스토어, 아니면 디스크 로드
+  const phase: "idle" | RunPhase = run?.phase ?? (loaded ? "done" : "idle");
+  const chips: RunChip[] = run?.chips ?? [];
+  const stream = run?.stream ?? "";
+  const report = run ? run.report : (loaded?.report ?? null);
+  const body = run ? run.body : (loaded?.body ?? "");
+  const error = run?.error ?? null;
 
   async function generate() {
-    if (busyRef.current || isFuture) return;
-
+    if (isRunning(date) || isFuture) return;
     // 게이트: AI 미연결 → 온보딩/설정, 리포트 최초 설정 안 함 → 설정 열기
     if (!config?.provider) {
       onOpenSettings();
@@ -113,129 +97,28 @@ export function DailyReportPanel({
       onOpenSettings();
       return;
     }
+    setOpError(null);
+    void startReport(date, config); // 백그라운드 실행 (스토어가 상태 관리)
+  }
 
-    busyRef.current = true;
-    setError(null);
-    setStream("");
-    setPhase("collecting");
-    try {
-      const { md: todosDigest, count } = await buildTodosDigest(date);
-      const ranked = rankedSources(rc);
-      const githubR = ranked.find((s) => s.id === "github");
-      const sessR = ranked.find((s) => s.id === "ai_sessions");
-      // MCP 소스(Slack·Notion)는 claude 가 생성 중 직접 조회 — claude 프로바이더 전용
-      const mcpSources = config.provider === "claude" ? mcpSourcesFrom(rc) : [];
-
-      // 칩 초기화: 투두(즉시 확정) + 활성 플랫폼(수집 대기) + MCP(생성 중 조회)
-      const initChips: Chip[] = [{ id: "todos", status: "ok", items: count }];
-      for (const s of ranked) {
-        if (s.id === "github" || s.id === "ai_sessions") {
-          initChips.push({ id: s.id, status: "pending", items: 0 });
-        }
-      }
-      for (const m of mcpSources) {
-        initChips.push({ id: m.id, status: "mcp", items: 0 });
-      }
-      setChips(initChips);
-
-      const [startMs, endMs] = dayRangeMs(date);
-      const digests = await reportCollect(
-        {
-          date,
-          startMs,
-          endMs,
-          tzOffsetMin: new Date().getTimezoneOffset(),
-          github: githubR
-            ? {
-                rank: githubR.rank,
-                path: rc.githubPath || null,
-                repos: rc.githubRepos,
-                account: rc.githubAccount || null,
-              }
-            : null,
-          aiSessions: sessR
-            ? { rank: sessR.rank, claude: rc.sessionsClaude, codex: rc.sessionsCodex }
-            : null,
-        },
-        (p: CollectProgress) => {
-          setChips((prev) =>
-            prev.map((c) =>
-              c.id === p.id
-                ? { id: c.id, status: p.ok ? "ok" : "error", items: p.items }
-                : c,
-            ),
-          );
-        },
-      );
-
-      // 활동 전무 → 생성 없이 종료(크레딧 절약). MCP 소스가 있으면 claude 가 조회하므로 진행
-      const hasActivity =
-        count > 0 || digests.some((d) => d.ok && d.items > 0) || mcpSources.length > 0;
-      if (!hasActivity) {
-        setPhase("empty");
-        return;
-      }
-
-      setPhase("streaming");
-      const { markdown, meta } = await reportGenerate(
-        {
-          date,
-          todosDigest,
-          digests,
-          mcpSources,
-          model: config.model,
-          cliPath: config.cliPath,
-          provider: config.provider,
-        },
-        (t: string) => setStream((s) => s + t),
-      );
-
-      const filePath = await writeReportFile(date, markdown);
-      const sourcesJson = JSON.stringify([
-        ...digests.map((d: SourceDigest) => ({
-          id: d.id,
-          rank: d.rank,
-          ok: d.ok,
-          items: d.items,
-          error: d.error,
-        })),
-        ...mcpSources.map((m) => ({
-          id: m.id,
-          rank: m.rank,
-          ok: true,
-          items: 0,
-          mcp: true,
-          error: null,
-        })),
-      ]);
-      await upsertReport({
-        date,
-        filePath,
-        sourcesJson,
-        provider: config.provider,
-        model: meta.model,
-        durationMs: meta.duration_ms,
-      });
-      setBody(markdown);
-      setReport(await getReport(date));
-      setPhase("done");
-    } catch (e) {
-      setError(errMsg(e));
-      setPhase("error");
-    } finally {
-      busyRef.current = false;
+  function regenerate() {
+    setConfirmRegen(false);
+    if (!config?.provider) {
+      onOpenSettings();
+      return;
     }
+    setOpError(null);
+    void startReport(date, config);
   }
 
   async function remove() {
     setConfirmDelete(false);
     try {
       await deleteReport(date);
-      setReport(null);
-      setBody("");
-      setPhase("idle");
+      clearRun(date);
+      setLoaded(null);
     } catch (e) {
-      setError(errMsg(e));
+      setOpError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -368,6 +251,7 @@ export function DailyReportPanel({
         </p>
       )}
       {phase === "error" && error && <div className="error-note">{error}</div>}
+      {opError && <div className="error-note">{opError}</div>}
 
       <Modal
         open={confirmRegen}
@@ -380,13 +264,7 @@ export function DailyReportPanel({
             <button className="btn btn-sm" onClick={() => setConfirmRegen(false)}>
               취소
             </button>
-            <button
-              className="btn btn-primary"
-              onClick={() => {
-                setConfirmRegen(false);
-                void generate();
-              }}
-            >
+            <button className="btn btn-primary" onClick={regenerate}>
               다시 생성
             </button>
           </>
