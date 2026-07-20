@@ -35,3 +35,6 @@ dist-ssr
 .gemini/
 /AGENTS.md
 /CLAUDE.md
+
+# 내부 기획 문서 — 로컬 전용, 원격에 올리지 않는다
+/PRD.md
