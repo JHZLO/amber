@@ -2706,7 +2706,7 @@ body.resizing-col .todo-resizer::after {
   gap: 12px;
   padding: 10px 8px;
   border-radius: 8px; /* 구분선 없이 여백+hover 로만 구분 (선 과다 방지) */
-  transition: background 0.12s;
+  transition: background 0.12s, box-shadow 0.12s, transform 0.12s;
 }
 .todo-row:hover {
   background: var(--surface-2);
@@ -2732,9 +2732,18 @@ body.resizing-col .todo-resizer::after {
 .todo-grip:active {
   cursor: grabbing;
 }
+/* 드래그로 집어 든 행 — 노션처럼 선명하게 "들린" 느낌(솔리드 배경 + 그림자 + 살짝 확대).
+   흐려지지 않는다 = 지금 쥐고 있는 대상 */
 .todo-row.dragging {
-  opacity: 0.55;
-  background: var(--surface-2);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  transform: scale(1.01);
+  z-index: 5;
+  cursor: grabbing;
+}
+.todo-row.dragging .todo-grip {
+  opacity: 1;
+  color: var(--text);
 }
 body.dragging-rows {
   cursor: grabbing;
