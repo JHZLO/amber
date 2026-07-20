@@ -1,5 +1,5 @@
 // 필기노트의 선택 영역을 개념 카드로 "승격".
-// 선택 텍스트 + 노트 문맥을 개념 생성 파이프라인(claudeGenerate)에 넣어 제목/요약/상세/태그를 만들고,
+// 선택 텍스트 + 노트 문맥을 개념 생성 파이프라인(aiGenerate)에 넣어 제목/요약/상세/태그를 만들고,
 // 미리보기에서 편집 후 저장한다. 저장 = 개념 생성(source_kind='file') + 노트 쪽 역참조 사이드카 기록.
 
 import { useEffect, useState, type ReactNode } from "react";
@@ -7,7 +7,7 @@ import { ulid as genUlid } from "ulid";
 import { Markdown } from "./Markdown";
 import type { AppConfig } from "../lib/config";
 import type { Confidence } from "../types";
-import { claudeGenerate, friendlyError } from "../lib/claude";
+import { aiGenerate, friendlyError } from "../lib/ai";
 import { createConcept } from "../lib/db";
 import { detailPathFor, writeNote } from "../lib/vault";
 import { addNoteConcept } from "../lib/noteConcepts";
@@ -82,7 +82,7 @@ export function PromoteConceptModal({
       "[출처 노트 전체]를 문맥으로만 참고해 제목·요약·상세 노트·태그를 작성하라. " +
       "노트 전체를 요약하지 말고 선택한 개념에 집중하라.";
 
-    claudeGenerate({
+    aiGenerate({
       transcript: input,
       instruction,
       model: config.model,

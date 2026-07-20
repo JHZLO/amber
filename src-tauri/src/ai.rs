@@ -1,5 +1,5 @@
-// Claude headless 브리지.
-// 붙여넣은 AI Q&A 원문 → 로컬 `claude -p --output-format json` → 요약+상세 노트(JSON).
+// AI 프로바이더 브리지 (claude/codex/gemini) — headless CLI 로 노트 생성/보강/질문.
+// 붙여넣은 AI Q&A 원문 → 로컬 CLI (claude 는 `claude -p --output-format json`) → 요약+상세 노트(JSON).
 // 봉투(envelope) 안의 .result 문자열에 우리 계약 JSON 이 또 들어있어 "이중 파싱"이 필요하다 (PRD §6).
 // stdin 으로 원문을 넘기고 EOF 를 확실히 닫기 위해 tokio::process 를 직접 사용한다.
 
@@ -81,7 +81,7 @@ pub(crate) async fn run_provider_text(
     dur: Duration,
     system_prompt: &str,
     input: String,
-) -> Result<(String, MetaOut), ClaudeError> {
+) -> Result<(String, MetaOut), AiError> {
     match kind {
         ProviderKind::Claude => {
             spawn_claude_result(program, model, dur, system_prompt, input).await
@@ -98,7 +98,7 @@ async fn spawn_simple_cli_result(
     dur: Duration,
     system_prompt: &str,
     input: String,
-) -> Result<(String, MetaOut), ClaudeError> {
+) -> Result<(String, MetaOut), AiError> {
     let combined = format!("[지시사항 — 반드시 그대로 따를 것]\n{system_prompt}\n\n{input}");
     let started = std::time::Instant::now();
 
@@ -129,12 +129,12 @@ async fn spawn_simple_cli_result(
         .spawn()
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                ClaudeError::new(
-                    "CLAUDE_NOT_FOUND",
+                AiError::new(
+                    "AI_NOT_FOUND",
                     format!("AI CLI 를 찾을 수 없습니다: {program}"),
                 )
             } else {
-                ClaudeError::new("SPAWN_ERROR", e.to_string())
+                AiError::new("SPAWN_ERROR", e.to_string())
             }
         })?;
 
@@ -143,18 +143,18 @@ async fn spawn_simple_cli_result(
         stdin
             .write_all(combined.as_bytes())
             .await
-            .map_err(|e| ClaudeError::new("STDIN_ERROR", e.to_string()))?;
+            .map_err(|e| AiError::new("STDIN_ERROR", e.to_string()))?;
         let _ = stdin.shutdown().await;
     }
 
     let output = match timeout(dur, child.wait_with_output()).await {
         Err(_) => {
-            return Err(ClaudeError::new(
-                "CLAUDE_TIMEOUT",
+            return Err(AiError::new(
+                "AI_TIMEOUT",
                 format!("{}초 안에 응답이 없습니다.", dur.as_secs()),
             ))
         }
-        Ok(r) => r.map_err(|e| ClaudeError::new("WAIT_ERROR", e.to_string()))?,
+        Ok(r) => r.map_err(|e| AiError::new("WAIT_ERROR", e.to_string()))?,
     };
 
     if !output.status.success() {
@@ -165,19 +165,19 @@ async fn spawn_simple_cli_result(
             || stderr.contains("credential")
         {
             (
-                "CLAUDE_AUTH",
+                "AI_AUTH",
                 "AI CLI 인증이 필요합니다. 터미널에서 로그인 후 다시 시도하세요.",
             )
         } else if stderr.contains("rate") || stderr.contains("quota") || stderr.contains("limit") {
             (
-                "CLAUDE_RATE_LIMIT",
+                "AI_RATE_LIMIT",
                 "사용량 한도에 도달했습니다. 잠시 후 다시 시도하세요.",
             )
         } else {
-            ("CLAUDE_ERROR", "AI CLI 실행이 실패했습니다.")
+            ("AI_ERROR", "AI CLI 실행이 실패했습니다.")
         };
         let detail = String::from_utf8_lossy(&output.stderr);
-        return Err(ClaudeError::new(code, format!("{msg}\n{}", detail.trim())));
+        return Err(AiError::new(code, format!("{msg}\n{}", detail.trim())));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -191,7 +191,7 @@ async fn spawn_simple_cli_result(
         _ => stdout.trim().to_string(),
     };
     if text.is_empty() {
-        return Err(ClaudeError::new("CLAUDE_ERROR", "빈 응답입니다."));
+        return Err(AiError::new("AI_ERROR", "빈 응답입니다."));
     }
 
     let meta = MetaOut {
@@ -248,12 +248,12 @@ pub struct NoteAskResult {
 
 /// 프론트가 케이스별로 분기할 수 있게 code + message 로 반환
 #[derive(Debug, Serialize)]
-pub struct ClaudeError {
+pub struct AiError {
     pub code: String,
     pub message: String,
 }
 
-impl ClaudeError {
+impl AiError {
     pub(crate) fn new(code: &str, message: impl Into<String>) -> Self {
         Self {
             code: code.into(),
@@ -315,16 +315,16 @@ pub(crate) fn strip_outer_fence(s: &str) -> &str {
 }
 
 #[tauri::command]
-pub async fn claude_generate(
+pub async fn ai_generate(
     transcript: String,
     instruction: Option<String>,
     model: Option<String>,
     cli_path: Option<String>,
     provider: Option<String>,
     timeout_secs: Option<u64>,
-) -> Result<GenerateResult, ClaudeError> {
+) -> Result<GenerateResult, AiError> {
     if transcript.trim().chars().count() < MIN_INPUT_CHARS {
-        return Err(ClaudeError::new(
+        return Err(AiError::new(
             "EMPTY_INPUT",
             "입력이 너무 짧습니다. 대화 원문을 붙여넣어 주세요.",
         ));
@@ -342,13 +342,13 @@ pub async fn claude_generate(
         None => transcript,
     };
 
-    run_claude(kind, program, model, dur, SYSTEM_PROMPT, input).await
+    run_concept_note(kind, program, model, dur, SYSTEM_PROMPT, input).await
 }
 
 /// 이미 정리된 노트 + 사용자 프롬프트 → 보강된 노트(JSON).
-/// 원문 요약(claude_generate)과 파이프라인은 같지만, 입력 구성과 시스템 프롬프트만 다르다.
+/// 원문 요약(ai_generate)과 파이프라인은 같지만, 입력 구성과 시스템 프롬프트만 다르다.
 #[tauri::command]
-pub async fn claude_augment(
+pub async fn ai_augment(
     title: String,
     summary: String,
     tags: Vec<String>,
@@ -358,16 +358,16 @@ pub async fn claude_augment(
     cli_path: Option<String>,
     provider: Option<String>,
     timeout_secs: Option<u64>,
-) -> Result<GenerateResult, ClaudeError> {
+) -> Result<GenerateResult, AiError> {
     let instr = instruction.trim();
     if instr.is_empty() {
-        return Err(ClaudeError::new(
+        return Err(AiError::new(
             "EMPTY_INPUT",
             "보강 지시를 입력해 주세요.",
         ));
     }
     if markdown.trim().is_empty() {
-        return Err(ClaudeError::new(
+        return Err(AiError::new(
             "EMPTY_INPUT",
             "보강할 노트 본문이 비어 있습니다.",
         ));
@@ -384,14 +384,14 @@ pub async fn claude_augment(
         "[보강 요청]\n{instr}\n\n[현재 노트]\n제목: {title}\n요약: {summary}\n태그: {tags_line}\n\n[현재 상세 노트 (Markdown)]\n{markdown}"
     );
 
-    run_claude(kind, program, model, dur, AUGMENT_SYSTEM_PROMPT, input).await
+    run_concept_note(kind, program, model, dur, AUGMENT_SYSTEM_PROMPT, input).await
 }
 
 /// 필기노트 작성/보강: 자유 형식 마크다운 + 지시 → 완성본(raw 마크다운).
-/// 개념 정리(claude_generate)와 달리 JSON 계약을 파싱하지 않는다 — 봉투 .result 를 그대로 본문으로.
+/// 개념 정리(ai_generate)와 달리 JSON 계약을 파싱하지 않는다 — 봉투 .result 를 그대로 본문으로.
 /// 빈 본문 허용(그 경우 요청 주제로 처음부터 작성).
 #[tauri::command]
-pub async fn claude_note_compose(
+pub async fn ai_note_compose(
     title: String,
     markdown: String,
     instruction: String,
@@ -399,10 +399,10 @@ pub async fn claude_note_compose(
     cli_path: Option<String>,
     provider: Option<String>,
     timeout_secs: Option<u64>,
-) -> Result<NoteComposeResult, ClaudeError> {
+) -> Result<NoteComposeResult, AiError> {
     let instr = instruction.trim();
     if instr.is_empty() {
-        return Err(ClaudeError::new("EMPTY_INPUT", "작성 지시를 입력해 주세요."));
+        return Err(AiError::new("EMPTY_INPUT", "작성 지시를 입력해 주세요."));
     }
 
     let kind = provider_kind(provider.as_deref());
@@ -423,8 +423,8 @@ pub async fn claude_note_compose(
     // 전체를 감싼 코드펜스만 벗기고(본문 내부 코드블록은 보존) 그대로 마크다운 본문으로 사용
     let md = strip_outer_fence(&result_str).trim().to_string();
     if md.is_empty() {
-        return Err(ClaudeError::new(
-            "CLAUDE_BAD_CONTRACT",
+        return Err(AiError::new(
+            "AI_BAD_CONTRACT",
             "생성된 노트 내용이 비어 있습니다. 다시 시도해 주세요.",
         ));
     }
@@ -435,7 +435,7 @@ pub async fn claude_note_compose(
 /// 필기노트 작성/보강 (스트리밍). 생성 텍스트 델타를 on_delta 채널로 실시간 전송하고,
 /// 최종 결과는 stream-json 의 마지막 `result` 봉투(.result)에서 확정한다(신뢰 소스).
 #[tauri::command]
-pub async fn claude_note_compose_stream(
+pub async fn ai_note_compose_stream(
     title: String,
     markdown: String,
     instruction: String,
@@ -444,10 +444,10 @@ pub async fn claude_note_compose_stream(
     provider: Option<String>,
     timeout_secs: Option<u64>,
     on_delta: Channel<String>,
-) -> Result<NoteComposeResult, ClaudeError> {
+) -> Result<NoteComposeResult, AiError> {
     let instr = instruction.trim();
     if instr.is_empty() {
-        return Err(ClaudeError::new("EMPTY_INPUT", "작성 지시를 입력해 주세요."));
+        return Err(AiError::new("EMPTY_INPUT", "작성 지시를 입력해 주세요."));
     }
 
     let kind = provider_kind(provider.as_deref());
@@ -463,7 +463,7 @@ pub async fn claude_note_compose_stream(
     );
 
     let (result_str, meta) = if kind == ProviderKind::Claude {
-        stream_claude_result(program, model, dur, NOTE_SYSTEM_PROMPT, input, &on_delta).await?
+        stream_claude_result(program, model, dur, NOTE_SYSTEM_PROMPT, input, &[], &on_delta).await?
     } else {
         // codex/gemini 는 스트리밍 미지원 경로 — 완료 후 전체 텍스트를 한 번에 전송
         let r = run_provider_text(kind, program, model, dur, NOTE_SYSTEM_PROMPT, input).await?;
@@ -473,8 +473,8 @@ pub async fn claude_note_compose_stream(
 
     let md = strip_outer_fence(&result_str).trim().to_string();
     if md.is_empty() {
-        return Err(ClaudeError::new(
-            "CLAUDE_BAD_CONTRACT",
+        return Err(AiError::new(
+            "AI_BAD_CONTRACT",
             "생성된 노트 내용이 비어 있습니다. 다시 시도해 주세요.",
         ));
     }
@@ -491,7 +491,7 @@ pub struct AskExchange {
 
 /// 필기노트 인라인 질문: 선택 문장 + 질문 (+ 이전 문답) + 노트 문맥 → 짧은 답변(raw 텍스트).
 #[tauri::command]
-pub async fn claude_note_ask(
+pub async fn ai_note_ask(
     selection: String,
     question: String,
     note_markdown: String,
@@ -500,14 +500,14 @@ pub async fn claude_note_ask(
     cli_path: Option<String>,
     provider: Option<String>,
     timeout_secs: Option<u64>,
-) -> Result<NoteAskResult, ClaudeError> {
+) -> Result<NoteAskResult, AiError> {
     let q = question.trim();
     if q.is_empty() {
-        return Err(ClaudeError::new("EMPTY_INPUT", "질문을 입력해 주세요."));
+        return Err(AiError::new("EMPTY_INPUT", "질문을 입력해 주세요."));
     }
     let sel = selection.trim();
     if sel.is_empty() {
-        return Err(ClaudeError::new("EMPTY_INPUT", "선택한 문장이 비어 있습니다."));
+        return Err(AiError::new("EMPTY_INPUT", "선택한 문장이 비어 있습니다."));
     }
 
     let kind = provider_kind(provider.as_deref());
@@ -536,8 +536,8 @@ pub async fn claude_note_ask(
 
     let answer = strip_outer_fence(&result_str).trim().to_string();
     if answer.is_empty() {
-        return Err(ClaudeError::new(
-            "CLAUDE_BAD_CONTRACT",
+        return Err(AiError::new(
+            "AI_BAD_CONTRACT",
             "답변이 비어 있습니다. 다시 시도해 주세요.",
         ));
     }
@@ -553,8 +553,10 @@ pub(crate) async fn stream_claude_result(
     dur: Duration,
     system_prompt: &str,
     input: String,
+    // 추가 CLI 인자(예: MCP --allowedTools/--mcp-config). 노트 경로는 빈 슬라이스를 넘긴다.
+    extra_args: &[String],
     on_delta: &Channel<String>,
-) -> Result<(String, MetaOut), ClaudeError> {
+) -> Result<(String, MetaOut), AiError> {
     let mut child = Command::new(&program)
         .arg("-p")
         .args(["--output-format", "stream-json"])
@@ -562,6 +564,7 @@ pub(crate) async fn stream_claude_result(
         .arg("--verbose")
         .args(["--model", &model])
         .args(["--append-system-prompt", system_prompt])
+        .args(extra_args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -569,12 +572,12 @@ pub(crate) async fn stream_claude_result(
         .spawn()
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                ClaudeError::new(
-                    "CLAUDE_NOT_FOUND",
+                AiError::new(
+                    "AI_NOT_FOUND",
                     format!("claude CLI 를 찾을 수 없습니다: {program}"),
                 )
             } else {
-                ClaudeError::new("SPAWN_ERROR", e.to_string())
+                AiError::new("SPAWN_ERROR", e.to_string())
             }
         })?;
 
@@ -583,7 +586,7 @@ pub(crate) async fn stream_claude_result(
         stdin
             .write_all(input.as_bytes())
             .await
-            .map_err(|e| ClaudeError::new("STDIN_ERROR", e.to_string()))?;
+            .map_err(|e| AiError::new("STDIN_ERROR", e.to_string()))?;
         let _ = stdin.shutdown().await;
     }
 
@@ -604,7 +607,7 @@ pub(crate) async fn stream_claude_result(
         while let Some(line) = lines
             .next_line()
             .await
-            .map_err(|e| ClaudeError::new("WAIT_ERROR", e.to_string()))?
+            .map_err(|e| AiError::new("WAIT_ERROR", e.to_string()))?
         {
             if line.trim().is_empty() {
                 continue;
@@ -638,14 +641,14 @@ pub(crate) async fn stream_claude_result(
                 _ => {}
             }
         }
-        Ok::<(), ClaudeError>(())
+        Ok::<(), AiError>(())
     };
 
     match timeout(dur, read_loop).await {
         Err(_) => {
             let _ = child.start_kill();
-            return Err(ClaudeError::new(
-                "CLAUDE_TIMEOUT",
+            return Err(AiError::new(
+                "AI_TIMEOUT",
                 format!("{}초 안에 응답이 없습니다.", dur.as_secs()),
             ));
         }
@@ -664,28 +667,28 @@ pub(crate) async fn stream_claude_result(
                 || low.contains("unauthorized")
             {
                 (
-                    "CLAUDE_AUTH",
+                    "AI_AUTH",
                     "claude 인증이 필요합니다. 터미널에서 `claude` 로그인 후 다시 시도하세요.",
                 )
             } else if low.contains("rate") || low.contains("quota") || low.contains("limit") {
                 (
-                    "CLAUDE_RATE_LIMIT",
+                    "AI_RATE_LIMIT",
                     "사용량 한도에 도달했습니다. 잠시 후 다시 시도하세요.",
                 )
             } else {
-                ("CLAUDE_BAD_ENVELOPE", "스트림에서 결과를 받지 못했습니다.")
+                ("AI_BAD_ENVELOPE", "스트림에서 결과를 받지 못했습니다.")
             };
-            return Err(ClaudeError::new(code, format!("{msg}\n{}", errbuf.trim())));
+            return Err(AiError::new(code, format!("{msg}\n{}", errbuf.trim())));
         }
     };
 
     if envelope.is_error || envelope.subtype.as_deref() != Some("success") {
-        return Err(ClaudeError::new("CLAUDE_ERROR", "claude 가 오류를 반환했습니다."));
+        return Err(AiError::new("AI_ERROR", "claude 가 오류를 반환했습니다."));
     }
     let result_str = envelope
         .result
         .clone()
-        .ok_or_else(|| ClaudeError::new("CLAUDE_ERROR", "빈 응답입니다."))?;
+        .ok_or_else(|| AiError::new("AI_ERROR", "빈 응답입니다."))?;
 
     let usage = envelope.usage;
     let meta = MetaOut {
@@ -700,7 +703,7 @@ pub(crate) async fn stream_claude_result(
 }
 
 /// stdout 이 훅/경고 텍스트로 오염됐을 때를 대비해 최외곽 JSON 객체만 도려내 재시도한다.
-fn parse_envelope(stdout: &str) -> Result<Envelope, ClaudeError> {
+fn parse_envelope(stdout: &str) -> Result<Envelope, AiError> {
     let trimmed = stdout.trim();
     if let Ok(e) = serde_json::from_str::<Envelope>(trimmed) {
         return Ok(e);
@@ -712,8 +715,8 @@ fn parse_envelope(stdout: &str) -> Result<Envelope, ClaudeError> {
             }
         }
     }
-    Err(ClaudeError::new(
-        "CLAUDE_BAD_ENVELOPE",
+    Err(AiError::new(
+        "AI_BAD_ENVELOPE",
         "CLI 응답(JSON 봉투) 해석 실패. `claude --version` 확인이 필요할 수 있습니다.",
     ))
 }
@@ -726,7 +729,7 @@ async fn spawn_claude_result(
     dur: Duration,
     system_prompt: &str,
     input: String,
-) -> Result<(String, MetaOut), ClaudeError> {
+) -> Result<(String, MetaOut), AiError> {
     let mut child = Command::new(&program)
         .arg("-p")
         .args(["--output-format", "json"])
@@ -739,12 +742,12 @@ async fn spawn_claude_result(
         .spawn()
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                ClaudeError::new(
-                    "CLAUDE_NOT_FOUND",
+                AiError::new(
+                    "AI_NOT_FOUND",
                     format!("claude CLI 를 찾을 수 없습니다: {program}"),
                 )
             } else {
-                ClaudeError::new("SPAWN_ERROR", e.to_string())
+                AiError::new("SPAWN_ERROR", e.to_string())
             }
         })?;
 
@@ -754,18 +757,18 @@ async fn spawn_claude_result(
         stdin
             .write_all(input.as_bytes())
             .await
-            .map_err(|e| ClaudeError::new("STDIN_ERROR", e.to_string()))?;
+            .map_err(|e| AiError::new("STDIN_ERROR", e.to_string()))?;
         let _ = stdin.shutdown().await;
     }
 
     let output = match timeout(dur, child.wait_with_output()).await {
         Err(_) => {
-            return Err(ClaudeError::new(
-                "CLAUDE_TIMEOUT",
+            return Err(AiError::new(
+                "AI_TIMEOUT",
                 format!("{}초 안에 응답이 없습니다.", dur.as_secs()),
             ))
         }
-        Ok(r) => r.map_err(|e| ClaudeError::new("WAIT_ERROR", e.to_string()))?,
+        Ok(r) => r.map_err(|e| AiError::new("WAIT_ERROR", e.to_string()))?,
     };
 
     if !output.status.success() {
@@ -775,31 +778,31 @@ async fn spawn_claude_result(
             || stderr.contains("unauthorized")
         {
             (
-                "CLAUDE_AUTH",
+                "AI_AUTH",
                 "claude 인증이 필요합니다. 터미널에서 `claude` 로그인 후 다시 시도하세요.",
             )
         } else if stderr.contains("rate") || stderr.contains("quota") || stderr.contains("limit") {
             (
-                "CLAUDE_RATE_LIMIT",
+                "AI_RATE_LIMIT",
                 "사용량 한도에 도달했습니다. 잠시 후 다시 시도하세요.",
             )
         } else {
-            ("CLAUDE_ERROR", "claude 실행이 실패했습니다.")
+            ("AI_ERROR", "claude 실행이 실패했습니다.")
         };
         let detail = String::from_utf8_lossy(&output.stderr);
-        return Err(ClaudeError::new(code, format!("{msg}\n{}", detail.trim())));
+        return Err(AiError::new(code, format!("{msg}\n{}", detail.trim())));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let envelope = parse_envelope(&stdout)?;
 
     if envelope.is_error || envelope.subtype.as_deref() != Some("success") {
-        return Err(ClaudeError::new("CLAUDE_ERROR", "claude 가 오류를 반환했습니다."));
+        return Err(AiError::new("AI_ERROR", "claude 가 오류를 반환했습니다."));
     }
 
     let result_str = envelope
         .result
-        .ok_or_else(|| ClaudeError::new("CLAUDE_ERROR", "빈 응답입니다."))?;
+        .ok_or_else(|| AiError::new("AI_ERROR", "빈 응답입니다."))?;
 
     let usage = envelope.usage;
     let meta = MetaOut {
@@ -814,20 +817,20 @@ async fn spawn_claude_result(
 }
 
 /// 개념 정리 파이프라인: 공용 실행 후 .result 를 우리 JSON 계약(Contract)으로 이중 파싱·정규화.
-async fn run_claude(
+async fn run_concept_note(
     kind: ProviderKind,
     program: String,
     model: String,
     dur: Duration,
     system_prompt: &str,
     input: String,
-) -> Result<GenerateResult, ClaudeError> {
+) -> Result<GenerateResult, AiError> {
     let (result_str, meta) =
         run_provider_text(kind, program, model, dur, system_prompt, input).await?;
 
     let contract: Contract = serde_json::from_str(strip_outer_fence(&result_str)).map_err(|e| {
-        ClaudeError::new(
-            "CLAUDE_BAD_CONTRACT",
+        AiError::new(
+            "AI_BAD_CONTRACT",
             format!("정리 결과(JSON) 파싱 실패: {e}"),
         )
     })?;
@@ -837,8 +840,8 @@ async fn run_claude(
     let summary = contract.summary.trim().to_string();
     let detail = contract.detail_markdown.trim().to_string();
     if title.is_empty() || summary.is_empty() || detail.is_empty() {
-        return Err(ClaudeError::new(
-            "CLAUDE_BAD_CONTRACT",
+        return Err(AiError::new(
+            "AI_BAD_CONTRACT",
             "필수 필드(title/summary/detail)가 비어 있습니다.",
         ));
     }
@@ -866,7 +869,7 @@ async fn run_claude(
 
 /// claude CLI 사전 헬스체크: 경로/설치 확인 (버전 문자열 반환)
 #[tauri::command]
-pub async fn claude_health(cli_path: Option<String>) -> Result<String, ClaudeError> {
+pub async fn ai_health(cli_path: Option<String>) -> Result<String, AiError> {
     let program = cli_path.unwrap_or_else(|| "claude".to_string());
     let output = Command::new(&program)
         .arg("--version")
@@ -874,19 +877,19 @@ pub async fn claude_health(cli_path: Option<String>) -> Result<String, ClaudeErr
         .await
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                ClaudeError::new(
-                    "CLAUDE_NOT_FOUND",
+                AiError::new(
+                    "AI_NOT_FOUND",
                     format!("claude 를 찾을 수 없습니다: {program}"),
                 )
             } else {
-                ClaudeError::new("SPAWN_ERROR", e.to_string())
+                AiError::new("SPAWN_ERROR", e.to_string())
             }
         })?;
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
-        Err(ClaudeError::new(
-            "CLAUDE_ERROR",
+        Err(AiError::new(
+            "AI_ERROR",
             String::from_utf8_lossy(&output.stderr).trim().to_string(),
         ))
     }

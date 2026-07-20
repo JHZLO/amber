@@ -320,7 +320,7 @@ export interface InvocationLog {
 export async function logInvocation(log: InvocationLog): Promise<void> {
   const db = await getDb();
   await db.execute(
-    `INSERT INTO claude_invocations
+    `INSERT INTO ai_invocations
        (concept_id, model, session_id, input_tokens, output_tokens, cost_usd, duration_ms, status, retry_count)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
     [

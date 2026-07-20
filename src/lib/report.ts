@@ -18,6 +18,8 @@ import { todayStr, formatDayShort } from "./date";
 import type {
   CollectProgress,
   DailyReport,
+  McpServer,
+  McpSource,
   ReportSourceId,
   ReportSourcePref,
   SourceDigest,
@@ -39,6 +41,11 @@ export interface ReportTools {
 /** gh 설치/버전 + AI 세션 디렉터리 존재 여부 (설정 화면 상태 표시용) */
 export function detectReportTools(): Promise<ReportTools> {
   return invoke<ReportTools>("detect_report_tools");
+}
+
+/** claude 에 등록된 MCP 서버 목록 (P2 Slack·Notion 선택용). claude 경로 필요 */
+export function reportMcpServers(cliPath: string | null): Promise<McpServer[]> {
+  return invoke<McpServer[]>("report_mcp_servers", { cliPath: cliPath ?? null });
 }
 
 export interface GithubCollectCfg {
@@ -89,12 +96,14 @@ export interface ReportGenResult {
   };
 }
 
-/** 투두 + digest → 리포트 마크다운(스트리밍). onDelta 로 생성 델타가 흘러온다. */
+/** 투두 + digest → 리포트 마크다운(스트리밍). onDelta 로 생성 델타가 흘러온다.
+ *  mcpSources 가 있으면(claude 전용) claude 가 등록 MCP 서버 도구를 직접 호출해 Slack·Notion 을 조회한다. */
 export function reportGenerate(
   params: {
     date: string;
     todosDigest: string;
     digests: SourceDigest[];
+    mcpSources?: McpSource[];
     model?: string | null;
     cliPath?: string | null;
     provider?: string | null;
@@ -108,6 +117,7 @@ export function reportGenerate(
     date: params.date,
     todosDigest: params.todosDigest,
     digests: params.digests,
+    mcpSources: params.mcpSources ?? [],
     model: params.model ?? null,
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
@@ -126,12 +136,17 @@ export interface ReportConfig {
   githubRepos: string[];
   sessionsClaude: boolean;
   sessionsCodex: boolean;
+  /** P2 — 선택한 등록 MCP 서버 이름 (빈 문자열 = 미선택) */
+  slackServer: string;
+  notionServer: string;
 }
 
-/** P1 기본 소스: GitHub, AI 세션 (slack·notion 은 P2 에서 추가) */
+/** 기본 소스 순서. github·ai_sessions 기본 on, slack·notion(P2)은 기본 off */
 const DEFAULT_SOURCES: ReportSourcePref[] = [
   { id: "github", enabled: true },
   { id: "ai_sessions", enabled: true },
+  { id: "slack", enabled: false },
+  { id: "notion", enabled: false },
 ];
 
 const VALID_IDS: ReportSourceId[] = ["github", "ai_sessions", "slack", "notion"];
@@ -154,14 +169,17 @@ function parseSources(raw: string | null): ReportSourcePref[] {
 }
 
 export async function loadReportConfig(): Promise<ReportConfig> {
-  const [onb, sources, ghPath, ghRepos, sesClaude, sesCodex] = await Promise.all([
-    getSetting("report_onboarded"),
-    getSetting("report_sources"),
-    getSetting("report_github_path"),
-    getSetting("report_github_repos"),
-    getSetting("report_sessions_claude"),
-    getSetting("report_sessions_codex"),
-  ]);
+  const [onb, sources, ghPath, ghRepos, sesClaude, sesCodex, slackSrv, notionSrv] =
+    await Promise.all([
+      getSetting("report_onboarded"),
+      getSetting("report_sources"),
+      getSetting("report_github_path"),
+      getSetting("report_github_repos"),
+      getSetting("report_sessions_claude"),
+      getSetting("report_sessions_codex"),
+      getSetting("report_slack_server"),
+      getSetting("report_notion_server"),
+    ]);
   return {
     onboarded: onb === "1",
     sources: parseSources(sources),
@@ -173,6 +191,8 @@ export async function loadReportConfig(): Promise<ReportConfig> {
     // 기본 on (감지되면 사용). 명시적으로 "0" 저장했을 때만 off
     sessionsClaude: sesClaude !== "0",
     sessionsCodex: sesCodex !== "0",
+    slackServer: slackSrv ?? "",
+    notionServer: notionSrv ?? "",
   };
 }
 
@@ -184,6 +204,8 @@ export async function saveReportConfig(c: ReportConfig): Promise<void> {
     setSetting("report_github_repos", c.githubRepos.join(",")),
     setSetting("report_sessions_claude", c.sessionsClaude ? "1" : "0"),
     setSetting("report_sessions_codex", c.sessionsCodex ? "1" : "0"),
+    setSetting("report_slack_server", c.slackServer.trim()),
+    setSetting("report_notion_server", c.notionServer.trim()),
   ]);
 }
 
@@ -192,6 +214,18 @@ export function rankedSources(c: ReportConfig): { id: ReportSourceId; rank: numb
   return c.sources
     .filter((s) => s.enabled)
     .map((s, i) => ({ id: s.id, rank: i + 1 }));
+}
+
+/** 활성 MCP 소스(Slack·Notion)를 report_generate 용 McpSource[] 로. 서버 미선택이면 제외 */
+export function mcpSourcesFrom(c: ReportConfig): McpSource[] {
+  const out: McpSource[] = [];
+  for (const r of rankedSources(c)) {
+    if (r.id === "slack" && c.slackServer)
+      out.push({ id: "slack", rank: r.rank, server: c.slackServer });
+    if (r.id === "notion" && c.notionServer)
+      out.push({ id: "notion", rank: r.rank, server: c.notionServer });
+  }
+  return out;
 }
 
 // ---- daily_reports 메타 (DB) ----

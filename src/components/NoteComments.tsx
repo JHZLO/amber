@@ -13,7 +13,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import type { AppConfig } from "../lib/config";
-import { claudeNoteAsk, friendlyError } from "../lib/claude";
+import { aiNoteAsk, friendlyError } from "../lib/ai";
 import {
   loadComments,
   newCommentId,
@@ -353,7 +353,7 @@ export function NoteCommentLayer({
     setAsking(true);
     setAskError(null);
     try {
-      const { answer, meta } = await claudeNoteAsk({
+      const { answer, meta } = await aiNoteAsk({
         selection: anchor,
         question: q,
         noteMarkdown: body,
@@ -412,7 +412,7 @@ export function NoteCommentLayer({
       if (t) t.scrollTop = t.scrollHeight;
     });
     try {
-      const { answer, meta } = await claudeNoteAsk({
+      const { answer, meta } = await aiNoteAsk({
         selection: target.anchor,
         question: q,
         noteMarkdown: body,

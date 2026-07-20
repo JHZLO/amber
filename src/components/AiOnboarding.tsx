@@ -11,7 +11,7 @@ import {
   type AiProvider,
   type AppConfig,
 } from "../lib/config";
-import { detectAiClis, type DetectedCli } from "../lib/claude";
+import { detectAiClis, type DetectedCli } from "../lib/ai";
 import { Modal, Spinner } from "../ui";
 import { Icon } from "../icons";
 

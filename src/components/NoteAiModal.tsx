@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Markdown } from "./Markdown";
 import { DiffView } from "./DiffView";
 import type { AppConfig } from "../lib/config";
-import { claudeNoteComposeStream, friendlyError } from "../lib/claude";
+import { aiNoteComposeStream, friendlyError } from "../lib/ai";
 import { loadPrompts, type SavedPrompt } from "../lib/prompts";
 import { AiThinking, Modal } from "../ui";
 import { Icon } from "../icons";
@@ -78,7 +78,7 @@ export function NoteAiModal({
     setStreamText("");
     setStep("loading");
     try {
-      const { markdown } = await claudeNoteComposeStream(
+      const { markdown } = await aiNoteComposeStream(
         {
           title,
           markdown: currentBody,

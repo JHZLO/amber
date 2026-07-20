@@ -1,49 +1,93 @@
 // 설정 › 데일리 리포트 섹션. 연동 소스 활성화 + 드래그 순위(배열 순서=rank) + 소스별 확장 설정.
-// 테마처럼 "변경 즉시 저장"(saveReportConfig). P1 소스: GitHub · AI 세션 (Slack·Notion 은 P2).
+// 테마처럼 "변경 즉시 저장"(saveReportConfig).
+// P1: GitHub · AI 세션. P2: Slack · Notion(MCP) — claude 에 등록된 서버를 선택해 재사용.
 
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
-import type { ReportSourceId } from "../types";
+import type { McpServer, ReportSourceId } from "../types";
+import { loadConfig, type AppConfig } from "../lib/config";
 import {
   detectReportTools,
   loadReportConfig,
+  reportMcpServers,
   saveReportConfig,
   type ReportConfig,
   type ReportTools,
 } from "../lib/report";
-import { Checkbox } from "../ui";
+import { Checkbox, Select, Spinner } from "../ui";
 import { Icon } from "../icons";
 
-const P1_SOURCES: ReportSourceId[] = ["github", "ai_sessions"];
+const ALL_SOURCES: ReportSourceId[] = ["github", "ai_sessions", "slack", "notion"];
+const MCP_SOURCES: ReportSourceId[] = ["slack", "notion"];
 const LABEL: Record<ReportSourceId, string> = {
   github: "GitHub",
   ai_sessions: "AI 세션",
   slack: "Slack",
   notion: "Notion",
 };
+const SUB: Record<ReportSourceId, string> = {
+  github: "내 계정 활동 이력",
+  ai_sessions: "로컬 세션 요약",
+  slack: "MCP · 메시지·스레드",
+  notion: "MCP · 페이지·코멘트",
+};
+
+const MCP_STATUS_KO: Record<string, string> = {
+  connected: "연결됨",
+  needs_auth: "인증 필요",
+  failed: "연결 실패",
+  pending: "승인 대기",
+  unknown: "",
+};
 
 export function ReportSettings() {
   const [cfg, setCfg] = useState<ReportConfig | null>(null);
+  const [appCfg, setAppCfg] = useState<AppConfig | null>(null);
   const [tools, setTools] = useState<ReportTools | null>(null);
   const [detecting, setDetecting] = useState(false);
+  const [mcpServers, setMcpServers] = useState<McpServer[] | null>(null);
+  const [mcpLoading, setMcpLoading] = useState(false);
   const [expanded, setExpanded] = useState<ReportSourceId | null>(null);
   const [dragId, setDragId] = useState<ReportSourceId | null>(null);
-  const listRef = useRef<HTMLDivElement>(null);
   const alive = useRef(true);
+
+  const isClaude = appCfg?.provider === "claude";
 
   useEffect(() => {
     alive.current = true;
-    // 설정 화면에 이 섹션이 보이면 '설정을 거쳤다'고 보고 최초 게이트를 해제한다.
+    // 설정에 이 섹션이 보이면 '설정을 거쳤다'고 보고 최초 게이트를 해제한다.
     loadReportConfig().then((c) => {
       if (!alive.current) return;
       const next = c.onboarded ? c : { ...c, onboarded: true };
       setCfg(next);
       if (!c.onboarded) void saveReportConfig(next);
     });
+    loadConfig().then((ac) => {
+      if (!alive.current) return;
+      setAppCfg(ac);
+      if (ac.provider === "claude") void redetectMcp(ac.cliPath);
+    });
     void redetect();
     return () => {
       alive.current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 서버 목록이 오면 이름이 맞는 연결된 서버를 자동 제안(비어 있을 때만)
+  useEffect(() => {
+    if (!mcpServers || !cfg) return;
+    let next = cfg;
+    if (!next.slackServer) {
+      const m = mcpServers.find((s) => s.connected && /slack/i.test(s.name));
+      if (m) next = { ...next, slackServer: m.name };
+    }
+    if (!next.notionServer) {
+      const m = mcpServers.find((s) => s.connected && /notion/i.test(s.name));
+      if (m) next = { ...next, notionServer: m.name };
+    }
+    if (next !== cfg) update(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mcpServers]);
 
   async function redetect() {
     setDetecting(true);
@@ -55,7 +99,17 @@ export function ReportSettings() {
     }
   }
 
-  // 상태 갱신 + 즉시 영속
+  async function redetectMcp(cliPath?: string) {
+    setMcpLoading(true);
+    try {
+      const path = cliPath ?? appCfg?.cliPath ?? "";
+      const list = await reportMcpServers(path || null);
+      if (alive.current) setMcpServers(list);
+    } finally {
+      if (alive.current) setMcpLoading(false);
+    }
+  }
+
   function update(next: ReportConfig) {
     setCfg(next);
     void saveReportConfig(next);
@@ -98,7 +152,6 @@ export function ReportSettings() {
       window.removeEventListener("mouseup", onUp);
       document.body.classList.remove("dragging-rows");
       setDragId(null);
-      // 최종 순서 영속
       setCfg((prev) => {
         if (prev) void saveReportConfig(prev);
         return prev;
@@ -110,8 +163,7 @@ export function ReportSettings() {
 
   if (!cfg) return null;
 
-  // P1 소스만, cfg 순서대로. rank = 활성 소스 중 순번
-  const rows = cfg.sources.filter((s) => P1_SOURCES.includes(s.id));
+  const rows = cfg.sources.filter((s) => ALL_SOURCES.includes(s.id));
   const enabledOrder = cfg.sources.filter((s) => s.enabled).map((s) => s.id);
   const rankOf = (id: ReportSourceId) => enabledOrder.indexOf(id) + 1;
 
@@ -121,9 +173,31 @@ export function ReportSettings() {
         ? { label: `gh ${tools.gh.version.replace(/^gh version\s*/, "")}`, ok: true }
         : { label: "gh 설치 필요", ok: false };
     }
-    const has = !!(tools?.claude_sessions || tools?.codex_sessions);
-    return has ? { label: "감지됨", ok: true } : { label: "세션 없음", ok: false };
+    if (id === "ai_sessions") {
+      const has = !!(tools?.claude_sessions || tools?.codex_sessions);
+      return has ? { label: "감지됨", ok: true } : { label: "세션 없음", ok: false };
+    }
+    // slack / notion (MCP)
+    if (!isClaude) return { label: "claude 필요", ok: false };
+    const server = id === "slack" ? cfg!.slackServer : cfg!.notionServer;
+    if (!server) return { label: "서버 선택", ok: false };
+    const s = mcpServers?.find((x) => x.name === server);
+    if (!s) return { label: "미확인", ok: false };
+    return s.connected
+      ? { label: "연결됨", ok: true }
+      : { label: MCP_STATUS_KO[s.status] || "미연결", ok: false };
   }
+
+  function serverOptions() {
+    const opts = [{ value: "", label: "선택 안 함" }];
+    for (const s of mcpServers ?? []) {
+      const st = MCP_STATUS_KO[s.status];
+      opts.push({ value: s.name, label: s.connected ? s.name : `${s.name} · ${st}` });
+    }
+    return opts;
+  }
+
+  const hasConnectedMcp = (mcpServers ?? []).some((s) => s.connected);
 
   return (
     <section className="set-section">
@@ -139,10 +213,11 @@ export function ReportSettings() {
         켠 플랫폼만 수집해요. 위에 둘수록 리포트의 중심이 됩니다(순위 = 행 순서, 드래그로 조정).
       </p>
 
-      <div className="rep-src-list" ref={listRef}>
+      <div className="rep-src-list">
         {rows.map((s) => {
           const st = statusFor(s.id);
           const isOpen = expanded === s.id;
+          const isMcp = MCP_SOURCES.includes(s.id);
           return (
             <div
               key={s.id}
@@ -171,10 +246,9 @@ export function ReportSettings() {
                   <span className="rep-src-title">
                     {LABEL[s.id]}
                     {s.id === "ai_sessions" && <span className="rep-src-tag">Claude · Codex</span>}
+                    {isMcp && <span className="rep-src-tag">MCP</span>}
                   </span>
-                  <span className="rep-src-sub">
-                    {s.id === "github" ? "내 계정 활동 이력" : "로컬 세션 요약"}
-                  </span>
+                  <span className="rep-src-sub">{SUB[s.id]}</span>
                 </div>
                 <span className={`rep-status ${st.ok ? "ok" : ""}`}>{st.label}</span>
                 <button
@@ -221,7 +295,7 @@ export function ReportSettings() {
                         <div className="hint">지정하면 그 레포 활동만 모아 잡음을 줄여요.</div>
                       </div>
                     </>
-                  ) : (
+                  ) : s.id === "ai_sessions" ? (
                     <div className="rep-sub-toggles">
                       <Checkbox
                         checked={cfg.sessionsClaude}
@@ -246,6 +320,25 @@ export function ReportSettings() {
                         </span>
                       </span>
                     </div>
+                  ) : (
+                    // slack / notion (MCP)
+                    <McpSourceBody
+                      id={s.id}
+                      isClaude={isClaude}
+                      loading={mcpLoading}
+                      servers={mcpServers}
+                      hasConnected={hasConnectedMcp}
+                      value={s.id === "slack" ? cfg.slackServer : cfg.notionServer}
+                      options={serverOptions()}
+                      onPick={(v) =>
+                        update(
+                          s.id === "slack"
+                            ? { ...cfg, slackServer: v }
+                            : { ...cfg, notionServer: v },
+                        )
+                      }
+                      onRedetect={() => void redetectMcp()}
+                    />
                   )}
                 </div>
               )}
@@ -253,11 +346,70 @@ export function ReportSettings() {
           );
         })}
       </div>
-
-      <p className="hint rep-soon">
-        <Icon name="workflow" size={12} />
-        Slack · Notion (MCP) 연동은 곧 지원돼요.
-      </p>
     </section>
+  );
+}
+
+function McpSourceBody({
+  id,
+  isClaude,
+  loading,
+  servers,
+  hasConnected,
+  value,
+  options,
+  onPick,
+  onRedetect,
+}: {
+  id: ReportSourceId;
+  isClaude: boolean;
+  loading: boolean;
+  servers: McpServer[] | null;
+  hasConnected: boolean;
+  value: string;
+  options: { value: string; label: string }[];
+  onPick: (v: string) => void;
+  onRedetect: () => void;
+}) {
+  if (!isClaude) {
+    return (
+      <div className="hint">
+        {LABEL[id]} 수집은 claude 프로바이더 전용이에요. 설정 상단 <b>AI 연결</b>에서 claude 에
+        연결하면 등록된 MCP 서버를 그대로 사용합니다.
+      </div>
+    );
+  }
+  return (
+    <>
+      <div className="field" style={{ marginBottom: 8 }}>
+        <label>MCP 서버</label>
+        {loading ? (
+          <div className="loading-box" style={{ padding: "12px 0" }}>
+            <Spinner />
+            <span className="hint">등록된 서버를 찾는 중…</span>
+          </div>
+        ) : servers && servers.length && hasConnected ? (
+          <Select block value={value} options={options} onChange={onPick} />
+        ) : (
+          <div className="rep-mcp-guide">
+            <div className="hint" style={{ marginBottom: 8 }}>
+              claude 에 등록·인증된 MCP 서버가 없어요. 터미널에서 한 번만 등록·인증하면 이후 자동
+              재사용돼요:
+            </div>
+            <code className="rep-mcp-cmd">
+              claude mcp add --transport http {id} https://mcp.{id}.com/mcp
+            </code>
+            <code className="rep-mcp-cmd">claude → /mcp → 브라우저 인증</code>
+          </div>
+        )}
+        <div className="hint" style={{ marginTop: 6 }}>
+          인증은 claude CLI 가 관리해요. Amber 는 토큰을 저장하지 않습니다.
+        </div>
+      </div>
+      <button className="btn btn-sm" onClick={onRedetect}>
+        <Icon name="refresh" size={13} />
+        서버 다시 감지
+      </button>
+    </>
   );
 }

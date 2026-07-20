@@ -10,6 +10,7 @@ import {
   deleteReport,
   getReport,
   loadReportConfig,
+  mcpSourcesFrom,
   rankedSources,
   readReportFile,
   reportCollect,
@@ -18,7 +19,7 @@ import {
   writeReportFile,
 } from "../lib/report";
 import { dayRangeMs, todayStr } from "../lib/date";
-import { friendlyError } from "../lib/claude";
+import { friendlyError } from "../lib/ai";
 import { Markdown } from "./Markdown";
 import { AiThinking, Modal, Spinner } from "../ui";
 import { Icon } from "../icons";
@@ -35,7 +36,7 @@ const SRC_LABEL: Record<string, string> = {
   notion: "Notion",
 };
 
-type ChipStatus = "ok" | "pending" | "error";
+type ChipStatus = "ok" | "pending" | "error" | "mcp";
 interface Chip {
   id: string;
   status: ChipStatus;
@@ -122,13 +123,18 @@ export function DailyReportPanel({
       const ranked = rankedSources(rc);
       const githubR = ranked.find((s) => s.id === "github");
       const sessR = ranked.find((s) => s.id === "ai_sessions");
+      // MCP 소스(Slack·Notion)는 claude 가 생성 중 직접 조회 — claude 프로바이더 전용
+      const mcpSources = config.provider === "claude" ? mcpSourcesFrom(rc) : [];
 
-      // 칩 초기화: 투두(즉시 확정) + 활성 플랫폼(수집 대기)
+      // 칩 초기화: 투두(즉시 확정) + 활성 플랫폼(수집 대기) + MCP(생성 중 조회)
       const initChips: Chip[] = [{ id: "todos", status: "ok", items: count }];
       for (const s of ranked) {
         if (s.id === "github" || s.id === "ai_sessions") {
           initChips.push({ id: s.id, status: "pending", items: 0 });
         }
+      }
+      for (const m of mcpSources) {
+        initChips.push({ id: m.id, status: "mcp", items: 0 });
       }
       setChips(initChips);
 
@@ -161,8 +167,9 @@ export function DailyReportPanel({
         },
       );
 
-      // 활동 전무 → 생성 없이 종료(크레딧 절약)
-      const hasActivity = count > 0 || digests.some((d) => d.ok && d.items > 0);
+      // 활동 전무 → 생성 없이 종료(크레딧 절약). MCP 소스가 있으면 claude 가 조회하므로 진행
+      const hasActivity =
+        count > 0 || digests.some((d) => d.ok && d.items > 0) || mcpSources.length > 0;
       if (!hasActivity) {
         setPhase("empty");
         return;
@@ -174,6 +181,7 @@ export function DailyReportPanel({
           date,
           todosDigest,
           digests,
+          mcpSources,
           model: config.model,
           cliPath: config.cliPath,
           provider: config.provider,
@@ -182,15 +190,23 @@ export function DailyReportPanel({
       );
 
       const filePath = await writeReportFile(date, markdown);
-      const sourcesJson = JSON.stringify(
-        digests.map((d: SourceDigest) => ({
+      const sourcesJson = JSON.stringify([
+        ...digests.map((d: SourceDigest) => ({
           id: d.id,
           rank: d.rank,
           ok: d.ok,
           items: d.items,
           error: d.error,
         })),
-      );
+        ...mcpSources.map((m) => ({
+          id: m.id,
+          rank: m.rank,
+          ok: true,
+          items: 0,
+          mcp: true,
+          error: null,
+        })),
+      ]);
       await upsertReport({
         date,
         filePath,
@@ -232,9 +248,8 @@ export function DailyReportPanel({
     }
   }
 
-  const doneSources: { id: string; ok: boolean; items: number }[] = report
-    ? safeParse(report.sources_json)
-    : [];
+  const doneSources: { id: string; ok: boolean; items: number; mcp?: boolean }[] =
+    report ? safeParse(report.sources_json) : [];
 
   return (
     <div className="report">
@@ -295,9 +310,9 @@ export function DailyReportPanel({
                 {c.status === "ok" && <Icon name="check" size={12} />}
                 {c.status === "pending" && <Spinner />}
                 {c.status === "error" && <Icon name="x" size={12} />}
+                {c.status === "mcp" && <Icon name="workflow" size={12} />}
                 {SRC_LABEL[c.id] ?? c.id}
-                {c.status === "ok" && c.id !== "todos" && ` ${c.items}`}
-                {c.status === "ok" && c.id === "todos" && ` ${c.items}`}
+                {c.status === "ok" && ` ${c.items}`}
               </span>
             ))}
           </div>
@@ -319,7 +334,7 @@ export function DailyReportPanel({
         <>
           <div className="report-meta">
             {doneSources
-              .filter((s) => s.ok && s.items > 0)
+              .filter((s) => s.ok && (s.items > 0 || s.mcp))
               .map((s) => (
                 <span key={s.id} className="chip report-src">
                   #{SRC_LABEL[s.id] ?? s.id}
@@ -402,7 +417,9 @@ export function DailyReportPanel({
   );
 }
 
-function safeParse(json: string): { id: string; ok: boolean; items: number }[] {
+function safeParse(
+  json: string,
+): { id: string; ok: boolean; items: number; mcp?: boolean }[] {
   try {
     const arr = JSON.parse(json);
     return Array.isArray(arr) ? arr : [];

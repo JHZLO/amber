@@ -1,7 +1,7 @@
 // 데일리 리포트 백엔드.
 // 2단계: ① 수집(report_collect) — GitHub(gh CLI) · AI 코딩 세션(로컬 jsonl) 을 병렬·결정적으로
 // 긁어 소스별 digest 마크다운으로. ② 생성(report_generate) — 투두(계획) + rank 순 digest 를
-// 하나의 프롬프트로 조립해 기존 claude.rs 프로바이더 브리지로 요약(스트리밍).
+// 하나의 프롬프트로 조립해 기존 ai.rs 프로바이더 브리지로 요약(스트리밍).
 //
 // 투두 digest 는 프론트가 DB(til/amber.db)에서 만들어 넘긴다(Rust 는 SQLite 커넥션 미보유).
 // 타임존은 프론트가 [start_ms, end_ms) UTC 범위 + tz_offset_min 을 넘겨 Rust 는 산술만 한다
@@ -14,9 +14,9 @@ use tauri::ipc::Channel;
 use tokio::process::Command;
 use tokio::time::timeout;
 
-use crate::claude::{
+use crate::ai::{
     default_binary, provider_kind, resolve_model, run_provider_text, stream_claude_result,
-    strip_outer_fence, ClaudeError, MetaOut, ProviderKind,
+    strip_outer_fence, AiError, MetaOut, ProviderKind,
 };
 
 const COLLECT_TIMEOUT_SECS: u64 = 20;
@@ -89,6 +89,14 @@ pub struct SessionsCfg {
     pub claude: bool,
     #[serde(default)]
     pub codex: bool,
+}
+
+/// P2 — MCP 소스(Slack·Notion). 수집은 생성 시 claude 가 등록 서버 도구를 직접 호출해 처리한다.
+#[derive(Debug, Deserialize)]
+pub struct McpSource {
+    pub id: String,     // "slack" | "notion"
+    pub rank: u8,
+    pub server: String, // 등록된 MCP 서버 이름 (claude mcp list, 예: "plugin:Notion:notion")
 }
 
 /// rank → digest 문자 예산(우선순위 높을수록 더 상세히 담는다). PLAN §5.
@@ -188,18 +196,18 @@ fn truncate_line(s: &str, max: usize) -> String {
 
 // ---- GitHub 수집: gh CLI 로 연결된 계정의 활동 이력(events) ----
 
-async fn run_gh(program: &str, args: &[&str]) -> Result<Vec<u8>, ClaudeError> {
+async fn run_gh(program: &str, args: &[&str]) -> Result<Vec<u8>, AiError> {
     let out = timeout(
         Duration::from_secs(COLLECT_TIMEOUT_SECS),
         Command::new(program).args(args).output(),
     )
     .await
-    .map_err(|_| ClaudeError::new("REPORT_TIMEOUT", "gh 응답이 없습니다."))?
+    .map_err(|_| AiError::new("REPORT_TIMEOUT", "gh 응답이 없습니다."))?
     .map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
-            ClaudeError::new("GH_NOT_FOUND", "gh CLI 를 찾을 수 없습니다.")
+            AiError::new("GH_NOT_FOUND", "gh CLI 를 찾을 수 없습니다.")
         } else {
-            ClaudeError::new("GH_ERROR", e.to_string())
+            AiError::new("GH_ERROR", e.to_string())
         }
     })?;
     if !out.status.success() {
@@ -211,7 +219,7 @@ async fn run_gh(program: &str, args: &[&str]) -> Result<Vec<u8>, ClaudeError> {
             ("GH_ERROR", "gh 호출이 실패했습니다.")
         };
         let detail = String::from_utf8_lossy(&out.stderr);
-        return Err(ClaudeError::new(code, format!("{msg}\n{}", detail.trim())));
+        return Err(AiError::new(code, format!("{msg}\n{}", detail.trim())));
     }
     Ok(out.stdout)
 }
@@ -223,7 +231,7 @@ async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDi
         .filter(|p| !p.is_empty())
         .unwrap_or_else(|| "gh".to_string());
 
-    let mk_err = |e: ClaudeError| SourceDigest {
+    let mk_err = |e: AiError| SourceDigest {
         id: "github".into(),
         rank: cfg.rank,
         ok: false,
@@ -239,7 +247,7 @@ async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDi
     };
     let login = String::from_utf8_lossy(&login_out).trim().to_string();
     if login.is_empty() {
-        return mk_err(ClaudeError::new("GH_AUTH", "gh 로그인 계정을 확인하지 못했습니다."));
+        return mk_err(AiError::new("GH_AUTH", "gh 로그인 계정을 확인하지 못했습니다."));
     }
 
     // 2) 계정 활동 이벤트 (private 포함 — 본인 인증 상태)
@@ -250,11 +258,11 @@ async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDi
     };
     let events: serde_json::Value = match serde_json::from_slice(&events_out) {
         Ok(v) => v,
-        Err(e) => return mk_err(ClaudeError::new("GH_ERROR", format!("이벤트 파싱 실패: {e}"))),
+        Err(e) => return mk_err(AiError::new("GH_ERROR", format!("이벤트 파싱 실패: {e}"))),
     };
     let arr = match events.as_array() {
         Some(a) => a,
-        None => return mk_err(ClaudeError::new("GH_ERROR", "이벤트 형식이 배열이 아닙니다.")),
+        None => return mk_err(AiError::new("GH_ERROR", "이벤트 형식이 배열이 아닙니다.")),
     };
 
     let repo_filter: Vec<String> = cfg.repos.iter().map(|r| r.trim().to_lowercase()).filter(|r| !r.is_empty()).collect();
@@ -683,7 +691,7 @@ pub async fn report_collect(
     github: Option<GithubCfg>,
     ai_sessions: Option<SessionsCfg>,
     on_progress: Channel<CollectProgress>,
-) -> Result<Vec<SourceDigest>, ClaudeError> {
+) -> Result<Vec<SourceDigest>, AiError> {
     let gh_fut = async {
         match github.as_ref() {
             Some(cfg) => Some(collect_github(cfg, start_ms, end_ms).await),
@@ -751,28 +759,66 @@ fn assemble_input(date: &str, todos_digest: &str, digests: &mut [SourceDigest]) 
     input
 }
 
+/// MCP 서버명 → allowedTools 토큰. 비영숫자(콜론·공백·하이픈)는 '_' 로 정규화(claude 규칙).
+/// 예: "plugin:Notion:notion" → "mcp__plugin_Notion_notion"
+fn mcp_tool_prefix(server: &str) -> String {
+    let s: String = server
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    format!("mcp__{s}")
+}
+
+/// 생성 프롬프트에 붙일 MCP 수집 지시(claude 가 등록 서버 도구를 직접 호출). rank 순, 읽기 전용 강제.
+fn mcp_instructions(date: &str, mcp: &mut [McpSource]) -> String {
+    mcp.sort_by_key(|m| m.rank);
+    let mut s = String::from(
+        "\n[MCP 수집 지시]\n아래 도구를 직접 호출해 대상 날짜의 활동을 수집한 뒤 리포트에 반영하라. \
+반드시 읽기/조회 도구만 쓰고, 메시지 전송·페이지 생성/수정·삭제 등 쓰기 도구는 절대 호출하지 마라. \
+도구가 인증 오류·빈 결과를 주면 그 소스는 건너뛰고 나머지로 리포트를 완성하라.\n",
+    );
+    for m in mcp.iter() {
+        let what = match m.id.as_str() {
+            "slack" => format!(
+                "{date} 에 내가 보낸 메시지·참여한 스레드·의사결정/이슈 공유를 Slack 도구로 조회"
+            ),
+            "notion" => format!("{date} 에 편집·생성한 페이지와 코멘트를 Notion 도구로 조회"),
+            _ => format!("{date} 활동을 조회"),
+        };
+        s.push_str(&format!("- [{}순위] {}\n", m.rank, what));
+    }
+    s
+}
+
 /// 조립한 프롬프트를 기존 프로바이더 브리지로 요약(claude 는 스트리밍).
+/// P2: mcp_sources 가 있고 provider=claude 면 --allowedTools/--permission-mode 로 등록 MCP 서버 도구를
+/// 비대화식 허용하고, 프롬프트에 수집 지시를 붙여 claude 가 Slack·Notion 을 직접 조회하게 한다.
 #[tauri::command]
 pub async fn report_generate(
     date: String,
     todos_digest: String,
     digests: Vec<SourceDigest>,
+    mcp_sources: Vec<McpSource>,
     model: Option<String>,
     cli_path: Option<String>,
     provider: Option<String>,
     timeout_secs: Option<u64>,
     on_delta: Channel<String>,
-) -> Result<ReportResult, ClaudeError> {
+) -> Result<ReportResult, AiError> {
+    let kind = provider_kind(provider.as_deref());
+    // MCP 위임은 claude 경로 전용 (codex/gemini 는 later)
+    let use_mcp = kind == ProviderKind::Claude && !mcp_sources.is_empty();
+
     let has_activity = !todos_digest.trim().is_empty()
-        || digests.iter().any(|d| d.ok && d.items > 0);
+        || digests.iter().any(|d| d.ok && d.items > 0)
+        || use_mcp;
     if !has_activity {
-        return Err(ClaudeError::new(
+        return Err(AiError::new(
             "EMPTY_INPUT",
             "이 날짜엔 정리할 활동이 없어요.",
         ));
     }
 
-    let kind = provider_kind(provider.as_deref());
     let program = cli_path
         .filter(|p| !p.is_empty())
         .unwrap_or_else(|| default_binary(kind).to_string());
@@ -780,10 +826,28 @@ pub async fn report_generate(
     let dur = Duration::from_secs(timeout_secs.unwrap_or(DEFAULT_GEN_TIMEOUT_SECS));
 
     let mut digests = digests;
-    let input = assemble_input(&date, &todos_digest, &mut digests);
+    let mut input = assemble_input(&date, &todos_digest, &mut digests);
+
+    let mut extra_args: Vec<String> = Vec::new();
+    if use_mcp {
+        let mut mcp = mcp_sources;
+        input.push_str(&mcp_instructions(&date, &mut mcp));
+        let tools = mcp
+            .iter()
+            .map(|m| mcp_tool_prefix(&m.server))
+            .collect::<Vec<_>>()
+            .join(",");
+        // 등록 서버는 -p 에서 자동 로드됨(--mcp-config 불필요). allow 한 도구만 실행, 나머지는
+        // dontAsk 로 무프롬프트 자동 거부(파괴적 도구 차단). --strict-mcp-config 는 쓰지 않는다.
+        extra_args.push("--allowedTools".into());
+        extra_args.push(tools);
+        extra_args.push("--permission-mode".into());
+        extra_args.push("dontAsk".into());
+    }
 
     let (result_str, meta) = if kind == ProviderKind::Claude {
-        stream_claude_result(program, model, dur, REPORT_SYSTEM_PROMPT, input, &on_delta).await?
+        stream_claude_result(program, model, dur, REPORT_SYSTEM_PROMPT, input, &extra_args, &on_delta)
+            .await?
     } else {
         let r = run_provider_text(kind, program, model, dur, REPORT_SYSTEM_PROMPT, input).await?;
         let _ = on_delta.send(r.0.clone());
@@ -792,8 +856,8 @@ pub async fn report_generate(
 
     let md = strip_outer_fence(&result_str).trim().to_string();
     if md.is_empty() {
-        return Err(ClaudeError::new(
-            "CLAUDE_BAD_CONTRACT",
+        return Err(AiError::new(
+            "AI_BAD_CONTRACT",
             "생성된 리포트가 비어 있습니다. 다시 시도해 주세요.",
         ));
     }
@@ -876,9 +940,104 @@ pub async fn detect_report_tools() -> ReportTools {
     }
 }
 
+// ---- 커맨드: 등록된 MCP 서버 목록 (P2 Slack·Notion 소스 선택용) ----
+
+#[derive(Debug, Serialize)]
+pub struct McpServer {
+    pub name: String,
+    pub connected: bool,
+    /// connected | needs_auth | failed | pending | unknown
+    pub status: String,
+    /// http | sse | stdio
+    pub transport: String,
+}
+
+/// `claude mcp list` 한 줄 파싱. 이름에 콜론·공백이 있을 수 있어(plugin:Notion:notion 등)
+/// 첫 ": "(콜론+공백)만 이름/값 경계로 본다.
+fn parse_mcp_list(text: &str) -> Vec<McpServer> {
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with("Checking") {
+            continue;
+        }
+        let Some(idx) = line.find(": ") else { continue };
+        let name = line[..idx].trim().to_string();
+        if name.is_empty() {
+            continue;
+        }
+        let rest = &line[idx + 2..];
+        let (status, connected) = if rest.contains("Connected") {
+            ("connected", true)
+        } else if rest.contains("Needs authentication") {
+            ("needs_auth", false)
+        } else if rest.contains("Failed") {
+            ("failed", false)
+        } else if rest.contains("Pending") {
+            ("pending", false)
+        } else {
+            ("unknown", false)
+        };
+        let transport = if rest.contains("(HTTP)") {
+            "http"
+        } else if rest.contains("(SSE)") {
+            "sse"
+        } else {
+            "stdio"
+        };
+        out.push(McpServer {
+            name,
+            connected,
+            status: status.to_string(),
+            transport: transport.to_string(),
+        });
+    }
+    out
+}
+
+/// 연결된 claude 프로바이더에 등록된 MCP 서버 목록. codex/gemini 는 빈 목록(호출부에서 미사용).
+#[tauri::command]
+pub async fn report_mcp_servers(cli_path: Option<String>) -> Vec<McpServer> {
+    let program = cli_path
+        .filter(|p| !p.is_empty())
+        .unwrap_or_else(|| "claude".to_string());
+    match timeout(
+        Duration::from_secs(20),
+        Command::new(&program).args(["mcp", "list"]).output(),
+    )
+    .await
+    {
+        Ok(Ok(o)) => parse_mcp_list(&String::from_utf8_lossy(&o.stdout)),
+        _ => Vec::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_mcp_list_names_with_colons() {
+        let sample = "Checking MCP server health…\n\n\
+plugin:slack:slack: https://mcp.slack.com/mcp (HTTP) - ✔ Connected\n\
+plugin:Notion:notion: https://mcp.notion.com/mcp (HTTP) - ✔ Connected\n\
+plugin:vercel:vercel: https://mcp.vercel.com (HTTP) - ! Needs authentication\n\
+serena-tripstore: http://ts-builder.local:8000/sse (SSE) - ✘ Failed to connect\n\
+context7: npx -y @upstash/context7-mcp - ⏸ Pending approval (run `claude` to approve)\n";
+        let servers = parse_mcp_list(sample);
+        assert_eq!(servers.len(), 5);
+        assert_eq!(servers[0].name, "plugin:slack:slack");
+        assert!(servers[0].connected);
+        assert_eq!(servers[0].transport, "http");
+        assert_eq!(servers[1].name, "plugin:Notion:notion");
+        assert!(servers[1].connected);
+        assert_eq!(servers[2].status, "needs_auth");
+        assert!(!servers[2].connected);
+        assert_eq!(servers[3].status, "failed");
+        assert_eq!(servers[3].transport, "sse");
+        assert_eq!(servers[4].status, "pending");
+        assert_eq!(servers[4].transport, "stdio");
+    }
 
     #[test]
     fn iso_ms_matches_reference() {

@@ -1,4 +1,4 @@
-mod claude;
+mod ai;
 mod detect;
 mod report;
 
@@ -71,6 +71,12 @@ pub fn run() {
             version: 5,
             description: "add_daily_reports",
             sql: include_str!("../migrations/0005_daily_reports.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 6,
+            description: "rename_claude_invocations_to_ai",
+            sql: include_str!("../migrations/0006_rename_invocations.sql"),
             kind: MigrationKind::Up,
         },
     ];
@@ -156,16 +162,17 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             move_to_trash,
-            claude::claude_generate,
-            claude::claude_augment,
-            claude::claude_note_compose,
-            claude::claude_note_compose_stream,
-            claude::claude_note_ask,
-            claude::claude_health,
+            ai::ai_generate,
+            ai::ai_augment,
+            ai::ai_note_compose,
+            ai::ai_note_compose_stream,
+            ai::ai_note_ask,
+            ai::ai_health,
             detect::detect_ai_clis,
             report::report_collect,
             report::report_generate,
-            report::detect_report_tools
+            report::detect_report_tools,
+            report::report_mcp_servers
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

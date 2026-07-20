@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Markdown } from "./Markdown";
 import type { AppConfig } from "../lib/config";
 import type { ConceptWithTags } from "../types";
-import { claudeAugment, friendlyError } from "../lib/claude";
+import { aiAugment, friendlyError } from "../lib/ai";
 import { setConceptTags, updateConceptContent } from "../lib/db";
 import { writeNote } from "../lib/vault";
 import { AiThinking, Modal } from "../ui";
@@ -77,7 +77,7 @@ export function AugmentModal({
     setError(null);
     setStep("loading");
     try {
-      const { note } = await claudeAugment({
+      const { note } = await aiAugment({
         title: concept.title,
         summary: concept.summary,
         tags: concept.tags,

@@ -3,7 +3,7 @@ import { Markdown } from "./Markdown";
 import { ulid as genUlid } from "ulid";
 import type { AppConfig } from "../lib/config";
 import type { Confidence } from "../types";
-import { claudeGenerate, friendlyError } from "../lib/claude";
+import { aiGenerate, friendlyError } from "../lib/ai";
 import { createConcept, getSetting, setSetting } from "../lib/db";
 import { detailPathFor, writeNote } from "../lib/vault";
 import { AiThinking, Modal } from "../ui";
@@ -68,7 +68,7 @@ export function AddConceptModal({
     setStep("loading");
     void setSetting("default_instruction", instruction.trim());
     try {
-      const { note } = await claudeGenerate({
+      const { note } = await aiGenerate({
         transcript,
         instruction,
         model: config.model,

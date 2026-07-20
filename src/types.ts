@@ -101,6 +101,21 @@ export interface CollectProgress {
   error: string | null;
 }
 
+/** 등록된 MCP 서버 (claude mcp list 파싱, P2 Slack·Notion 소스 선택용) */
+export interface McpServer {
+  name: string;
+  connected: boolean;
+  status: string; // connected | needs_auth | failed | pending | unknown
+  transport: string; // http | sse | stdio
+}
+
+/** 생성 시 claude 가 직접 조회할 MCP 소스 (report_generate 로 전달) */
+export interface McpSource {
+  id: ReportSourceId; // slack | notion
+  rank: number;
+  server: string; // 등록 서버 이름
+}
+
 /** daily_reports 테이블 한 행 (본문 정본은 vault/reports/<date>.md 파일) */
 export interface DailyReport {
   id: number;

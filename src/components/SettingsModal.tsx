@@ -9,11 +9,11 @@ import {
   loadConfig,
 } from "../lib/config";
 import {
-  claudeHealth,
+  aiHealth,
   detectAiClis,
-  isClaudeError,
+  isAiError,
   type DetectedCli,
-} from "../lib/claude";
+} from "../lib/ai";
 import {
   loadPrompts,
   makePrompt,
@@ -128,12 +128,12 @@ export function SettingsModal({
     setTesting(true);
     setTestResult(null);
     try {
-      const v = await claudeHealth(path);
+      const v = await aiHealth(path);
       if (!alive.current) return;
       setTestResult({ ok: true, msg: `연결 성공 — ${v}` });
     } catch (e) {
       if (!alive.current) return;
-      setTestResult({ ok: false, msg: isClaudeError(e) ? e.message : String(e) });
+      setTestResult({ ok: false, msg: isAiError(e) ? e.message : String(e) });
     } finally {
       if (alive.current) setTesting(false);
     }
