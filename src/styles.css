@@ -663,6 +663,15 @@ select {
 .modal.narrow {
   max-width: 440px;
 }
+/* 내부 탭/섹션 전환이 있는 모달(설정 등) — 내용 높이에 따라 창이 커졌다 작아지지 않게 크기 고정.
+   본문(.modal-body)만 남는 공간을 채우고 넘치면 스크롤 → 탭 전환 시 창 크기가 안 흔들린다. */
+.modal.fixed-h {
+  height: min(620px, 86vh);
+}
+.modal.fixed-h .modal-body {
+  flex: 1;
+  min-height: 0;
+}
 .modal-head {
   display: flex;
   align-items: center;

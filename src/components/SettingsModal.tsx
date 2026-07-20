@@ -221,6 +221,7 @@ export function SettingsModal({
       title={editing ? (isNew ? "새 프롬프트" : "프롬프트 편집") : "설정"}
       onClose={handleClose}
       footer={footer}
+      fixedHeight
     >
       {editing ? (
         // 포커스 에디터 — 이름 + 큰 textarea 하나만

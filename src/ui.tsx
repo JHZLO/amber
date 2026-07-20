@@ -177,6 +177,7 @@ export function Modal({
   footer,
   wide,
   narrow,
+  fixedHeight,
 }: {
   open: boolean;
   title: string;
@@ -185,6 +186,8 @@ export function Modal({
   footer?: ReactNode;
   wide?: boolean;
   narrow?: boolean;
+  /** 내부 탭·섹션 전환이 있는 모달용 — 내용 높이와 무관하게 크기 고정(본문만 스크롤) */
+  fixedHeight?: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -208,7 +211,11 @@ export function Modal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className={`modal ${wide ? "wide" : ""} ${narrow ? "narrow" : ""}`}>
+      <div
+        className={`modal ${wide ? "wide" : ""} ${narrow ? "narrow" : ""} ${
+          fixedHeight ? "fixed-h" : ""
+        }`}
+      >
         <div className="modal-head">
           <h2>{title}</h2>
           <button className="icon-btn" onClick={onClose} aria-label="닫기">
