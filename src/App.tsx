@@ -380,7 +380,11 @@ function App() {
 
       {/* 할 일 섹션 — 선택 날짜/스크롤 보존을 위해 항상 마운트 */}
       <div className={`section-wrap ${section === "todo" ? "" : "hidden"}`}>
-        <TodoView active={section === "todo"} />
+        <TodoView
+          active={section === "todo"}
+          config={config}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
       </div>
       </div>
 

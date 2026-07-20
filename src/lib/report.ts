@@ -1,0 +1,295 @@
+// 데일리 리포트 프론트 계층.
+// - Rust 브리지 래퍼(report_collect / report_generate / detect_report_tools)
+// - 리포트 설정(소스 활성화·순위·gh 경로 등)을 settings KV 에 저장 (config.ts 패턴)
+// - daily_reports 메타 CRUD + vault/reports/<date>.md 파일 R/W (본문 정본은 파일)
+// - 투두 digest 빌더(DB → 마크다운). Rust 는 SQLite 미보유라 투두는 여기서 만든다.
+
+import { invoke, Channel } from "@tauri-apps/api/core";
+import {
+  BaseDirectory,
+  mkdir,
+  writeTextFile,
+  readTextFile,
+  exists,
+} from "@tauri-apps/plugin-fs";
+import { getDb, getSetting, setSetting } from "./db";
+import { listTodos, listOverdueOpen } from "./todos";
+import { todayStr, formatDayShort } from "./date";
+import type {
+  CollectProgress,
+  DailyReport,
+  ReportSourceId,
+  ReportSourcePref,
+  SourceDigest,
+  Todo,
+} from "../types";
+
+// ---- Rust 브리지 ----
+
+export interface GhInfo {
+  path: string;
+  version: string;
+}
+export interface ReportTools {
+  gh: GhInfo | null;
+  claude_sessions: boolean;
+  codex_sessions: boolean;
+}
+
+/** gh 설치/버전 + AI 세션 디렉터리 존재 여부 (설정 화면 상태 표시용) */
+export function detectReportTools(): Promise<ReportTools> {
+  return invoke<ReportTools>("detect_report_tools");
+}
+
+export interface GithubCollectCfg {
+  rank: number;
+  path: string | null;
+  repos: string[];
+}
+export interface SessionsCollectCfg {
+  rank: number;
+  claude: boolean;
+  codex: boolean;
+}
+
+/** 활성 소스 병렬 수집. 소스별 완료는 onProgress 로 흘러온다. */
+export function reportCollect(
+  params: {
+    date: string;
+    startMs: number;
+    endMs: number;
+    tzOffsetMin: number;
+    github: GithubCollectCfg | null;
+    aiSessions: SessionsCollectCfg | null;
+  },
+  onProgress: (p: CollectProgress) => void,
+): Promise<SourceDigest[]> {
+  const channel = new Channel<CollectProgress>();
+  channel.onmessage = onProgress;
+  return invoke<SourceDigest[]>("report_collect", {
+    date: params.date,
+    startMs: params.startMs,
+    endMs: params.endMs,
+    tzOffsetMin: params.tzOffsetMin,
+    github: params.github,
+    aiSessions: params.aiSessions,
+    onProgress: channel,
+  });
+}
+
+export interface ReportGenResult {
+  markdown: string;
+  meta: {
+    model: string;
+    session_id: string | null;
+    cost_usd: number | null;
+    input_tokens: number | null;
+    output_tokens: number | null;
+    duration_ms: number | null;
+  };
+}
+
+/** 투두 + digest → 리포트 마크다운(스트리밍). onDelta 로 생성 델타가 흘러온다. */
+export function reportGenerate(
+  params: {
+    date: string;
+    todosDigest: string;
+    digests: SourceDigest[];
+    model?: string | null;
+    cliPath?: string | null;
+    provider?: string | null;
+    timeoutSecs?: number | null;
+  },
+  onDelta: (text: string) => void,
+): Promise<ReportGenResult> {
+  const channel = new Channel<string>();
+  channel.onmessage = onDelta;
+  return invoke<ReportGenResult>("report_generate", {
+    date: params.date,
+    todosDigest: params.todosDigest,
+    digests: params.digests,
+    model: params.model ?? null,
+    cliPath: params.cliPath ?? null,
+    provider: params.provider ?? null,
+    timeoutSecs: params.timeoutSecs ?? null,
+    onDelta: channel,
+  });
+}
+
+// ---- 리포트 설정 (settings KV) ----
+
+export interface ReportConfig {
+  onboarded: boolean;
+  /** 배열 순서 = 우선순위(rank). 앞일수록 리포트 중심 소스 */
+  sources: ReportSourcePref[];
+  githubPath: string;
+  githubRepos: string[];
+  sessionsClaude: boolean;
+  sessionsCodex: boolean;
+}
+
+/** P1 기본 소스: GitHub, AI 세션 (slack·notion 은 P2 에서 추가) */
+const DEFAULT_SOURCES: ReportSourcePref[] = [
+  { id: "github", enabled: true },
+  { id: "ai_sessions", enabled: true },
+];
+
+const VALID_IDS: ReportSourceId[] = ["github", "ai_sessions", "slack", "notion"];
+
+function parseSources(raw: string | null): ReportSourcePref[] {
+  if (!raw) return DEFAULT_SOURCES.map((s) => ({ ...s }));
+  try {
+    const arr = JSON.parse(raw) as ReportSourcePref[];
+    const clean = arr.filter(
+      (s) => s && VALID_IDS.includes(s.id) && typeof s.enabled === "boolean",
+    );
+    // 누락된 기본 소스는 뒤에 보충(마이그레이션 없이 새 소스 등장 흡수)
+    for (const d of DEFAULT_SOURCES) {
+      if (!clean.some((s) => s.id === d.id)) clean.push({ ...d });
+    }
+    return clean.length ? clean : DEFAULT_SOURCES.map((s) => ({ ...s }));
+  } catch {
+    return DEFAULT_SOURCES.map((s) => ({ ...s }));
+  }
+}
+
+export async function loadReportConfig(): Promise<ReportConfig> {
+  const [onb, sources, ghPath, ghRepos, sesClaude, sesCodex] = await Promise.all([
+    getSetting("report_onboarded"),
+    getSetting("report_sources"),
+    getSetting("report_github_path"),
+    getSetting("report_github_repos"),
+    getSetting("report_sessions_claude"),
+    getSetting("report_sessions_codex"),
+  ]);
+  return {
+    onboarded: onb === "1",
+    sources: parseSources(sources),
+    githubPath: ghPath ?? "",
+    githubRepos: (ghRepos ?? "")
+      .split(",")
+      .map((r) => r.trim())
+      .filter(Boolean),
+    // 기본 on (감지되면 사용). 명시적으로 "0" 저장했을 때만 off
+    sessionsClaude: sesClaude !== "0",
+    sessionsCodex: sesCodex !== "0",
+  };
+}
+
+export async function saveReportConfig(c: ReportConfig): Promise<void> {
+  await Promise.all([
+    setSetting("report_onboarded", c.onboarded ? "1" : "0"),
+    setSetting("report_sources", JSON.stringify(c.sources)),
+    setSetting("report_github_path", c.githubPath.trim()),
+    setSetting("report_github_repos", c.githubRepos.join(",")),
+    setSetting("report_sessions_claude", c.sessionsClaude ? "1" : "0"),
+    setSetting("report_sessions_codex", c.sessionsCodex ? "1" : "0"),
+  ]);
+}
+
+/** 활성 소스만, 배열 순서대로 rank(1..n) 부여 */
+export function rankedSources(c: ReportConfig): { id: ReportSourceId; rank: number }[] {
+  return c.sources
+    .filter((s) => s.enabled)
+    .map((s, i) => ({ id: s.id, rank: i + 1 }));
+}
+
+// ---- daily_reports 메타 (DB) ----
+
+export async function getReport(date: string): Promise<DailyReport | null> {
+  const db = await getDb();
+  const rows = await db.select<DailyReport[]>(
+    `SELECT * FROM daily_reports WHERE report_date = $1`,
+    [date],
+  );
+  return rows.length ? rows[0] : null;
+}
+
+export async function upsertReport(input: {
+  date: string;
+  filePath: string;
+  sourcesJson: string;
+  provider: string | null;
+  model: string | null;
+  durationMs: number | null;
+}): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `INSERT INTO daily_reports (report_date, file_path, sources_json, provider, model, duration_ms, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT(report_date) DO UPDATE SET
+       file_path = excluded.file_path,
+       sources_json = excluded.sources_json,
+       provider = excluded.provider,
+       model = excluded.model,
+       duration_ms = excluded.duration_ms,
+       updated_at = excluded.updated_at`,
+    [
+      input.date,
+      input.filePath,
+      input.sourcesJson,
+      input.provider,
+      input.model,
+      input.durationMs,
+      Date.now(),
+    ],
+  );
+}
+
+export async function deleteReport(date: string): Promise<void> {
+  const db = await getDb();
+  await db.execute(`DELETE FROM daily_reports WHERE report_date = $1`, [date]);
+  const rel = `${VAULT}/${reportPathFor(date)}`;
+  if (await exists(rel, { baseDir: BASE })) {
+    await invoke("move_to_trash", { relPath: rel });
+  }
+}
+
+// ---- vault/reports/<date>.md 파일 (본문 정본, frontmatter 없음) ----
+
+const BASE = BaseDirectory.AppData;
+const VAULT = "vault";
+
+/** DB 에 저장할 상대경로 */
+export function reportPathFor(date: string): string {
+  return `reports/${date}.md`;
+}
+
+export async function writeReportFile(date: string, md: string): Promise<string> {
+  await mkdir(`${VAULT}/reports`, { baseDir: BASE, recursive: true });
+  const rel = reportPathFor(date);
+  await writeTextFile(`${VAULT}/${rel}`, md, { baseDir: BASE });
+  return rel;
+}
+
+export async function readReportFile(date: string): Promise<string | null> {
+  const rel = `${VAULT}/${reportPathFor(date)}`;
+  if (!(await exists(rel, { baseDir: BASE }))) return null;
+  return readTextFile(rel, { baseDir: BASE });
+}
+
+// ---- 투두 digest (계획 축) ----
+
+/** 선택 날짜의 할 일 + (오늘이면) 밀린 항목을 마크다운으로. Rust 생성 프롬프트의 '계획' 재료. */
+export async function buildTodosDigest(date: string): Promise<{ md: string; count: number }> {
+  const todos = await listTodos(date);
+  const overdue = date === todayStr() ? await listOverdueOpen(date) : [];
+  if (!todos.length && !overdue.length) return { md: "", count: 0 };
+
+  const tops = todos.filter((t) => t.parent_id == null);
+  const kids = (pid: number) => todos.filter((t) => t.parent_id === pid);
+  const mark = (t: Todo) => (t.done === 1 ? "[x]" : "[ ]");
+
+  const lines: string[] = [];
+  for (const p of tops) {
+    lines.push(`- ${mark(p)} ${p.content}`);
+    for (const c of kids(p.id)) lines.push(`  - ${mark(c)} ${c.content}`);
+  }
+  if (overdue.length) {
+    lines.push("", "밀린(미완료) 항목:");
+    for (const t of overdue.slice(0, 20)) {
+      lines.push(`- [ ] ${t.content} (원래 ${formatDayShort(t.due_date)})`);
+    }
+  }
+  return { md: lines.join("\n"), count: todos.length };
+}

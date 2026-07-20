@@ -23,6 +23,7 @@ import {
 import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
 import { Modal, Select, Spinner } from "../ui";
 import { Icon } from "../icons";
+import { ReportSettings } from "./ReportSettings";
 
 const THEMES: { id: ThemePref; label: string }[] = [
   { id: "system", label: "시스템 설정 따름" },
@@ -332,6 +333,9 @@ export function SettingsModal({
               </div>
             )}
           </section>
+
+          {/* ── 데일리 리포트 ── */}
+          <ReportSettings />
 
           {/* ── 모양 ── */}
           <section className="set-section">

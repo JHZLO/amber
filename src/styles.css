@@ -2929,6 +2929,230 @@ body.dragging-rows .todo-row:hover {
   gap: 6px;
 }
 
+/* ---- 데일리 리포트 (할 일 아래 블록) ---- */
+.report {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.report-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  margin-bottom: 10px;
+}
+.report-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+}
+.report-actions {
+  display: inline-flex;
+  gap: 2px;
+}
+.report-hint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-3);
+}
+/* 활동 없음 = 좌측 바 + 옅은 배경 (색으로 칠하지 않음, DESIGN §3) */
+.report-empty {
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border-left: 2px solid var(--text);
+  border-radius: 0 6px 6px 0;
+}
+
+/* 수집 진행 칩: ok=채움 / pending=아웃라인 / error=점선 (상태를 색이 아니라 채움/윤곽으로) */
+.report-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.report-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-variant-numeric: tabular-nums;
+}
+.report-chip.ok {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+  border: 1px solid var(--primary-bg);
+}
+.report-chip.pending {
+  color: var(--text-3);
+  border: 1px solid var(--border-strong);
+}
+.report-chip.error {
+  color: var(--text-3);
+  border: 1px dashed var(--border-strong);
+}
+.report-chip .spinner {
+  width: 11px;
+  height: 11px;
+}
+
+/* 완성 메타: 근거 소스 태그 + 시각·모델 스탬프 */
+.report-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.report-src.failed {
+  border-style: dashed;
+  color: var(--text-3);
+}
+.report-stamp {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.report-body {
+  font-size: 13.5px;
+}
+/* 스트리밍 커서 — 깜빡이는 세로 바 */
+.report-body.streaming {
+  position: relative;
+}
+.report-caret {
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  margin-left: 1px;
+  background: var(--text);
+  vertical-align: -3px;
+  border-radius: 1px;
+  animation: report-blink 1s steps(2, start) infinite;
+}
+@keyframes report-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ---- 설정 › 데일리 리포트: 소스 행 ---- */
+.rep-src-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rep-src {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.rep-src.off {
+  border-style: dashed;
+}
+.rep-src.dragging {
+  opacity: 0.5;
+}
+.rep-src-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.rep-src-grip {
+  cursor: grab;
+}
+.rep-rank {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+  border: 1px solid var(--border-strong);
+}
+.rep-rank.on {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+  border-color: var(--primary-bg);
+}
+.rep-src-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.rep-src-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.rep-src-tag {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
+.rep-src-sub {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.rep-status {
+  font-size: 11px;
+  color: var(--text-3);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+.rep-status.ok {
+  color: var(--text-2);
+  border-color: var(--border-strong);
+}
+.rep-src-body {
+  padding: 12px;
+  border-top: 1px dashed var(--border);
+  background: var(--surface);
+}
+.rep-sub-toggles {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px 10px;
+}
+.rep-sub-label {
+  font-size: 13px;
+}
+.rep-sub-state {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.rep-soon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .checkbox,
   .cal-cell,
@@ -2942,5 +3166,8 @@ body.dragging-rows .todo-row:hover {
   .todo-overdue-caret,
   .todo-overdue-body {
     transition: none;
+  }
+  .report-caret {
+    animation: none;
   }
 }

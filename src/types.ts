@@ -71,3 +71,45 @@ export interface DayTodoCount {
   total: number;
   done: number;
 }
+
+// ---- 데일리 리포트 (daily_reports 테이블 한 행 + 수집 계층) ----
+
+/** 연동 플랫폼 소스 식별자. P1 은 github·ai_sessions 만 동작(slack·notion 은 P2). */
+export type ReportSourceId = "github" | "ai_sessions" | "slack" | "notion";
+
+/** 소스 활성화 상태. 배열에서의 순서(index)가 곧 우선순위(rank) */
+export interface ReportSourcePref {
+  id: ReportSourceId;
+  enabled: boolean;
+}
+
+/** Rust report_collect 가 소스별로 돌려주는 수집 결과 (생성 재료 + UI 근거) */
+export interface SourceDigest {
+  id: string;
+  rank: number;
+  ok: boolean;
+  items: number;
+  digest_md: string;
+  error: string | null;
+}
+
+/** 수집 진행 알림(Channel) — 소스별로 끝나는 대로 도착 */
+export interface CollectProgress {
+  id: string;
+  ok: boolean;
+  items: number;
+  error: string | null;
+}
+
+/** daily_reports 테이블 한 행 (본문 정본은 vault/reports/<date>.md 파일) */
+export interface DailyReport {
+  id: number;
+  report_date: string; // 'YYYY-MM-DD'
+  file_path: string; // vault 기준 상대경로 'reports/<date>.md'
+  sources_json: string; // 생성 근거 스냅샷 [{id,rank,ok,items,error}]
+  provider: string | null;
+  model: string | null;
+  duration_ms: number | null;
+  created_at: number; // UTC ms
+  updated_at: number; // UTC ms
+}

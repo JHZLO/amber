@@ -1,5 +1,6 @@
 mod claude;
 mod detect;
+mod report;
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -64,6 +65,12 @@ pub fn run() {
             version: 4,
             description: "add_todo_parent",
             sql: include_str!("../migrations/0004_todo_parent.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 5,
+            description: "add_daily_reports",
+            sql: include_str!("../migrations/0005_daily_reports.sql"),
             kind: MigrationKind::Up,
         },
     ];
@@ -155,7 +162,10 @@ pub fn run() {
             claude::claude_note_compose_stream,
             claude::claude_note_ask,
             claude::claude_health,
-            detect::detect_ai_clis
+            detect::detect_ai_clis,
+            report::report_collect,
+            report::report_generate,
+            report::detect_report_tools
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

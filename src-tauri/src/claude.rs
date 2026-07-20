@@ -16,75 +16,24 @@ const DEFAULT_MODEL: &str = "claude-opus-4-8";
 const DEFAULT_TIMEOUT_SECS: u64 = 300;
 const MIN_INPUT_CHARS: usize = 20;
 
-const SYSTEM_PROMPT: &str = r#"너는 사용자가 방금 AI와의 Q&A로 배운 기술 개념을, 나중에 복습할 수 있는 학습 노트로 정리하는 도우미다.
-입력(stdin)은 AI와 나눈 대화 원문이다. 아래 스키마의 JSON "하나만" 출력하라. 마크다운 코드펜스(```)나 설명 문장을 절대 붙이지 말고, raw JSON 만 출력한다.
+// 시스템 프롬프트는 src-tauri/context/*.md 에 영어로 두고 컴파일 시 그대로 임베드한다
+// (include_str!). 파일 = 모델에 전달되는 프롬프트 본문 그 자체이며, 고치면 재빌드가 필요하다.
+// 상세는 context/README.md 참고. 결과물은 각 프롬프트의 "주 언어(대개 한국어)" 규칙으로 한글 유지.
 
-{
-  "title": "개념을 한눈에 나타내는 짧은 제목 (<=120자)",
-  "summary": "위젯에 스쳐보기용 1~2문장 요약. 평문(마크다운 X), <=400자",
-  "detail_markdown": "GFM 마크다운 상세 노트. 아래 구조 권장:\n## 핵심\n(한두 문단)\n## 왜 중요한가 / 맥락\n## 핵심 포인트\n- ...\n## 주의점·함정\n- ...\n## 예시\n(필요시 코드블록)\n## 참고\n(있으면)",
-  "tags": ["소문자 주제 태그 1~5개, # 없이"],
-  "confidence_suggestion": 1,
-  "source_excerpt": "원문에서 핵심을 담은 짧은 인용 또는 null"
-}
+// 개념 카드 생성 + 선택 영역 승격 공용. 출력: raw JSON(Contract).
+const SYSTEM_PROMPT: &str = include_str!("../context/concept-generate.md");
 
-규칙:
-- 원문의 주 언어를 따른다(대개 한국어). 코드/기술 용어는 영어 그대로 둔다.
-- confidence_suggestion 은 방금 배운 것이므로 기본 1.
-- 원문에 없는 내용을 지어내지 말고, 불확실하면 노트에 그 한계를 적는다.
-- 입력에 '[사용자 추가 지시]' 섹션이 있으면, 그 지시를 최우선으로 반영해 정리하라."#;
-
-const AUGMENT_SYSTEM_PROMPT: &str = r#"너는 사용자가 이미 정리해 둔 기술 학습 노트를, 사용자의 '보강 요청'에 따라 더 좋게 다듬어 주는 편집자다.
-입력(stdin)에는 [보강 요청]과 [현재 노트](제목/요약/태그/상세 Markdown)가 들어 있다.
-아래 스키마의 JSON "하나만" 출력하라. 마크다운 코드펜스(```)나 설명 문장을 절대 붙이지 말고, raw JSON 만 출력한다.
-
-{
-  "title": "개념을 한눈에 나타내는 짧은 제목 (<=120자)",
-  "summary": "위젯에 스쳐보기용 1~2문장 요약. 평문(마크다운 X), <=400자",
-  "detail_markdown": "GFM 마크다운으로 보강된 상세 노트 전체(완성본)",
-  "tags": ["소문자 주제 태그 1~5개, # 없이"],
-  "confidence_suggestion": 1,
-  "source_excerpt": "핵심 인용 또는 null"
-}
-
-규칙:
-- 현재 노트를 통째로 대체하는, 보강된 '완성본'을 출력한다. 기존의 정확한 내용·구조는 최대한 보존하고, 보강 요청을 최우선으로 반영해 확장/수정한다.
-- 보강 요청이 특정 부분(예: 예시 추가, 특정 섹션 심화, 더 쉽게, 최신 내용 반영)만 가리키면 나머지는 그대로 둔다.
-- 노트의 주 언어를 따른다(대개 한국어). 코드/기술 용어는 영어 그대로 둔다.
-- 사실에 없는 내용을 지어내지 말고, 불확실하면 그 한계를 노트에 명시한다.
-- title/summary/tags 는 내용이 크게 달라진 게 아니면 기존 것을 유지하되, 필요하면 자연스럽게 다듬어도 된다.
-- confidence_suggestion 필드는 채우되 무시해도 된다(학습 상태는 이 기능이 바꾸지 않는다)."#;
+// 기존 개념 노트 보강. 출력: raw JSON(Contract).
+const AUGMENT_SYSTEM_PROMPT: &str = include_str!("../context/concept-augment.md");
 
 // 노트는 detail_markdown 만 쓰므로 JSON 계약을 강요하지 않는다.
 // 큰 마크다운을 JSON 문자열에 담게 하면(특히 sonnet) 이스케이프/전체 코드펜스 래핑으로 이중 파싱이
 // 간헐적으로 깨진다 → "raw 마크다운 그 자체"만 받고 봉투 .result 를 그대로 본문으로 쓴다(CLI 가 이스케이프 담당).
-const NOTE_SYSTEM_PROMPT: &str = r#"너는 사용자의 필기노트를 대신 작성하거나 다듬는 조수다.
-입력(stdin)에는 [작성 요청]과 [현재 노트](제목, Markdown 본문 — 비어 있을 수 있음)가 들어 있다.
-
-출력은 "노트 본문이 될 GFM 마크다운 그 자체"만 낸다.
-- JSON 으로 감싸지 마라.
-- 출력 전체를 코드펜스(```)로 감싸지 마라. (본문 안의 코드블록/표에서 ``` 를 쓰는 건 정상이며 권장된다.)
-- "여기 있습니다", "다음은…" 같은 머리말/맺음말을 붙이지 마라. 첫 글자부터 노트 내용이어야 한다.
-
-규칙:
-- 현재 본문에 내용이 있으면 구조와 말투를 최대한 보존하며 작성 요청을 반영해 확장/수정하고, 비어 있으면 요청 주제로 처음부터 작성한다.
-- 주제와 요청에 맞는 자연스러운 문서 구조(#/##/### 제목, 목록, 표, 코드블록)를 쓴다.
-- mermaid 코드블록을 쓸 때 라벨 안에 큰따옴표가 필요하면 #quot; 를 쓴다. 백슬래시 이스케이프(\")는 mermaid 가 지원하지 않아 렌더가 깨진다.
-- 노트의 주 언어를 따른다(대개 한국어). 코드/기술 용어는 영어 그대로 둔다.
-- 사실이 불확실하면 지어내지 말고 그 한계를 본문에 명시한다."#;
+const NOTE_SYSTEM_PROMPT: &str = include_str!("../context/note-compose.md");
 
 // 필기노트 인라인 질문(노션 댓글식): 드래그한 문장 + 질문 → 짧은 답변.
 // 노트 본문을 불리지 않는 별도 Q&A 라 "간결함"을 프롬프트로 강제한다.
-const ASK_SYSTEM_PROMPT: &str = r#"너는 사용자가 자기 필기노트를 읽다가 생긴 질문에 답하는 조수다.
-입력(stdin)에는 [질문], [선택한 부분](노트에서 드래그한 문장), [노트 전체](문맥)가 들어 있다.
-[이전 문답]이 있으면 같은 선택 부분을 두고 방금까지 나눈 대화다 — [질문]은 그 흐름을 잇는
-후속 질문이니 이미 설명한 내용을 반복하지 말고 이어서 답한다.
-
-출력은 답변 텍스트만 낸다.
-- 간결하게: 핵심만 2~5문장. 꼭 필요할 때만 3줄 이내의 아주 짧은 코드 1개.
-- 마크다운은 굵게/인라인 코드/짧은 목록 정도만. 헤딩(#)과 긴 문서 구조 금지.
-- JSON 이나 코드펜스로 전체를 감싸지 말고, "좋은 질문이네요" 같은 머리말 없이 첫 글자부터 답변.
-- 노트의 주 언어(대개 한국어)를 따른다. 선택한 부분과 노트 문맥을 우선 근거로 삼고, 불확실하면 그 한계를 한 줄로 밝힌다."#;
+const ASK_SYSTEM_PROMPT: &str = include_str!("../context/note-ask.md");
 
 // ---- 프로바이더 추상화 ----
 // AI 를 특정 벤더에 묶지 않는다. claude 는 풍부한 경로(JSON 봉투 + 스트리밍)를 쓰고,
@@ -99,7 +48,7 @@ pub enum ProviderKind {
     Gemini,
 }
 
-fn provider_kind(p: Option<&str>) -> ProviderKind {
+pub(crate) fn provider_kind(p: Option<&str>) -> ProviderKind {
     match p {
         Some("codex") => ProviderKind::Codex,
         Some("gemini") => ProviderKind::Gemini,
@@ -107,7 +56,7 @@ fn provider_kind(p: Option<&str>) -> ProviderKind {
     }
 }
 
-fn default_binary(kind: ProviderKind) -> &'static str {
+pub(crate) fn default_binary(kind: ProviderKind) -> &'static str {
     match kind {
         ProviderKind::Claude => "claude",
         ProviderKind::Codex => "codex",
@@ -116,7 +65,7 @@ fn default_binary(kind: ProviderKind) -> &'static str {
 }
 
 /// 모델 결정: claude 는 기본 모델 폴백, codex/gemini 는 빈 값 = CLI 기본 모델 사용(-m 미전달)
-fn resolve_model(kind: ProviderKind, model: Option<String>) -> String {
+pub(crate) fn resolve_model(kind: ProviderKind, model: Option<String>) -> String {
     let m = model.filter(|m| !m.is_empty());
     match kind {
         ProviderKind::Claude => m.unwrap_or_else(|| DEFAULT_MODEL.to_string()),
@@ -125,7 +74,7 @@ fn resolve_model(kind: ProviderKind, model: Option<String>) -> String {
 }
 
 /// 프로바이더 공용 실행: 시스템 프롬프트 + 입력 → 최종 텍스트(.result 상당) + 메타
-async fn run_provider_text(
+pub(crate) async fn run_provider_text(
     kind: ProviderKind,
     program: String,
     model: String,
@@ -305,7 +254,7 @@ pub struct ClaudeError {
 }
 
 impl ClaudeError {
-    fn new(code: &str, message: impl Into<String>) -> Self {
+    pub(crate) fn new(code: &str, message: impl Into<String>) -> Self {
         Self {
             code: code.into(),
             message: message.into(),
@@ -351,7 +300,7 @@ fn default_conf() -> u8 {
 }
 
 /// 최외곽 코드펜스만 제거(detail_markdown 안의 예시 코드블록은 건드리지 않도록 전체 문자열 기준).
-fn strip_outer_fence(s: &str) -> &str {
+pub(crate) fn strip_outer_fence(s: &str) -> &str {
     let t = s.trim();
     if let Some(rest) = t.strip_prefix("```") {
         // 첫 줄(언어 태그 가능)을 버리고, 끝의 ``` 제거
@@ -598,7 +547,7 @@ pub async fn claude_note_ask(
 
 /// stream-json 실행: 줄 단위로 읽어 text_delta 를 on_delta 로 흘리고,
 /// 마지막 `result` 봉투에서 최종 .result + 메타를 확정해 돌려준다.
-async fn stream_claude_result(
+pub(crate) async fn stream_claude_result(
     program: String,
     model: String,
     dur: Duration,

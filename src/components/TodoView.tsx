@@ -37,7 +37,9 @@ import {
 import { Checkbox } from "../ui";
 import { Icon } from "../icons";
 import { MiniCalendar } from "./MiniCalendar";
+import { DailyReportPanel } from "./DailyReportPanel";
 import { openConceptInApp } from "../lib/nav";
+import type { AppConfig } from "../lib/config";
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -51,7 +53,15 @@ const CAL_W_DEFAULT = 460;
 // 오른쪽 체크리스트가 항상 확보할 최소 폭 — 창이 좁아지면 캘린더가 이만큼 양보(반응형)
 const DETAIL_MIN = 340;
 
-export function TodoView({ active }: { active: boolean }) {
+export function TodoView({
+  active,
+  config,
+  onOpenSettings,
+}: {
+  active: boolean;
+  config: AppConfig | null;
+  onOpenSettings: () => void;
+}) {
   const [selected, setSelected] = useState(() => todayStr());
   const [cursor, setCursor] = useState(() => monthOf(todayStr()));
 
@@ -659,6 +669,13 @@ export function TodoView({ active }: { active: boolean }) {
             {topLevel.length}개 중 {doneTop}개 완료
           </div>
         )}
+
+        <DailyReportPanel
+          date={selected}
+          config={config}
+          active={active}
+          onOpenSettings={onOpenSettings}
+        />
 
         {learned.length > 0 && (
           <div className="todo-learned">
