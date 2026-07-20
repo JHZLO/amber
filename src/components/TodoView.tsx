@@ -45,9 +45,11 @@ const OVERDUE_LIMIT = 20;
 
 // 캘린더 pane 너비(드래그 조절, localStorage 영속). 가로 비중은 사용자가 직접 정한다.
 const CAL_W_KEY = "amber.todo.cal-width";
-const CAL_W_MIN = 340;
+const CAL_W_MIN = 260; // 캘린더 최소 폭 (셀 안 날짜 원이 들어가는 하한)
 const CAL_W_MAX = 780;
 const CAL_W_DEFAULT = 460;
+// 오른쪽 체크리스트가 항상 확보할 최소 폭 — 창이 좁아지면 캘린더가 이만큼 양보(반응형)
+const DETAIL_MIN = 340;
 
 export function TodoView({ active }: { active: boolean }) {
   const [selected, setSelected] = useState(() => todayStr());
@@ -83,13 +85,25 @@ export function TodoView({ active }: { active: boolean }) {
     localStorage.setItem(CAL_W_KEY, String(Math.round(calWidth)));
   }, [calWidth]);
 
+  // 반응형: .body 실측 폭을 추적. calWidth 는 '희망 폭'으로 두고, 실제 렌더 폭(calWEff)은
+  // 창이 좁으면 줄고 넓어지면 다시 커진다 — 체크리스트는 항상 DETAIL_MIN 이상 확보.
+  const [bodyW, setBodyW] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const measure = () => setBodyW(bodyRef.current?.clientWidth ?? 0);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [active]);
+
   function startResize(e: ReactMouseEvent) {
     e.preventDefault();
     const rect = bodyRef.current?.getBoundingClientRect();
     if (!rect) return;
     document.body.classList.add("resizing-col");
     const onMove = (ev: MouseEvent) => {
-      setCalWidth(Math.min(CAL_W_MAX, Math.max(CAL_W_MIN, ev.clientX - rect.left)));
+      const maxCal = Math.min(CAL_W_MAX, rect.width - DETAIL_MIN);
+      setCalWidth(Math.max(CAL_W_MIN, Math.min(maxCal, ev.clientX - rect.left)));
     };
     const onUp = () => {
       document.body.classList.remove("resizing-col");
@@ -319,6 +333,10 @@ export function TodoView({ active }: { active: boolean }) {
 
   const today = todayStr();
   const isToday = selected === today;
+  // 렌더용 캘린더 폭: 희망 폭(calWidth)을 창 폭에 맞춰 clamp (오른쪽 최소 DETAIL_MIN 보장)
+  const calWEff = bodyW
+    ? Math.max(CAL_W_MIN, Math.min(calWidth, bodyW - DETAIL_MIN))
+    : calWidth;
   const topLevel = todos.filter((t) => t.parent_id == null);
   const childrenOf = (pid: number) => todos.filter((t) => t.parent_id === pid);
   const doneTop = topLevel.filter((t) => t.done === 1).length;
@@ -430,7 +448,7 @@ export function TodoView({ active }: { active: boolean }) {
     <div
       className="body todo-body"
       ref={bodyRef}
-      style={{ gridTemplateColumns: `${calWidth}px 1fr` }}
+      style={{ gridTemplateColumns: `${calWEff}px 1fr` }}
     >
       <aside className="list todo-cal-pane">
         <MiniCalendar
@@ -448,7 +466,7 @@ export function TodoView({ active }: { active: boolean }) {
 
       <div
         className="todo-resizer"
-        style={{ left: calWidth }}
+        style={{ left: calWEff }}
         onMouseDown={startResize}
         title="드래그해서 캘린더 너비 조절"
       />
