@@ -21,7 +21,7 @@ import {
   type NoteNode,
 } from "../lib/notes";
 import { useTreeDnd } from "../lib/useTreeDnd";
-import { Modal, Select, Spinner, TreeDragOverlay, timeAgo } from "../ui";
+import { Modal, Select, Spinner, Tooltip, TreeDragOverlay, timeAgo } from "../ui";
 import { Icon } from "../icons";
 import type { AppConfig } from "../lib/config";
 import { NoteAiModal } from "./NoteAiModal";
@@ -518,27 +518,33 @@ export function NotesView({
         <div className="notes-tree-head">
           <RootPicker section="notes" />
           <span className="spacer" />
-          <button
-            className="icon-btn sm"
-            title={`새 노트 (위치: ${encodeDir(activeDir)})`}
-            onClick={() => openNameModal("new-note")}
-          >
-            <Icon name="file-plus" size={15} />
-          </button>
-          <button
-            className="icon-btn sm"
-            title={`새 폴더 (위치: ${encodeDir(activeDir)})`}
-            onClick={() => openNameModal("new-folder")}
-          >
-            <Icon name="folder-plus" size={15} />
-          </button>
-          <button
-            className="icon-btn sm"
-            title="새로고침 (Finder 에서 바꾼 내용 반영)"
-            onClick={() => void reload()}
-          >
-            <Icon name="refresh" size={14} />
-          </button>
+          <Tooltip label={`새 노트 · ${encodeDir(activeDir)}`}>
+            <button
+              className="icon-btn sm"
+              aria-label="새 노트"
+              onClick={() => openNameModal("new-note")}
+            >
+              <Icon name="file-plus" size={15} />
+            </button>
+          </Tooltip>
+          <Tooltip label={`새 폴더 · ${encodeDir(activeDir)}`}>
+            <button
+              className="icon-btn sm"
+              aria-label="새 폴더"
+              onClick={() => openNameModal("new-folder")}
+            >
+              <Icon name="folder-plus" size={15} />
+            </button>
+          </Tooltip>
+          <Tooltip label="새로고침 · Finder 변경 반영">
+            <button
+              className="icon-btn sm"
+              aria-label="새로고침"
+              onClick={() => void reload()}
+            >
+              <Icon name="refresh" size={14} />
+            </button>
+          </Tooltip>
         </div>
 
         {treeError && (

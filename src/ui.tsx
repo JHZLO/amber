@@ -169,6 +169,57 @@ export function TagChip({
   );
 }
 
+/** 호버 툴팁 — 자식을 감싸면 잠깐 머무를 때 라벨이 뜬다.
+ *  네이티브 `title` 은 Tauri macOS WKWebView 에서 안 뜨므로 아이콘 버튼 힌트는 이걸 쓴다.
+ *  라벨은 body 로 portal → 사이드바 overflow 에 안 잘린다. 접근성 이름은 자식에 aria-label 로 따로. */
+export function Tooltip({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+
+  const show = () => {
+    timer.current = setTimeout(() => {
+      const r = ref.current?.getBoundingClientRect();
+      if (r) setPos({ left: r.left + r.width / 2, top: r.bottom + 6 });
+    }, 350);
+  };
+  const hide = () => {
+    if (timer.current) clearTimeout(timer.current);
+    setPos(null);
+  };
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  return (
+    <span
+      ref={ref}
+      className="tip-wrap"
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onMouseDown={hide}
+    >
+      {children}
+      {pos &&
+        createPortal(
+          <span className="tip" style={{ left: pos.left, top: pos.top }}>
+            {label}
+          </span>,
+          document.body,
+        )}
+    </span>
+  );
+}
+
 export function Modal({
   open,
   title,

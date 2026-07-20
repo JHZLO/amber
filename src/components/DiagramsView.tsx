@@ -21,7 +21,7 @@ import {
 } from "../lib/diagrams";
 import { useTreeDnd } from "../lib/useTreeDnd";
 import { DiagramCanvas } from "./DiagramCanvas";
-import { Modal, Select, Spinner, TreeDragOverlay, timeAgo } from "../ui";
+import { Modal, Select, Spinner, Tooltip, TreeDragOverlay, timeAgo } from "../ui";
 import { Icon } from "../icons";
 import { RootPicker } from "./RootPicker";
 import { rootDisplayName, WORKSPACE_EVENT } from "../lib/workspace";
@@ -444,27 +444,33 @@ export function DiagramsView({ active }: { active: boolean }) {
         <div className="notes-tree-head">
           <RootPicker section="diagrams" />
           <span className="spacer" />
-          <button
-            className="icon-btn sm"
-            title={`새 다이어그램 (위치: ${encodeDir(activeDir)})`}
-            onClick={() => openNameModal("new-file")}
-          >
-            <Icon name="file-plus" size={15} />
-          </button>
-          <button
-            className="icon-btn sm"
-            title={`새 폴더 (위치: ${encodeDir(activeDir)})`}
-            onClick={() => openNameModal("new-folder")}
-          >
-            <Icon name="folder-plus" size={15} />
-          </button>
-          <button
-            className="icon-btn sm"
-            title="새로고침 (Finder 에서 바꾼 내용 반영)"
-            onClick={() => void reload()}
-          >
-            <Icon name="refresh" size={14} />
-          </button>
+          <Tooltip label={`새 다이어그램 · ${encodeDir(activeDir)}`}>
+            <button
+              className="icon-btn sm"
+              aria-label="새 다이어그램"
+              onClick={() => openNameModal("new-file")}
+            >
+              <Icon name="file-plus" size={15} />
+            </button>
+          </Tooltip>
+          <Tooltip label={`새 폴더 · ${encodeDir(activeDir)}`}>
+            <button
+              className="icon-btn sm"
+              aria-label="새 폴더"
+              onClick={() => openNameModal("new-folder")}
+            >
+              <Icon name="folder-plus" size={15} />
+            </button>
+          </Tooltip>
+          <Tooltip label="새로고침 · Finder 변경 반영">
+            <button
+              className="icon-btn sm"
+              aria-label="새로고침"
+              onClick={() => void reload()}
+            >
+              <Icon name="refresh" size={14} />
+            </button>
+          </Tooltip>
         </div>
 
         {treeError && (
