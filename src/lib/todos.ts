@@ -75,14 +75,17 @@ export async function toggleTodo(id: number, done: 0 | 1): Promise<void> {
   );
 }
 
-/** 부모 토글 → 부모와 모든 자식을 같은 상태로 (하향 전파). 트리거가 각 행 completed_at 관리 */
-export async function setDoneWithChildren(
-  id: number,
-  done: 0 | 1,
-): Promise<void> {
+/** 어떤 노드 토글 → 그 노드와 모든 자손(재귀)을 같은 상태로 (하향 전파, 다단계).
+ *  트리거가 각 행 completed_at 관리. 위쪽(조상) 재계산은 recomputeChainFrom 이 담당. */
+export async function setSubtreeDone(id: number, done: 0 | 1): Promise<void> {
   const db = await getDb();
   await db.execute(
-    `UPDATE todos SET done = $1 WHERE (id = $2 OR parent_id = $2) AND done <> $1`,
+    `WITH RECURSIVE sub(id) AS (
+       SELECT $2
+       UNION ALL
+       SELECT t.id FROM todos t JOIN sub ON t.parent_id = sub.id
+     )
+     UPDATE todos SET done = $1 WHERE done <> $1 AND id IN (SELECT id FROM sub)`,
     [done, id],
   );
 }
@@ -101,6 +104,24 @@ export async function recomputeParentDone(parentId: number): Promise<void> {
     done,
     parentId,
   ]);
+}
+
+/** 자손 변경 후, 주어진 부모에서 위로(조상 체인) 완료 상태를 아래→위로 재계산한다.
+ *  각 단계는 직속 자식만 보므로(recomputeParentDone), 바닥부터 올라가면 정합성이 유지된다.
+ *  parentId=null 이면 최상위라 재계산할 조상이 없다(no-op). */
+export async function recomputeChainFrom(
+  parentId: number | null,
+): Promise<void> {
+  const db = await getDb();
+  let pid: number | null = parentId;
+  while (pid != null) {
+    await recomputeParentDone(pid);
+    const rows = await db.select<{ parent_id: number | null }[]>(
+      `SELECT parent_id FROM todos WHERE id = $1`,
+      [pid],
+    );
+    pid = rows.length ? rows[0].parent_id : null;
+  }
 }
 
 /** 내용 수정 (updated_at 갱신) */
@@ -126,8 +147,17 @@ export async function moveTodos(ids: number[], dueDate: string): Promise<void> {
   );
 }
 
-/** 삭제 (즉시, 확인 모달 없음 — 값싼 대상). 부모를 지우면 자식(parent_id=id)도 함께 */
+/** 삭제 (즉시, 확인 모달 없음 — 값싼 대상). 노드를 지우면 그 서브트리 전체(모든 자손)를 함께.
+ *  삭제 후 부모 완료 상태 재계산은 호출부(recomputeChainFrom)가 담당. */
 export async function deleteTodo(id: number): Promise<void> {
   const db = await getDb();
-  await db.execute(`DELETE FROM todos WHERE id = $1 OR parent_id = $1`, [id]);
+  await db.execute(
+    `WITH RECURSIVE sub(id) AS (
+       SELECT $1
+       UNION ALL
+       SELECT t.id FROM todos t JOIN sub ON t.parent_id = sub.id
+     )
+     DELETE FROM todos WHERE id IN (SELECT id FROM sub)`,
+    [id],
+  );
 }

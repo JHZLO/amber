@@ -17,9 +17,9 @@ import {
   listOverdueOpen,
   listTodos,
   moveTodos,
-  recomputeParentDone,
+  recomputeChainFrom,
   reorderTodos,
-  setDoneWithChildren,
+  setSubtreeDone,
   toggleTodo,
   updateTodoContent,
 } from "../lib/todos";
@@ -44,6 +44,8 @@ import type { AppConfig } from "../lib/config";
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 const OVERDUE_LIMIT = 20;
+// 중첩 단계별 들여쓰기(px). 유닛 marginLeft 로 겹쳐 적용돼 단계마다 이만큼 더 들어간다.
+const INDENT = 24;
 
 // 캘린더 pane 너비(드래그 조절, localStorage 영속). 가로 비중은 사용자가 직접 정한다.
 const CAL_W_KEY = "amber.todo.cal-width";
@@ -125,17 +127,22 @@ export function TodoView({
   }
 
   // 할 일 순서 드래그 (포인터 기반 — WKWebView 에서 HTML5 DnD 보다 안정적).
-  // 노션식: 집어 든 유닛(부모+자식 묶음)이 커서를 따라 "들린 채" 이동하고, 나머지 유닛은
-  // 유닛 높이만큼 밀려 자리를 비운다. 드래그 중엔 배열을 건드리지 않고 transform 만 쓰고
-  // (집은 유닛=translateY(커서 이동량) → 커서 정확 추적), 놓을 때만 실제 순서를 커밋한다.
+  // 노션식: 집어 든 유닛(항목+그 서브트리)이 커서를 따라 "들린 채" 이동하고, 나머지 유닛은
+  // 유닛 높이만큼 밀려 자리를 비운다. 재배치는 "같은 형제 그룹 안"으로만 한다(부모는 안 바뀜).
+  // 드래그 중엔 배열을 건드리지 않고 transform 만 쓰고, 놓을 때만 실제 순서를 커밋한다.
   function startDrag(e: ReactMouseEvent, id: number) {
     e.preventDefault();
     const listEl = listRef.current;
     if (!listEl) return;
+    const node = todosRef.current.find((t) => t.id === id);
+    if (!node) return;
 
-    // 시작 시 각 유닛의 위치를 실측 (드래그 중 배열은 안 바뀌므로 좌표가 유효하다)
+    // 재배치 단위 = 드래그한 항목의 형제 그룹(같은 parent_id). data-parent-id 로 그 그룹만 실측.
+    const pkey = node.parent_id == null ? "root" : String(node.parent_id);
     const units = Array.from(
-      listEl.querySelectorAll<HTMLElement>(".todo-unit"),
+      listEl.querySelectorAll<HTMLElement>(
+        `.todo-unit[data-parent-id="${pkey}"]`,
+      ),
     ).map((el) => {
       const r = el.getBoundingClientRect();
       return { el, top: r.top, height: r.height, center: r.top + r.height / 2 };
@@ -147,7 +154,9 @@ export function TodoView({
     const dragged = units[fromIndex];
     const draggedH = dragged.height;
     const startY = e.clientY;
-    const listRect = listEl.getBoundingClientRect();
+    // 집은 유닛이 형제 그룹 범위를 벗어나 날아가지 않게 clamp 할 상하 경계
+    const groupTop = Math.min(...units.map((u) => u.top));
+    const groupBottom = Math.max(...units.map((u) => u.top + u.height));
 
     setDragId(id);
     document.body.classList.add("dragging-rows");
@@ -156,10 +165,10 @@ export function TodoView({
     // 들어올린 유닛의 커서 이동량(dy)으로 삽입 위치를 계산하고 각 유닛에 transform 적용.
     let dropIndex = fromIndex;
     const apply = (clientY: number) => {
-      // 커서를 따라 이동하되, 리스트 범위를 벗어나 날아가지 않게 clamp
+      // 커서를 따라 이동하되, 형제 그룹 범위를 벗어나지 않게 clamp
       const dy = Math.max(
-        listRect.top - dragged.top,
-        Math.min(listRect.bottom - (dragged.top + draggedH), clientY - startY),
+        groupTop - dragged.top,
+        Math.min(groupBottom - (dragged.top + draggedH), clientY - startY),
       );
       const currentCenter = dragged.center + dy;
       // 들어올린 유닛의 중심이 넘어선 다른 유닛 수 = 재배치 후 앞에 올 유닛 수 = 삽입 index
@@ -205,22 +214,25 @@ export function TodoView({
       setDragId(null);
 
       const cur = todosRef.current;
-      const tops = cur.filter((t) => t.parent_id == null);
-      const from = tops.findIndex((t) => t.id === id);
-      if (from === -1 || dropIndex === from) return; // 제자리면 커밋 생략
-      const nextTops = tops.slice();
-      const [moved] = nextTops.splice(from, 1);
-      nextTops.splice(dropIndex, 0, moved);
-      // 부모 순서만 재배치, 자식은 각 부모 뒤에 그대로 유지
-      const rebuilt: Todo[] = [];
-      for (const p of nextTops) {
-        rebuilt.push(p);
-        for (const c of cur.filter((t) => t.parent_id === p.id)) rebuilt.push(c);
-      }
-      setTodos(rebuilt);
-      void reorderTodos(nextTops.map((t) => t.id)).catch((err) =>
-        setError(errMsg(err)),
+      // 같은 형제 그룹 안에서만 재배치 (parent_id 동일). 자손 서브트리는 렌더가 id 기준
+      // 재귀라 자동으로 따라온다 — flat 배열에선 형제들의 자리만 새 순서로 바꿔 끼운다.
+      const siblings = cur.filter(
+        (t) => (t.parent_id ?? null) === (node.parent_id ?? null),
       );
+      const from = siblings.findIndex((t) => t.id === id);
+      if (from === -1 || dropIndex === from) return; // 제자리면 커밋 생략
+      const nextSibs = siblings.slice();
+      const [moved] = nextSibs.splice(from, 1);
+      nextSibs.splice(dropIndex, 0, moved);
+      const newOrder = nextSibs.map((t) => t.id);
+      const sibIds = new Set(siblings.map((t) => t.id));
+      const byId = new Map(cur.map((t) => [t.id, t]));
+      let k = 0;
+      const rebuilt = cur.map((t) =>
+        sibIds.has(t.id) ? byId.get(newOrder[k++])! : t,
+      );
+      setTodos(rebuilt);
+      void reorderTodos(newOrder).catch((err) => setError(errMsg(err)));
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -310,17 +322,14 @@ export function TodoView({
     }
   }
 
-  // 메인 목록 토글 — 상하위 완료 전파. 부모 체크 → 자식 전부, 자식 체크 → 부모 자동완료 재계산.
+  // 메인 목록 토글 — 다단계 완료 전파. 어떤 노드든 그 서브트리 전체를 같은 상태로 하향 전파하고,
+  // 위로는 조상 체인의 완료 상태를 재계산(자식이 모두 완료면 부모도 완료).
   // 전파 결과를 정확히 반영하려고 토글 후 reloadDay (정렬은 sort_order 고정이라 행 안 튐).
   async function toggle(t: Todo) {
     const next: 0 | 1 = t.done === 1 ? 0 : 1;
     try {
-      if (t.parent_id == null) {
-        await setDoneWithChildren(t.id, next);
-      } else {
-        await toggleTodo(t.id, next);
-        await recomputeParentDone(t.parent_id);
-      }
+      await setSubtreeDone(t.id, next);
+      await recomputeChainFrom(t.parent_id);
       await reloadDay();
       void reloadCounts();
     } catch (e) {
@@ -358,6 +367,8 @@ export function TodoView({
   async function remove(t: Todo) {
     try {
       await deleteTodo(t.id);
+      // 서브트리를 지웠으니 부모 완료 상태 재계산(마지막 미완료 자식이 사라졌을 수 있음)
+      await recomputeChainFrom(t.parent_id);
       refreshAll();
     } catch (e) {
       setError(errMsg(e));
@@ -381,7 +392,7 @@ export function TodoView({
     setBusy(true);
     try {
       await createTodo(content, selected, parentId);
-      await recomputeParentDone(parentId);
+      await recomputeChainFrom(parentId);
       setChildInput("");
       await reloadDay();
       void reloadCounts();
@@ -403,17 +414,16 @@ export function TodoView({
   const childrenOf = (pid: number) => todos.filter((t) => t.parent_id === pid);
   const doneTop = topLevel.filter((t) => t.done === 1).length;
 
-  function renderRow(t: Todo, opts?: { overdue?: boolean; child?: boolean }) {
+  function renderRow(t: Todo, opts?: { overdue?: boolean }) {
     const isOverdue = opts?.overdue ?? false;
-    const isChild = opts?.child ?? false;
-    const kids = !isOverdue && !isChild ? childrenOf(t.id) : [];
+    const kids = isOverdue ? [] : childrenOf(t.id);
     const kidsDone = kids.filter((k) => k.done === 1).length;
     return (
       <div
-        className={`todo-row ${t.done === 1 ? "done" : ""} ${isChild ? "todo-child" : ""}`}
+        className={`todo-row ${t.done === 1 ? "done" : ""}`}
         data-todo-id={t.id}
       >
-        {!isOverdue && !isChild && (
+        {!isOverdue && (
           <span
             className="todo-grip"
             title="드래그해서 순서 변경"
@@ -474,18 +484,16 @@ export function TodoView({
         ) : (
           // 메인 목록: 하위추가/편집/삭제는 hover 오버레이(레이아웃을 밀지 않음)
           <span className="row-actions" onClick={(e) => e.stopPropagation()}>
-            {!isChild && (
-              <button
-                className="icon-btn sm"
-                title="하위 추가"
-                onClick={() => {
-                  setAddingChildFor(t.id);
-                  setChildInput("");
-                }}
-              >
-                <Icon name="plus" size={13} />
-              </button>
-            )}
+            <button
+              className="icon-btn sm"
+              title="하위 추가"
+              onClick={() => {
+                setAddingChildFor(t.id);
+                setChildInput("");
+              }}
+            >
+              <Icon name="plus" size={13} />
+            </button>
             <button
               className="icon-btn sm"
               title="이름 변경"
@@ -501,6 +509,47 @@ export function TodoView({
               <Icon name="trash" size={13} />
             </button>
           </span>
+        )}
+      </div>
+    );
+  }
+
+  // 항목 유닛(항목 + 그 서브트리) 재귀 렌더. 각 유닛은 data-parent-id 로 형제 그룹을 표시(드래그용),
+  // depth>0 이면 marginLeft 로 들여쓴다(중첩이 겹쳐 단계마다 더 들어간다).
+  function renderUnit(node: Todo, depth: number) {
+    return (
+      <div
+        key={node.id}
+        className={`todo-unit ${dragId === node.id ? "dragging" : ""}`}
+        data-unit-id={node.id}
+        data-parent-id={node.parent_id == null ? "root" : String(node.parent_id)}
+        style={depth > 0 ? { marginLeft: INDENT } : undefined}
+      >
+        {renderRow(node)}
+        {childrenOf(node.id).map((c) => renderUnit(c, depth + 1))}
+        {addingChildFor === node.id && (
+          <div className="todo-row todo-subadd" style={{ marginLeft: INDENT }}>
+            <input
+              ref={childInputRef}
+              className="input todo-edit"
+              autoFocus
+              placeholder="하위 항목 — Enter 로 추가"
+              value={childInput}
+              onChange={(e) => setChildInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing) return;
+                if (e.key === "Enter") void addChild(node.id);
+                if (e.key === "Escape") {
+                  setAddingChildFor(null);
+                  setChildInput("");
+                }
+              }}
+              onBlur={() => {
+                setAddingChildFor(null);
+                setChildInput("");
+              }}
+            />
+          </div>
         )}
       </div>
     );
@@ -625,42 +674,7 @@ export function TodoView({
               이 날의 할 일이 없어요 — 위 입력창에 적고 Enter.
             </div>
           ) : (
-            topLevel.map((p) => (
-              <div
-                key={p.id}
-                className={`todo-unit ${dragId === p.id ? "dragging" : ""}`}
-                data-unit-id={p.id}
-              >
-                {renderRow(p)}
-                {childrenOf(p.id).map((c) => (
-                  <Fragment key={c.id}>{renderRow(c, { child: true })}</Fragment>
-                ))}
-                {addingChildFor === p.id && (
-                  <div className="todo-row todo-child todo-subadd">
-                    <input
-                      ref={childInputRef}
-                      className="input todo-edit"
-                      autoFocus
-                      placeholder="하위 항목 — Enter 로 추가"
-                      value={childInput}
-                      onChange={(e) => setChildInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.nativeEvent.isComposing) return;
-                        if (e.key === "Enter") void addChild(p.id);
-                        if (e.key === "Escape") {
-                          setAddingChildFor(null);
-                          setChildInput("");
-                        }
-                      }}
-                      onBlur={() => {
-                        setAddingChildFor(null);
-                        setChildInput("");
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            ))
+            topLevel.map((p) => renderUnit(p, 0))
           )}
         </div>
 

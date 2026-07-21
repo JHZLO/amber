@@ -2826,7 +2826,7 @@ body.resizing-col .todo-resizer::after {
 .todo-grip:active {
   cursor: grabbing;
 }
-/* 최상위 유닛(부모+자식 묶음) = 드래그 순서 조정의 단위. */
+/* 항목 유닛(항목 + 그 서브트리) = 드래그 재배치 단위(같은 형제 그룹 안). depth>0 은 marginLeft 로 들여씀. */
 .todo-unit {
   position: relative;
 }
@@ -2946,10 +2946,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   color: var(--text-3);
   text-decoration: line-through;
 }
-/* 상하위: 자식 행 들여쓰기 (부모 텍스트 아래 정렬) */
-.todo-child {
-  padding-left: 40px;
-}
+/* 중첩 들여쓰기는 .todo-unit 의 marginLeft(인라인, INDENT)로 단계마다 겹쳐 적용한다. */
 /* 부모 진행률 — 완료 하위/전체 (모노톤, tabular) */
 .todo-progress {
   flex-shrink: 0;
