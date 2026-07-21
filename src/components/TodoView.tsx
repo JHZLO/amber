@@ -454,7 +454,7 @@ export function TodoView({
         ) : (
           <span
             className="todo-text"
-            onClick={() => (isOverdue ? toggleOverdue(t) : toggle(t))}
+            onClick={() => (isOverdue ? toggleOverdue(t) : startEdit(t))}
           >
             {t.content}
           </span>

@@ -2939,8 +2939,12 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   font-size: 14px;
   line-height: 1.5;
   color: var(--text);
-  cursor: pointer;
+  cursor: text; /* 글자 클릭 = 인라인 편집 진입 (완료 토글은 체크박스) */
   transition: color 0.12s;
+}
+/* 밀린 스트립의 글자는 편집이 아니라 완료 토글이라 포인터 유지 */
+.todo-overdue-inner .todo-text {
+  cursor: pointer;
 }
 .todo-row.done .todo-text {
   color: var(--text-3);
