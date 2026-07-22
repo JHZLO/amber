@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/concepts.png" alt="Amber concept cards" width="960" />
+  <img src="docs/assets/hero.png" alt="Amber — markdown notes with inline AI Q&A" width="960" />
 </p>
 
 ## Features
