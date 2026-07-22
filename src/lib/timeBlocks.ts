@@ -7,12 +7,15 @@ import type { TimeBlock } from "../types";
 
 const now = () => Date.now();
 
-/** 특정 날짜의 블록. 시작 시각순 (idx_blocks_day 에 대응) */
-export async function listBlocks(date: string): Promise<TimeBlock[]> {
+/** 날짜 범위의 블록 (from <= date <= to). 날짜·시작 시각순 — 일(from=to)/주/월 뷰 공용 */
+export async function listBlocks(
+  from: string,
+  to: string,
+): Promise<TimeBlock[]> {
   const db = await getDb();
   return db.select<TimeBlock[]>(
-    `SELECT * FROM time_blocks WHERE date = $1 ORDER BY start_min, id`,
-    [date],
+    `SELECT * FROM time_blocks WHERE date BETWEEN $1 AND $2 ORDER BY date, start_min, id`,
+    [from, to],
   );
 }
 
@@ -33,16 +36,17 @@ export async function createBlock(
   return res.lastInsertId as number;
 }
 
-/** 이동/리사이즈 — 시간 범위 갱신 */
+/** 이동/리사이즈 — 시간 범위 갱신 (주 뷰에선 다른 날짜 컬럼으로도 이동) */
 export async function updateBlockTime(
   id: number,
+  date: string,
   startMin: number,
   endMin: number,
 ): Promise<void> {
   const db = await getDb();
   await db.execute(
-    `UPDATE time_blocks SET start_min = $1, end_min = $2, updated_at = $3 WHERE id = $4`,
-    [startMin, endMin, now(), id],
+    `UPDATE time_blocks SET date = $1, start_min = $2, end_min = $3, updated_at = $4 WHERE id = $5`,
+    [date, startMin, endMin, now(), id],
   );
 }
 

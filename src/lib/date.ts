@@ -43,6 +43,13 @@ export function addMonths(
 }
 
 /** 'YYYY-MM-DD' 가 속한 {year, month(1-12)} */
+/** 그 날짜가 속한 주의 시작(일요일) 'YYYY-MM-DD' — 미니 캘린더(일~토)와 같은 기준 */
+export function weekStartOf(s: string): string {
+  const d = parseLocalDate(s);
+  d.setDate(d.getDate() - d.getDay());
+  return localDateStr(d);
+}
+
 export function monthOf(s: string): { year: number; month: number } {
   const d = parseLocalDate(s);
   return { year: d.getFullYear(), month: d.getMonth() + 1 };

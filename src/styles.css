@@ -2596,8 +2596,8 @@ html.widget-root #root {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 9px 12px 8px;
+  gap: 8px;
+  padding: 6px 10px 6px 12px;
   border-bottom: 1px solid var(--border);
 }
 .day-tt-label {
@@ -2610,6 +2610,73 @@ html.widget-root #root {
   font-size: 11.5px;
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* 뷰 전환(일/주/월) — 공용 .segmented/.tab 을 좁은 헤더에 맞게 축소 */
+.day-tt-seg {
+  padding: 2px;
+}
+.day-tt-seg .tab {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+/* 주 뷰 요일·날짜 헤더 — 그리드 컬럼과 정렬(좌 시간라벨 46px + 우 10px inset) */
+.day-tt-days {
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+  padding: 4px 10px 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.tt-days-gutter {
+  width: 46px;
+  flex-shrink: 0;
+}
+.tt-day-cell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 3px 0 4px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  transition: background 0.12s;
+}
+.tt-day-cell:hover {
+  background: var(--surface-2);
+}
+.tt-day-cell.selected {
+  background: var(--surface-3);
+}
+.tt-day-dow {
+  font-size: 10px;
+  color: var(--text-3);
+}
+.tt-day-num {
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+  text-align: center;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.tt-day-cell.today .tt-day-num {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+}
+/* 주 뷰 컬럼 구분 세로선 */
+.tt-vline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--border);
+  pointer-events: none;
 }
 .day-tt-scroll {
   flex: 1;
@@ -2763,11 +2830,10 @@ html.widget-root #root {
   padding: 0;
   width: 100%;
 }
-/* '지금' 라인 — 모노톤(§2: 빨간 선 금지), 좌측 점 + 1px 라인 */
+/* '지금' 라인 — 모노톤(§2: 빨간 선 금지), 좌측 점 + 1px 라인. 좌표(left/width)는
+   오늘 컬럼에만 걸치도록 인라인 스타일로 준다(주 뷰에선 1/7 폭). */
 .tt-now {
   position: absolute;
-  left: -1px;
-  right: 0;
   border-top: 1px solid var(--text);
   z-index: 4;
   pointer-events: none;
@@ -2781,6 +2847,70 @@ html.widget-root #root {
   height: 6px;
   border-radius: 50%;
   background: var(--text);
+}
+/* 월 뷰 아젠다 — 그 달의 블록을 날짜별로 (읽기 전용, 클릭=날짜 선택) */
+.day-tt-agenda {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 10px 12px 12px;
+}
+.tt-ag-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 10px 2px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.tt-ag-date:hover {
+  color: var(--text);
+}
+.tt-ag-today {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+}
+.tt-ag-row {
+  display: flex;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.tt-ag-row:hover {
+  background: var(--surface-2);
+}
+.tt-ag-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.tt-ag-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tt-ag-row.done .tt-ag-title {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+.day-tt-empty {
+  padding: 14px 4px;
 }
 body.resizing-tt {
   cursor: ns-resize;
@@ -3559,7 +3689,9 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   .todo-overdue-caret,
   .todo-overdue-body,
   .tt-block,
-  .tt-del {
+  .tt-del,
+  .tt-day-cell,
+  .tt-ag-row {
     transition: none;
   }
   .report-caret {

@@ -35,15 +35,18 @@ import {
   dayRangeMs,
   formatDayLong,
   formatDayShort,
+  localDateStr,
   monthGridDates,
   monthOf,
+  parseLocalDate,
   shiftDay,
   todayStr,
+  weekStartOf,
 } from "../lib/date";
 import { Checkbox } from "../ui";
 import { Icon } from "../icons";
 import { MiniCalendar } from "./MiniCalendar";
-import { DayTimetable } from "./DayTimetable";
+import { DayTimetable, type TtView } from "./DayTimetable";
 import { DailyReportPanel } from "./DailyReportPanel";
 import { openConceptInApp } from "../lib/nav";
 import type { AppConfig } from "../lib/config";
@@ -53,6 +56,25 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const OVERDUE_LIMIT = 20;
 // 중첩 단계별 들여쓰기(px). 유닛 marginLeft 로 겹쳐 적용돼 단계마다 이만큼 더 들어간다.
 const INDENT = 24;
+
+// 타임테이블 뷰 모드 (일/주/월, localStorage 영속)
+const TT_VIEW_KEY = "amber.todo.tt-view";
+
+/** 뷰별 블록 로드 범위 [from, to] — 일=선택일, 주=일~토, 월=그 달 1일~말일 */
+function ttRange(view: TtView, selected: string): [string, string] {
+  if (view === "week") {
+    const start = weekStartOf(selected);
+    return [start, shiftDay(start, 6)];
+  }
+  if (view === "month") {
+    const d = parseLocalDate(selected);
+    return [
+      localDateStr(new Date(d.getFullYear(), d.getMonth(), 1)),
+      localDateStr(new Date(d.getFullYear(), d.getMonth() + 1, 0)),
+    ];
+  }
+  return [selected, selected];
+}
 
 // 캘린더 pane 너비(드래그 조절, localStorage 영속). 가로 비중은 사용자가 직접 정한다.
 const CAL_W_KEY = "amber.todo.cal-width";
@@ -76,6 +98,13 @@ export function TodoView({
 
   const [todos, setTodos] = useState<Todo[]>([]);
   const [blocks, setBlocks] = useState<TimeBlock[]>([]);
+  const [ttView, setTtView] = useState<TtView>(() => {
+    const s = localStorage.getItem(TT_VIEW_KEY);
+    return s === "week" || s === "month" ? s : "day";
+  });
+  useEffect(() => {
+    localStorage.setItem(TT_VIEW_KEY, ttView);
+  }, [ttView]);
   const [ttFocus, setTtFocus] = useState<{ min: number; nonce: number } | null>(
     null,
   );
@@ -255,7 +284,8 @@ export function TodoView({
       const today = todayStr();
       const rows = await listTodos(selected);
       setTodos(rows);
-      setBlocks(await listBlocks(selected));
+      const [ttFrom, ttTo] = ttRange(ttView, selected);
+      setBlocks(await listBlocks(ttFrom, ttTo));
       setOverdue(selected === today ? await listOverdueOpen(today) : []);
       const [start, end] = dayRangeMs(selected);
       setLearned(await conceptsLearnedOn(start, end));
@@ -263,7 +293,7 @@ export function TodoView({
     } catch (e) {
       setError(errMsg(e));
     }
-  }, [selected]);
+  }, [selected, ttView]);
 
   // 표시 중인 달 그리드 범위의 날짜별 개수 (캘린더 점·월 요약)
   const reloadCounts = useCallback(async () => {
@@ -405,7 +435,11 @@ export function TodoView({
         selected === todayStr()
           ? Math.min(Math.ceil(nowMinute() / 15) * 15, 1440 - 60)
           : 9 * 60;
-      const start = findFreeSlot(blocks, from, 60);
+      const start = findFreeSlot(
+        blocks.filter((b) => b.date === selected),
+        from,
+        60,
+      );
       await createBlock(selected, start, start + 60, "", t.id);
       setTtFocus({ min: start, nonce: Date.now() });
       await reloadDay();
@@ -610,14 +644,24 @@ export function TodoView({
           onToday={() => goDate(today)}
         />
         <DayTimetable
+          view={ttView}
+          onViewChange={setTtView}
           date={selected}
-          isToday={isToday}
+          days={
+            ttView === "week"
+              ? Array.from({ length: 7 }, (_, i) =>
+                  shiftDay(weekStartOf(selected), i),
+                )
+              : [selected]
+          }
+          today={today}
           active={active}
           blocks={blocks}
           todos={todos}
           focus={ttFocus}
           onChanged={() => void reloadDay()}
           onError={setError}
+          onSelectDate={goDate}
         />
       </aside>
 
