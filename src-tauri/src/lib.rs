@@ -79,6 +79,12 @@ pub fn run() {
             sql: include_str!("../migrations/0006_rename_invocations.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 7,
+            description: "add_time_blocks",
+            sql: include_str!("../migrations/0007_time_blocks.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

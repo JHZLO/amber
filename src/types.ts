@@ -65,6 +65,18 @@ export interface Todo {
   updated_at: number; // UTC ms
 }
 
+/** 시간 블록(타임테이블) — 선택 날짜의 시간 계획. 시간은 자정 기준 분(로컬 벽시계) */
+export interface TimeBlock {
+  id: number;
+  date: string; // 'YYYY-MM-DD' — 로컬 달력 날짜 (lib/date.ts)
+  start_min: number; // 자정 기준 분, 0~1435
+  end_min: number; // start_min < end_min <= 1440
+  title: string; // 연동 블록은 '' — 표시할 땐 연결된 할 일 내용을 미러
+  todo_id: number | null; // 연결된 할 일 (삭제 시 DB가 블록도 cascade)
+  created_at: number; // UTC ms
+  updated_at: number; // UTC ms
+}
+
 /** 캘린더 날짜별 개수 (점·월 요약용) */
 export interface DayTodoCount {
   due_date: string; // 'YYYY-MM-DD'

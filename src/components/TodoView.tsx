@@ -9,7 +9,7 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import type { DayTodoCount, Todo } from "../types";
+import type { DayTodoCount, TimeBlock, Todo } from "../types";
 import {
   createTodo,
   deleteTodo,
@@ -23,6 +23,12 @@ import {
   toggleTodo,
   updateTodoContent,
 } from "../lib/todos";
+import {
+  createBlock,
+  findFreeSlot,
+  listBlocks,
+  nowMinute,
+} from "../lib/timeBlocks";
 import { conceptsLearnedOn } from "../lib/db";
 import {
   addMonths,
@@ -37,6 +43,7 @@ import {
 import { Checkbox } from "../ui";
 import { Icon } from "../icons";
 import { MiniCalendar } from "./MiniCalendar";
+import { DayTimetable } from "./DayTimetable";
 import { DailyReportPanel } from "./DailyReportPanel";
 import { openConceptInApp } from "../lib/nav";
 import type { AppConfig } from "../lib/config";
@@ -68,6 +75,10 @@ export function TodoView({
   const [cursor, setCursor] = useState(() => monthOf(todayStr()));
 
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [blocks, setBlocks] = useState<TimeBlock[]>([]);
+  const [ttFocus, setTtFocus] = useState<{ min: number; nonce: number } | null>(
+    null,
+  );
   const [counts, setCounts] = useState<Record<string, DayTodoCount>>({});
   const [overdue, setOverdue] = useState<Todo[]>([]);
   const [overdueOpen, setOverdueOpen] = useState(false);
@@ -244,6 +255,7 @@ export function TodoView({
       const today = todayStr();
       const rows = await listTodos(selected);
       setTodos(rows);
+      setBlocks(await listBlocks(selected));
       setOverdue(selected === today ? await listOverdueOpen(today) : []);
       const [start, end] = dayRangeMs(selected);
       setLearned(await conceptsLearnedOn(start, end));
@@ -385,6 +397,23 @@ export function TodoView({
     }
   }
 
+  // 할 일을 타임테이블에 배치 — 다음 빈 슬롯에 1시간 블록 생성 후 그리로 스크롤.
+  // 오늘이면 지금 이후(15분 올림), 다른 날이면 09:00 부터 빈 자리를 찾는다.
+  async function scheduleTodo(t: Todo) {
+    try {
+      const from =
+        selected === todayStr()
+          ? Math.min(Math.ceil(nowMinute() / 15) * 15, 1440 - 60)
+          : 9 * 60;
+      const start = findFreeSlot(blocks, from, 60);
+      await createBlock(selected, start, start + 60, "", t.id);
+      setTtFocus({ min: start, nonce: Date.now() });
+      await reloadDay();
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  }
+
   // 하위 항목 추가 (부모 hover '+하위'). 추가 후 부모 완료 재계산 + 입력 유지(연속 추가)
   async function addChild(parentId: number) {
     const content = childInput.trim();
@@ -496,6 +525,13 @@ export function TodoView({
             </button>
             <button
               className="icon-btn sm"
+              title="시간표에 넣기"
+              onClick={() => void scheduleTodo(t)}
+            >
+              <Icon name="clock" size={13} />
+            </button>
+            <button
+              className="icon-btn sm"
               title="이름 변경"
               onClick={() => startEdit(t)}
             >
@@ -572,6 +608,16 @@ export function TodoView({
           onPrevMonth={() => setCursor((c) => addMonths(c, -1))}
           onNextMonth={() => setCursor((c) => addMonths(c, 1))}
           onToday={() => goDate(today)}
+        />
+        <DayTimetable
+          date={selected}
+          isToday={isToday}
+          active={active}
+          blocks={blocks}
+          todos={todos}
+          focus={ttFocus}
+          onChanged={() => void reloadDay()}
+          onError={setError}
         />
       </aside>
 

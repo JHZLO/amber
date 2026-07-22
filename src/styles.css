@@ -2572,7 +2572,208 @@ html.widget-root #root {
   min-width: 0; /* 캘린더를 넓게 드래그해도 오른쪽 목록이 넘치지 않게 */
 }
 .todo-cal-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 캘린더는 상단 고정, 스크롤은 타임테이블 내부로 위임 */
+}
+.todo-cal-pane .todo-cal {
+  flex-shrink: 0;
+}
+
+/* ---- 데이 타임테이블 (캘린더 하단, 구글 캘린더식 time-blocking — DayTimetable.tsx) ---- */
+.day-tt {
+  --tt-hour: 44px; /* px/시간 — DayTimetable.tsx TT_HOUR_H 와 동기 */
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+}
+.day-tt-scroll {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+}
+.day-tt-inner {
+  position: relative;
+  height: calc(var(--tt-hour) * 24 + 16px);
+}
+/* 시간 라벨 열 (좌측 고정 폭) */
+.day-tt-hours {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 46px;
+}
+.tt-hlabel {
+  position: absolute;
+  right: 8px;
+  transform: translateY(-50%);
+  font-size: 10.5px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+/* 시간 그리드 — 1px 시간선은 repeating-gradient 로 (엘리먼트 없이) */
+.day-tt-grid {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 46px;
+  right: 10px;
+  border-left: 1px solid var(--border);
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--border) 0 1px,
+    transparent 1px var(--tt-hour)
+  );
+}
+/* 시간 블록 — 미완료=아웃라인+좌측 바(선택 시그니처 §3), 진행 중=primary 필, 완료=흐림+취소선 */
+.tt-block {
+  position: absolute;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: inset 2px 0 0 var(--text);
+  padding: 3px 8px 3px 10px;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  cursor: grab;
+  user-select: none;
+  transition: background 0.12s, box-shadow 0.12s;
+}
+.tt-block:hover {
+  background: var(--surface-2);
+}
+.tt-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tt-block.untitled .tt-title {
+  color: var(--text-3);
+}
+.tt-time {
+  font-size: 10px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.tt-block.now {
+  background: var(--primary-bg);
+  border-color: var(--primary-bg);
+  color: var(--primary-fg);
+  box-shadow: none;
+}
+.tt-block.now:hover {
+  background: var(--primary-bg-hover);
+}
+.tt-block.now .tt-time {
+  color: var(--primary-fg);
+  opacity: 0.72;
+}
+.tt-block.done {
+  color: var(--text-3);
+  box-shadow: inset 2px 0 0 var(--text-3);
+}
+.tt-block.done .tt-title {
+  text-decoration: line-through;
+}
+.tt-block.dragging {
+  box-shadow: var(--shadow);
+  z-index: 6;
+  cursor: grabbing;
+}
+/* 생성 고스트 — 드래그 중 범위 미리보기 */
+.tt-ghost {
+  border-style: dashed;
+  background: var(--surface-2);
+  box-shadow: none;
+  pointer-events: none;
+  z-index: 5;
+}
+/* 아래 가장자리 리사이즈 핸들 */
+.tt-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 7px;
+  cursor: ns-resize;
+}
+/* hover 삭제 (파괴 시그니처는 hover 에만 §2) */
+.tt-del {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: inline-flex;
+  padding: 2px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-3);
+  opacity: 0;
+  transition: opacity 0.12s;
+  cursor: pointer;
+}
+.tt-block:hover .tt-del {
+  opacity: 1;
+}
+.tt-del:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.tt-block.now .tt-del {
+  color: var(--primary-fg);
+}
+/* 블록 제목 인라인 편집 */
+.tt-edit {
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+  padding: 0;
+  width: 100%;
+}
+/* '지금' 라인 — 모노톤(§2: 빨간 선 금지), 좌측 점 + 1px 라인 */
+.tt-now {
+  position: absolute;
+  left: -1px;
+  right: 0;
+  border-top: 1px solid var(--text);
+  z-index: 4;
+  pointer-events: none;
+}
+.tt-now::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: -3.5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text);
+}
+/* 하단 계획 합계 (detail-meta 톤) */
+.day-tt-meta {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+body.resizing-tt {
+  cursor: ns-resize;
+}
+body.resizing-tt * {
+  user-select: none !important;
 }
 /* 드래그 핸들 — pane 경계에 얹힌 얇은 선(평소 숨김, hover/드래그 시 강조) */
 .todo-resizer {
@@ -3354,7 +3555,9 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   .todo-row .row-actions,
   .todo-grip,
   .todo-overdue-caret,
-  .todo-overdue-body {
+  .todo-overdue-body,
+  .tt-block,
+  .tt-del {
     transition: none;
   }
   .report-caret {

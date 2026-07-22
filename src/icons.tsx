@@ -33,7 +33,8 @@ export type IconName =
   | "message"
   | "calendar-check"
   | "copy"
-  | "grip";
+  | "grip"
+  | "clock";
 
 const PATHS: Record<IconName, ReactNode> = {
   "chevron-left": <path d="M15 18l-6-6 6-6" />,
@@ -47,6 +48,12 @@ const PATHS: Record<IconName, ReactNode> = {
   ),
   minus: <path d="M5 12h14" />,
   check: <path d="M20 6 9 17l-5-5" />,
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </>
+  ),
   pencil: <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />,
   trash: (
     <>
