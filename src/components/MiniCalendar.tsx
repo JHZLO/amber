@@ -6,7 +6,6 @@ import {
   WEEKDAYS_KO,
   formatMonthTitle,
   monthGridDates,
-  monthOf,
   parseLocalDate,
 } from "../lib/date";
 import { Icon } from "../icons";
@@ -33,17 +32,6 @@ export function MiniCalendar({
   onToday: () => void;
 }) {
   const cells = monthGridDates(year, month);
-
-  // 월 요약: 이 달(인접 월 제외) 항목 합계
-  let monthTotal = 0;
-  let monthDone = 0;
-  for (const [date, c] of Object.entries(counts)) {
-    const m = monthOf(date);
-    if (m.year === year && m.month === month) {
-      monthTotal += c.total;
-      monthDone += c.done;
-    }
-  }
 
   return (
     <div className="todo-cal">
@@ -93,13 +81,6 @@ export function MiniCalendar({
             </button>
           );
         })}
-      </div>
-
-      <div className="cal-month-sum">
-        <span>이번 달</span>
-        <span>
-          {monthDone} / {monthTotal}
-        </span>
       </div>
     </div>
   );

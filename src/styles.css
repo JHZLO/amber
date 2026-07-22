@@ -2587,7 +2587,29 @@ html.widget-root #root {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  margin-top: 12px;
   border-top: 1px solid var(--border);
+}
+/* 섹션 헤더 밴드 — 캘린더↔시간축 전환을 알리는 조용한 구분(eyebrow 라벨 + 계획 합계).
+   스크롤 콘텐츠가 이 밴드 밑으로 지나가도록 border-bottom 으로 뷰포트를 프레임한다. */
+.day-tt-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.day-tt-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+}
+.day-tt-plan {
+  font-size: 11.5px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
 }
 .day-tt-scroll {
   flex: 1;
@@ -2760,15 +2782,6 @@ html.widget-root #root {
   border-radius: 50%;
   background: var(--text);
 }
-/* 하단 계획 합계 (detail-meta 톤) */
-.day-tt-meta {
-  flex-shrink: 0;
-  padding: 6px 12px;
-  border-top: 1px solid var(--border);
-  font-size: 11.5px;
-  color: var(--text-3);
-  font-variant-numeric: tabular-nums;
-}
 body.resizing-tt {
   cursor: ns-resize;
 }
@@ -2930,17 +2943,6 @@ body.resizing-col .todo-resizer::after {
 .cal-dot.none {
   visibility: hidden;
 }
-.cal-month-sum {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: var(--text-2);
-  font-variant-numeric: tabular-nums;
-}
-
 /* 우: 상세 헤더(날짜 + 이동) — 기본 detail-head 는 flex-start 라 여기선 center + wrap */
 .detail-head.todo-head {
   align-items: center;

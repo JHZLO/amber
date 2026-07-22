@@ -286,9 +286,20 @@ export function DayTimetable({
 
   const laid = layoutLanes(blocks);
   const plannedMin = blocks.reduce((s, b) => s + (b.end_min - b.start_min), 0);
+  const plannedLabel =
+    plannedMin > 0
+      ? `계획 ${Math.floor(plannedMin / 60) > 0 ? `${Math.floor(plannedMin / 60)}시간` : ""}${
+          plannedMin % 60 > 0 ? ` ${plannedMin % 60}분` : ""
+        }`.trim()
+      : null;
 
   return (
     <div className="day-tt">
+      {/* 섹션 헤더 밴드 — 캘린더와 시간축의 구분선 역할(라벨 + 계획 합계) */}
+      <div className="day-tt-head">
+        <span className="day-tt-label">타임테이블</span>
+        {plannedLabel && <span className="day-tt-plan">{plannedLabel}</span>}
+      </div>
       <div className="day-tt-scroll" ref={scrollRef}>
         <div className="day-tt-inner">
           <div className="day-tt-hours" aria-hidden="true">
@@ -388,12 +399,6 @@ export function DayTimetable({
           </div>
         </div>
       </div>
-      {plannedMin > 0 && (
-        <div className="day-tt-meta">
-          계획 {Math.floor(plannedMin / 60) > 0 ? `${Math.floor(plannedMin / 60)}시간 ` : ""}
-          {plannedMin % 60 > 0 ? `${plannedMin % 60}분` : ""}
-        </div>
-      )}
     </div>
   );
 }
