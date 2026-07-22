@@ -33,6 +33,8 @@ dist-ssr
 .claude/
 .codex/
 .gemini/
+.agents/
+skills-lock.json
 /AGENTS.md
 /CLAUDE.md
 
