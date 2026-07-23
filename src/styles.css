@@ -3217,9 +3217,10 @@ body.resizing-col .todo-resizer::after {
 .todo-unit {
   position: relative;
 }
-/* 트리 드래그(세로=위치·가로=깊이): 원본(서브트리째)은 자리에 흐리게 — 파일 트리와 동일 문법(§8) */
-.todo-unit.dragging {
-  opacity: 0.35;
+/* 트리 드래그(세로=위치·가로=깊이): 원본(서브트리째)은 접히고, 삽입 지점 아래 행들이
+   실시간으로 밀려 gap 을 연다. 집은 것은 오버레이가 커서 1:1 추적(§8). */
+.todo-listing.reordering .todo-row {
+  transition: transform 0.18s var(--ease-out);
 }
 /* 커서를 1:1 따라오는 행 복제 오버레이 (body 포탈, 위치는 인라인 transform) */
 .todo-drag-overlay {
@@ -3773,6 +3774,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   .cal-num,
   .cal-title,
   .todo-row,
+  .todo-listing.reordering .todo-row,
   .todo-text,
   .todo-row .row-actions,
   .todo-grip,

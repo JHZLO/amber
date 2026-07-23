@@ -121,7 +121,6 @@ export function TodoView({
   const [childInput, setChildInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dragId, setDragId] = useState<number | null>(null);
 
   const quickRef = useRef<HTMLInputElement>(null);
   const childInputRef = useRef<HTMLInputElement>(null);
@@ -168,10 +167,11 @@ export function TodoView({
   }
 
   // 할 일 트리 드래그 (포인터 기반 — WKWebView 에서 HTML5 DnD 보다 안정적).
-  // Todoist/Notion 문법: **세로 = 삽입 위치, 가로 = 깊이(들여쓰기)**. 한 제스처로 재정렬과
+  // Todoist 문법: **세로 = 삽입 위치, 가로 = 깊이(들여쓰기)**. 한 제스처로 재정렬과
   // 부모 변경(하위로 넣기·꺼내기·다른 부모로)을 모두 처리한다.
-  // 파일 트리 규약(§8) 재사용: 원본(서브트리째)은 자리에 흐리게, 행 복제 오버레이가 커서를
-  // 1:1 로 따라오고, 깊이만큼 들여쓴 2px 삽입선이 떨어질 곳을 보여준다. 커밋은 놓을 때 한 번.
+  // 피드백: 원본(서브트리째)은 접히고, 삽입 지점 아래 행들이 **실시간으로 밀려 gap 을 연다**
+  // (0.18s ease-out). 행 복제 오버레이가 커서를 1:1 로 따라오고, gap 안의 깊이만큼 들여쓴
+  // 2px 삽입선이 떨어질 곳을 보여준다. 드래그 중 리렌더 없이 transform 명령형, 커밋은 놓을 때 한 번.
   function startDrag(e: ReactMouseEvent, id: number) {
     e.preventDefault();
     const listEl = listRef.current;
@@ -196,18 +196,24 @@ export function TodoView({
     const subtree = new Set<number>([id]);
     for (const r of rows) if (r.parent_id != null && subtree.has(r.parent_id)) subtree.add(r.id);
 
-    // DOM 실측 (메인 목록의 실제 행만 — 문서 순서 = rows 순서)
-    const rects = new Map<number, DOMRect>();
+    // 행 요소 맵 (실측은 원본을 접은 뒤 beginVisuals 에서 — 접힘 reflow 반영 좌표가 필요)
+    const els = new Map<number, HTMLElement>();
     for (const el of Array.from(
       listEl.querySelectorAll<HTMLElement>(".todo-row[data-todo-id]"),
     )) {
-      rects.set(Number(el.dataset.todoId), el.getBoundingClientRect());
+      els.set(Number(el.dataset.todoId), el);
     }
-    const srcRect = rects.get(id);
-    if (!srcRect) return;
+    const srcRowEl = els.get(id);
+    const srcUnitEl = listEl.querySelector<HTMLElement>(
+      `.todo-unit[data-unit-id="${id}"]`,
+    );
+    if (!srcRowEl || !srcUnitEl) return;
+    const srcRect = srcRowEl.getBoundingClientRect(); // 접기 전 — 오버레이 크기/grab 오프셋용
+    const gapH = srcRect.height; // 서브트리는 오버레이 칩(+N)으로 접히므로 gap 은 한 행 높이
     // 삽입 후보 = 서브트리 제외 행들 (세로 순서 유지)
-    const others = rows.filter((r) => !subtree.has(r.id) && rects.has(r.id));
-    const listRect = listEl.getBoundingClientRect();
+    const others = rows.filter((r) => !subtree.has(r.id) && els.has(r.id));
+    const rects = new Map<number, DOMRect>();
+    let listRect = listEl.getBoundingClientRect();
 
     const startX = e.clientX;
     const startY = e.clientY;
@@ -220,7 +226,13 @@ export function TodoView({
 
     const beginVisuals = () => {
       document.body.classList.add("dragging-rows");
-      setDragId(id); // 원본(서브트리째) 흐림 — renderUnit 이 .dragging 부여
+      listEl.classList.add("reordering"); // 드래그 중에만 밀림 트랜지션 활성
+      // 원본(서브트리째) 접기 → 아래 행들이 자연 reflow 로 올라온 좌표를 실측
+      srcUnitEl.style.display = "none";
+      for (const r of others) {
+        rects.set(r.id, els.get(r.id)!.getBoundingClientRect());
+      }
+      listRect = listEl.getBoundingClientRect();
       // 커서를 따라오는 행 복제 오버레이 (본문 + 자손 수 칩)
       overlay = document.createElement("div");
       overlay.className = "todo-drag-overlay";
@@ -245,7 +257,7 @@ export function TodoView({
     const apply = (clientX: number, clientY: number) => {
       if (!overlay || !line) return;
       overlay.style.transform = `translate(${clientX - grabX}px, ${clientY - grabY}px)`;
-      // 삽입 index: 커서 Y 가 중심을 지난 행 수 (others 는 세로 정렬 상태)
+      // 삽입 index: 커서 Y 가 중심을 지난 행 수 (others 는 세로 정렬 상태, 접힘 후 좌표)
       let idx = 0;
       for (const r of others) {
         const rc = rects.get(r.id)!;
@@ -260,11 +272,16 @@ export function TodoView({
       const desired = srcDepth + Math.round((clientX - startX) / INDENT);
       const depth = Math.max(minD, Math.min(maxD, desired));
       slot = { idx, depth };
-      // 삽입선: 슬롯 경계 Y + 깊이만큼 들여쓴 왼쪽 (listing 좌표계)
-      const y = above
-        ? rects.get(above.id)!.bottom
-        : below
-          ? rects.get(below.id)!.top
+      // 밀림: 슬롯 아래 행 전부 gap 높이만큼 내려 자리를 비운다 (트랜지션은 .reordering CSS)
+      for (let j = 0; j < others.length; j++) {
+        const el = els.get(others[j].id)!;
+        el.style.transform = j >= idx ? `translateY(${gapH}px)` : "";
+      }
+      // 삽입선: 열린 gap 의 세로 중앙 + 깊이만큼 들여쓴 왼쪽 (listing 좌표계)
+      const y = below
+        ? rects.get(below.id)!.top + gapH / 2
+        : above
+          ? rects.get(above.id)!.bottom + 4
           : listRect.top + 2;
       line.style.top = `${y - listRect.top - 1}px`;
       line.style.left = `${10 + depth * INDENT}px`;
@@ -287,9 +304,15 @@ export function TodoView({
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       document.body.classList.remove("dragging-rows");
+      // 트랜지션을 먼저 끄고(즉시 스냅) 밀림 transform 제거 + 원본 복원 → reload 결과가 정본
+      listEl.classList.remove("reordering");
+      for (const r of others) {
+        const el = els.get(r.id);
+        if (el) el.style.transform = "";
+      }
+      srcUnitEl.style.display = "";
       overlay?.remove();
       line?.remove();
-      setDragId(null);
       if (!moved || !slot) return;
 
       const { idx, depth } = slot;
@@ -651,7 +674,7 @@ export function TodoView({
     return (
       <div
         key={node.id}
-        className={`todo-unit ${dragId === node.id ? "dragging" : ""}`}
+        className="todo-unit"
         data-unit-id={node.id}
         data-parent-id={node.parent_id == null ? "root" : String(node.parent_id)}
         style={depth > 0 ? { marginLeft: INDENT } : undefined}
