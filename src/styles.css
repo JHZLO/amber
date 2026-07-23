@@ -3176,6 +3176,7 @@ body.resizing-col .todo-resizer::after {
 
 /* 목록 */
 .todo-listing {
+  position: relative; /* 드래그 삽입선(.todo-drop-line)의 좌표 기준 */
   display: flex;
   flex-direction: column;
 }
@@ -3216,23 +3217,60 @@ body.resizing-col .todo-resizer::after {
 .todo-unit {
   position: relative;
 }
-/* 드래그 중 밀려나는 유닛만 부드럽게 이동 (집은 유닛은 인라인 transition:none 으로 1:1 추적).
-   드롭 때 .reordering 을 떼면 트랜지션이 사라져 최종 배열로 즉시 스냅 — 재배치와 겹쳐 튀는 잔상 방지. */
-.todo-listing.reordering .todo-unit {
-  transition: transform 0.18s var(--ease-out);
-}
-/* 드래그로 집어 든 유닛 — 커서를 따라 "들린 채" 움직인다(이동량은 인라인 transform).
-   노션처럼 솔리드 배경 + 그림자로 들린 느낌. 흐려지지 않는다 = 지금 쥐고 있는 대상 */
+/* 트리 드래그(세로=위치·가로=깊이): 원본(서브트리째)은 자리에 흐리게 — 파일 트리와 동일 문법(§8) */
 .todo-unit.dragging {
+  opacity: 0.35;
+}
+/* 커서를 1:1 따라오는 행 복제 오버레이 (body 포탈, 위치는 인라인 transform) */
+.todo-drag-overlay {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
   background: var(--surface);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
   box-shadow: var(--shadow);
-  z-index: 5;
-  cursor: grabbing;
+  font-size: 14px;
+  pointer-events: none;
 }
-.todo-unit.dragging .todo-grip {
-  opacity: 1;
-  color: var(--text);
+.todo-drag-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.todo-drag-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-variant-numeric: tabular-nums;
+}
+/* 삽입선 — 세로 위치 = 슬롯, 왼쪽 들여쓰기 = 선택한 깊이. 좌측 점으로 시작점 표시 */
+.todo-drop-line {
+  position: absolute;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--text);
+  z-index: 6;
+  pointer-events: none;
+}
+.todo-drop-line::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text);
 }
 body.dragging-rows {
   cursor: grabbing;
@@ -3735,7 +3773,6 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   .cal-num,
   .cal-title,
   .todo-row,
-  .todo-listing.reordering .todo-unit,
   .todo-text,
   .todo-row .row-actions,
   .todo-grip,
@@ -3761,7 +3798,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   }
 }
 /* 드래그로 들려 있는 요소 — 모션이 임박했음을 컴포지터에 힌트 */
-.todo-unit.dragging,
+.todo-drag-overlay,
 .tt-block.dragging,
 .tree-drag-overlay {
   will-change: transform;

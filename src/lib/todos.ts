@@ -54,6 +54,19 @@ export async function createTodo(
   return res.lastInsertId as number;
 }
 
+/** 드래그 트리 이동: 부모 변경 (하위로 넣기·상위로 꺼내기·다른 부모로).
+ *  순환(자기 서브트리 안으로) 방지는 호출부(UI)가 후보에서 제외하는 방식으로 보장한다. */
+export async function reparentTodo(
+  id: number,
+  parentId: number | null,
+): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `UPDATE todos SET parent_id = $1, updated_at = $2 WHERE id = $3`,
+    [parentId, now(), id],
+  );
+}
+
 /** 드래그로 정한 순서를 저장 — orderedIds 의 위치(0..n)를 각 항목의 sort_order 로 */
 export async function reorderTodos(orderedIds: number[]): Promise<void> {
   if (!orderedIds.length) return;

@@ -19,6 +19,7 @@ import {
   moveTodos,
   recomputeChainFrom,
   reorderTodos,
+  reparentTodo,
   setSubtreeDone,
   toggleTodo,
   updateTodoContent,
@@ -166,113 +167,173 @@ export function TodoView({
     window.addEventListener("mouseup", onUp);
   }
 
-  // 할 일 순서 드래그 (포인터 기반 — WKWebView 에서 HTML5 DnD 보다 안정적).
-  // 노션식: 집어 든 유닛(항목+그 서브트리)이 커서를 따라 "들린 채" 이동하고, 나머지 유닛은
-  // 유닛 높이만큼 밀려 자리를 비운다. 재배치는 "같은 형제 그룹 안"으로만 한다(부모는 안 바뀜).
-  // 드래그 중엔 배열을 건드리지 않고 transform 만 쓰고, 놓을 때만 실제 순서를 커밋한다.
+  // 할 일 트리 드래그 (포인터 기반 — WKWebView 에서 HTML5 DnD 보다 안정적).
+  // Todoist/Notion 문법: **세로 = 삽입 위치, 가로 = 깊이(들여쓰기)**. 한 제스처로 재정렬과
+  // 부모 변경(하위로 넣기·꺼내기·다른 부모로)을 모두 처리한다.
+  // 파일 트리 규약(§8) 재사용: 원본(서브트리째)은 자리에 흐리게, 행 복제 오버레이가 커서를
+  // 1:1 로 따라오고, 깊이만큼 들여쓴 2px 삽입선이 떨어질 곳을 보여준다. 커밋은 놓을 때 한 번.
   function startDrag(e: ReactMouseEvent, id: number) {
     e.preventDefault();
     const listEl = listRef.current;
     if (!listEl) return;
-    const node = todosRef.current.find((t) => t.id === id);
+    const cur = todosRef.current;
+    const node = cur.find((t) => t.id === id);
     if (!node) return;
 
-    // 재배치 단위 = 드래그한 항목의 형제 그룹(같은 parent_id). data-parent-id 로 그 그룹만 실측.
-    const pkey = node.parent_id == null ? "root" : String(node.parent_id);
-    const units = Array.from(
-      listEl.querySelectorAll<HTMLElement>(
-        `.todo-unit[data-parent-id="${pkey}"]`,
-      ),
-    ).map((el) => {
-      const r = el.getBoundingClientRect();
-      return { el, top: r.top, height: r.height, center: r.top + r.height / 2 };
-    });
-    const fromIndex = units.findIndex(
-      (u) => Number(u.el.dataset.unitId) === id,
-    );
-    if (fromIndex === -1) return;
-    const dragged = units[fromIndex];
-    const draggedH = dragged.height;
-    const startY = e.clientY;
-    // 집은 유닛이 형제 그룹 범위를 벗어나 날아가지 않게 clamp 할 상하 경계
-    const groupTop = Math.min(...units.map((u) => u.top));
-    const groupBottom = Math.max(...units.map((u) => u.top + u.height));
-
-    setDragId(id);
-    document.body.classList.add("dragging-rows");
-    listEl.classList.add("reordering"); // 드래그 중에만 밀림 트랜지션 활성
-
-    // 들어올린 유닛의 커서 이동량(dy)으로 삽입 위치를 계산하고 각 유닛에 transform 적용.
-    let dropIndex = fromIndex;
-    const apply = (clientY: number) => {
-      // 커서를 따라 이동하되, 형제 그룹 범위를 벗어나지 않게 clamp
-      const dy = Math.max(
-        groupTop - dragged.top,
-        Math.min(groupBottom - (dragged.top + draggedH), clientY - startY),
-      );
-      const currentCenter = dragged.center + dy;
-      // 들어올린 유닛의 중심이 넘어선 다른 유닛 수 = 재배치 후 앞에 올 유닛 수 = 삽입 index
-      let above = 0;
-      for (let i = 0; i < units.length; i++) {
-        if (i !== fromIndex && currentCenter > units[i].center) above++;
-      }
-      dropIndex = above;
-      for (let i = 0; i < units.length; i++) {
-        const { el } = units[i];
-        if (i === fromIndex) {
-          el.style.transition = "none"; // 집은 유닛은 커서를 지연 없이 1:1 추적
-          el.style.transform = `translateY(${dy}px)`;
-          el.style.zIndex = "5";
-          continue;
-        }
-        // from~drop 사이 유닛만 유닛 높이만큼 밀어 gap 을 연다 (CSS 트랜지션으로 부드럽게)
-        const shift =
-          above > fromIndex && i > fromIndex && i <= above
-            ? -draggedH
-            : above < fromIndex && i >= above && i < fromIndex
-              ? draggedH
-              : 0;
-        el.style.transition = "";
-        el.style.transform = shift ? `translateY(${shift}px)` : "";
-        el.style.zIndex = "";
+    // 렌더와 동일한 순서의 플랫 행 목록 (depth 포함)
+    type RowMeta = { id: number; parent_id: number | null; depth: number };
+    const rows: RowMeta[] = [];
+    const walk = (parent: number | null, depth: number) => {
+      for (const t of cur.filter((x) => (x.parent_id ?? null) === parent)) {
+        rows.push({ id: t.id, parent_id: t.parent_id ?? null, depth });
+        walk(t.id, depth + 1);
       }
     };
-    apply(startY);
+    walk(null, 0);
+    const srcDepth = rows.find((r) => r.id === id)?.depth ?? 0;
 
-    const onMove = (ev: MouseEvent) => apply(ev.clientY);
+    // 드래그 서브트리 — 자기 자신/자손 안으로는 못 들어간다 (후보에서 제외 = 순환 방지)
+    const subtree = new Set<number>([id]);
+    for (const r of rows) if (r.parent_id != null && subtree.has(r.parent_id)) subtree.add(r.id);
+
+    // DOM 실측 (메인 목록의 실제 행만 — 문서 순서 = rows 순서)
+    const rects = new Map<number, DOMRect>();
+    for (const el of Array.from(
+      listEl.querySelectorAll<HTMLElement>(".todo-row[data-todo-id]"),
+    )) {
+      rects.set(Number(el.dataset.todoId), el.getBoundingClientRect());
+    }
+    const srcRect = rects.get(id);
+    if (!srcRect) return;
+    // 삽입 후보 = 서브트리 제외 행들 (세로 순서 유지)
+    const others = rows.filter((r) => !subtree.has(r.id) && rects.has(r.id));
+    const listRect = listEl.getBoundingClientRect();
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const grabX = e.clientX - srcRect.left;
+    const grabY = e.clientY - srcRect.top;
+    let moved = false;
+    let overlay: HTMLDivElement | null = null;
+    let line: HTMLDivElement | null = null;
+    let slot: { idx: number; depth: number } | null = null;
+
+    const beginVisuals = () => {
+      document.body.classList.add("dragging-rows");
+      setDragId(id); // 원본(서브트리째) 흐림 — renderUnit 이 .dragging 부여
+      // 커서를 따라오는 행 복제 오버레이 (본문 + 자손 수 칩)
+      overlay = document.createElement("div");
+      overlay.className = "todo-drag-overlay";
+      overlay.style.width = `${Math.min(srcRect.width, 420)}px`;
+      const label = document.createElement("span");
+      label.className = "todo-drag-label";
+      label.textContent = node.content;
+      overlay.appendChild(label);
+      const descCount = subtree.size - 1;
+      if (descCount > 0) {
+        const chip = document.createElement("span");
+        chip.className = "todo-drag-count";
+        chip.textContent = `+${descCount}`;
+        overlay.appendChild(chip);
+      }
+      document.body.appendChild(overlay);
+      line = document.createElement("div");
+      line.className = "todo-drop-line";
+      listEl.appendChild(line);
+    };
+
+    const apply = (clientX: number, clientY: number) => {
+      if (!overlay || !line) return;
+      overlay.style.transform = `translate(${clientX - grabX}px, ${clientY - grabY}px)`;
+      // 삽입 index: 커서 Y 가 중심을 지난 행 수 (others 는 세로 정렬 상태)
+      let idx = 0;
+      for (const r of others) {
+        const rc = rects.get(r.id)!;
+        if (clientY > rc.top + rc.height / 2) idx++;
+        else break;
+      }
+      const above = others[idx - 1] ?? null;
+      const below = others[idx] ?? null;
+      // 유효 깊이: 아래 행의 깊이 이상(그 행의 부모를 뺏지 않게), 위 행의 깊이+1 이하(그 행의 하위까지)
+      const maxD = above ? above.depth + 1 : 0;
+      const minD = below ? below.depth : 0;
+      const desired = srcDepth + Math.round((clientX - startX) / INDENT);
+      const depth = Math.max(minD, Math.min(maxD, desired));
+      slot = { idx, depth };
+      // 삽입선: 슬롯 경계 Y + 깊이만큼 들여쓴 왼쪽 (listing 좌표계)
+      const y = above
+        ? rects.get(above.id)!.bottom
+        : below
+          ? rects.get(below.id)!.top
+          : listRect.top + 2;
+      line.style.top = `${y - listRect.top - 1}px`;
+      line.style.left = `${10 + depth * INDENT}px`;
+      line.style.right = "8px";
+    };
+
+    const onMove = (ev: MouseEvent) => {
+      if (!moved) {
+        if (
+          Math.abs(ev.clientY - startY) < 5 &&
+          Math.abs(ev.clientX - startX) < 5
+        )
+          return;
+        moved = true;
+        beginVisuals();
+      }
+      apply(ev.clientX, ev.clientY);
+    };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       document.body.classList.remove("dragging-rows");
-      // 트랜지션을 먼저 끄고(즉시 스냅) 인라인 transform 제거 → setTodos 재정렬 결과가 정본
-      listEl.classList.remove("reordering");
-      for (const u of units) {
-        u.el.style.transition = "";
-        u.el.style.transform = "";
-        u.el.style.zIndex = "";
-      }
+      overlay?.remove();
+      line?.remove();
       setDragId(null);
+      if (!moved || !slot) return;
 
-      const cur = todosRef.current;
-      // 같은 형제 그룹 안에서만 재배치 (parent_id 동일). 자손 서브트리는 렌더가 id 기준
-      // 재귀라 자동으로 따라온다 — flat 배열에선 형제들의 자리만 새 순서로 바꿔 끼운다.
-      const siblings = cur.filter(
-        (t) => (t.parent_id ?? null) === (node.parent_id ?? null),
-      );
-      const from = siblings.findIndex((t) => t.id === id);
-      if (from === -1 || dropIndex === from) return; // 제자리면 커밋 생략
-      const nextSibs = siblings.slice();
-      const [moved] = nextSibs.splice(from, 1);
-      nextSibs.splice(dropIndex, 0, moved);
-      const newOrder = nextSibs.map((t) => t.id);
-      const sibIds = new Set(siblings.map((t) => t.id));
-      const byId = new Map(cur.map((t) => [t.id, t]));
-      let k = 0;
-      const rebuilt = cur.map((t) =>
-        sibIds.has(t.id) ? byId.get(newOrder[k++])! : t,
-      );
-      setTodos(rebuilt);
-      void reorderTodos(newOrder).catch((err) => setError(errMsg(err)));
+      const { idx, depth } = slot;
+      // 새 부모 = 슬롯 위쪽에서 가장 가까운 depth-1 행 (depth 0 이면 최상위)
+      let newParent: number | null = null;
+      if (depth > 0) {
+        for (let i = idx - 1; i >= 0; i--) {
+          if (others[i].depth === depth - 1) {
+            newParent = others[i].id;
+            break;
+          }
+          if (others[i].depth < depth - 1) break;
+        }
+        if (newParent == null) return; // 방어 — 유효 깊이 규칙상 오지 않는 경로
+      }
+      // 새 형제 순서: 슬롯 이전에 등장한 같은 부모의 행 수 = 삽입 위치
+      const beforeCnt = others
+        .slice(0, idx)
+        .filter((r) => r.parent_id === newParent).length;
+      const groupIds = cur
+        .filter((t) => (t.parent_id ?? null) === newParent && t.id !== id)
+        .map((t) => t.id);
+      groupIds.splice(beforeCnt, 0, id);
+
+      const oldParent = node.parent_id ?? null;
+      if (newParent === oldParent) {
+        const oldOrder = cur
+          .filter((t) => (t.parent_id ?? null) === oldParent)
+          .map((t) => t.id);
+        if (oldOrder.join(",") === groupIds.join(",")) return; // 제자리 — 커밋 생략
+      }
+      void (async () => {
+        try {
+          if (newParent !== oldParent) await reparentTodo(id, newParent);
+          await reorderTodos(groupIds);
+          // 완료 상태 재계산: 떠난 그룹(마지막 미완료가 빠졌을 수 있음) + 새 그룹
+          await recomputeChainFrom(oldParent);
+          if (newParent !== oldParent) await recomputeChainFrom(newParent);
+          await reloadDay();
+          void reloadCounts();
+        } catch (err) {
+          setError(errMsg(err));
+        }
+      })();
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -489,7 +550,7 @@ export function TodoView({
         {!isOverdue && (
           <span
             className="todo-grip"
-            title="드래그해서 순서 변경"
+            title="드래그해서 이동 · 가로로 깊이 조절"
             aria-hidden="true"
             onMouseDown={(e) => startDrag(e, t.id)}
           >
