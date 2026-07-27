@@ -221,6 +221,11 @@ export function Tooltip({
   );
 }
 
+/** 초기 포커스 후보. 헤더 닫기 버튼에 걸리지 않게 푸터·본문 안에서만 찾는다
+ *  — 거기에 포커스가 가면 Enter 가 '승인'이 아니라 '닫기'가 돼버린다. */
+const MODAL_FOCUSABLE =
+  'button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])';
+
 export function Modal({
   open,
   title,
@@ -241,6 +246,27 @@ export function Modal({
   /** 내부 탭·섹션 전환이 있는 모달용 — 내용 높이와 무관하게 크기 고정(본문만 스크롤) */
   fixedHeight?: boolean;
 }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  // 열릴 때 초기 포커스 — 확인 모달이 Esc 로 취소만 되고 Enter 로 승인이 안 되던 문제.
+  // 입력이 있는 모달은 손대지 않는다: 이미 autoFocus 로 입력을 잡거나(이름 변경·설정),
+  // 사용자가 먼저 타이핑할 자리라 버튼이 포커스를 뺏으면 안 된다.
+  useEffect(() => {
+    if (!open) return;
+    const box = boxRef.current;
+    if (!box || box.querySelector("input, textarea")) return;
+    const foot = box.querySelector(".modal-foot");
+    // 주 액션 = 푸터의 primary, 파괴적 확인이면 danger-ghost (DESIGN.md §8)
+    const target =
+      foot?.querySelector<HTMLElement>(
+        ".btn-primary:not(:disabled), .btn-danger-ghost:not(:disabled)",
+      ) ??
+      foot?.querySelector<HTMLElement>(MODAL_FOCUSABLE) ??
+      box.querySelector(".modal-body")?.querySelector<HTMLElement>(MODAL_FOCUSABLE) ??
+      box;
+    target.focus();
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     const h = (e: KeyboardEvent) => {
@@ -264,6 +290,8 @@ export function Modal({
       }}
     >
       <div
+        ref={boxRef}
+        tabIndex={-1}
         className={`modal ${wide ? "wide" : ""} ${narrow ? "narrow" : ""} ${
           fixedHeight ? "fixed-h" : ""
         }`}

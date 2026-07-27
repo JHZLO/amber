@@ -368,10 +368,16 @@ export async function buildTodosDigest(date: string): Promise<{ md: string; coun
   const mark = (t: Todo) => (t.done === 1 ? "[x]" : "[ ]");
 
   const lines: string[] = [];
-  for (const p of tops) {
-    lines.push(`- ${mark(p)} ${p.content}`);
-    for (const c of kids(p.id)) lines.push(`  - ${mark(c)} ${c.content}`);
-  }
+  // 중첩 깊이는 무제한이라 재귀로 끝까지 내려간다(2단만 찍으면 하위 계획이 프롬프트에서 통째로 빠진다).
+  // seen 은 parent_id 가 순환하도록 망가진 데이터에서 무한 루프를 막는 안전장치.
+  const seen = new Set<number>();
+  const walk = (t: Todo, depth: number) => {
+    if (seen.has(t.id)) return;
+    seen.add(t.id);
+    lines.push(`${"  ".repeat(depth)}- ${mark(t)} ${t.content}`);
+    for (const c of kids(t.id)) walk(c, depth + 1);
+  };
+  for (const p of tops) walk(p, 0);
   if (overdue.length) {
     lines.push("", "밀린(미완료) 항목:");
     for (const t of overdue.slice(0, 20)) {

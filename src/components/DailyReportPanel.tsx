@@ -2,9 +2,11 @@
 // ① 미생성(버튼) → ② 수집(소스별 칩) → 요약 스트리밍 → ③ 완성(마크다운+메타) / ④ 에러·활동없음.
 // 생성 '실행'은 lib/reportRun 스토어가 백그라운드로 돌린다 — 이 컴포넌트는 구독·표시만 한다.
 // 그래서 탭/날짜를 바꿔도 생성이 안 끊기고, 응답 올 때까지 로딩이 유지된다.
+// 스트리밍 중엔 누적 텍스트를 그대로 보여주고(델타마다 마크다운 전체를 다시 파싱하지 않게)
+// 끝난 뒤에 한 번만 마크다운으로 렌더한다 — NoteAiModal 과 같은 패턴.
 // 정본: 본문 = vault/reports/<date>.md, 메타 = daily_reports 테이블 (lib/report.ts).
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AppConfig } from "../lib/config";
 import type { DailyReport } from "../types";
 import {
@@ -61,6 +63,7 @@ export function DailyReportPanel({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [copied, setCopied] = useState(false);
   const [opError, setOpError] = useState<string | null>(null);
+  const streamRef = useRef<HTMLPreElement>(null);
 
   const isFuture = date > todayStr();
 
@@ -76,6 +79,13 @@ export function DailyReportPanel({
       cancelled = true;
     };
   }, [active, date, run]);
+
+  // 생성 중 새 텍스트가 오면 스트림 박스를 맨 아래로 자동 스크롤 (NoteAiModal 과 동일)
+  useEffect(() => {
+    if (streamRef.current) {
+      streamRef.current.scrollTop = streamRef.current.scrollHeight;
+    }
+  }, [run?.stream]);
 
   // 표시값: 실행 중이면 스토어, 아니면 디스크 로드
   const phase: "idle" | RunPhase = run?.phase ?? (loaded ? "done" : "idle");
@@ -203,10 +213,10 @@ export function DailyReportPanel({
           {phase === "collecting" ? (
             <AiThinking label="활동을 모으는 중…" compact />
           ) : stream ? (
-            <div className="markdown report-body streaming">
-              <Markdown>{stream}</Markdown>
+            <pre className="note-stream-body" ref={streamRef}>
+              {stream}
               <span className="report-caret" aria-hidden="true" />
-            </div>
+            </pre>
           ) : (
             <AiThinking label="요약하는 중…" compact />
           )}

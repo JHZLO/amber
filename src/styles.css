@@ -3633,10 +3633,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
 .report-body {
   font-size: 13.5px;
 }
-/* 스트리밍 커서 — 깜빡이는 세로 바 */
-.report-body.streaming {
-  position: relative;
-}
+/* 스트리밍 커서 — 깜빡이는 세로 바 (스트리밍 중 pre 안에서 사용) */
 .report-caret {
   display: inline-block;
   width: 7px;
