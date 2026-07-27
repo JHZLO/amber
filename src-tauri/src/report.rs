@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tauri::ipc::Channel;
+use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
 use tokio::time::timeout;
 
@@ -26,6 +27,12 @@ const MAX_EVENTS: usize = 60;
 const MAX_SESSIONS: usize = 40;
 // push 당 head 커밋 메시지 조회 상한 (events 엔 메시지가 없어 따로 조회 — 지연 방지용 캡)
 const MAX_COMMIT_FETCH: usize = 25;
+// 세션 jsonl 동시 파싱 수. 파일 수가 수천 개라 한 번에 다 열면 fd 가 마른다.
+const SESSION_CONCURRENCY: usize = 8;
+// 파일 앞부분에서 '창 뒤' 타임스탬프만 이만큼 이어지면 그 파일은 그날 활동이 없다고 보고 중단한다.
+// 1행으로 판단하지 않는 이유: 머리에 나중 시각의 메타 행(pr-link·queue-operation)이 섞인다.
+// 실측상 가장 이른 타임스탬프는 5행 안에 나오므로 40행이면 충분히 여유롭다.
+const SESSION_SKIP_PROBE: u32 = 40;
 
 const REPORT_SYSTEM_PROMPT: &str = r#"너는 사용자의 하루 업무를 정리해 '데일리 리포트'로 써 주는 조수다.
 입력(stdin)에는 [리포트 대상 날짜], [투두 — 오늘의 계획], 그리고 활성화된 플랫폼별 활동 요약이
@@ -515,16 +522,19 @@ fn count_edits(msg: &serde_json::Value) -> u32 {
         .count() as u32
 }
 
-async fn parse_claude_file(path: &Path, start_ms: i64, end_ms: i64) -> Option<SessionEntry> {
-    let text = tokio::fs::read_to_string(path).await.ok()?;
+async fn parse_claude_file(path: PathBuf, start_ms: i64, end_ms: i64) -> Option<SessionEntry> {
+    let file = tokio::fs::File::open(&path).await.ok()?;
+    let mut lines = tokio::io::BufReader::new(file).lines();
     let mut cwd = String::new();
     let mut summary: Option<String> = None;
     let mut first_user: Option<String> = None;
     let mut min_ts: Option<i64> = None;
     let mut max_ts: Option<i64> = None;
     let mut edits: u32 = 0;
+    let mut past: u32 = 0;
 
-    for line in text.lines() {
+    while let Ok(Some(line)) = lines.next_line().await {
+        let line = line.as_str();
         if line.trim().is_empty() {
             continue;
         }
@@ -545,6 +555,13 @@ async fn parse_claude_file(path: &Path, start_ms: i64, end_ms: i64) -> Option<Se
         }
         let ts = v.get("timestamp").and_then(|t| t.as_str()).and_then(parse_iso_ms);
         let Some(ts) = ts else { continue };
+        // jsonl 은 시간순 append — 앞부분이 죄다 창 뒤면 뒤도 마찬가지라 파일을 통째로 접는다.
+        if ts >= end_ms && min_ts.is_none() {
+            past += 1;
+            if past >= SESSION_SKIP_PROBE {
+                return None;
+            }
+        }
         if ts < start_ms || ts >= end_ms {
             continue;
         }
@@ -587,11 +604,41 @@ async fn parse_claude_file(path: &Path, start_ms: i64, end_ms: i64) -> Option<Se
     })
 }
 
+/// 파일 목록을 SESSION_CONCURRENCY 개씩 겹쳐 파싱한다(디스크 I/O 대기 겹치기). 완료 순서는
+/// 상관없다 — 호출부에서 start 로 정렬한다.
+async fn parse_sessions_bounded<F, Fut>(
+    paths: Vec<PathBuf>,
+    start_ms: i64,
+    end_ms: i64,
+    parse: F,
+) -> Vec<SessionEntry>
+where
+    F: Fn(PathBuf, i64, i64) -> Fut + Copy + Send + 'static,
+    Fut: std::future::Future<Output = Option<SessionEntry>> + Send + 'static,
+{
+    let mut queued = paths.into_iter();
+    let mut running = tokio::task::JoinSet::new();
+    let mut out = Vec::new();
+    for _ in 0..SESSION_CONCURRENCY {
+        let Some(p) = queued.next() else { break };
+        running.spawn(parse(p, start_ms, end_ms));
+    }
+    while let Some(done) = running.join_next().await {
+        if let Ok(Some(e)) = done {
+            out.push(e);
+        }
+        if let Some(p) = queued.next() {
+            running.spawn(parse(p, start_ms, end_ms));
+        }
+    }
+    out
+}
+
 async fn collect_claude_sessions(home: &Path, start_ms: i64, end_ms: i64) -> Vec<SessionEntry> {
     let root = home.join(".claude/projects");
-    let mut out = Vec::new();
+    let mut paths: Vec<PathBuf> = Vec::new();
     let Ok(mut projects) = tokio::fs::read_dir(&root).await else {
-        return out;
+        return Vec::new();
     };
     while let Ok(Some(proj)) = projects.next_entry().await {
         if !proj.path().is_dir() {
@@ -615,22 +662,23 @@ async fn collect_claude_sessions(home: &Path, start_ms: i64, end_ms: i64) -> Vec
                     }
                 }
             }
-            if let Some(e) = parse_claude_file(&path, start_ms, end_ms).await {
-                out.push(e);
-            }
+            paths.push(path);
         }
     }
-    out
+    parse_sessions_bounded(paths, start_ms, end_ms, parse_claude_file).await
 }
 
-async fn parse_codex_file(path: &Path, start_ms: i64, end_ms: i64) -> Option<SessionEntry> {
-    let text = tokio::fs::read_to_string(path).await.ok()?;
+async fn parse_codex_file(path: PathBuf, start_ms: i64, end_ms: i64) -> Option<SessionEntry> {
+    let file = tokio::fs::File::open(&path).await.ok()?;
+    let mut lines = tokio::io::BufReader::new(file).lines();
     let mut cwd = String::new();
     let mut first_user: Option<String> = None;
     let mut min_ts: Option<i64> = None;
     let mut max_ts: Option<i64> = None;
+    let mut past: u32 = 0;
 
-    for line in text.lines() {
+    while let Ok(Some(line)) = lines.next_line().await {
+        let line = line.as_str();
         if line.trim().is_empty() {
             continue;
         }
@@ -645,6 +693,13 @@ async fn parse_codex_file(path: &Path, start_ms: i64, end_ms: i64) -> Option<Ses
         }
         let ts = v.get("timestamp").and_then(|t| t.as_str()).and_then(parse_iso_ms);
         if let Some(ts) = ts {
+            // jsonl 은 시간순 append — 앞부분이 죄다 창 뒤면 뒤도 마찬가지라 파일을 통째로 접는다.
+            if ts >= end_ms && min_ts.is_none() {
+                past += 1;
+                if past >= SESSION_SKIP_PROBE {
+                    return None;
+                }
+            }
             if ts >= start_ms && ts < end_ms {
                 min_ts = Some(min_ts.map_or(ts, |m| m.min(ts)));
                 max_ts = Some(max_ts.map_or(ts, |m| m.max(ts)));
@@ -694,37 +749,49 @@ async fn collect_codex_sessions(
     start_ms: i64,
     end_ms: i64,
 ) -> Vec<SessionEntry> {
-    let mut out = Vec::new();
     let mut parts = date.split('-');
     let (Some(y), Some(m), Some(d)) = (parts.next(), parts.next(), parts.next()) else {
-        return out;
+        return Vec::new();
     };
     let dir = home.join(format!(".codex/sessions/{y}/{m}/{d}"));
     let Ok(mut files) = tokio::fs::read_dir(&dir).await else {
-        return out;
+        return Vec::new();
     };
+    let mut paths: Vec<PathBuf> = Vec::new();
     while let Ok(Some(f)) = files.next_entry().await {
         let path = f.path();
         if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
             continue;
         }
-        if let Some(e) = parse_codex_file(&path, start_ms, end_ms).await {
-            out.push(e);
-        }
+        paths.push(path);
     }
-    out
+    parse_sessions_bounded(paths, start_ms, end_ms, parse_codex_file).await
 }
 
 async fn collect_ai_sessions(cfg: &SessionsCfg, date: &str, start_ms: i64, end_ms: i64, tz: i32) -> SourceDigest {
-    let mut sessions: Vec<SessionEntry> = Vec::new();
-    if let Some(home) = home_dir() {
-        if cfg.claude {
-            sessions.extend(collect_claude_sessions(&home, start_ms, end_ms).await);
+    let gather = async {
+        let mut sessions: Vec<SessionEntry> = Vec::new();
+        if let Some(home) = home_dir() {
+            if cfg.claude {
+                sessions.extend(collect_claude_sessions(&home, start_ms, end_ms).await);
+            }
+            if cfg.codex {
+                sessions.extend(collect_codex_sessions(&home, date, start_ms, end_ms).await);
+            }
         }
-        if cfg.codex {
-            sessions.extend(collect_codex_sessions(&home, date, start_ms, end_ms).await);
-        }
-    }
+        sessions
+    };
+    // 세션 로그는 수백 MB 까지 커진다 — 다른 수집기와 같은 상한을 걸어 멈춘 것처럼 보이지 않게.
+    let Ok(mut sessions) = timeout(Duration::from_secs(COLLECT_TIMEOUT_SECS), gather).await else {
+        return SourceDigest {
+            id: "ai_sessions".into(),
+            rank: cfg.rank,
+            ok: false,
+            items: 0,
+            digest_md: String::new(),
+            error: Some("AI 세션 수집이 시간 내에 끝나지 않았습니다.".into()),
+        };
+    };
     sessions.sort_by_key(|s| s.start);
     sessions.truncate(MAX_SESSIONS);
 
@@ -852,6 +919,41 @@ fn mcp_tool_prefix(server: &str) -> String {
     format!("mcp__{s}")
 }
 
+/// 쓰기(부작용) 성격 도구를 가리키는 이름 조각. 서버마다 표기가 달라(slack_send_message ·
+/// notion-create-pages) 동사만 잡고 앞뒤는 와일드카드로 연다.
+/// 'comment'·'react' 는 조각만으로는 읽기 도구(notion-get-comments · slack_get_reactions)까지
+/// 걸려 리포트 재료가 사라진다 — 그 쓰기 형태는 create/update/delete/add 가 이미 덮는다.
+const MCP_WRITE_VERBS: &[&str] = &[
+    "send",
+    "post",
+    "reply",
+    "schedule",
+    "create",
+    "update",
+    "edit",
+    "write",
+    "delete",
+    "remove",
+    "add",
+    "move",
+    "duplicate",
+    "archive",
+    "upload",
+];
+
+/// allow 는 서버 통째로 둘 수밖에 없다(도구 이름이 서버·버전마다 달라 엄격한 화이트리스트는
+/// 조용히 아무것도 못 걷는다) — 대신 쓰기 도구를 deny 로 막는다. deny 는 allow 를 이기고
+/// 와일드카드를 위치 제한 없이 허용한다(allow 규칙은 접두 뒤에서만 허용).
+fn mcp_deny_tools(prefixes: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    for p in prefixes {
+        for verb in MCP_WRITE_VERBS {
+            out.push(format!("{p}__*{verb}*"));
+        }
+    }
+    out
+}
+
 /// 생성 프롬프트에 붙일 MCP 수집 지시(claude 가 등록 서버 도구를 직접 호출). rank 순, 읽기 전용 강제.
 fn mcp_instructions(date: &str, mcp: &mut [McpSource]) -> String {
     mcp.sort_by_key(|m| m.rank);
@@ -915,15 +1017,16 @@ pub async fn report_generate(
     if use_mcp {
         let mut mcp = mcp_sources;
         input.push_str(&mcp_instructions(&date, &mut mcp));
-        let tools = mcp
-            .iter()
-            .map(|m| mcp_tool_prefix(&m.server))
-            .collect::<Vec<_>>()
-            .join(",");
+        let prefixes: Vec<String> = mcp.iter().map(|m| mcp_tool_prefix(&m.server)).collect();
         // 등록 서버는 -p 에서 자동 로드됨(--mcp-config 불필요). allow 한 도구만 실행, 나머지는
-        // dontAsk 로 무프롬프트 자동 거부(파괴적 도구 차단). --strict-mcp-config 는 쓰지 않는다.
+        // dontAsk 로 무프롬프트 자동 거부. --strict-mcp-config 는 쓰지 않는다.
+        // allow 는 서버 접두 = 그 서버의 '모든' 도구다 — 쓰기 도구까지 무프롬프트로 열린다.
+        // 리포트 입력은 남이 쓴 텍스트라(프롬프트 인젝션 표면) 프롬프트 지시만으로는 부족하다.
+        // deny 로 전송·생성/수정·삭제류를 실제로 막는다(프롬프트 지시는 그대로 이중 방어).
         extra_args.push("--allowedTools".into());
-        extra_args.push(tools);
+        extra_args.push(prefixes.join(","));
+        extra_args.push("--disallowedTools".into());
+        extra_args.push(mcp_deny_tools(&prefixes).join(","));
         extra_args.push("--permission-mode".into());
         extra_args.push("dontAsk".into());
     }
@@ -1195,6 +1298,71 @@ context7: npx -y @upstash/context7-mcp - ⏸ Pending approval (run `claude` to a
         assert_eq!(servers[3].transport, "sse");
         assert_eq!(servers[4].status, "pending");
         assert_eq!(servers[4].transport, "stdio");
+    }
+
+    /// claude 의 도구 이름 매칭 흉내 — '*' = 임의 문자열, 전체 일치.
+    fn glob_match(pat: &str, name: &str) -> bool {
+        let parts: Vec<&str> = pat.split('*').collect();
+        let Some(rest) = name.strip_prefix(parts[0]) else {
+            return false;
+        };
+        let mut rest = rest;
+        for (i, part) in parts.iter().enumerate().skip(1) {
+            if i == parts.len() - 1 {
+                return rest.ends_with(part);
+            }
+            match rest.find(part) {
+                Some(at) => rest = &rest[at + part.len()..],
+                None => return false,
+            }
+        }
+        rest.is_empty()
+    }
+
+    #[test]
+    fn deny_blocks_write_tools_but_keeps_reads() {
+        // 실제 등록 서버(plugin:slack:slack · plugin:Notion:notion)의 도구 이름으로 검증한다.
+        let prefixes = vec![
+            mcp_tool_prefix("plugin:slack:slack"),
+            mcp_tool_prefix("plugin:Notion:notion"),
+        ];
+        let deny = mcp_deny_tools(&prefixes);
+        let denied = |tool: &str| deny.iter().any(|p| glob_match(p, tool));
+
+        for w in [
+            "mcp__plugin_slack_slack__slack_send_message",
+            "mcp__plugin_slack_slack__slack_send_message_draft",
+            "mcp__plugin_slack_slack__slack_schedule_message",
+            "mcp__plugin_slack_slack__slack_add_reaction",
+            "mcp__plugin_slack_slack__slack_create_canvas",
+            "mcp__plugin_slack_slack__slack_update_canvas",
+            "mcp__plugin_slack_slack__slack_create_conversation",
+            "mcp__plugin_Notion_notion__notion-create-pages",
+            "mcp__plugin_Notion_notion__notion-create-comment",
+            "mcp__plugin_Notion_notion__notion-update-page",
+            "mcp__plugin_Notion_notion__notion-duplicate-page",
+            "mcp__plugin_Notion_notion__notion-move-pages",
+        ] {
+            assert!(denied(w), "쓰기 도구가 막히지 않음: {w}");
+        }
+
+        for r in [
+            "mcp__plugin_slack_slack__slack_read_channel",
+            "mcp__plugin_slack_slack__slack_read_thread",
+            "mcp__plugin_slack_slack__slack_read_canvas",
+            "mcp__plugin_slack_slack__slack_search_public",
+            "mcp__plugin_slack_slack__slack_get_reactions",
+            "mcp__plugin_slack_slack__slack_list_channel_members",
+            "mcp__plugin_Notion_notion__notion-fetch",
+            "mcp__plugin_Notion_notion__notion-search",
+            "mcp__plugin_Notion_notion__notion-get-comments",
+            "mcp__plugin_Notion_notion__notion-query-data-sources",
+        ] {
+            assert!(!denied(r), "읽기 도구까지 막힘: {r}");
+        }
+
+        // 다른 서버의 도구는 이 deny 규칙과 무관하다(allow 자체가 안 열려 있다).
+        assert!(!denied("mcp__plugin_vercel_vercel__deploy_create"));
     }
 
     #[test]
