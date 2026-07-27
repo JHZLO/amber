@@ -21,9 +21,11 @@ import {
 } from "../lib/diagrams";
 import { useTreeDnd } from "../lib/useTreeDnd";
 import { DiagramCanvas } from "./DiagramCanvas";
+import { DiagramAiModal } from "./DiagramAiModal";
 import { Modal, Select, Spinner, Tooltip, TreeDragOverlay, timeAgo } from "../ui";
 import { Icon } from "../icons";
 import { RootPicker } from "./RootPicker";
+import type { AppConfig } from "../lib/config";
 import { rootDisplayName, WORKSPACE_EVENT } from "../lib/workspace";
 
 // 이동/생성 위치 Select 값 인코딩 (루트 '' ↔ '/')
@@ -38,7 +40,13 @@ type NameModalState =
 
 type DeleteTarget = { name: string; path: string; isDir: boolean };
 
-export function DiagramsView({ active }: { active: boolean }) {
+export function DiagramsView({
+  active,
+  config,
+}: {
+  active: boolean;
+  config: AppConfig | null;
+}) {
   const [tree, setTree] = useState<DiagramNode[] | null>(null);
   const [treeError, setTreeError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -58,6 +66,7 @@ export function DiagramsView({ active }: { active: boolean }) {
   const [modalError, setModalError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<DeleteTarget | null>(null);
   const [pendingOpen, setPendingOpen] = useState<string | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
 
   const dirty = editing && draft !== body;
@@ -192,6 +201,13 @@ export function DiagramsView({ active }: { active: boolean }) {
   function startEdit() {
     setDraft(body);
     setPreviewChart(body);
+    setEditing(true);
+  }
+
+  /** AI 변환 결과는 초안으로만 반영 — 파일은 사용자가 ⌘S 로 저장할 때까지 그대로 */
+  function applyAiResult(mermaid: string) {
+    setDraft(mermaid);
+    setPreviewChart(mermaid);
     setEditing(true);
   }
 
@@ -524,6 +540,22 @@ export function DiagramsView({ active }: { active: boolean }) {
                 <h1 className="dgm-title">{fileName}</h1>
               </div>
               <span className="spacer" />
+              <Tooltip
+                label={
+                  config?.provider
+                    ? "스키마 DDL 을 붙여넣어 ERD 로 변환"
+                    : "AI 를 연결하면 쓸 수 있어요 (설정)"
+                }
+              >
+                <button
+                  className="btn btn-sm"
+                  onClick={() => setAiOpen(true)}
+                  disabled={busy || loadingBody || !config?.provider}
+                >
+                  <Icon name="sparkles" size={14} />
+                  DDL → ERD
+                </button>
+              </Tooltip>
               {editing ? (
                 <>
                   <button
@@ -777,6 +809,15 @@ export function DiagramsView({ active }: { active: boolean }) {
           지금 다이어그램에 저장하지 않은 변경이 있어요. 버리고 이동할까요?
         </p>
       </Modal>
+
+      {/* 스키마 DDL → ERD 변환 (결과는 에디터 초안으로만 반영) */}
+      <DiagramAiModal
+        open={aiOpen}
+        currentSource={editing ? draft : body}
+        config={config}
+        onClose={() => setAiOpen(false)}
+        onApplied={applyAiResult}
+      />
     </div>
   );
 }

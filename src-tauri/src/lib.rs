@@ -176,6 +176,7 @@ pub fn run() {
             ai::ai_note_compose,
             ai::ai_note_compose_stream,
             ai::ai_note_ask,
+            ai::ai_erd_generate_stream,
             ai::ai_health,
             detect::detect_ai_clis,
             report::report_collect,

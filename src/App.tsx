@@ -381,7 +381,7 @@ function App() {
 
       {/* 다이어그램 섹션 — 편집 초안 보존을 위해 항상 마운트 */}
       <div className={`section-wrap ${section === "diagrams" ? "" : "hidden"}`}>
-        <DiagramsView active={section === "diagrams"} />
+        <DiagramsView active={section === "diagrams"} config={config} />
       </div>
 
       {/* 할 일 섹션 — 선택 날짜/스크롤 보존을 위해 항상 마운트 */}

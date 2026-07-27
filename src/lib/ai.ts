@@ -198,6 +198,39 @@ export async function aiNoteAsk(params: {
   });
 }
 
+export interface ErdResult {
+  mermaid: string;
+  meta: InvocationMeta;
+}
+
+/** 다이어그램 탭: 스키마 DDL → ERD mermaid 소스 (스트리밍).
+ *  current 를 주면 에디터에 열려 있는 기존 소스의 문법·구성을 이어받아 확장한다. */
+export async function aiErdGenerateStream(
+  params: {
+    ddl: string;
+    instruction?: string | null;
+    current?: string | null;
+    model?: string | null;
+    cliPath?: string | null;
+    provider?: string | null;
+    timeoutSecs?: number | null;
+  },
+  onDelta: (text: string) => void,
+): Promise<ErdResult> {
+  const channel = new Channel<string>();
+  channel.onmessage = onDelta;
+  return invoke<ErdResult>("ai_erd_generate_stream", {
+    ddl: params.ddl,
+    instruction: params.instruction ?? null,
+    current: params.current ?? null,
+    model: params.model ?? null,
+    cliPath: params.cliPath ?? null,
+    provider: params.provider ?? null,
+    timeoutSecs: params.timeoutSecs ?? null,
+    onDelta: channel,
+  });
+}
+
 export async function aiHealth(cliPath?: string | null): Promise<string> {
   return invoke<string>("ai_health", { cliPath: cliPath ?? null });
 }

@@ -35,6 +35,9 @@ const NOTE_SYSTEM_PROMPT: &str = include_str!("../context/note-compose.md");
 // 노트 본문을 불리지 않는 별도 Q&A 라 "간결함"을 프롬프트로 강제한다.
 const ASK_SYSTEM_PROMPT: &str = include_str!("../context/note-ask.md");
 
+// 다이어그램 탭: 스키마 DDL → ERD mermaid 소스. 노트와 같은 이유로 JSON 계약 없이 raw 텍스트.
+const ERD_SYSTEM_PROMPT: &str = include_str!("../context/diagram-erd.md");
+
 // ---- 프로바이더 추상화 ----
 // AI 를 특정 벤더에 묶지 않는다. claude 는 풍부한 경로(JSON 봉투 + 스트리밍)를 쓰고,
 // codex/gemini 는 "stdin 프롬프트 → 최종 텍스트" 공통 경로를 쓴다.
@@ -243,6 +246,13 @@ pub struct NoteComposeResult {
 #[derive(Debug, Serialize)]
 pub struct NoteAskResult {
     pub answer: String,
+    pub meta: MetaOut,
+}
+
+/// DDL → ERD 변환 결과 = mermaid 소스 + 메타
+#[derive(Debug, Serialize)]
+pub struct ErdResult {
+    pub mermaid: String,
     pub meta: MetaOut,
 }
 
@@ -543,6 +553,63 @@ pub async fn ai_note_ask(
     }
 
     Ok(NoteAskResult { answer, meta })
+}
+
+/// 다이어그램 탭: 스키마 DDL → ERD mermaid 소스 (스트리밍).
+/// 노트 작성과 같은 raw 텍스트 경로 — 큰 mermaid 소스를 JSON 문자열에 담는 이중 파싱을 피한다.
+/// current(에디터에 열려 있는 기존 소스)를 주면 그 문법·구성을 이어받아 확장한다.
+#[tauri::command]
+pub async fn ai_erd_generate_stream(
+    ddl: String,
+    instruction: Option<String>,
+    current: Option<String>,
+    model: Option<String>,
+    cli_path: Option<String>,
+    provider: Option<String>,
+    timeout_secs: Option<u64>,
+    on_delta: Channel<String>,
+) -> Result<ErdResult, AiError> {
+    if ddl.trim().chars().count() < MIN_INPUT_CHARS {
+        return Err(AiError::new(
+            "EMPTY_INPUT",
+            "스키마 DDL 을 붙여넣어 주세요.",
+        ));
+    }
+
+    let kind = provider_kind(provider.as_deref());
+    let program =
+        cli_path.filter(|p| !p.is_empty()).unwrap_or_else(|| default_binary(kind).to_string());
+    let model = resolve_model(kind, model);
+    let dur = Duration::from_secs(timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS));
+
+    let mut input = String::new();
+    if let Some(instr) = instruction.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        input.push_str(&format!("[추가 지시]\n{instr}\n\n"));
+    }
+    if let Some(cur) = current.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        input.push_str(&format!("[현재 다이어그램 (Mermaid)]\n{cur}\n\n"));
+    }
+    input.push_str(&format!("[스키마 DDL]\n{}", ddl.trim()));
+
+    let (result_str, meta) = if kind == ProviderKind::Claude {
+        stream_claude_result(program, model, dur, ERD_SYSTEM_PROMPT, input, &[], &on_delta).await?
+    } else {
+        // codex/gemini 는 스트리밍 미지원 경로 — 완료 후 전체 텍스트를 한 번에 전송
+        let r = run_provider_text(kind, program, model, dur, ERD_SYSTEM_PROMPT, input).await?;
+        let _ = on_delta.send(r.0.clone());
+        r
+    };
+
+    // 전체를 감싼 ```mermaid 펜스만 벗긴다 (mermaid 소스 안에는 코드펜스가 없다)
+    let mermaid = strip_outer_fence(&result_str).trim().to_string();
+    if mermaid.is_empty() {
+        return Err(AiError::new(
+            "AI_BAD_CONTRACT",
+            "생성된 다이어그램이 비어 있습니다. 다시 시도해 주세요.",
+        ));
+    }
+
+    Ok(ErdResult { mermaid, meta })
 }
 
 /// stream-json 실행: 줄 단위로 읽어 text_delta 를 on_delta 로 흘리고,

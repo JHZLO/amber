@@ -68,7 +68,7 @@ Real folders and files are the source of truth — no DB lock-in, friendly to gi
 
 ### 📊 Mermaid diagram studio
 
-Keep ERDs, flowcharts and sequence diagrams as plain `.mmd` files organized in folders. Pan/zoom canvas (wheel zoom · drag pan · double-click zoom · fit-to-screen shortcuts), live render while editing, and automatic recovery from common mermaid syntax mistakes.
+Keep ERDs, flowcharts and sequence diagrams as plain `.mmd` files organized in folders. Pan/zoom canvas (wheel zoom · drag pan · double-click zoom · fit-to-screen shortcuts), live render while editing, and automatic recovery from common mermaid syntax mistakes. Paste raw `CREATE TABLE` DDL and the AI turns it into a house-style ERD — solid lines for real FK constraints, dotted for logical ones, nullability, indexes and enum values carried in the column notes.
 
 </td>
 <td width="50%">
