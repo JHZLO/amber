@@ -15,6 +15,8 @@ import { Icon } from "../icons";
 import { AugmentModal } from "./AugmentModal";
 import { openNoteInApp } from "../lib/nav";
 
+const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
 function parseTags(raw: string): string[] {
   return raw
     .split(/[,\n]/)
@@ -49,6 +51,7 @@ export function ConceptDetail({
 }) {
   const [body, setBody] = useState("");
   const [loadingBody, setLoadingBody] = useState(true);
+  const [readError, setReadError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -64,10 +67,16 @@ export function ConceptDetail({
   useEffect(() => {
     let alive = true;
     setEditing(false);
+    setReadError(null);
     setLoadingBody(true);
     readNote(concept.detail_path)
       .then((b) => alive && setBody(b))
-      .catch(() => alive && setBody("_(본문을 읽을 수 없습니다)_"))
+      // 실패를 본문으로 위장하지 않는다 — 그 문자열이 초안이 되면 저장 시 원본이 날아간다
+      .catch((e) => {
+        if (!alive) return;
+        setBody("");
+        setReadError(errMsg(e));
+      })
       .finally(() => alive && setLoadingBody(false));
     return () => {
       alive = false;
@@ -83,7 +92,7 @@ export function ConceptDetail({
   }
 
   async function save() {
-    if (busy) return;
+    if (busy || readError) return;
     setBusy(true);
     try {
       await updateConceptContent(concept.id, {
@@ -247,14 +256,20 @@ export function ConceptDetail({
               자신감
               <Icon name="minus" size={13} />
             </button>
-            <button className="btn btn-sm" onClick={startEdit} disabled={busy}>
+            <button
+              className="btn btn-sm"
+              onClick={startEdit}
+              disabled={busy || loadingBody || !!readError}
+            >
               <Icon name="pencil" size={14} />
               편집
             </button>
             <button
               className="btn btn-sm"
               onClick={() => setAugmenting(true)}
-              disabled={busy || loadingBody || !config?.provider}
+              disabled={
+                busy || loadingBody || !!readError || !config?.provider
+              }
               title="현재 노트를 프롬프트로 AI가 보강"
             >
               <Icon name="sparkles" size={14} />
@@ -275,6 +290,8 @@ export function ConceptDetail({
 
         {loadingBody ? (
           <Spinner />
+        ) : readError ? (
+          <div className="error-note">본문을 읽을 수 없어요 — {readError}</div>
         ) : (
           <div className="markdown">
             <Markdown>{body}</Markdown>

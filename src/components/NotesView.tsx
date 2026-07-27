@@ -47,6 +47,9 @@ type NameModalState =
 
 type DeleteTarget = { name: string; path: string; isDir: boolean };
 
+// 저장하려는 순간 디스크가 더 새로울 때(외부 편집) 사용자에게 넘길 선택지
+type ConflictState = { path: string; diskMtime: number };
+
 export function NotesView({
   active,
   config,
@@ -64,10 +67,15 @@ export function NotesView({
   const [mtime, setMtime] = useState<number | null>(null);
   const [commentCount, setCommentCount] = useState(0);
   const [loadingBody, setLoadingBody] = useState(false);
+  const [readError, setReadError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [previewMd, setPreviewMd] = useState(""); // 편집 프리뷰용(디바운스)
   const [busy, setBusy] = useState(false);
   const [opError, setOpError] = useState<string | null>(null);
+  const [conflict, setConflict] = useState<ConflictState | null>(null);
+  // 열기 세대 번호 — 늦게 도착한 이전 노트의 응답이 지금 버퍼를 덮지 않게
+  const openSeq = useRef(0);
 
   const [nameModal, setNameModal] = useState<NameModalState | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
@@ -176,6 +184,13 @@ export function NotesView({
     return () => window.removeEventListener(WORKSPACE_EVENT, h);
   }, [reload]);
 
+  // 편집 중 타이핑 → 350ms 디바운스로 프리뷰 갱신 (mermaid 펜스 안에서 글자마다 재렌더 방지)
+  useEffect(() => {
+    if (!editing) return;
+    const t = setTimeout(() => setPreviewMd(draft), 350);
+    return () => clearTimeout(t);
+  }, [draft, editing]);
+
   /** dir 와 그 조상 폴더를 모두 펼침 */
   function expandTo(dir: string) {
     if (!dir) return;
@@ -200,25 +215,33 @@ export function NotesView({
   }
 
   async function doOpen(path: string, opts?: { edit?: boolean }) {
+    const seq = ++openSeq.current;
     setSelected(path);
     setActiveDir(parentOf(path));
     setEditing(false);
     setOpError(null);
+    setReadError(null);
     setCommentCount(0); // 새 노트의 질문 수는 레이어가 로드 후 갱신
     setLoadingBody(true);
     try {
       const b = await readNoteFile(path);
+      const m = await noteMtime(path);
+      if (seq !== openSeq.current) return; // 그 사이 다른 노트를 열었다
       setBody(b);
       if (opts?.edit) {
         setDraft(b);
+        setPreviewMd(b);
         setEditing(true);
       }
-      setMtime(await noteMtime(path));
-    } catch {
-      setBody("_(노트를 읽을 수 없습니다)_");
+      setMtime(m);
+    } catch (e) {
+      if (seq !== openSeq.current) return;
+      // 실패를 본문으로 위장하지 않는다 — 그 문자열이 초안이 되면 ⌘S 한 번에 원본이 날아간다
+      setBody("");
+      setReadError(errMsg(e));
       setMtime(null);
     } finally {
-      setLoadingBody(false);
+      if (seq === openSeq.current) setLoadingBody(false);
     }
   }
 
@@ -267,20 +290,43 @@ export function NotesView({
     setActiveDir(n.path);
   }
 
-  async function save() {
-    if (!editing || !selected || busy) return;
+  async function save(opts?: { force?: boolean }) {
+    if (!editing || !selected || busy || readError) return;
     setBusy(true);
     try {
+      // 열 때 잡아둔 mtime 보다 디스크가 새로우면 외부(Obsidian/vim/git)가 먼저 고친 것 —
+      // 조용히 덮지 않고 사용자에게 선택을 넘긴다
+      if (!opts?.force) {
+        const cur = await noteMtime(selected);
+        if (cur !== null && mtime !== null && cur > mtime) {
+          setConflict({ path: selected, diskMtime: cur });
+          return;
+        }
+      }
       await writeNoteFile(selected, draft);
       setBody(draft);
       setEditing(false);
-      setMtime(Date.now());
+      setMtime((await noteMtime(selected)) ?? Date.now());
       setOpError(null);
     } catch (e) {
       setOpError(errMsg(e));
     } finally {
       setBusy(false);
     }
+  }
+
+  /** 툴바 새로고침 — 트리만 갱신하면 열린 버퍼가 옛 내용으로 남는다.
+   *  편집 중이면 초안은 그대로 두고 디스크가 더 새로운지만 확인해 외부 변경 모달로 넘긴다. */
+  async function refreshAll() {
+    await reload();
+    if (!selected) return;
+    if (editing) {
+      const cur = await noteMtime(selected);
+      if (cur !== null && mtime !== null && cur > mtime)
+        setConflict({ path: selected, diskMtime: cur });
+      return;
+    }
+    await doOpen(selected);
   }
 
   // ⌘S 저장 (노트 섹션이 보일 때 + 편집 중일 때만)
@@ -540,7 +586,7 @@ export function NotesView({
             <button
               className="icon-btn sm"
               aria-label="새로고침"
-              onClick={() => void reload()}
+              onClick={() => void refreshAll()}
             >
               <Icon name="refresh" size={14} />
             </button>
@@ -599,6 +645,9 @@ export function NotesView({
             </div>
 
             {opError && <div className="error-note">{opError}</div>}
+            {readError && (
+              <div className="error-note">노트를 읽을 수 없어요 — {readError}</div>
+            )}
 
             <div className="detail-actions detail-actions-split">
               <div className="detail-actions-group">
@@ -634,9 +683,10 @@ export function NotesView({
                       className="btn btn-sm"
                       onClick={() => {
                         setDraft(body);
+                        setPreviewMd(body);
                         setEditing(true);
                       }}
-                      disabled={busy || loadingBody}
+                      disabled={busy || loadingBody || !!readError}
                     >
                       <Icon name="pencil" size={14} />
                       편집
@@ -644,7 +694,9 @@ export function NotesView({
                     <button
                       className="btn btn-sm"
                       onClick={() => setAiOpen(true)}
-                      disabled={busy || loadingBody || !config?.provider}
+                      disabled={
+                        busy || loadingBody || !!readError || !config?.provider
+                      }
                       title="현재 노트를 바탕으로 AI가 작성/보강"
                     >
                       <Icon name="sparkles" size={14} />
@@ -673,7 +725,7 @@ export function NotesView({
 
             {loadingBody ? (
               <Spinner />
-            ) : editing ? (
+            ) : readError ? null : editing ? (
               // 좌 소스 / 우 라이브 프리뷰 (PRD §4.2 편집 모드)
               <div className="note-edit-split">
                 <textarea
@@ -683,7 +735,7 @@ export function NotesView({
                   spellCheck={false}
                 />
                 <div className="markdown note-preview">
-                  <Markdown>{draft}</Markdown>
+                  <Markdown>{previewMd}</Markdown>
                 </div>
               </div>
             ) : (
@@ -902,7 +954,7 @@ export function NotesView({
           {confirmDelete?.isDir ? "폴더와 안의 모든 노트를" : "노트를"}{" "}
           삭제할까요?
           <br />
-          되돌릴 수 없어요.
+          휴지통으로 옮겨져요 — Finder 에서 되돌릴 수 있어요.
         </p>
       </Modal>
 
@@ -916,6 +968,7 @@ export function NotesView({
           onClose={() => setAiOpen(false)}
           onApplied={(md) => {
             setDraft(md);
+            setPreviewMd(md);
             setEditing(true);
           }}
         />
@@ -964,6 +1017,49 @@ export function NotesView({
       >
         <p style={{ margin: 0 }}>
           지금 노트에 저장하지 않은 변경이 있어요. 버리고 이동할까요?
+        </p>
+      </Modal>
+
+      {/* 외부에서 먼저 수정됨 → 덮어쓰기/다시 읽기 선택 */}
+      <Modal
+        open={!!conflict}
+        title="파일이 밖에서 바뀌었어요"
+        narrow
+        onClose={() => setConflict(null)}
+        footer={
+          <>
+            <button className="btn btn-sm" onClick={() => setConflict(null)}>
+              계속 편집
+            </button>
+            <button
+              className="btn btn-sm"
+              onClick={() => {
+                const p = conflict?.path;
+                setConflict(null);
+                if (p) void doOpen(p);
+              }}
+              disabled={busy}
+            >
+              내 편집 버리고 다시 읽기
+            </button>
+            <button
+              className="btn btn-sm btn-danger-ghost"
+              onClick={() => {
+                setConflict(null);
+                void save({ force: true });
+              }}
+              disabled={busy}
+            >
+              그래도 덮어쓰기
+            </button>
+          </>
+        }
+      >
+        <p style={{ margin: 0 }}>
+          이 노트를 연 뒤에 다른 프로그램(Obsidian·vim·git 등)이 파일을
+          고쳤어요{conflict && <> · 디스크 수정 {timeAgo(conflict.diskMtime)}</>}.
+          <br />
+          덮어쓰면 그 변경이 사라져요.
         </p>
       </Modal>
     </div>
