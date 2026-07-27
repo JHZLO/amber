@@ -1,5 +1,5 @@
 // 할 일 섹션: 좌측 미니 캘린더 + 우측 선택 날짜 체크리스트 (2-pane, .claude/DESIGN.md §7).
-// 오늘 우선 — 탭을 열면 오늘 + 빠른 추가 입력에 포커스. 정본은 til.db 의 todos 테이블(lib/todos.ts).
+// 오늘 우선 — 탭을 열면 오늘 + 빠른 추가 입력에 포커스. 정본은 amber.db 의 todos 테이블(lib/todos.ts).
 
 import {
   Fragment,
@@ -21,9 +21,16 @@ import {
   reorderTodos,
   reparentTodo,
   setSubtreeDone,
-  toggleTodo,
   updateTodoContent,
 } from "../lib/todos";
+import {
+  childrenOf as childrenIn,
+  clampDropDepth,
+  descendantCount,
+  flattenTree,
+  resolveDrop,
+  subtreeIds,
+} from "../lib/todoTree";
 import {
   createBlock,
   findFreeSlot,
@@ -44,7 +51,7 @@ import {
   todayStr,
   weekStartOf,
 } from "../lib/date";
-import { Checkbox } from "../ui";
+import { Checkbox, Modal } from "../ui";
 import { Icon } from "../icons";
 import { MiniCalendar } from "./MiniCalendar";
 import { DayTimetable, type TtView } from "./DayTimetable";
@@ -121,6 +128,11 @@ export function TodoView({
   const [childInput, setChildInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 자손이 딸린 항목 삭제 확인 — count 는 함께 사라질 자손 수
+  const [confirmDelete, setConfirmDelete] = useState<{
+    todo: Todo;
+    count: number;
+  } | null>(null);
 
   const quickRef = useRef<HTMLInputElement>(null);
   const childInputRef = useRef<HTMLInputElement>(null);
@@ -184,21 +196,12 @@ export function TodoView({
     const node = cur.find((t) => t.id === id);
     if (!node) return;
 
-    // 렌더와 동일한 순서의 플랫 행 목록 (depth 포함)
-    type RowMeta = { id: number; parent_id: number | null; depth: number };
-    const rows: RowMeta[] = [];
-    const walk = (parent: number | null, depth: number) => {
-      for (const t of cur.filter((x) => (x.parent_id ?? null) === parent)) {
-        rows.push({ id: t.id, parent_id: t.parent_id ?? null, depth });
-        walk(t.id, depth + 1);
-      }
-    };
-    walk(null, 0);
+    // 트리 판단(플랫 행·서브트리·깊이 clamp·드롭 해석)은 전부 순수 모듈 lib/todoTree.ts.
+    // 여기 남는 건 실측(rect)·오버레이 transform·DB 커밋뿐이다.
+    const rows = flattenTree(cur);
     const srcDepth = rows.find((r) => r.id === id)?.depth ?? 0;
-
     // 드래그 서브트리 — 자기 자신/자손 안으로는 못 들어간다 (후보에서 제외 = 순환 방지)
-    const subtree = new Set<number>([id]);
-    for (const r of rows) if (r.parent_id != null && subtree.has(r.parent_id)) subtree.add(r.id);
+    const subtree = subtreeIds(cur, id);
 
     // 행 요소 맵 (실측은 원본을 접은 뒤 beginVisuals 에서 — 접힘 reflow 반영 좌표가 필요)
     const els = new Map<number, HTMLElement>();
@@ -270,11 +273,8 @@ export function TodoView({
       }
       const above = others[idx - 1] ?? null;
       const below = others[idx] ?? null;
-      // 유효 깊이: 아래 행의 깊이 이상(그 행의 부모를 뺏지 않게), 위 행의 깊이+1 이하(그 행의 하위까지)
-      const maxD = above ? above.depth + 1 : 0;
-      const minD = below ? below.depth : 0;
       const desired = srcDepth + Math.round((clientX - startX) / INDENT);
-      const depth = Math.max(minD, Math.min(maxD, desired));
+      const depth = clampDropDepth(desired, above, below);
       slot = { idx, depth };
       // 밀림: 슬롯 아래 행 전부 gap 높이만큼 내려 자리를 비운다 (트랜지션은 .reordering CSS)
       for (let j = 0; j < others.length; j++) {
@@ -319,39 +319,14 @@ export function TodoView({
       line?.remove();
       if (!moved || !slot) return;
 
-      const { idx, depth } = slot;
-      // 새 부모 = 슬롯 위쪽에서 가장 가까운 depth-1 행 (depth 0 이면 최상위)
-      let newParent: number | null = null;
-      if (depth > 0) {
-        for (let i = idx - 1; i >= 0; i--) {
-          if (others[i].depth === depth - 1) {
-            newParent = others[i].id;
-            break;
-          }
-          if (others[i].depth < depth - 1) break;
-        }
-        if (newParent == null) return; // 방어 — 유효 깊이 규칙상 오지 않는 경로
-      }
-      // 새 형제 순서: 슬롯 이전에 등장한 같은 부모의 행 수 = 삽입 위치
-      const beforeCnt = others
-        .slice(0, idx)
-        .filter((r) => r.parent_id === newParent).length;
-      const groupIds = cur
-        .filter((t) => (t.parent_id ?? null) === newParent && t.id !== id)
-        .map((t) => t.id);
-      groupIds.splice(beforeCnt, 0, id);
-
+      const drop = resolveDrop(cur, others, id, slot); // null = 제자리·불가 슬롯
+      if (!drop) return;
+      const newParent = drop.newParentId;
       const oldParent = node.parent_id ?? null;
-      if (newParent === oldParent) {
-        const oldOrder = cur
-          .filter((t) => (t.parent_id ?? null) === oldParent)
-          .map((t) => t.id);
-        if (oldOrder.join(",") === groupIds.join(",")) return; // 제자리 — 커밋 생략
-      }
       void (async () => {
         try {
           if (newParent !== oldParent) await reparentTodo(id, newParent);
-          await reorderTodos(groupIds);
+          await reorderTodos(drop.orderedSiblingIds);
           // 완료 상태 재계산: 떠난 그룹(마지막 미완료가 빠졌을 수 있음) + 새 그룹
           await recomputeChainFrom(oldParent);
           if (newParent !== oldParent) await recomputeChainFrom(newParent);
@@ -468,10 +443,13 @@ export function TodoView({
     }
   }
 
-  // 밀린 스트립 항목 토글 — 완료하면 스트립에서 빠지므로 전체 갱신
+  // 밀린 스트립 항목 토글 — 메인 토글과 같은 전파(하향 서브트리 + 상향 재계산). 예전엔 단일 행만
+  // 바꿔서 마지막 자식을 완료해도 부모가 스트립에 남았다. 완료하면 스트립에서 빠지므로 전체 갱신.
   async function toggleOverdue(t: Todo) {
+    const next: 0 | 1 = t.done === 1 ? 0 : 1;
     try {
-      await toggleTodo(t.id, t.done === 1 ? 0 : 1);
+      await setSubtreeDone(t.id, next);
+      await recomputeChainFrom(t.parent_id);
       refreshAll();
     } catch (e) {
       setError(errMsg(e));
@@ -504,7 +482,19 @@ export function TodoView({
     }
   }
 
+  // 삭제는 서브트리째라 비가역이다 — 자손이 있을 때만 확인을 받는다(DESIGN §8: 확인 모달 남발 금지).
+  // 홑 항목(대부분)은 예전처럼 원클릭. 자손 수는 트리 모듈이 세고, 밀린 스트립 행은 그 스트립에서 센다.
+  function askRemove(t: Todo, isOverdue: boolean) {
+    const n = descendantCount(isOverdue ? overdue : todos, t.id);
+    if (n === 0) {
+      void remove(t);
+      return;
+    }
+    setConfirmDelete({ todo: t, count: n });
+  }
+
   async function remove(t: Todo) {
+    setConfirmDelete(null);
     try {
       await deleteTodo(t.id);
       // 서브트리를 지웠으니 부모 완료 상태 재계산(마지막 미완료 자식이 사라졌을 수 있음)
@@ -518,7 +508,9 @@ export function TodoView({
   async function moveToday(ids: number[]) {
     if (!ids.length) return;
     try {
-      await moveTodos(ids, todayStr());
+      // 서브트리째 이동 → 뒤에 남은 원래 부모만 완료 상태를 다시 계산하면 된다
+      const leftBehind = await moveTodos(ids, todayStr());
+      for (const pid of leftBehind) await recomputeChainFrom(pid);
       refreshAll();
     } catch (e) {
       setError(errMsg(e));
@@ -571,8 +563,8 @@ export function TodoView({
   const calWEff = bodyW
     ? Math.max(CAL_W_MIN, Math.min(calWidth, bodyW - DETAIL_MIN))
     : calWidth;
-  const topLevel = todos.filter((t) => t.parent_id == null);
-  const childrenOf = (pid: number) => todos.filter((t) => t.parent_id === pid);
+  const topLevel = childrenIn(todos, null);
+  const childrenOf = (pid: number) => childrenIn(todos, pid);
   const doneTop = topLevel.filter((t) => t.done === 1).length;
 
   function renderRow(t: Todo, opts?: { overdue?: boolean }) {
@@ -638,7 +630,7 @@ export function TodoView({
             <button
               className="icon-btn sm danger"
               title="삭제"
-              onClick={() => void remove(t)}
+              onClick={() => askRemove(t, true)}
             >
               <Icon name="trash" size={13} />
             </button>
@@ -674,7 +666,7 @@ export function TodoView({
             <button
               className="icon-btn sm danger"
               title="삭제"
-              onClick={() => void remove(t)}
+              onClick={() => askRemove(t, false)}
             >
               <Icon name="trash" size={13} />
             </button>
@@ -910,6 +902,36 @@ export function TodoView({
           </div>
         )}
       </section>
+
+      <Modal
+        open={confirmDelete != null}
+        title="할 일 삭제"
+        narrow
+        onClose={() => setConfirmDelete(null)}
+        footer={
+          <>
+            <span className="spacer" />
+            <button className="btn btn-sm" onClick={() => setConfirmDelete(null)}>
+              취소
+            </button>
+            <button
+              className="btn btn-sm btn-danger-ghost"
+              onClick={() => confirmDelete && void remove(confirmDelete.todo)}
+            >
+              삭제
+            </button>
+          </>
+        }
+      >
+        {confirmDelete && (
+          <p style={{ margin: 0 }}>
+            <b>{confirmDelete.todo.content}</b> 항목을 하위 {confirmDelete.count}
+            개와 함께 삭제할까요?
+            <br />
+            되돌릴 수 없어요.
+          </p>
+        )}
+      </Modal>
     </div>
   );
 }

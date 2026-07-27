@@ -79,15 +79,6 @@ export async function reorderTodos(orderedIds: number[]): Promise<void> {
   }
 }
 
-/** 완료 토글. 이미 해당 상태면 no-op → 멱등(setStatus 패턴). completed_at 은 트리거가 스탬프 */
-export async function toggleTodo(id: number, done: 0 | 1): Promise<void> {
-  const db = await getDb();
-  await db.execute(
-    `UPDATE todos SET done = $1 WHERE id = $2 AND done <> $1`,
-    [done, id],
-  );
-}
-
 /** 어떤 노드 토글 → 그 노드와 모든 자손(재귀)을 같은 상태로 (하향 전파, 다단계).
  *  트리거가 각 행 completed_at 관리. 위쪽(조상) 재계산은 recomputeChainFrom 이 담당. */
 export async function setSubtreeDone(id: number, done: 0 | 1): Promise<void> {
@@ -149,18 +140,48 @@ export async function updateTodoContent(
   );
 }
 
-/** 여러 항목의 날짜를 옮김 (밀린 할 일 이월). done 은 건드리지 않음 */
-export async function moveTodos(ids: number[], dueDate: string): Promise<void> {
-  if (!ids.length) return;
+/** 여러 항목의 날짜를 옮김 (밀린 할 일 이월). done 은 건드리지 않음.
+ *  **서브트리째** 옮긴다 — 자손을 남기면 그 자손의 부모가 다른 날에 있어 어느 날에도 안 그려진다
+ *  (하루 목록은 parent_id IS NULL 부터 내려가며 그린다). 같은 이유로, 함께 오지 않는 부모 밑에
+ *  있던 항목은 도착 날짜에서 최상위로 올린다(parent_id = NULL).
+ *  단일 문장 두 개(조회 → UPDATE)이며 실제 변경은 한 UPDATE 안에서 원자적으로 일어난다.
+ *  @returns 뒤에 남은 원래 부모 id 들 — 자식이 빠졌으니 호출부가 recomputeChainFrom 로 재계산한다. */
+export async function moveTodos(
+  ids: number[],
+  dueDate: string,
+): Promise<number[]> {
+  if (!ids.length) return [];
   const db = await getDb();
-  const placeholders = ids.map((_, i) => `$${i + 3}`).join(",");
+  // 씨앗 id 끼리 부모-자식일 수 있어(‘모두 오늘로’) UNION 으로 중복을 접는다
+  const movedCte = (from: number) =>
+    `WITH RECURSIVE moved(id) AS (
+       SELECT id FROM todos WHERE id IN (${ids.map((_, i) => `$${i + from}`).join(",")})
+       UNION
+       SELECT t.id FROM todos t JOIN moved ON t.parent_id = moved.id
+     )`;
+  const orphaned = await db.select<{ parent_id: number }[]>(
+    `${movedCte(1)}
+     SELECT DISTINCT parent_id FROM todos
+      WHERE id IN (SELECT id FROM moved)
+        AND parent_id IS NOT NULL
+        AND parent_id NOT IN (SELECT id FROM moved)`,
+    ids,
+  );
   await db.execute(
-    `UPDATE todos SET due_date = $1, updated_at = $2 WHERE id IN (${placeholders})`,
+    `${movedCte(3)}
+     UPDATE todos
+        SET due_date = $1,
+            updated_at = $2,
+            parent_id = CASE WHEN parent_id IN (SELECT id FROM moved)
+                             THEN parent_id ELSE NULL END
+      WHERE id IN (SELECT id FROM moved)`,
     [dueDate, now(), ...ids],
   );
+  return orphaned.map((r) => r.parent_id);
 }
 
-/** 삭제 (즉시, 확인 모달 없음 — 값싼 대상). 노드를 지우면 그 서브트리 전체(모든 자손)를 함께.
+/** 삭제. 노드를 지우면 그 서브트리 전체(모든 자손)를 함께 — 되돌릴 수 없으므로
+ *  자손이 있을 때만 호출부가 확인 모달을 띄운다(홑 항목은 값싼 대상이라 즉시 삭제, DESIGN §8).
  *  삭제 후 부모 완료 상태 재계산은 호출부(recomputeChainFrom)가 담당. */
 export async function deleteTodo(id: number): Promise<void> {
   const db = await getDb();
