@@ -21,8 +21,9 @@ import { NotesView } from "./components/NotesView";
 import { AiOnboarding } from "./components/AiOnboarding";
 import { DiagramsView } from "./components/DiagramsView";
 import { TodoView } from "./components/TodoView";
+import { SearchModal, type SearchHit } from "./components/SearchModal";
 import { THEME_EVENT, resolvedTheme, toggleTheme } from "./lib/theme";
-import { OPEN_CONCEPT, OPEN_NOTE } from "./lib/nav";
+import { OPEN_CONCEPT, OPEN_NOTE, openDiagramInApp, openNoteInApp } from "./lib/nav";
 
 type StatusTab = ConceptStatus | "all";
 type Section = "til" | "notes" | "diagrams" | "todo";
@@ -46,6 +47,19 @@ const DEFAULT_SORT: Record<StatusTab, ConceptSort> = {
   learned: "recent_updated",
   all: "recent_updated",
 };
+
+// 레일 = 최상위 작업공간. 순서가 곧 ⌘1~4 의 번호라 모듈 상수로 고정한다
+const RAIL: {
+  id: Section;
+  label: string;
+  icon: "layers" | "book" | "workflow" | "calendar-check";
+}[] = [
+  { id: "todo", label: "할 일", icon: "calendar-check" },
+  { id: "til", label: "개념", icon: "layers" },
+  { id: "notes", label: "필기노트", icon: "book" },
+  { id: "diagrams", label: "다이어그램", icon: "workflow" },
+];
+
 
 function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -77,6 +91,7 @@ function App() {
 
   const [addOpen, setAddOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   // 리포트가 백그라운드로 생성 중이면 어느 탭에 있든 할 일 레일에 표시(진행이 안 끊김을 알림)
   const reportBusy = useAnyReportGenerating();
   const [ready, setReady] = useState(false);
@@ -162,6 +177,42 @@ function App() {
     };
   }, []);
 
+  // 빠른 검색 결과 열기 — 섹션 전환/선택은 기존 경로(nav 이벤트·goToConcept)를 그대로 탄다
+  const openHit = (h: SearchHit) => {
+    setSearchOpen(false);
+    if (h.kind === "concept") {
+      goToConcept(h.id);
+    } else if (h.kind === "note") {
+      openNoteInApp(h.path); // 아래 OPEN_NOTE 리스너가 섹션 전환, NotesView 가 파일 열기
+    } else {
+      setSection("diagrams");
+      openDiagramInApp(h.path); // DiagramsView 의 OPEN_DIAGRAM 리스너가 파일을 연다
+    }
+  };
+
+  // ⌘K 빠른 검색 · ⌘1~4 레일 전환. 섹션 단축키(⌘S)와 달리 앱 전역이라 activeRef 대신
+  // "모달이 떠 있으면 양보" 로 가린다 — 안 보이는 화면이 뒤에서 바뀌지 않게.
+  const shieldedRef = useRef(false);
+  shieldedRef.current = addOpen || settingsOpen || searchOpen;
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (shieldedRef.current) return;
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+      if (e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+        return;
+      }
+      const i = Number(e.key) - 1;
+      if (Number.isInteger(i) && i >= 0 && i < RAIL.length) {
+        e.preventDefault();
+        setSection(RAIL[i].id);
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
+
   const selected = concepts.find((c) => c.id === selectedId) ?? null;
 
   function toggleTag(name: string) {
@@ -184,17 +235,6 @@ function App() {
 
   const countOf = (id: StatusTab) =>
     id === "learning" ? counts.learning : id === "learned" ? counts.learned : counts.all;
-
-  const RAIL: {
-    id: Section;
-    label: string;
-    icon: "layers" | "book" | "workflow" | "calendar-check";
-  }[] = [
-    { id: "todo", label: "할 일", icon: "calendar-check" },
-    { id: "til", label: "개념", icon: "layers" },
-    { id: "notes", label: "필기노트", icon: "book" },
-    { id: "diagrams", label: "다이어그램", icon: "workflow" },
-  ];
 
   return (
     <div className="app">
@@ -413,6 +453,12 @@ function App() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         onSaved={setConfig}
+      />
+      {/* 보관함 전체 빠른 검색 (⌘K) */}
+      <SearchModal
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onOpenHit={openHit}
       />
     </div>
   );

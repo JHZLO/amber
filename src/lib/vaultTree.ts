@@ -76,6 +76,71 @@ export function flattenDirs(tree: VaultNode[]): string[] {
   return dirs;
 }
 
+/** 검색 결과 한 건 */
+export interface VaultMatch {
+  /** 표시명 (확장자 제거) */
+  name: string;
+  /** 루트 기준 상대경로 (확장자 포함) */
+  path: string;
+  /** 본문에서 처음 걸린 줄. 파일명만 일치했으면 null */
+  snippet: string | null;
+}
+
+const SNIPPET_MAX = 120;
+
+/** 파일명 + 본문 substring 검색 (대소문자 무시). 파일명 일치를 앞에 둔다.
+ *  트리·읽기를 주입받는 이유: notes/diagrams 가 이미 각자 루트로 묶은 함수를 내보내고 있어
+ *  루트·확장자 설정을 호출부에서 다시 쓰지 않아도 된다.
+ *  수십 개 규모라 인덱스 없이 매번 전부 읽는다 — 호출부가 디바운스로 빈도를 줄인다. */
+export async function searchFiles(
+  src: {
+    listTree: () => Promise<VaultNode[]>;
+    readFile: (relPath: string) => Promise<string>;
+  },
+  query: string,
+  limit = 20,
+): Promise<VaultMatch[]> {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+
+  const files: VaultNode[] = [];
+  const walk = (nodes: VaultNode[]) => {
+    for (const n of nodes) {
+      if (n.isDir) walk(n.children ?? []);
+      else files.push(n);
+    }
+  };
+  walk(await src.listTree());
+
+  const byName: VaultMatch[] = [];
+  const byBody: VaultMatch[] = [];
+  for (const f of files) {
+    let snippet: string | null = null;
+    try {
+      snippet = firstHitLine(await src.readFile(f.path), q);
+    } catch {
+      // 읽기 실패(삭제 직후·권한)는 결과에서 조용히 빼되 이름 일치는 살린다
+    }
+    if (f.name.toLowerCase().includes(q))
+      byName.push({ name: f.name, path: f.path, snippet });
+    else if (snippet) byBody.push({ name: f.name, path: f.path, snippet });
+  }
+  return [...byName, ...byBody].slice(0, limit);
+}
+
+/** 소문자 질의가 처음 걸린 줄. 길면 매칭 지점이 잘리지 않게 그 앞에서 자른다 */
+function firstHitLine(body: string, q: string): string | null {
+  for (const raw of body.split("\n")) {
+    const line = raw.trim();
+    const at = line.toLowerCase().indexOf(q);
+    if (at === -1) continue;
+    if (line.length <= SNIPPET_MAX) return line;
+    const start = Math.max(0, at - 30);
+    return (start ? "…" : "") + line.slice(start, start + SNIPPET_MAX) + "…";
+  }
+  return null;
+}
+
 export interface VaultTreeConfig {
   /** 루트 폴더. appdata 상대경로('vault/notes') 또는 절대경로('/Users/…').
    *  getter 를 주면 호출 시점마다 해석 — "폴더 열기"로 루트가 바뀌어도 인스턴스 재생성 불필요. */
