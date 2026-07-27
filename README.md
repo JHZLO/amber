@@ -95,7 +95,9 @@ A per-day checklist with unlimited nesting and drag reordering, a mini month cal
 - **Light / dark theme** — follows the system, one-click toggle, synced across windows
 - **Safe deletes** — files go to the macOS Trash, not into the void
 - **Saved prompts** — store your frequent AI instructions and reuse them as chips
-- **Zero-effort backup** — everything is plain text; copying one folder is a full backup
+- **One-click backup** — the 백업 action in 설정 exports a consistent snapshot of your vault
+  and database. Don't copy `amber.db` by hand: it runs in WAL mode, so a raw copy of a running
+  database can miss recent writes
 
 ## Supported AI CLIs
 

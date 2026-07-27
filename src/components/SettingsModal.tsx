@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { openPath } from "@tauri-apps/plugin-opener";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { appDataDir } from "@tauri-apps/api/path";
+import { createBackup } from "../lib/backup";
 import type { AiProvider, AppConfig } from "../lib/config";
 import {
   PROVIDER_LABELS,
@@ -62,6 +64,16 @@ export function SettingsModal({
   const [theme, setTheme] = useState<ThemePref>("system");
   const [tab, setTab] = useState<SetTab>("ai");
 
+  // 백업: 폴더 선택 → Rust 가 vault 사본 + DB 스냅샷 생성. 결과는 탭과 무관하게 본문 맨 위에 남긴다
+  const [backingUp, setBackingUp] = useState(false);
+  const [backupResult, setBackupResult] = useState<{
+    ok: boolean;
+    msg: string;
+  } | null>(null);
+  // 폴더 선택 다이얼로그는 앱을 막지 않아 그 사이에도 버튼을 또 누를 수 있다 — 상태보다 먼저 잠근다
+  const backupLock = useRef(false);
+  const backupNote = useRef<HTMLDivElement>(null);
+
   // 저장 프롬프트: 목록 + 포커스 에디터(한 번에 하나만 편집)
   const [prompts, setPrompts] = useState<SavedPrompt[]>([]);
   // editing !== null 이면 에디터 화면. isNew 는 취소 시 목록에 안 남기기 위함
@@ -90,6 +102,7 @@ export function SettingsModal({
       void redetect(); // 열자마자 설치된 CLI 를 감지해 카드로 보여준다
       loadPrompts().then(setPrompts);
       setEditing(null);
+      setBackupResult(null);
       setTab("ai");
       setTheme(getThemePref());
     }
@@ -175,6 +188,36 @@ export function SettingsModal({
     setTestResult(null);
   }
 
+  async function backup() {
+    if (backupLock.current) return;
+    backupLock.current = true;
+    try {
+      const dir = await openDialog({
+        directory: true,
+        multiple: false,
+        title: "백업을 저장할 폴더 선택",
+      });
+      if (typeof dir !== "string" || !dir) return;
+      setBackingUp(true);
+      setBackupResult(null);
+      const out = await createBackup(dir);
+      if (!alive.current) return;
+      setBackupResult({ ok: true, msg: `백업 완료 — ${out}` });
+    } catch (e) {
+      // 노트가 탭 위에 따로 뜨므로 무엇이 실패했는지부터 밝힌다 (Rust 메시지는 이미 한국어 문장)
+      if (alive.current)
+        setBackupResult({ ok: false, msg: `백업 실패 — ${String(e)}` });
+    } finally {
+      backupLock.current = false;
+      if (alive.current) setBackingUp(false);
+    }
+  }
+
+  // 탭 내용이 길어 아래로 스크롤돼 있으면 맨 위의 결과 노트를 못 보고 지나친다
+  useEffect(() => {
+    if (backupResult) backupNote.current?.scrollIntoView({ block: "nearest" });
+  }, [backupResult]);
+
   async function openFolder() {
     try {
       await openPath(await appDataDir());
@@ -204,6 +247,13 @@ export function SettingsModal({
     <>
       <button className="btn btn-sm" onClick={openFolder}>
         데이터 폴더 열기
+      </button>
+      <button
+        className="btn btn-sm"
+        onClick={() => void backup()}
+        disabled={backingUp}
+      >
+        {backingUp ? "백업 중…" : "백업"}
       </button>
       <span className="spacer" />
       <button className="btn btn-sm" onClick={onClose}>
@@ -253,6 +303,15 @@ export function SettingsModal({
         </>
       ) : (
         <>
+          {backupResult && (
+            <div
+              ref={backupNote}
+              className={backupResult.ok ? "ok-note" : "error-note"}
+              style={{ marginBottom: 12 }}
+            >
+              {backupResult.msg}
+            </div>
+          )}
           <div className="set-tabs">
             {SETTING_TABS.map((t) => (
               <button

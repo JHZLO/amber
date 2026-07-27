@@ -2,12 +2,16 @@ mod ai;
 mod detect;
 mod report;
 
+use std::path::Path;
+use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
     Manager, WindowEvent,
 };
 use tauri_plugin_sql::{Migration, MigrationKind};
+use tokio::process::Command;
+use tokio::time::timeout;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -38,6 +42,136 @@ fn move_to_trash(app: tauri::AppHandle, rel_path: String) -> Result<(), String> 
     }
     trash::delete(&canon_target).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// 백업: 사용자가 고른 폴더 아래 `amber-backup-<UTC 타임스탬프>/` 를 만들고
+/// DB 스냅샷(amber.db)과 vault/ 사본을 넣는다. 성공 시 만들어진 폴더의 절대경로를 돌려준다.
+#[tauri::command]
+async fn create_backup(app: tauri::AppHandle, dest_dir: String) -> Result<String, String> {
+    // DB 는 sql 플러그인이 app_config_dir 기준으로 열고, vault 는 프론트가 appdata 기준으로 쓴다
+    // (macOS 에선 같은 폴더지만 각자의 기준을 그대로 따른다).
+    let db = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| e.to_string())?
+        .join("amber.db");
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let vault = data_dir.join("vault");
+
+    let dest = std::path::PathBuf::from(dest_dir.trim());
+    if !dest.is_dir() {
+        return Err("백업할 폴더를 찾을 수 없습니다.".into());
+    }
+    // 백업 대상이 앱 데이터 폴더 안이면 vault 를 자기 자신 안으로 무한 복사하게 된다
+    if let (Ok(d), Ok(base)) = (dest.canonicalize(), data_dir.canonicalize()) {
+        if d.starts_with(&base) {
+            return Err("앱 데이터 폴더 밖의 위치를 선택해 주세요.".into());
+        }
+    }
+
+    // 같은 폴더에 여러 번 백업해도 덮어쓰지 않게 하위 폴더로 나눈다
+    // (VACUUM INTO 는 대상 파일이 이미 있으면 실패한다).
+    let root = dest.join(format!("amber-backup-{}", utc_stamp()));
+    std::fs::create_dir_all(&root).map_err(|e| format!("백업 폴더를 만들지 못했습니다: {e}"))?;
+
+    let write = async {
+        if db.exists() {
+            vacuum_into(&db, &root.join("amber.db")).await?;
+        }
+        if vault.is_dir() {
+            let (from, to) = (vault.clone(), root.join("vault"));
+            // 파일 복사는 블로킹이라 워커 스레드로 — 그동안 UI(IPC)가 멈추지 않게
+            tokio::task::spawn_blocking(move || copy_dir(&from, &to))
+                .await
+                .map_err(|e| e.to_string())??;
+        }
+        Ok::<(), String>(())
+    };
+
+    if let Err(e) = write.await {
+        // 반쪽짜리 폴더를 남기면 온전한 백업으로 오인한다 — 방금 만든 폴더만 되돌린다
+        let _ = std::fs::remove_dir_all(&root);
+        return Err(e);
+    }
+    Ok(root.to_string_lossy().into_owned())
+}
+
+/// DB 스냅샷. journal_mode 가 WAL 이라 amber.db 파일 복사는 최근 쓰기를 놓치므로,
+/// 앱이 DB 를 연 채로도 일관된 사본을 만드는 `VACUUM INTO` 를 쓴다.
+/// sqlx 를 직접 의존하지 않으므로 macOS 기본 제공 sqlite3 CLI 로 실행한다.
+async fn vacuum_into(db: &Path, out: &Path) -> Result<(), String> {
+    // 경로는 SQL 문자열 리터럴로 들어가므로 작은따옴표만 이스케이프(셸은 거치지 않는다)
+    let sql = format!(
+        "VACUUM INTO '{}'",
+        out.to_string_lossy().replace('\'', "''")
+    );
+    let res = timeout(
+        Duration::from_secs(120),
+        Command::new("/usr/bin/sqlite3")
+            .arg(db)
+            .arg(&sql)
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .map_err(|_| "DB 백업이 시간 안에 끝나지 않았습니다.".to_string())?;
+
+    let output = res.map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            "시스템 sqlite3 를 찾을 수 없어 DB 를 백업하지 못했습니다.".to_string()
+        } else {
+            format!("sqlite3 실행 실패: {e}")
+        }
+    })?;
+    if !output.status.success() {
+        return Err(format!(
+            "DB 백업 실패: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(())
+}
+
+/// 재귀 복사 — tauri-plugin-fs 에 재귀 복사가 없어 직접 구현.
+/// 심볼릭 링크는 건너뛴다(백업본이 원본 밖을 가리키는 것 방지).
+fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(to).map_err(|e| e.to_string())?;
+    for entry in std::fs::read_dir(from).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let kind = entry.file_type().map_err(|e| e.to_string())?;
+        let dst = to.join(entry.file_name());
+        if kind.is_dir() {
+            copy_dir(&entry.path(), &dst)?;
+        } else if kind.is_file() {
+            std::fs::copy(entry.path(), &dst).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+/// 백업 폴더 이름용 UTC 타임스탬프(YYYYMMDD-HHMMSS). chrono 없이 epoch 초에서 직접 환산.
+fn utc_stamp() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
+    // 3월을 연초로 두는 민력(civil) 역산 — 윤년 분기를 한 번에 처리한다
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = era * 400 + yoe + i64::from(m <= 2);
+    format!(
+        "{y:04}{m:02}{d:02}-{:02}{:02}{:02}",
+        rem / 3_600,
+        (rem % 3_600) / 60,
+        rem % 60
+    )
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -106,22 +240,10 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            // 구 프로젝트명(til) 잔재 정리: til.db → amber.db 로 이전.
-            // DB 는 프론트의 Database.load 시점에 열리므로, 그 전(setup)에 파일명을 바꿔 데이터를 보존한다.
-            // amber.db 가 아직 없을 때만(최초 1회), WAL/SHM 까지 함께 옮긴다.
-            if let Ok(dir) = app.path().app_config_dir() {
-                if dir.join("til.db").exists() && !dir.join("amber.db").exists() {
-                    for (old, new) in [
-                        ("til.db", "amber.db"),
-                        ("til.db-wal", "amber.db-wal"),
-                        ("til.db-shm", "amber.db-shm"),
-                    ] {
-                        let from = dir.join(old);
-                        if from.exists() {
-                            let _ = std::fs::rename(&from, dir.join(new));
-                        }
-                    }
-                }
+            // 위젯은 모든 스페이스에 표시 — 데스크탑을 전환하거나 다른 앱이 전체화면이어도 사라지지 않는다
+            // (PRD §8.1: JSON 키가 아니라 런타임 API). 메인 창에는 걸지 않는다.
+            if let Some(w) = app.get_webview_window("widget") {
+                let _ = w.set_visible_on_all_workspaces(true);
             }
 
             let handle = app.handle();
@@ -171,6 +293,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             move_to_trash,
+            create_backup,
             ai::ai_generate,
             ai::ai_augment,
             ai::ai_note_compose,
