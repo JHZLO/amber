@@ -15,8 +15,10 @@ export const PROVIDER_LABELS: Record<AiProvider, string> = {
 /** 프로바이더별 모델 선택지. 빈 id = CLI 기본 모델 사용(설정 파일의 model 값을 따름) */
 export const PROVIDER_MODELS: Record<AiProvider, { id: string; label: string }[]> = {
   claude: [
-    { id: "claude-opus-4-8", label: "Opus (품질 우선)" },
-    { id: "claude-sonnet-5", label: "Sonnet (속도·비용 절약)" },
+    { id: "claude-opus-5", label: "Opus 5 (최신·품질 우선)" },
+    { id: "claude-opus-4-8", label: "Opus 4.8 (품질 우선)" },
+    { id: "claude-sonnet-5", label: "Sonnet 5 (균형)" },
+    { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5 (속도·비용 절약)" },
   ],
   codex: [
     { id: "gpt-5.6-sol", label: "GPT-5.6 (최신)" },
