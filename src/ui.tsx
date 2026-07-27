@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -292,9 +293,16 @@ export function timeAgo(ms: number): string {
   return new Date(ms).toLocaleDateString("ko-KR");
 }
 
+/** 드롭다운 메뉴 배치 상수 — `.select-menu`(styles.css)와 짝을 이룬다 */
+const MENU_MAX_H = 260; // 최대 높이. 뷰포트가 좁으면 아래에서 더 줄인다
+const MENU_GAP = 6; // 트리거와 메뉴 사이 간격
+const MENU_EDGE = 10; // 뷰포트 가장자리에 남길 최소 여백
+const MENU_MIN_H = 96; // 뒤집어도 좁을 때의 바닥값(≈항목 3개) — 그 아래로는 스크롤
+
 /** 커스텀 드롭다운 (네이티브 select 대신).
  *  메뉴는 body 로 portal + position:fixed 로 띄워, 모달 등 overflow 컨테이너에
- *  잘리거나 스크롤 높이를 밀어 레이아웃을 흔드는 문제를 원천 차단한다. */
+ *  잘리거나 스크롤 높이를 밀어 레이아웃을 흔드는 문제를 원천 차단한다.
+ *  아래 공간이 모자라면 위로 뒤집어(flip) 모달 푸터의 저장/닫기 같은 하단 액션을 덮지 않는다. */
 export function Select<T extends string>({
   value,
   options,
@@ -310,10 +318,12 @@ export function Select<T extends string>({
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{
-    top: number;
+    top?: number;
+    bottom?: number;
     left?: number;
     right?: number;
     minWidth: number;
+    maxHeight: number;
   } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -323,16 +333,40 @@ export function Select<T extends string>({
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setPos(
-      align === "right"
-        ? { top: r.bottom + 6, right: window.innerWidth - r.right, minWidth: r.width }
-        : { top: r.bottom + 6, left: r.left, minWidth: r.width },
+    // 메뉴가 벗어나면 안 되는 경계. 모달 안이면 '모달 본문' — 뷰포트 기준으로 재면 화면엔 들어가도
+    // 푸터의 저장/닫기를 덮어버린다. 모달 밖이면 뷰포트.
+    const host = el.closest(".modal-body")?.getBoundingClientRect();
+    const limitTop = Math.max(MENU_EDGE, host?.top ?? 0);
+    const limitBottom = Math.min(
+      window.innerHeight - MENU_EDGE,
+      host?.bottom ?? window.innerHeight,
     );
+    const roomBelow = limitBottom - r.bottom - MENU_GAP;
+    const roomAbove = r.top - limitTop - MENU_GAP;
+    // 실제 내용 높이로 판단(메뉴는 open 과 동시에 마운트되므로 measure 가능).
+    // 아직 못 쟀으면 최대치로 가정해 보수적으로 뒤집는다.
+    const need = Math.min(menuRef.current?.scrollHeight || MENU_MAX_H, MENU_MAX_H);
+    // 아래가 모자라고 위가 더 넓을 때만 뒤집는다 — 공간이 되면 늘 아래(예측 가능한 기본값)
+    const up = roomBelow < need && roomAbove > roomBelow;
+    setPos({
+      ...(align === "right"
+        ? { right: window.innerWidth - r.right }
+        : { left: r.left }),
+      ...(up
+        ? { bottom: window.innerHeight - r.top + MENU_GAP }
+        : { top: r.bottom + MENU_GAP }),
+      minWidth: r.width,
+      maxHeight: Math.max(MENU_MIN_H, Math.min(MENU_MAX_H, up ? roomAbove : roomBelow)),
+    });
   }, [align]);
+
+  // 배치는 paint 전에 끝낸다 — 잘못된 위치가 한 프레임 보이지 않게
+  useLayoutEffect(() => {
+    if (open) place();
+  }, [open, place]);
 
   useEffect(() => {
     if (!open) return;
-    place();
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
       if (rootRef.current?.contains(t) || menuRef.current?.contains(t)) return;
@@ -357,7 +391,7 @@ export function Select<T extends string>({
       window.removeEventListener("resize", onReflow);
       window.removeEventListener("scroll", onScroll, true);
     };
-  }, [open, place]);
+  }, [open]);
 
   const cur = options.find((o) => o.value === value);
 
@@ -381,16 +415,19 @@ export function Select<T extends string>({
         </svg>
       </button>
       {open &&
-        pos &&
         createPortal(
+          // pos 계산(useLayoutEffect) 전 한 프레임은 숨긴다 — 측정용으로 마운트만 해둔 상태
           <div
             ref={menuRef}
             className="select-menu"
             style={{
-              top: pos.top,
-              left: pos.left,
-              right: pos.right,
-              minWidth: pos.minWidth,
+              top: pos?.top,
+              bottom: pos?.bottom,
+              left: pos?.left,
+              right: pos?.right,
+              minWidth: pos?.minWidth,
+              maxHeight: pos?.maxHeight,
+              visibility: pos ? undefined : "hidden",
             }}
           >
             {options.map((o) => (
