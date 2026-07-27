@@ -48,6 +48,43 @@ export function reportMcpServers(cliPath: string | null): Promise<McpServer[]> {
   return invoke<McpServer[]>("report_mcp_servers", { cliPath: cliPath ?? null });
 }
 
+// `claude mcp list` 는 등록 서버마다 health check 를 돌아 10초 이상 걸린다. 설정을 열 때마다
+// 그만큼 "확인 중…" 을 보는 건 과하므로, 마지막 결과를 캐시해 즉시 보여주고 뒤에서 갱신한다
+// (stale-while-revalidate). 캐시는 표시용일 뿐 — 실제 수집은 항상 claude 가 직접 한다.
+
+const MCP_CACHE_KEY = "report_mcp_cache";
+
+function isMcpServer(v: unknown): v is McpServer {
+  const s = v as McpServer;
+  return (
+    !!s &&
+    typeof s.name === "string" &&
+    typeof s.connected === "boolean" &&
+    typeof s.status === "string" &&
+    typeof s.transport === "string"
+  );
+}
+
+/** 마지막으로 감지한 MCP 서버 목록. 없거나 깨졌으면 null */
+export async function loadMcpCache(): Promise<McpServer[] | null> {
+  const raw = await getSetting(MCP_CACHE_KEY);
+  if (!raw) return null;
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return null;
+    const clean = arr.filter(isMcpServer);
+    return clean.length ? clean : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveMcpCache(servers: McpServer[]): Promise<void> {
+  // 빈 결과(감지 실패·타임아웃)로 멀쩡한 캐시를 덮지 않는다
+  if (!servers.length) return;
+  await setSetting(MCP_CACHE_KEY, JSON.stringify(servers));
+}
+
 /** gh 에 로그인된 계정 목록 (여러 계정일 때 조회 계정 선택용) */
 export interface GhAccount {
   login: string;

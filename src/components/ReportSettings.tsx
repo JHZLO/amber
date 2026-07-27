@@ -7,9 +7,11 @@ import type { McpServer, ReportSourceId } from "../types";
 import { loadConfig, type AppConfig } from "../lib/config";
 import {
   detectReportTools,
+  loadMcpCache,
   loadReportConfig,
   reportGhAccounts,
   reportMcpServers,
+  saveMcpCache,
   saveReportConfig,
   type GhAccount,
   type ReportConfig,
@@ -52,6 +54,7 @@ export function ReportSettings() {
   const [expanded, setExpanded] = useState<ReportSourceId | null>(null);
   const [dragId, setDragId] = useState<ReportSourceId | null>(null);
   const alive = useRef(true);
+  const suggested = useRef(false);
 
   const isClaude = appCfg?.provider === "claude";
 
@@ -64,10 +67,16 @@ export function ReportSettings() {
       setCfg(next);
       if (!c.onboarded) void saveReportConfig(next);
     });
-    loadConfig().then((ac) => {
+    loadConfig().then(async (ac) => {
       if (!alive.current) return;
       setAppCfg(ac);
-      if (ac.provider === "claude") void redetectMcp(ac.cliPath);
+      if (ac.provider !== "claude") return;
+      // 지난 감지 결과를 먼저 붙여 즉시 상태를 보여주고(오래 걸리는 감지를 기다리지 않는다),
+      // 곧바로 백그라운드 갱신을 돌려 최신 값으로 덮는다.
+      const cached = await loadMcpCache();
+      if (!alive.current) return;
+      if (cached) setMcpServers(cached);
+      void redetectMcp(ac.cliPath);
     });
     void redetect();
     return () => {
@@ -76,9 +85,13 @@ export function ReportSettings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 서버 목록이 오면 이름이 맞는 연결된 서버를 자동 제안(비어 있을 때만)
+  // 서버 목록·설정이 모두 준비되면 이름이 맞는 연결된 서버를 자동 제안(비어 있을 때만).
+  // 캐시 덕에 목록이 cfg 보다 먼저 올 수 있어 둘 다 의존하되, 사용자가 '선택 안 함' 으로
+  // 비운 걸 다시 채우지 않도록 열려 있는 동안 한 번만 돈다.
   useEffect(() => {
+    if (suggested.current) return;
     if (!mcpServers || !cfg) return;
+    suggested.current = true;
     let next = cfg;
     if (!next.slackServer) {
       const m = mcpServers.find((s) => s.connected && /slack/i.test(s.name));
@@ -90,7 +103,7 @@ export function ReportSettings() {
     }
     if (next !== cfg) update(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mcpServers]);
+  }, [mcpServers, cfg]);
 
   async function redetect() {
     setDetecting(true);
@@ -110,7 +123,10 @@ export function ReportSettings() {
     try {
       const path = cliPath ?? appCfg?.cliPath ?? "";
       const list = await reportMcpServers(path || null);
-      if (alive.current) setMcpServers(list);
+      if (!alive.current) return;
+      setMcpServers(list);
+      // 빈 결과는 캐시하지 않는다(감지 실패와 구분 불가) — 다음에 또 처음부터 기다리지 않게
+      void saveMcpCache(list);
     } finally {
       if (alive.current) setMcpLoading(false);
     }
@@ -412,13 +428,14 @@ function McpSourceBody({
     <>
       <div className="field" style={{ marginBottom: 8 }}>
         <label>MCP 서버</label>
-        {/* servers === null = 아직 감지 전. 여기서 '없어요' 안내를 띄우면 등록된 서버가 사라진 걸로 보인다 */}
-        {loading || !servers ? (
+        {/* servers === null = 감지 전(캐시도 없음). 갱신 중에는 캐시를 계속 보여준다 —
+            여기서 로딩/'없어요' 로 되돌리면 설정이 사라진 것처럼 보인다 */}
+        {!servers ? (
           <div className="loading-box" style={{ padding: "12px 0" }}>
             <Spinner />
             <span className="hint">등록된 서버를 찾는 중…</span>
           </div>
-        ) : servers && servers.length && hasConnected ? (
+        ) : servers.length && hasConnected ? (
           <Select block value={value} options={options} onChange={onPick} />
         ) : (
           <div className="rep-mcp-guide">
@@ -436,9 +453,9 @@ function McpSourceBody({
           인증은 claude CLI 가 관리해요. Amber 는 토큰을 저장하지 않습니다.
         </div>
       </div>
-      <button className="btn btn-sm" onClick={onRedetect}>
+      <button className="btn btn-sm" onClick={onRedetect} disabled={loading}>
         <Icon name="refresh" size={13} />
-        서버 다시 감지
+        {loading ? "감지 중…" : "서버 다시 감지"}
       </button>
     </>
   );
