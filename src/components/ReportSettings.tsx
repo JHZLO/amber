@@ -187,7 +187,10 @@ export function ReportSettings() {
     if (!isClaude) return { label: "claude 필요", ok: false };
     const server = id === "slack" ? cfg!.slackServer : cfg!.notionServer;
     if (!server) return { label: "서버 선택", ok: false };
-    const s = mcpServers?.find((x) => x.name === server);
+    // 감지 전(null)은 '아직 모름' — 실패(빈 배열)와 구분한다. 저장은 됐는데 "미확인" 으로 보이면
+    // 설정이 날아간 걸로 오해한다(claude mcp list 는 10초 이상 걸린다).
+    if (!mcpServers) return { label: "확인 중…", ok: false };
+    const s = mcpServers.find((x) => x.name === server);
     if (!s) return { label: "미확인", ok: false };
     return s.connected
       ? { label: "연결됨", ok: true }
@@ -409,7 +412,8 @@ function McpSourceBody({
     <>
       <div className="field" style={{ marginBottom: 8 }}>
         <label>MCP 서버</label>
-        {loading ? (
+        {/* servers === null = 아직 감지 전. 여기서 '없어요' 안내를 띄우면 등록된 서버가 사라진 걸로 보인다 */}
+        {loading || !servers ? (
           <div className="loading-box" style={{ padding: "12px 0" }}>
             <Spinner />
             <span className="hint">등록된 서버를 찾는 중…</span>

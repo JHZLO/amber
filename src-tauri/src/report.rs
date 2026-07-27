@@ -1084,8 +1084,10 @@ pub async fn report_mcp_servers(cli_path: Option<String>) -> Vec<McpServer> {
     let program = cli_path
         .filter(|p| !p.is_empty())
         .unwrap_or_else(|| "claude".to_string());
+    // 서버마다 health check 를 돌아 등록 수에 비례해 느리다(20여 개에 ~15초). 20초는 너무 빠듯해
+    // 조금만 느려도 빈 목록 → "등록된 서버가 없어요" 로 보인다. 넉넉히 잡는다(끝나면 즉시 반환).
     match timeout(
-        Duration::from_secs(20),
+        Duration::from_secs(60),
         Command::new(&program).args(["mcp", "list"]).output(),
     )
     .await
