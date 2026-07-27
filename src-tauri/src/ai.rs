@@ -15,6 +15,11 @@ const DEFAULT_MODEL: &str = "claude-opus-4-8";
 // 상세 노트 생성(특히 sonnet 다중 턴 + mermaid)이 오래 걸려 넉넉하게 5분.
 const DEFAULT_TIMEOUT_SECS: u64 = 300;
 const MIN_INPUT_CHARS: usize = 20;
+// `--version` 헬스체크 상한 — detect.rs 의 probe_version 과 같은 값(설정 모달 스피너가 멈추지 않게).
+const HEALTH_TIMEOUT_SECS: u64 = 8;
+// 스트림이 끝난 뒤 프로세스 종료를 기다리는 상한. stdio MCP 서버 teardown 이 늦어질 수 있는데,
+// 출력은 이미 다 받은 뒤라 더 기다릴 이유가 없다.
+const POST_STREAM_WAIT_SECS: u64 = 10;
 
 // 시스템 프롬프트는 src-tauri/context/*.md 에 영어로 두고 컴파일 시 그대로 임베드한다
 // (include_str!). 파일 = 모델에 전달되는 프롬프트 본문 그 자체이며, 고치면 재빌드가 필요하다.
@@ -659,7 +664,7 @@ pub(crate) async fn stream_claude_result(
 
     // stderr 는 별도 태스크로 동시에 비운다(파이프 가득 참으로 인한 교착 방지).
     let stderr = child.stderr.take().expect("stderr piped");
-    let stderr_task = tokio::spawn(async move {
+    let mut stderr_task = tokio::spawn(async move {
         let mut buf = String::new();
         let mut r = BufReader::new(stderr);
         let _ = r.read_to_string(&mut buf).await;
@@ -722,8 +727,20 @@ pub(crate) async fn stream_claude_result(
         Ok(r) => r?,
     }
 
-    let _ = child.wait().await;
-    let errbuf = stderr_task.await.unwrap_or_default();
+    // 결과 봉투까지 다 받아도 child 종료는 별개다 — 여기서 무한정 기다리면 호출부(리포트 생성 등)가
+    // 영영 반환하지 못하므로 상한을 두고 안 끝나면 죽인다.
+    let post = Duration::from_secs(POST_STREAM_WAIT_SECS);
+    if timeout(post, child.wait()).await.is_err() {
+        let _ = child.start_kill();
+    }
+    // stderr 파이프는 손자 프로세스(MCP 서버)가 붙들고 있을 수 있다. 진단용이라 못 받으면 포기.
+    let errbuf = match timeout(post, &mut stderr_task).await {
+        Ok(r) => r.unwrap_or_default(),
+        Err(_) => {
+            stderr_task.abort();
+            String::new()
+        }
+    };
 
     let envelope = match envelope {
         Some(e) => e,
@@ -938,20 +955,30 @@ async fn run_concept_note(
 #[tauri::command]
 pub async fn ai_health(cli_path: Option<String>) -> Result<String, AiError> {
     let program = cli_path.unwrap_or_else(|| "claude".to_string());
-    let output = Command::new(&program)
-        .arg("--version")
-        .output()
-        .await
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                AiError::new(
-                    "AI_NOT_FOUND",
-                    format!("claude 를 찾을 수 없습니다: {program}"),
-                )
-            } else {
-                AiError::new("SPAWN_ERROR", e.to_string())
-            }
-        })?;
+    let res = timeout(
+        Duration::from_secs(HEALTH_TIMEOUT_SECS),
+        Command::new(&program)
+            .arg("--version")
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .map_err(|_| {
+        AiError::new(
+            "AI_TIMEOUT",
+            format!("{HEALTH_TIMEOUT_SECS}초 안에 응답이 없습니다."),
+        )
+    })?;
+    let output = res.map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            AiError::new(
+                "AI_NOT_FOUND",
+                format!("claude 를 찾을 수 없습니다: {program}"),
+            )
+        } else {
+            AiError::new("SPAWN_ERROR", e.to_string())
+        }
+    })?;
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
