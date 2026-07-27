@@ -124,6 +124,10 @@ export function TodoView({
 
   const quickRef = useRef<HTMLInputElement>(null);
   const childInputRef = useRef<HTMLInputElement>(null);
+  // 입력창은 blur 에도 저장한다(§ Esc 만 취소). Enter·Esc 로 이미 끝난 세션에서 unmount 시
+  // blur 가 한 번 더 와도 중복 저장/되살아나지 않도록 '이미 정리됨'을 ref 로 기억한다.
+  const editDone = useRef(false);
+  const childDone = useRef(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const todosRef = useRef(todos);
@@ -432,7 +436,8 @@ export function TodoView({
     setEditingId(null);
   };
 
-  async function add() {
+  /** keepFocus=false 는 blur 로 저장하는 경로 — 사용자가 방금 클릭한 곳에서 포커스를 뺏지 않는다 */
+  async function add(keepFocus = true) {
     const content = quick.trim();
     if (!content || busy) return;
     setBusy(true);
@@ -444,7 +449,7 @@ export function TodoView({
       setError(errMsg(e));
     } finally {
       setBusy(false);
-      quickRef.current?.focus();
+      if (keepFocus) quickRef.current?.focus();
     }
   }
 
@@ -474,11 +479,20 @@ export function TodoView({
   }
 
   function startEdit(t: Todo) {
+    editDone.current = false;
     setEditingId(t.id);
     setEditText(t.content);
   }
 
+  /** 편집 취소(Esc) — 저장하지 않고 닫는다 */
+  function cancelEdit() {
+    editDone.current = true;
+    setEditingId(null);
+  }
+
   async function saveEdit(t: Todo) {
+    if (editDone.current) return; // Enter/Esc 로 이미 끝난 세션 (unmount blur 중복 방지)
+    editDone.current = true;
     const content = editText.trim();
     setEditingId(null);
     if (!content || content === t.content) return; // 빈 값·무변경은 취소로 처리
@@ -533,7 +547,7 @@ export function TodoView({
   }
 
   // 하위 항목 추가 (부모 hover '+하위'). 추가 후 부모 완료 재계산 + 입력 유지(연속 추가)
-  async function addChild(parentId: number) {
+  async function addChild(parentId: number, keepFocus = true) {
     const content = childInput.trim();
     if (!content || busy) return;
     setBusy(true);
@@ -547,7 +561,7 @@ export function TodoView({
       setError(errMsg(e));
     } finally {
       setBusy(false);
-      childInputRef.current?.focus();
+      if (keepFocus) childInputRef.current?.focus();
     }
   }
 
@@ -594,9 +608,10 @@ export function TodoView({
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing) return;
               if (e.key === "Enter") void saveEdit(t);
-              if (e.key === "Escape") setEditingId(null);
+              if (e.key === "Escape") cancelEdit();
             }}
-            onBlur={() => setEditingId(null)}
+            // 바깥을 클릭해도 편집 내용을 버리지 않는다 — 취소는 Esc
+            onBlur={() => void saveEdit(t)}
           />
         ) : (
           <span
@@ -635,6 +650,7 @@ export function TodoView({
               className="icon-btn sm"
               title="하위 추가"
               onClick={() => {
+                childDone.current = false;
                 setAddingChildFor(t.id);
                 setChildInput("");
               }}
@@ -694,13 +710,18 @@ export function TodoView({
                 if (e.nativeEvent.isComposing) return;
                 if (e.key === "Enter") void addChild(node.id);
                 if (e.key === "Escape") {
+                  childDone.current = true;
                   setAddingChildFor(null);
                   setChildInput("");
                 }
               }}
+              // 바깥을 클릭하면 적던 하위 항목을 버리지 않고 저장하며 닫는다 — 취소는 Esc
               onBlur={() => {
+                if (childDone.current) return;
+                childDone.current = true;
                 setAddingChildFor(null);
-                setChildInput("");
+                if (childInput.trim()) void addChild(node.id, false);
+                else setChildInput("");
               }}
             />
           </div>
@@ -801,7 +822,10 @@ export function TodoView({
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing) return;
               if (e.key === "Enter") void add();
+              if (e.key === "Escape") setQuick("");
             }}
+            // 바깥을 클릭해도 적던 할 일을 잃지 않는다 — 비우려면 Esc
+            onBlur={() => void add(false)}
           />
         </div>
 

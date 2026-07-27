@@ -3150,6 +3150,8 @@ body.resizing-col .todo-resizer::after {
 
 /* 빠른 추가 */
 /* 인라인 추가 (Todoist 풍 — 큰 입력창 대신 은은한 plus + 무테 입력) */
+/* 입력란임이 항상 보이도록 기본에서 이미 채워 둔다(빈 줄처럼 보이지 않게).
+   포커스는 한 단계 더 진한 surface-3 로 구분 — §3 의 surface-2→surface-3 문법 */
 .todo-quick {
   display: flex;
   align-items: center;
@@ -3157,10 +3159,11 @@ body.resizing-col .todo-resizer::after {
   padding: 9px 8px;
   margin-bottom: 4px;
   border-radius: 8px;
+  background: var(--surface-2);
   transition: background 0.12s;
 }
 .todo-quick:focus-within {
-  background: var(--surface-2);
+  background: var(--surface-3);
 }
 .todo-quick-ico {
   display: inline-flex;
