@@ -80,16 +80,6 @@ export function Widget() {
     [queue, idx, snapshot],
   );
 
-  // ←/→ 키로 순환
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") go(-1);
-      else if (e.key === "ArrowRight") go(1);
-    };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [go]);
-
   async function complete() {
     if (!current) return;
     await setStatus(current.id, "learned");
@@ -119,6 +109,32 @@ export function Widget() {
     await emitTo("main", "open-concept", { id: current.id });
     await showMain();
   }
+
+  // 키보드 단축키 — 아래 버튼들과 1:1 (마우스 없이도 위젯을 다 쓸 수 있게).
+  // IME 조합 중이거나 입력에 포커스가 있으면 글자 입력을 뺏으므로 무시하고,
+  // 조합키(⌘/⌃/⌥)가 눌린 조합도 앱·OS 단축키 몫으로 남긴다.
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      const k = e.key.toLowerCase();
+      // Enter/Space 는 포커스된 버튼을 네이티브로 누르니 그쪽에 양보(이중 실행 방지)
+      if ((k === "enter" || k === " ") && el?.tagName === "BUTTON") return;
+      if (k === "arrowleft") go(-1);
+      else if (k === "arrowright") go(1);
+      else if (k === "enter" || k === "d") complete();
+      // 자신감 ±는 버튼 disabled 조건과 같은 경계에서 멈춘다
+      else if ((k === "arrowdown" || k === "[") && current && current.confidence > 1) conf(-1);
+      else if ((k === "arrowup" || k === "]") && current && current.confidence < 3) conf(1);
+      else if (k === "o" || k === " ") {
+        e.preventDefault(); // Space 기본 스크롤 차단
+        openDetail();
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [go, current]);
 
   function hideWidget() {
     getCurrentWindow().hide();
