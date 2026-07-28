@@ -4,8 +4,12 @@
 
 import { invoke } from "@tauri-apps/api/core";
 
-/** `<destDir>/amber-backup-<타임스탬프>/` 를 만들고 그 절대경로를 돌려준다.
+/** `<destDir>/amber-backup-<로컬 타임스탬프>/` 를 만들고 그 절대경로를 돌려준다.
  *  실패 시 사용자에게 보여줄 한국어 메시지로 reject. */
 export function createBackup(destDir: string): Promise<string> {
-  return invoke<string>("create_backup", { destDir });
+  // 폴더명이 사용자 시계와 일치하게 — report 와 같은 getTimezoneOffset 부호 규약
+  return invoke<string>("create_backup", {
+    destDir,
+    tzOffsetMin: new Date().getTimezoneOffset(),
+  });
 }

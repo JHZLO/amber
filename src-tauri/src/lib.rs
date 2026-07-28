@@ -44,10 +44,15 @@ fn move_to_trash(app: tauri::AppHandle, rel_path: String) -> Result<(), String> 
     Ok(())
 }
 
-/// 백업: 사용자가 고른 폴더 아래 `amber-backup-<UTC 타임스탬프>/` 를 만들고
+/// 백업: 사용자가 고른 폴더 아래 `amber-backup-<로컬 타임스탬프>/` 를 만들고
 /// DB 스냅샷(amber.db)과 vault/ 사본을 넣는다. 성공 시 만들어진 폴더의 절대경로를 돌려준다.
+/// tz_offset_min 은 JS Date.getTimezoneOffset() 값(report.rs 와 같은 부호 규약).
 #[tauri::command]
-async fn create_backup(app: tauri::AppHandle, dest_dir: String) -> Result<String, String> {
+async fn create_backup(
+    app: tauri::AppHandle,
+    dest_dir: String,
+    tz_offset_min: i32,
+) -> Result<String, String> {
     // DB 는 sql 플러그인이 app_config_dir 기준으로 열고, vault 는 프론트가 appdata 기준으로 쓴다
     // (macOS 에선 같은 폴더지만 각자의 기준을 그대로 따른다).
     let db = app
@@ -71,7 +76,7 @@ async fn create_backup(app: tauri::AppHandle, dest_dir: String) -> Result<String
 
     // 같은 폴더에 여러 번 백업해도 덮어쓰지 않게 하위 폴더로 나눈다
     // (VACUUM INTO 는 대상 파일이 이미 있으면 실패한다).
-    let root = dest.join(format!("amber-backup-{}", utc_stamp()));
+    let root = dest.join(format!("amber-backup-{}", local_stamp(tz_offset_min)));
     std::fs::create_dir_all(&root).map_err(|e| format!("백업 폴더를 만들지 못했습니다: {e}"))?;
 
     let write = async {
@@ -149,12 +154,14 @@ fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// 백업 폴더 이름용 UTC 타임스탬프(YYYYMMDD-HHMMSS). chrono 없이 epoch 초에서 직접 환산.
-fn utc_stamp() -> String {
+/// 백업 폴더 이름용 로컬 타임스탬프(YYYYMMDD-HHMMSS). chrono 없이 epoch 초에서 직접 환산.
+/// tz_offset_min = JS getTimezoneOffset()(UTC 기준 분, KST=-540) — report.rs fmt_hhmm 과 동일 산술.
+fn local_stamp(tz_offset_min: i32) -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
+        .unwrap_or(0)
+        - i64::from(tz_offset_min) * 60;
     let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
     // 3월을 연초로 두는 민력(civil) 역산 — 윤년 분기를 한 번에 처리한다
     let z = days + 719_468;
