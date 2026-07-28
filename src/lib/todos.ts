@@ -148,13 +148,12 @@ export async function updateTodoContent(
  *  함께 오지 않는 부모 밑에 있던 항목은 도착 날짜에서 최상위로 올린다(parent_id = NULL).
  *  남겨진 완료 자식은 부모가 다른 날로 가 고아가 되지만 지우거나 떼어내지 않는다 —
  *  화면에서 lib/todoTree.visibleRoots 가 루트로 끌어올려 보여주고, 부모가 돌아오면 다시 붙는다.
- *  단일 문장 두 개(조회 → UPDATE)이며 실제 변경은 한 UPDATE 안에서 원자적으로 일어난다.
- *  @returns 뒤에 남은 원래 부모 id 들 — 자식이 빠졌으니 호출부가 recomputeChainFrom 로 재계산한다. */
-export async function moveTodos(
-  ids: number[],
-  dueDate: string,
-): Promise<number[]> {
-  if (!ids.length) return [];
+ *
+ *  **뒤에 남은 부모의 완료 상태는 건드리지 않는다.** 자식이 빠졌다고 재계산하면, 남은 자식이
+ *  전부 완료일 때 부모가 완료로 승격돼 밀린 목록에서 사라진다 — 일을 끝낸 게 아니라 오늘로
+ *  옮겼을 뿐인데도. 이동은 완료 상태를 바꾸는 동작이 아니다(체크만 그 역할을 한다). */
+export async function moveTodos(ids: number[], dueDate: string): Promise<void> {
+  if (!ids.length) return;
   const db = await getDb();
   // 씨앗 id 끼리 부모-자식일 수 있어(‘모두 오늘로’) UNION 으로 중복을 접는다.
   // 재귀는 미완료 자식만 따라간다 — 완료된 가지는 그 아래까지 통째로 원래 날짜에 남는다.
@@ -164,14 +163,6 @@ export async function moveTodos(
        UNION
        SELECT t.id FROM todos t JOIN moved ON t.parent_id = moved.id WHERE t.done = 0
      )`;
-  const orphaned = await db.select<{ parent_id: number }[]>(
-    `${movedCte(1)}
-     SELECT DISTINCT parent_id FROM todos
-      WHERE id IN (SELECT id FROM moved)
-        AND parent_id IS NOT NULL
-        AND parent_id NOT IN (SELECT id FROM moved)`,
-    ids,
-  );
   await db.execute(
     `${movedCte(3)}
      UPDATE todos
@@ -182,7 +173,6 @@ export async function moveTodos(
       WHERE id IN (SELECT id FROM moved)`,
     [dueDate, now(), ...ids],
   );
-  return orphaned.map((r) => r.parent_id);
 }
 
 /** 삭제. 노드를 지우면 그 서브트리 전체(모든 자손)를 함께 — 되돌릴 수 없으므로

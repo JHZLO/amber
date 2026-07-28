@@ -522,9 +522,8 @@ export function TodoView({
   async function moveToday(ids: number[]) {
     if (!ids.length) return;
     try {
-      // 서브트리째 이동 → 뒤에 남은 원래 부모만 완료 상태를 다시 계산하면 된다
-      const leftBehind = await moveTodos(ids, todayStr());
-      for (const pid of leftBehind) await recomputeChainFrom(pid);
+      // 완료 재계산을 하지 않는다 — 옮기는 건 끝내는 게 아니다(lib/todos.moveTodos 주석)
+      await moveTodos(ids, todayStr());
       refreshAll();
     } catch (e) {
       setError(errMsg(e));
