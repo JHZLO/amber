@@ -38,13 +38,24 @@ export function flattenTree(nodes: readonly TodoNode[]): TreeRow[] {
   return rows;
 }
 
+/** 이 목록 안에서 최상위로 그려야 할 행 — 부모가 목록에 없으면 루트로 취급한다.
+ *  하루 목록은 `due_date = 오늘` 로 자른 부분 집합이라 부모가 다른 날에 있을 수 있는데
+ *  (밀린 항목을 가져올 때 완료된 자식은 원래 날짜에 남는다), childrenOf(nodes, null) 로만
+ *  루트를 고르면 그런 행이 어느 날에도 안 그려진다. */
+export function visibleRoots<T extends TodoNode>(nodes: readonly T[]): T[] {
+  const present = new Set(nodes.map((n) => n.id));
+  return nodes.filter((n) => {
+    const pid = n.parent_id ?? null;
+    return pid === null || !present.has(pid);
+  });
+}
+
 /** 부분 집합용 펼치기 — 부모가 목록에 없으면 그 행을 루트로 올린다.
  *  flattenTree 는 parent=null 에서만 내려가 '부모가 빠진 자식'을 통째로 누락시키는데,
  *  밀린 목록은 `done=0 AND due_date<오늘` 로 걸러낸 부분 집합이라(부모가 완료됐거나 마감이
  *  오늘 이후면 빠진다) 그대로 쓰면 자식이 화면에서 사라진다. 여기선 입력의 모든 행이 정확히
  *  한 번 나오는 것을 보장한다 — 순환이 있어도 마찬가지. */
 export function flattenSubset(nodes: readonly TodoNode[]): TreeRow[] {
-  const present = new Set(nodes.map((n) => n.id));
   const rows: TreeRow[] = [];
   const seen = new Set<number>();
   const walk = (node: TodoNode, depth: number) => {
@@ -53,10 +64,7 @@ export function flattenSubset(nodes: readonly TodoNode[]): TreeRow[] {
     rows.push({ id: node.id, parent_id: node.parent_id ?? null, depth });
     for (const c of childrenOf(nodes, node.id)) walk(c, depth + 1);
   };
-  for (const n of nodes) {
-    const pid = n.parent_id ?? null;
-    if (pid === null || !present.has(pid)) walk(n, 0);
-  }
+  for (const n of visibleRoots(nodes)) walk(n, 0);
   // 순환 뭉치는 위에서 루트를 못 찾는다 — 남은 행을 최상위로 끌어올려 누락을 막는다
   for (const n of nodes) walk(n, 0);
   return rows;

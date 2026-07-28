@@ -30,6 +30,7 @@ import {
   flattenTree,
   resolveDrop,
   subtreeIds,
+  visibleRoots,
 } from "../lib/todoTree";
 import {
   createBlock,
@@ -576,7 +577,9 @@ export function TodoView({
   const calWEff = bodyW
     ? Math.max(CAL_W_MIN, Math.min(calWidth, bodyW - DETAIL_MIN))
     : calWidth;
-  const topLevel = childrenIn(todos, null);
+  // 부모가 이 날에 없는 항목(밀린 항목을 가져갈 때 남겨진 완료 자식)도 루트로 그린다 —
+  // childrenIn(todos, null) 로만 고르면 그런 행이 어느 날에도 안 보인다
+  const topLevel = visibleRoots(todos);
   const childrenOf = (pid: number) => childrenIn(todos, pid);
   const doneTop = topLevel.filter((t) => t.done === 1).length;
   // 밀린 목록도 본문처럼 계층으로 — 부분 집합이라 flattenTree 가 아닌 flattenSubset 을 쓴다

@@ -10,6 +10,7 @@ import {
   flattenTree,
   resolveDrop,
   subtreeIds,
+  visibleRoots,
   type DropSlot,
   type TodoNode,
   type TreeRow,
@@ -36,6 +37,31 @@ const candidatesFor = (nodes: TodoNode[], draggedId: number): TreeRow[] => {
 };
 const drop = (nodes: TodoNode[], draggedId: number, slot: DropSlot) =>
   resolveDrop(nodes, candidatesFor(nodes, draggedId), draggedId, slot);
+
+// 하루 목록도 due_date 로 자른 부분 집합이다. 밀린 항목을 가져가면 완료된 자식은 원래 날짜에
+// 남고 부모만 다른 날로 가므로, 부모가 없는 행을 루트로 올리지 않으면 어느 날에도 안 보인다.
+describe("visibleRoots", () => {
+  it("부모가 목록에 있으면 루트가 아니다", () => {
+    expect(visibleRoots(TREE).map((n) => n.id)).toEqual([1, 5, 7]);
+  });
+
+  it("부모가 다른 날로 떠난 행을 루트로 올린다", () => {
+    // 부모 38 을 오늘로 가져가고 완료된 자식 40 과 그 자식 44 만 어제 남은 상태
+    const yesterday: TodoNode[] = [
+      { id: 40, parent_id: 38 },
+      { id: 44, parent_id: 40 },
+    ];
+    expect(visibleRoots(yesterday).map((n) => n.id)).toEqual([40]); // 44 는 40 밑에 그려진다
+    expect(flattenSubset(yesterday)).toEqual([
+      { id: 40, parent_id: 38, depth: 0 },
+      { id: 44, parent_id: 40, depth: 1 },
+    ]);
+  });
+
+  it("빈 목록이면 루트도 없다", () => {
+    expect(visibleRoots([])).toEqual([]);
+  });
+});
 
 // 밀린 목록은 done=0 AND due_date<오늘 로 걸러낸 부분 집합이라 부모가 빠질 수 있다.
 // 여기서 한 행이라도 누락되면 화면에서 할 일이 사라진다 — 그래서 "전부 나온다"를 못 박는다.

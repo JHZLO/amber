@@ -143,9 +143,11 @@ export async function updateTodoContent(
 }
 
 /** 여러 항목의 날짜를 옮김 (밀린 할 일 이월). done 은 건드리지 않음.
- *  **서브트리째** 옮긴다 — 자손을 남기면 그 자손의 부모가 다른 날에 있어 어느 날에도 안 그려진다
- *  (하루 목록은 parent_id IS NULL 부터 내려가며 그린다). 같은 이유로, 함께 오지 않는 부모 밑에
- *  있던 항목은 도착 날짜에서 최상위로 올린다(parent_id = NULL).
+ *  **미완료 서브트리째** 옮긴다 — 밀린 목록에 그 부모 밑으로 보이던 것이 곧 따라올 것이므로
+ *  (그 목록은 미완료만 담는다), 이미 체크한 자식은 완료한 날짜에 그대로 둔다.
+ *  함께 오지 않는 부모 밑에 있던 항목은 도착 날짜에서 최상위로 올린다(parent_id = NULL).
+ *  남겨진 완료 자식은 부모가 다른 날로 가 고아가 되지만 지우거나 떼어내지 않는다 —
+ *  화면에서 lib/todoTree.visibleRoots 가 루트로 끌어올려 보여주고, 부모가 돌아오면 다시 붙는다.
  *  단일 문장 두 개(조회 → UPDATE)이며 실제 변경은 한 UPDATE 안에서 원자적으로 일어난다.
  *  @returns 뒤에 남은 원래 부모 id 들 — 자식이 빠졌으니 호출부가 recomputeChainFrom 로 재계산한다. */
 export async function moveTodos(
@@ -154,12 +156,13 @@ export async function moveTodos(
 ): Promise<number[]> {
   if (!ids.length) return [];
   const db = await getDb();
-  // 씨앗 id 끼리 부모-자식일 수 있어(‘모두 오늘로’) UNION 으로 중복을 접는다
+  // 씨앗 id 끼리 부모-자식일 수 있어(‘모두 오늘로’) UNION 으로 중복을 접는다.
+  // 재귀는 미완료 자식만 따라간다 — 완료된 가지는 그 아래까지 통째로 원래 날짜에 남는다.
   const movedCte = (from: number) =>
     `WITH RECURSIVE moved(id) AS (
        SELECT id FROM todos WHERE id IN (${ids.map((_, i) => `$${i + from}`).join(",")})
        UNION
-       SELECT t.id FROM todos t JOIN moved ON t.parent_id = moved.id
+       SELECT t.id FROM todos t JOIN moved ON t.parent_id = moved.id WHERE t.done = 0
      )`;
   const orphaned = await db.select<{ parent_id: number }[]>(
     `${movedCte(1)}
