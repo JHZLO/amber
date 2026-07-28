@@ -823,26 +823,8 @@ export function TodoView({
 
         {error && <div className="error-note">{error}</div>}
 
-        <div className="todo-quick">
-          <span className="todo-quick-ico">
-            <Icon name="plus" size={15} />
-          </span>
-          <input
-            ref={quickRef}
-            className="input todo-quick-input"
-            placeholder={t("todos.quick.placeholder")}
-            value={quick}
-            onChange={(e) => setQuick(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.nativeEvent.isComposing) return;
-              if (e.key === "Enter") void add();
-              if (e.key === "Escape") setQuick("");
-            }}
-            // 바깥을 클릭해도 적던 할 일을 잃지 않는다 — 비우려면 Esc
-            onBlur={() => void add(false)}
-          />
-        </div>
-
+        {/* 밀린 할 일은 '오늘 계획의 재료'라 날짜 바로 아래. 입력창과 그 입력이 들어갈 목록
+            사이에 끼우면 타이핑한 것이 무관한 블록 아래에 나타나 매핑이 깨진다(DESIGN §7) */}
         {isToday && overdue.length > 0 && (
           <div className={`todo-overdue ${overdueOpen ? "open" : ""}`}>
             <div
@@ -886,6 +868,26 @@ export function TodoView({
             </div>
           </div>
         )}
+
+        <div className="todo-quick">
+          <span className="todo-quick-ico">
+            <Icon name="plus" size={15} />
+          </span>
+          <input
+            ref={quickRef}
+            className="input todo-quick-input"
+            placeholder={t("todos.quick.placeholder")}
+            value={quick}
+            onChange={(e) => setQuick(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
+              if (e.key === "Enter") void add();
+              if (e.key === "Escape") setQuick("");
+            }}
+            // 바깥을 클릭해도 적던 할 일을 잃지 않는다 — 비우려면 Esc
+            onBlur={() => void add(false)}
+          />
+        </div>
 
         <div className="todo-listing" ref={listRef}>
           {todos.length === 0 ? (
