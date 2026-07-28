@@ -2,7 +2,6 @@
 // 오늘 우선 — 탭을 열면 오늘 + 빠른 추가 입력에 포커스. 정본은 amber.db 의 todos 테이블(lib/todos.ts).
 
 import {
-  Fragment,
   useCallback,
   useEffect,
   useRef,
@@ -27,6 +26,7 @@ import {
   childrenOf as childrenIn,
   clampDropDepth,
   descendantCount,
+  flattenSubset,
   flattenTree,
   resolveDrop,
   subtreeIds,
@@ -579,6 +579,9 @@ export function TodoView({
   const topLevel = childrenIn(todos, null);
   const childrenOf = (pid: number) => childrenIn(todos, pid);
   const doneTop = topLevel.filter((t) => t.done === 1).length;
+  // 밀린 목록도 본문처럼 계층으로 — 부분 집합이라 flattenTree 가 아닌 flattenSubset 을 쓴다
+  const overdueRows = flattenSubset(overdue);
+  const overdueById = new Map(overdue.map((o) => [o.id, o]));
 
   // 파라미터를 todo 로 둔다 — t 로 줄이면 i18n 의 t() 를 가려서(shadowing) 번역 호출이 깨진다
   function renderRow(todo: Todo, opts?: { overdue?: boolean }) {
@@ -862,8 +865,15 @@ export function TodoView({
             </div>
             <div className="todo-overdue-body">
               <div className="todo-overdue-inner">
-                {overdue.slice(0, OVERDUE_LIMIT).map((t) => (
-                  <Fragment key={t.id}>{renderRow(t, { overdue: true })}</Fragment>
+                {overdueRows.slice(0, OVERDUE_LIMIT).map((r) => (
+                  <div
+                    key={r.id}
+                    style={
+                      r.depth ? { marginLeft: r.depth * INDENT } : undefined
+                    }
+                  >
+                    {renderRow(overdueById.get(r.id)!, { overdue: true })}
+                  </div>
                 ))}
                 {overdue.length > OVERDUE_LIMIT && (
                   <div className="hint todo-overdue-more">

@@ -6,6 +6,7 @@ import {
   childrenOf,
   clampDropDepth,
   descendantCount,
+  flattenSubset,
   flattenTree,
   resolveDrop,
   subtreeIds,
@@ -35,6 +36,54 @@ const candidatesFor = (nodes: TodoNode[], draggedId: number): TreeRow[] => {
 };
 const drop = (nodes: TodoNode[], draggedId: number, slot: DropSlot) =>
   resolveDrop(nodes, candidatesFor(nodes, draggedId), draggedId, slot);
+
+// 밀린 목록은 done=0 AND due_date<오늘 로 걸러낸 부분 집합이라 부모가 빠질 수 있다.
+// 여기서 한 행이라도 누락되면 화면에서 할 일이 사라진다 — 그래서 "전부 나온다"를 못 박는다.
+describe("flattenSubset", () => {
+  const ids = (rows: TreeRow[]) => rows.map((r) => r.id).sort((a, b) => a - b);
+
+  it("부모가 목록에 있으면 그 아래로 들여쓴다", () => {
+    expect(flattenSubset(TREE)).toEqual(flattenTree(TREE));
+  });
+
+  it("부모가 빠진 자식을 루트로 올린다 — flattenTree 는 이걸 통째로 잃는다", () => {
+    // 부모 1 이 완료돼 밀린 목록에서 빠진 상황: 2·4·3 만 남는다
+    const subset: TodoNode[] = [
+      { id: 2, parent_id: 1 },
+      { id: 4, parent_id: 2 },
+      { id: 3, parent_id: 1 },
+    ];
+    expect(flattenTree(subset)).toEqual([]); // 기존 함수는 전부 잃는다
+    expect(flattenSubset(subset)).toEqual([
+      { id: 2, parent_id: 1, depth: 0 },
+      { id: 4, parent_id: 2, depth: 1 }, // 2 와의 관계는 유지
+      { id: 3, parent_id: 1, depth: 0 },
+    ]);
+  });
+
+  it("어떤 입력에서도 모든 행이 정확히 한 번 나온다", () => {
+    for (const subset of [
+      TREE,
+      TREE.filter((n) => n.id !== 1), // 루트 빠짐
+      TREE.filter((n) => n.id !== 2), // 중간 빠짐
+      [{ id: 9, parent_id: 99 }], // 부모가 아예 없는 행
+    ]) {
+      const rows = flattenSubset(subset);
+      expect(ids(rows)).toEqual(ids(subset.map((n) => ({ ...n, depth: 0 }))));
+      expect(new Set(rows.map((r) => r.id)).size).toBe(subset.length);
+    }
+  });
+
+  it("순환이 있어도 멈추고, 걸린 행도 빠뜨리지 않는다", () => {
+    const cyclic: TodoNode[] = [
+      { id: 1, parent_id: 2 },
+      { id: 2, parent_id: 1 },
+      { id: 3, parent_id: null },
+    ];
+    const rows = flattenSubset(cyclic);
+    expect(ids(rows)).toEqual([1, 2, 3]);
+  });
+});
 
 describe("flattenTree", () => {
   it("렌더 순서 그대로 depth 를 매긴다", () => {

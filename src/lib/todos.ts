@@ -29,11 +29,13 @@ export async function listMonthCounts(
   );
 }
 
-/** 밀린 할 일: before(보통 오늘) 이전의 미완료. idx_todos_open 부분 인덱스 전용 */
+/** 밀린 할 일: before(보통 오늘) 이전의 미완료. idx_todos_open 부분 인덱스 전용.
+ *  형제 순서는 listTodos 와 같은 sort_order 기준 — 스트립도 계층으로 그리므로 어긋나면 안 된다. */
 export async function listOverdueOpen(before: string): Promise<Todo[]> {
   const db = await getDb();
   return db.select<Todo[]>(
-    `SELECT * FROM todos WHERE done = 0 AND due_date < $1 ORDER BY due_date, id`,
+    `SELECT * FROM todos WHERE done = 0 AND due_date < $1
+      ORDER BY due_date, sort_order, id`,
     [before],
   );
 }
