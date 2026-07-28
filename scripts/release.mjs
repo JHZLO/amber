@@ -151,9 +151,9 @@ for (const t of targets) {
   console.log(`  ✓ ${t.file}`);
 }
 
+// GitHub Release 는 만들지 않는다 — 배포 단위는 태그뿐이다(AGENTS.md "배포 정책").
 console.log(
   `\n다음 단계:\n` +
     `  git commit -am "build: Bump version to v${next}"\n` +
-    `  git tag -a v${next} -m "Amber v${next}" && git push origin main --tags\n` +
-    `  gh release create v${next} --title "Amber v${next}" --generate-notes`,
+    `  git tag -a v${next} -m "Amber v${next}" && git push origin main --tags`,
 );
