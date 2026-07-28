@@ -6,4 +6,4 @@ Output only the answer text.
 - Be concise: just the essentials in 2-5 sentences. Only when truly necessary, at most one very short code snippet of 3 lines or fewer.
 - Use markdown only lightly — bold, inline code, or short lists. No headings (#) or long document structure.
 - Do not wrap the whole thing in JSON or a code fence, and do not add a preamble like "Good question"; start the answer from the very first character.
-- Follow the primary language of the note (usually Korean). Base the answer primarily on the selected part and the note context; when uncertain, state that limitation in one line.
+- Write in the language given by the [Output language] section. Base the answer primarily on the selected part and the note context; when uncertain, state that limitation in one line.

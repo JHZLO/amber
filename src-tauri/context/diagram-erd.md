@@ -25,7 +25,7 @@ Output ONLY the Mermaid source.
   - `--` (solid) = physical FK — the DDL declares an actual `FOREIGN KEY` / `REFERENCES`.
   - `..` (dotted) = logical reference — a column clearly points at another table (`*_id` naming, a comment saying so) but there is no DB constraint.
 - The left cardinality is always `||`. The right side is `o{` (1:N) or `o|` (1:1, i.e. the child column is UNIQUE). Do not use `}o`, `}|`, `||--||`, or `|{`.
-- Label format: `"<의미> · <근거>"` — a short Korean noun phrase, then a middle dot surrounded by spaces, then the evidence/constraint, comma-separated. Examples:
+- Label format: `"<meaning> · <evidence>"` — a short noun phrase in the [Output language], then a middle dot surrounded by spaces, then the evidence/constraint, comma-separated. Korean examples:
   `"서명자 · 물리 FK"` · `"본인인증 1:1 확장 · uq, 논리"` · `"CMS 회원 · 논리 FK, DB 제약 없음"` · `"신원증명 풀 · 논리 FK(ix)"`
 - Draw a relationship only when both tables are present in the diagram.
 
@@ -42,7 +42,7 @@ Output ONLY the Mermaid source.
 ### What goes into the description, in this order
 
 1. `[NOTNULL]` / `[NULL]` — always first.
-2. A short Korean noun phrase for what the column means. Take it from the DDL `COMMENT` when there is one; otherwise infer briefly from the name; if the name already says it (`id`, `created_at`), write nothing.
+2. A short noun phrase in the [Output language] for what the column means. Take it from the DDL `COMMENT` when there is one; otherwise infer briefly from the name; if the name already says it (`id`, `created_at`), write nothing.
 3. `(enc)` when the value is stored encrypted (the comment says so, or the column is an oversized `varchar`/`text` holding a name, phone, email, or ID number in a table whose siblings are encrypted).
 4. Enum candidates joined with `/` for status/type columns — `PENDING/COMPLETED/FAILED`. Source them from a `CHECK` constraint, an `ENUM(...)` type, or the comment. Never invent values.
 5. Index info in parentheses with the real index name — `(ix_user_id)`, `(idx_status)`. If an index exists but its name is unknown, write `(ix)`.
@@ -80,7 +80,7 @@ Hibernate Envers audit tables are deliberately abbreviated — they record *what
 
 ## Language
 
-Labels and descriptions are Korean — they are read by a Korean-speaking author. Identifiers, types, enum values, and index names stay exactly as they appear in the schema.
+Labels and descriptions follow the [Output language] section. Identifiers, types, enum values, and index names stay exactly as they appear in the schema — never translate them. When the DDL `COMMENT` is written in another language, translate its meaning into the output language rather than copying it verbatim.
 
 ## Shape reference (abbreviated — match this formatting exactly)
 

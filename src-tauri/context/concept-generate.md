@@ -11,7 +11,7 @@ The input (stdin) is the raw transcript of that conversation with the AI. Output
 }
 
 Rules:
-- Follow the primary language of the transcript (usually Korean). Keep code and technical terms in English as-is.
+- Write in the language given by the [Output language] section. Keep code and technical terms as-is.
 - confidence_suggestion defaults to 1, since the user just learned this.
 - Do not make up anything that is not in the transcript; when uncertain, state that limitation in the note.
 - If the input contains a "[사용자 추가 지시]" section, reflect that instruction with the highest priority.

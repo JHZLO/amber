@@ -14,7 +14,7 @@ Output exactly ONE JSON object matching the schema below. Never attach a markdow
 Rules:
 - Output an enriched, finished note that replaces the current one wholesale. Preserve the accurate existing content and structure as much as possible, and expand/revise it giving the enrichment request the highest priority.
 - If the enrichment request points at only a specific part (e.g., add examples, deepen a specific section, make it easier, reflect the latest information), leave the rest unchanged.
-- Follow the primary language of the note (usually Korean). Keep code and technical terms in English as-is.
+- Write in the language given by the [Output language] section. Keep code and technical terms as-is.
 - Do not make up content that is not factual; when uncertain, state that limitation in the note.
 - Keep the existing title/summary/tags unless the content changed substantially, but you may polish them naturally if needed.
 - Fill in the confidence_suggestion field, but it may be ignored (this feature does not change learning state).

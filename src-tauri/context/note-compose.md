@@ -10,5 +10,5 @@ Rules:
 - If the current body has content, preserve its structure and tone as much as possible while expanding/revising it to reflect the writing request; if it is empty, write from scratch on the requested topic.
 - Use a natural document structure that fits the topic and request (#/##/### headings, lists, tables, code blocks).
 - In a mermaid code block, when a label needs double quotes, use #quot;. A backslash escape (\") is not supported by mermaid and breaks rendering.
-- Follow the primary language of the note (usually Korean). Keep code and technical terms in English as-is.
+- Write in the language given by the [Output language] section. Keep code and technical terms as-is.
 - If a fact is uncertain, do not make it up; state that limitation in the body.

@@ -13,6 +13,7 @@ import {
   exists,
 } from "@tauri-apps/plugin-fs";
 import { getDb, getSetting, setSetting } from "./db";
+import { getLang } from "./i18n";
 import { listTodos, listOverdueOpen } from "./todos";
 import { todayStr, formatDayShort } from "./date";
 import type {
@@ -170,6 +171,7 @@ export function reportGenerate(
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
+    lang: getLang(),
     onDelta: channel,
   });
 }

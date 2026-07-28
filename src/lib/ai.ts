@@ -3,7 +3,7 @@
 
 import { invoke, Channel } from "@tauri-apps/api/core";
 import type { Confidence } from "../types";
-import { t } from "./i18n";
+import { getLang, t } from "./i18n";
 
 export interface GeneratedNote {
   title: string;
@@ -84,6 +84,7 @@ export async function aiGenerate(params: {
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
+    lang: getLang(),
   });
 }
 
@@ -109,6 +110,7 @@ export async function aiAugment(params: {
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
+    lang: getLang(),
   });
 }
 
@@ -137,6 +139,7 @@ export async function aiNoteCompose(params: {
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
+    lang: getLang(),
   });
 }
 
@@ -164,6 +167,7 @@ export async function aiNoteComposeStream(
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
+    lang: getLang(),
     onDelta: channel,
   });
 }
@@ -196,6 +200,7 @@ export async function aiNoteAsk(params: {
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
+    lang: getLang(),
   });
 }
 
@@ -228,6 +233,7 @@ export async function aiErdGenerateStream(
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
+    lang: getLang(),
     onDelta: channel,
   });
 }

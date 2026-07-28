@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <sub>Everything lives on your machine as plain text. No server, no accounts, no API keys stored. UI is currently Korean-first.</sub>
+  <sub>Everything lives on your machine as plain text. No server, no accounts, no API keys stored. English and Korean — AI output follows your UI language.</sub>
 </p>
 
 <p align="center">
@@ -92,10 +92,12 @@ A per-day checklist with unlimited nesting and drag reordering, a mini month cal
 ## Also in the box
 
 - **Works fully without AI** — notes, diagrams and todos never require a connection
+- **English & Korean** — picked from your system language, switchable in *Settings › Appearance*.
+  Generated notes, reports and diagram labels follow the same language
 - **Light / dark theme** — follows the system, one-click toggle, synced across windows
 - **Safe deletes** — files go to the macOS Trash, not into the void
 - **Saved prompts** — store your frequent AI instructions and reuse them as chips
-- **One-click backup** — the 백업 action in 설정 exports a consistent snapshot of your vault
+- **One-click backup** — *Back up* in *Settings* exports a consistent snapshot of your vault
   and database. Don't copy `amber.db` by hand: it runs in WAL mode, so a raw copy of a running
   database can miss recent writes
 

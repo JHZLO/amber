@@ -23,7 +23,7 @@ const POST_STREAM_WAIT_SECS: u64 = 10;
 
 // 시스템 프롬프트는 src-tauri/context/*.md 에 영어로 두고 컴파일 시 그대로 임베드한다
 // (include_str!). 파일 = 모델에 전달되는 프롬프트 본문 그 자체이며, 고치면 재빌드가 필요하다.
-// 상세는 context/README.md 참고. 결과물은 각 프롬프트의 "주 언어(대개 한국어)" 규칙으로 한글 유지.
+// 상세는 context/README.md 참고. 결과물 언어는 프롬프트에 박지 않고 lang_directive 로 주입한다.
 
 // 개념 카드 생성 + 선택 영역 승격 공용. 출력: raw JSON(Contract).
 const SYSTEM_PROMPT: &str = include_str!("../context/concept-generate.md");
@@ -42,6 +42,28 @@ const ASK_SYSTEM_PROMPT: &str = include_str!("../context/note-ask.md");
 
 // 다이어그램 탭: 스키마 DDL → ERD mermaid 소스. 노트와 같은 이유로 JSON 계약 없이 raw 텍스트.
 const ERD_SYSTEM_PROMPT: &str = include_str!("../context/diagram-erd.md");
+
+/// 출력 언어 지시 — **UI 언어(설정 › 모양)를 따라간다**. 프롬프트 본문에 언어를 박아 두면
+/// 기능마다 파일을 언어별로 복제해야 하므로, 이 블록 하나만 갈아끼운다.
+/// 사용자가 쓴 입력이 명확히 다른 언어면 그쪽을 따르게 해 한 노트에 두 언어가 섞이지 않게 한다.
+pub(crate) fn lang_directive(lang: Option<&str>) -> &'static str {
+    if lang == Some("en") {
+        "\n\n[Output language]\nWrite everything the user will read in English. Keep code, \
+identifiers and technical terms exactly as they appear in the input. If the user's own text in \
+the input is clearly written in another language, follow that language instead — never mix two \
+languages in one output."
+    } else {
+        "\n\n[Output language]\nWrite everything the user will read in Korean (한국어). Keep code, \
+identifiers and technical terms exactly as they appear in the input. If the user's own text in \
+the input is clearly written in another language, follow that language instead — never mix two \
+languages in one output."
+    }
+}
+
+/// 시스템 프롬프트 + 출력 언어 지시
+fn sys(prompt: &str, lang: Option<&str>) -> String {
+    format!("{prompt}{}", lang_directive(lang))
+}
 
 // ---- 프로바이더 추상화 ----
 // AI 를 특정 벤더에 묶지 않는다. claude 는 풍부한 경로(JSON 봉투 + 스트리밍)를 쓰고,
@@ -337,6 +359,7 @@ pub async fn ai_generate(
     cli_path: Option<String>,
     provider: Option<String>,
     timeout_secs: Option<u64>,
+    lang: Option<String>,
 ) -> Result<GenerateResult, AiError> {
     if transcript.trim().chars().count() < MIN_INPUT_CHARS {
         return Err(AiError::new(
@@ -357,7 +380,7 @@ pub async fn ai_generate(
         None => transcript,
     };
 
-    run_concept_note(kind, program, model, dur, SYSTEM_PROMPT, input).await
+    run_concept_note(kind, program, model, dur, &sys(SYSTEM_PROMPT, lang.as_deref()), input).await
 }
 
 /// 이미 정리된 노트 + 사용자 프롬프트 → 보강된 노트(JSON).
@@ -373,6 +396,7 @@ pub async fn ai_augment(
     cli_path: Option<String>,
     provider: Option<String>,
     timeout_secs: Option<u64>,
+    lang: Option<String>,
 ) -> Result<GenerateResult, AiError> {
     let instr = instruction.trim();
     if instr.is_empty() {
@@ -399,7 +423,7 @@ pub async fn ai_augment(
         "[보강 요청]\n{instr}\n\n[현재 노트]\n제목: {title}\n요약: {summary}\n태그: {tags_line}\n\n[현재 상세 노트 (Markdown)]\n{markdown}"
     );
 
-    run_concept_note(kind, program, model, dur, AUGMENT_SYSTEM_PROMPT, input).await
+    run_concept_note(kind, program, model, dur, &sys(AUGMENT_SYSTEM_PROMPT, lang.as_deref()), input).await
 }
 
 /// 필기노트 작성/보강: 자유 형식 마크다운 + 지시 → 완성본(raw 마크다운).
@@ -414,6 +438,7 @@ pub async fn ai_note_compose(
     cli_path: Option<String>,
     provider: Option<String>,
     timeout_secs: Option<u64>,
+    lang: Option<String>,
 ) -> Result<NoteComposeResult, AiError> {
     let instr = instruction.trim();
     if instr.is_empty() {
@@ -433,7 +458,8 @@ pub async fn ai_note_compose(
     );
 
     let (result_str, meta) =
-        run_provider_text(kind, program, model, dur, NOTE_SYSTEM_PROMPT, input).await?;
+        run_provider_text(kind, program, model, dur, &sys(NOTE_SYSTEM_PROMPT, lang.as_deref()), input)
+            .await?;
 
     // 전체를 감싼 코드펜스만 벗기고(본문 내부 코드블록은 보존) 그대로 마크다운 본문으로 사용
     let md = strip_outer_fence(&result_str).trim().to_string();
@@ -458,6 +484,7 @@ pub async fn ai_note_compose_stream(
     cli_path: Option<String>,
     provider: Option<String>,
     timeout_secs: Option<u64>,
+    lang: Option<String>,
     on_delta: Channel<String>,
 ) -> Result<NoteComposeResult, AiError> {
     let instr = instruction.trim();
@@ -478,10 +505,12 @@ pub async fn ai_note_compose_stream(
     );
 
     let (result_str, meta) = if kind == ProviderKind::Claude {
-        stream_claude_result(program, model, dur, NOTE_SYSTEM_PROMPT, input, &[], &on_delta).await?
+        stream_claude_result(program, model, dur, &sys(NOTE_SYSTEM_PROMPT, lang.as_deref()), input, &[], &on_delta)
+            .await?
     } else {
         // codex/gemini 는 스트리밍 미지원 경로 — 완료 후 전체 텍스트를 한 번에 전송
-        let r = run_provider_text(kind, program, model, dur, NOTE_SYSTEM_PROMPT, input).await?;
+        let r = run_provider_text(kind, program, model, dur, &sys(NOTE_SYSTEM_PROMPT, lang.as_deref()), input)
+            .await?;
         let _ = on_delta.send(r.0.clone());
         r
     };
@@ -515,6 +544,7 @@ pub async fn ai_note_ask(
     cli_path: Option<String>,
     provider: Option<String>,
     timeout_secs: Option<u64>,
+    lang: Option<String>,
 ) -> Result<NoteAskResult, AiError> {
     let q = question.trim();
     if q.is_empty() {
@@ -547,7 +577,7 @@ pub async fn ai_note_ask(
     input.push_str(&format!("[노트 전체 (Markdown)]\n{note}"));
 
     let (result_str, meta) =
-        run_provider_text(kind, program, model, dur, ASK_SYSTEM_PROMPT, input).await?;
+        run_provider_text(kind, program, model, dur, &sys(ASK_SYSTEM_PROMPT, lang.as_deref()), input).await?;
 
     let answer = strip_outer_fence(&result_str).trim().to_string();
     if answer.is_empty() {
@@ -572,6 +602,7 @@ pub async fn ai_erd_generate_stream(
     cli_path: Option<String>,
     provider: Option<String>,
     timeout_secs: Option<u64>,
+    lang: Option<String>,
     on_delta: Channel<String>,
 ) -> Result<ErdResult, AiError> {
     if ddl.trim().chars().count() < MIN_INPUT_CHARS {
@@ -597,10 +628,12 @@ pub async fn ai_erd_generate_stream(
     input.push_str(&format!("[스키마 DDL]\n{}", ddl.trim()));
 
     let (result_str, meta) = if kind == ProviderKind::Claude {
-        stream_claude_result(program, model, dur, ERD_SYSTEM_PROMPT, input, &[], &on_delta).await?
+        stream_claude_result(program, model, dur, &sys(ERD_SYSTEM_PROMPT, lang.as_deref()), input, &[], &on_delta)
+            .await?
     } else {
         // codex/gemini 는 스트리밍 미지원 경로 — 완료 후 전체 텍스트를 한 번에 전송
-        let r = run_provider_text(kind, program, model, dur, ERD_SYSTEM_PROMPT, input).await?;
+        let r = run_provider_text(kind, program, model, dur, &sys(ERD_SYSTEM_PROMPT, lang.as_deref()), input)
+            .await?;
         let _ = on_delta.send(r.0.clone());
         r
     };
@@ -986,5 +1019,43 @@ pub async fn ai_health(cli_path: Option<String>) -> Result<String, AiError> {
             "AI_ERROR",
             String::from_utf8_lossy(&output.stderr).trim().to_string(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 출력 언어가 프롬프트에 박히지 않고 주입되는지 — 이게 깨지면 영어 UI 에서 한국어 결과가 나온다
+    #[test]
+    fn lang_directive_switches_output_language() {
+        assert!(lang_directive(Some("en")).contains("in English"));
+        assert!(lang_directive(Some("ko")).contains("한국어"));
+        // 미지정·미지 언어는 한국어(기존 사용자 기본값)
+        assert!(lang_directive(None).contains("한국어"));
+        assert!(lang_directive(Some("ja")).contains("한국어"));
+    }
+
+    #[test]
+    fn sys_appends_directive_after_the_prompt() {
+        let out = sys("BODY", Some("en"));
+        assert!(out.starts_with("BODY"), "프롬프트 본문이 앞에 그대로 와야 한다");
+        assert!(out.contains("[Output language]"));
+    }
+
+    // 프롬프트 파일에 특정 언어를 박아두면 그 기능만 UI 언어를 안 따르게 된다(context/README.md 규칙)
+    #[test]
+    fn prompt_files_do_not_pin_an_output_language() {
+        for (name, body) in [
+            ("concept-generate", SYSTEM_PROMPT),
+            ("concept-augment", AUGMENT_SYSTEM_PROMPT),
+            ("note-compose", NOTE_SYSTEM_PROMPT),
+            ("note-ask", ASK_SYSTEM_PROMPT),
+        ] {
+            assert!(
+                !body.contains("usually Korean"),
+                "{name}: 출력 언어를 한국어로 고정하고 있다"
+            );
+        }
     }
 }
