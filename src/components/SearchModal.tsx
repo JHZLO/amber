@@ -9,6 +9,7 @@ import { searchFiles, parentOf } from "../lib/vaultTree";
 import { listNoteTree, readNoteFile } from "../lib/notes";
 import { listDiagramTree, readDiagramFile } from "../lib/diagrams";
 import { listConcepts } from "../lib/db";
+import { t } from "../lib/i18n";
 
 export type SearchHit =
   | { kind: "concept"; id: number; title: string; sub: string; where: string }
@@ -21,9 +22,9 @@ export type SearchHit =
     };
 
 const KIND_LABEL: Record<SearchHit["kind"], string> = {
-  concept: "개념",
-  note: "필기노트",
-  diagram: "다이어그램",
+  concept: t("app.quicksearch.kind.concept"),
+  note: t("app.quicksearch.kind.note"),
+  diagram: t("app.quicksearch.kind.diagram"),
 };
 
 // 종류별 상한 — 한 종류가 결과 목록을 독점하지 않게
@@ -148,16 +149,16 @@ export function SearchModal({
   return (
     <Modal
       open={open}
-      title="빠른 검색"
+      title={t("app.quicksearch.title")}
       onClose={onClose}
-      footer={<span className="hint">↑↓ 이동 · Enter 열기 · Esc 닫기</span>}
+      footer={<span className="hint">{t("app.quicksearch.hint")}</span>}
     >
       <div className="search-wrap" style={{ maxWidth: "none" }}>
         <Icon name="search" size={15} className="search-icon" />
         <input
           className="search"
           autoFocus
-          placeholder="노트·다이어그램·개념 검색 (이름·본문)…"
+          placeholder={t("app.quicksearch.placeholder")}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
@@ -188,10 +189,10 @@ export function SearchModal({
         {!hits.length && (
           <div className="empty">
             {!input.trim()
-              ? "이름이나 본문에 들어간 말을 입력해 보세요."
+              ? t("app.quicksearch.emptyPrompt")
               : searching
-                ? "찾는 중…"
-                : "결과가 없어요."}
+                ? t("app.quicksearch.searching")
+                : t("app.empty.noResults")}
           </div>
         )}
       </div>

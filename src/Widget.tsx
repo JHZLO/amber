@@ -7,6 +7,7 @@ import type { ConceptWithTags, Confidence } from "./types";
 import { adjustConfidence, learningQueue, markSeen, setStatus } from "./lib/db";
 import { ConfidenceDots } from "./ui";
 import { Icon } from "./icons";
+import { LANG_CHANGED_EVENT, t } from "./lib/i18n";
 
 async function showMain() {
   const main = await WebviewWindow.getByLabel("main");
@@ -47,6 +48,14 @@ export function Widget() {
     const un = listen("concept-changed", () => {
       dirty.current = true;
     });
+    return () => {
+      un.then((f) => f());
+    };
+  }, []);
+
+  // 설정(메인 창)에서 언어 변경 → 새 사전으로 다시 로드 (t()는 페이지 로드 시 고정이라 reload 필수)
+  useEffect(() => {
+    const un = listen(LANG_CHANGED_EVENT, () => location.reload());
     return () => {
       un.then((f) => f());
     };
@@ -151,18 +160,18 @@ export function Widget() {
         <div className="widget-head" onMouseDown={onHeadMouseDown}>
           <span className="widget-eyebrow">TIL</span>
           <span className="widget-count" />
-          <button className="widget-x" onClick={hideWidget} aria-label="숨기기">
+          <button className="widget-x" onClick={hideWidget} aria-label={t("app.widget.hide")}>
             <Icon name="x" size={13} />
           </button>
         </div>
         <div className="widget-empty">
-          학습 중인 개념이 없어요
+          {t("app.widget.emptyQueue")}
           <button
             className="widget-btn"
             style={{ width: "auto", padding: "0 10px" }}
             onClick={showMain}
           >
-            메인 열기
+            {t("app.widget.openMain")}
           </button>
         </div>
       </div>
@@ -176,13 +185,13 @@ export function Widget() {
         <span className="widget-count">
           {current ? idx + 1 : 0} / {queue.length}
         </span>
-        <button className="widget-x" onClick={hideWidget} aria-label="숨기기">
+        <button className="widget-x" onClick={hideWidget} aria-label={t("app.widget.hide")}>
           <Icon name="x" size={13} />
         </button>
       </div>
 
       <div className="widget-mid">
-        <button className="widget-nav" onClick={() => go(-1)} aria-label="이전">
+        <button className="widget-nav" onClick={() => go(-1)} aria-label={t("app.widget.prev")}>
           <span>
             <Icon name="chevron-left" size={18} />
           </span>
@@ -191,7 +200,7 @@ export function Widget() {
           <div className="widget-title">{current?.title}</div>
           <div className="widget-summary">{current?.summary}</div>
         </div>
-        <button className="widget-nav" onClick={() => go(1)} aria-label="다음">
+        <button className="widget-nav" onClick={() => go(1)} aria-label={t("app.widget.next")}>
           <span>
             <Icon name="chevron-right" size={18} />
           </span>
@@ -201,14 +210,14 @@ export function Widget() {
       <div className="widget-foot">
         {current && <ConfidenceDots value={current.confidence} />}
         <span className="spacer" />
-        <button className="widget-btn" onClick={complete} aria-label="학습완료">
+        <button className="widget-btn" onClick={complete} aria-label={t("app.widget.complete")}>
           <Icon name="check" size={15} />
         </button>
         <button
           className="widget-btn"
           onClick={() => conf(-1)}
           disabled={!current || current.confidence <= 1}
-          aria-label="자신감 낮추기"
+          aria-label={t("app.widget.confDown")}
         >
           <Icon name="minus" size={15} />
         </button>
@@ -216,11 +225,11 @@ export function Widget() {
           className="widget-btn"
           onClick={() => conf(1)}
           disabled={!current || current.confidence >= 3}
-          aria-label="자신감 높이기"
+          aria-label={t("app.widget.confUp")}
         >
           <Icon name="plus" size={15} />
         </button>
-        <button className="widget-btn" onClick={openDetail} aria-label="상세 열기">
+        <button className="widget-btn" onClick={openDetail} aria-label={t("app.widget.openDetail")}>
           <Icon name="expand" size={14} />
         </button>
       </div>

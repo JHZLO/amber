@@ -3,11 +3,12 @@
 
 import type { DayTodoCount } from "../types";
 import {
-  WEEKDAYS_KO,
   formatMonthTitle,
   monthGridDates,
   parseLocalDate,
+  weekdaysShort,
 } from "../lib/date";
+import { t } from "../lib/i18n";
 import { Icon } from "../icons";
 
 export function MiniCalendar({
@@ -36,19 +37,27 @@ export function MiniCalendar({
   return (
     <div className="todo-cal">
       <div className="cal-head">
-        <button className="icon-btn ghost sm" onClick={onPrevMonth} aria-label="이전 달">
+        <button
+          className="icon-btn ghost sm"
+          onClick={onPrevMonth}
+          aria-label={t("todos.cal.prevMonth")}
+        >
           <Icon name="chevron-left" size={15} />
         </button>
-        <button className="cal-title" onClick={onToday} title="오늘로">
+        <button className="cal-title" onClick={onToday} title={t("todos.cal.goToday")}>
           {formatMonthTitle(year, month)}
         </button>
-        <button className="icon-btn ghost sm" onClick={onNextMonth} aria-label="다음 달">
+        <button
+          className="icon-btn ghost sm"
+          onClick={onNextMonth}
+          aria-label={t("todos.cal.nextMonth")}
+        >
           <Icon name="chevron-right" size={15} />
         </button>
       </div>
 
       <div className="cal-dow">
-        {WEEKDAYS_KO.map((d) => (
+        {weekdaysShort().map((d) => (
           <span key={d}>{d}</span>
         ))}
       </div>

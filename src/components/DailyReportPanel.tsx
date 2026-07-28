@@ -27,17 +27,19 @@ import { todayStr } from "../lib/date";
 import { Markdown } from "./Markdown";
 import { AiThinking, Modal, Spinner } from "../ui";
 import { Icon } from "../icons";
+import { t, dateLocale } from "../lib/i18n";
 
+// GitHub·Slack·Notion 은 브랜드명이라 번역하지 않는다
 const SRC_LABEL: Record<string, string> = {
-  todos: "투두",
+  todos: t("report.source.todos"),
   github: "GitHub",
-  ai_sessions: "AI 세션",
+  ai_sessions: t("report.source.aiSessions"),
   slack: "Slack",
   notion: "Notion",
 };
 
 function hhmm(ms: number): string {
-  return new Date(ms).toLocaleTimeString("ko-KR", {
+  return new Date(ms).toLocaleTimeString(dateLocale(), {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -150,24 +152,28 @@ export function DailyReportPanel({
       <div className="report-head">
         <span className="report-eyebrow">
           <Icon name="sparkles" size={12} />
-          데일리 리포트
+          {t("report.title")}
         </span>
         <span className="spacer" />
         {phase === "done" ? (
           <span className="report-actions">
             <button
               className="icon-btn sm"
-              title="다시 생성"
+              title={t("report.regen")}
               onClick={() => setConfirmRegen(true)}
             >
               <Icon name="refresh" size={13} />
             </button>
-            <button className="icon-btn sm" title="복사" onClick={() => void copy()}>
+            <button
+              className="icon-btn sm"
+              title={t("report.copy")}
+              onClick={() => void copy()}
+            >
               <Icon name={copied ? "check" : "copy"} size={13} />
             </button>
             <button
               className="icon-btn sm danger"
-              title="삭제"
+              title={t("common.delete")}
               onClick={() => setConfirmDelete(true)}
             >
               <Icon name="trash" size={13} />
@@ -178,10 +184,10 @@ export function DailyReportPanel({
             className="btn btn-sm btn-primary"
             onClick={() => void generate()}
             disabled={isFuture}
-            title={isFuture ? "미래 날짜는 생성할 수 없어요" : undefined}
+            title={isFuture ? t("report.futureNo") : undefined}
           >
             <Icon name="sparkles" size={13} />
-            {config?.provider ? "리포트 생성" : "AI 연결하고 생성"}
+            {config?.provider ? t("report.generate") : t("report.connectGenerate")}
           </button>
         ) : null}
       </div>
@@ -189,9 +195,7 @@ export function DailyReportPanel({
       {/* ① 미생성 */}
       {phase === "idle" && (
         <p className="report-hint">
-          {isFuture
-            ? "미래 날짜예요. 지난 날짜나 오늘을 선택해 생성하세요."
-            : "투두와 연동 플랫폼 활동으로 하루를 정리해 드려요."}
+          {isFuture ? t("report.hintFuture") : t("report.hintIdle")}
         </p>
       )}
 
@@ -211,14 +215,14 @@ export function DailyReportPanel({
             ))}
           </div>
           {phase === "collecting" ? (
-            <AiThinking label="활동을 모으는 중…" compact />
+            <AiThinking label={t("report.collecting")} compact />
           ) : stream ? (
             <pre className="note-stream-body" ref={streamRef}>
               {stream}
               <span className="report-caret" aria-hidden="true" />
             </pre>
           ) : (
-            <AiThinking label="요약하는 중…" compact />
+            <AiThinking label={t("report.summarizing")} compact />
           )}
         </>
       )}
@@ -237,8 +241,12 @@ export function DailyReportPanel({
             {doneSources
               .filter((s) => !s.ok)
               .map((s) => (
-                <span key={s.id} className="chip report-src failed" title="수집 실패">
-                  {SRC_LABEL[s.id] ?? s.id} 실패
+                <span
+                  key={s.id}
+                  className="chip report-src failed"
+                  title={t("report.srcFailedTitle")}
+                >
+                  {t("report.srcFailed", { name: SRC_LABEL[s.id] ?? s.id })}
                 </span>
               ))}
             {report && (
@@ -256,51 +264,49 @@ export function DailyReportPanel({
 
       {/* ④ 에러 / 활동 없음 */}
       {phase === "empty" && (
-        <p className="report-hint report-empty">
-          이 날짜엔 기록된 활동이 없어요. 투두를 체크하거나 다른 날짜를 골라보세요.
-        </p>
+        <p className="report-hint report-empty">{t("report.empty")}</p>
       )}
       {phase === "error" && error && <div className="error-note">{error}</div>}
       {opError && <div className="error-note">{opError}</div>}
 
       <Modal
         open={confirmRegen}
-        title="리포트 다시 생성"
+        title={t("report.regenTitle")}
         onClose={() => setConfirmRegen(false)}
         narrow
         footer={
           <>
             <span className="spacer" />
             <button className="btn btn-sm" onClick={() => setConfirmRegen(false)}>
-              취소
+              {t("common.cancel")}
             </button>
             <button className="btn btn-primary" onClick={regenerate}>
-              다시 생성
+              {t("report.regen")}
             </button>
           </>
         }
       >
-        <p>기존 리포트를 새로 생성한 내용으로 덮어써요. 계속할까요?</p>
+        <p>{t("report.regenBody")}</p>
       </Modal>
 
       <Modal
         open={confirmDelete}
-        title="리포트 삭제"
+        title={t("report.deleteTitle")}
         onClose={() => setConfirmDelete(false)}
         narrow
         footer={
           <>
             <span className="spacer" />
             <button className="btn btn-sm" onClick={() => setConfirmDelete(false)}>
-              취소
+              {t("common.cancel")}
             </button>
             <button className="btn btn-danger-ghost" onClick={() => void remove()}>
-              삭제
+              {t("common.delete")}
             </button>
           </>
         }
       >
-        <p>이 날짜의 리포트를 삭제해요. 되돌릴 수 없어요.</p>
+        <p>{t("report.deleteBody")}</p>
       </Modal>
     </div>
   );

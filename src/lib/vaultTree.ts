@@ -13,6 +13,7 @@ import {
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
+import { t } from "./i18n";
 
 const BASE = BaseDirectory.AppData;
 
@@ -34,17 +35,17 @@ export function parentOf(rel: string): string {
 /** 단일 이름(경로 구분자 불가) 검증. 문제가 있으면 사유 문자열, 없으면 null */
 export function invalidNameReason(name: string): string | null {
   const n = name.trim();
-  if (!n) return "이름을 입력하세요.";
-  if (/[/\\:]/.test(n)) return "이름에 / \\ : 는 쓸 수 없어요.";
-  if (n.startsWith(".")) return "이름은 . 으로 시작할 수 없어요.";
-  if (n.length > 80) return "이름이 너무 길어요 (80자 이내).";
+  if (!n) return t("common.name.empty");
+  if (/[/\\:]/.test(n)) return t("common.name.badChars");
+  if (n.startsWith(".")) return t("common.name.leadingDot");
+  if (n.length > 80) return t("common.name.tooLong");
   return null;
 }
 
 /** 'CS/네트워크' 같은 다단계 경로 입력 검증 (구간별로 이름 규칙 적용) */
 export function invalidPathReason(path: string): string | null {
   const segs = path.split("/").map((s) => s.trim()).filter(Boolean);
-  if (!segs.length) return "이름을 입력하세요.";
+  if (!segs.length) return t("common.name.empty");
   for (const s of segs) {
     const r = invalidNameReason(s);
     if (r) return r;
@@ -233,7 +234,7 @@ export function createVaultTree(cfg: VaultTreeConfig) {
     const sub = normalizePath(nameOrPath);
     const rel = parentRel ? `${parentRel}/${sub}` : sub;
     if (await exists(full(rel), { baseDir: BASE }))
-      throw new Error("같은 이름이 이미 있어요.");
+      throw new Error(t("common.file.dupName"));
     await mkdir(full(rel), { baseDir: BASE, recursive: true });
     return rel;
   }
@@ -243,7 +244,7 @@ export function createVaultTree(cfg: VaultTreeConfig) {
     const sub = normalizePath(nameOrPath);
     const rel = (parentRel ? `${parentRel}/` : "") + `${sub}${mainExt}`;
     if (await exists(full(rel), { baseDir: BASE }))
-      throw new Error("같은 이름의 파일이 이미 있어요.");
+      throw new Error(t("common.file.dupFile"));
     await mkdir(full(parentOf(rel)), { baseDir: BASE, recursive: true });
     const title = sub.slice(sub.lastIndexOf("/") + 1);
     await writeFile(rel, cfg.template(title));
@@ -261,7 +262,7 @@ export function createVaultTree(cfg: VaultTreeConfig) {
       (parent ? `${parent}/` : "") + (isDir ? newName : `${newName}${mainExt}`);
     if (newRel === relPath) return relPath;
     if (await exists(full(newRel), { baseDir: BASE }))
-      throw new Error("같은 이름이 이미 있어요.");
+      throw new Error(t("common.file.dupName"));
     await rename(full(relPath), full(newRel), {
       oldPathBaseDir: BASE,
       newPathBaseDir: BASE,
@@ -276,11 +277,11 @@ export function createVaultTree(cfg: VaultTreeConfig) {
     const curParent = parentOf(relPath);
     if (dir === curParent) return relPath; // 같은 폴더 = no-op
     if (dir === relPath || dir.startsWith(`${relPath}/`))
-      throw new Error("폴더를 자기 자신 안으로 옮길 수 없어요.");
+      throw new Error(t("common.folder.intoSelf"));
     const name = relPath.slice(relPath.lastIndexOf("/") + 1); // 파일은 확장자 포함, 폴더는 폴더명
     const newRel = dir ? `${dir}/${name}` : name;
     if (await exists(full(newRel), { baseDir: BASE }))
-      throw new Error("대상 폴더에 같은 이름이 이미 있어요.");
+      throw new Error(t("common.folder.dupTarget"));
     await rename(full(relPath), full(newRel), {
       oldPathBaseDir: BASE,
       newPathBaseDir: BASE,

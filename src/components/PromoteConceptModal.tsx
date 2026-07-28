@@ -13,6 +13,7 @@ import { detailPathFor, writeNote } from "../lib/vault";
 import { addNoteConcept } from "../lib/noteConcepts";
 import { AiThinking, Modal } from "../ui";
 import { Icon } from "../icons";
+import { t } from "../lib/i18n";
 
 type Step = "loading" | "preview";
 
@@ -115,7 +116,7 @@ export function PromoteConceptModal({
   async function save() {
     if (!target) return;
     if (!title.trim() || !summary.trim()) {
-      setError("제목과 요약은 필수예요.");
+      setError(t("concepts.form.required"));
       return;
     }
     setSaving(true);
@@ -153,22 +154,22 @@ export function PromoteConceptModal({
     footer = (
       <>
         <button className="btn btn-sm" onClick={onClose} disabled={saving}>
-          취소
+          {t("common.cancel")}
         </button>
         <button className="btn btn-primary" onClick={() => void save()} disabled={saving}>
           <Icon name="layers" size={15} />
-          {saving ? "저장 중…" : "개념으로 저장 (학습중)"}
+          {saving ? t("concepts.saving") : t("concepts.promote.save")}
         </button>
       </>
     );
   }
 
   return (
-    <Modal open={open} title="개념으로 만들기" onClose={onClose} footer={footer} wide>
+    <Modal open={open} title={t("concepts.promote.title")} onClose={onClose} footer={footer} wide>
       {step === "loading" && (
         <AiThinking
-          label="선택한 내용을 개념 카드로 정리하는 중…"
-          hint="선택 부분을 중심으로 요약·상세를 만들어요"
+          label={t("concepts.promote.thinking")}
+          hint={t("concepts.promote.thinkingHint")}
         />
       )}
 
@@ -180,7 +181,7 @@ export function PromoteConceptModal({
             </div>
           )}
           <div className="field">
-            <label>제목</label>
+            <label>{t("concepts.field.title")}</label>
             <input
               className="input"
               value={title}
@@ -188,7 +189,7 @@ export function PromoteConceptModal({
             />
           </div>
           <div className="field">
-            <label>요약 (위젯 표시용)</label>
+            <label>{t("concepts.field.summary")}</label>
             <textarea
               className="textarea"
               style={{ fontFamily: "var(--font)" }}
@@ -198,7 +199,7 @@ export function PromoteConceptModal({
             />
           </div>
           <div className="field">
-            <label>태그 (쉼표로 구분)</label>
+            <label>{t("concepts.field.tags")}</label>
             <input
               className="input"
               value={tags}
@@ -207,13 +208,13 @@ export function PromoteConceptModal({
           </div>
           <div className="field">
             <label style={{ display: "flex", alignItems: "center" }}>
-              상세 노트 (Markdown)
+              {t("concepts.field.detailNote")}
               <span className="spacer" />
               <button
                 className="btn btn-sm"
                 onClick={() => setShowSource((v) => !v)}
               >
-                {showSource ? "프리뷰" : "소스 편집"}
+                {showSource ? t("concepts.preview.show") : t("concepts.preview.source")}
               </button>
             </label>
             {showSource ? (

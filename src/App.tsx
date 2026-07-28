@@ -24,21 +24,22 @@ import { TodoView } from "./components/TodoView";
 import { SearchModal, type SearchHit } from "./components/SearchModal";
 import { THEME_EVENT, resolvedTheme, toggleTheme } from "./lib/theme";
 import { OPEN_CONCEPT, OPEN_NOTE, openDiagramInApp, openNoteInApp } from "./lib/nav";
+import { t } from "./lib/i18n";
 
 type StatusTab = ConceptStatus | "all";
 type Section = "til" | "notes" | "diagrams" | "todo";
 
 const SORTS: { id: ConceptSort; label: string }[] = [
-  { id: "canonical", label: "자신감 낮은 순" },
-  { id: "recent_updated", label: "최근 수정순" },
-  { id: "recent_created", label: "최근 추가순" },
-  { id: "title", label: "제목순" },
+  { id: "canonical", label: t("app.sort.canonical") },
+  { id: "recent_updated", label: t("app.sort.recentUpdated") },
+  { id: "recent_created", label: t("app.sort.recentCreated") },
+  { id: "title", label: t("app.sort.title") },
 ];
 
 const TABS: { id: StatusTab; label: string }[] = [
-  { id: "learning", label: "학습중" },
-  { id: "learned", label: "학습완료" },
-  { id: "all", label: "전체" },
+  { id: "learning", label: t("common.status.learning") },
+  { id: "learned", label: t("common.status.learned") },
+  { id: "all", label: t("app.tab.all") },
 ];
 
 // 탭별 기본 정렬 (사용자가 바꾸면 그 탭 한정으로 기억)
@@ -54,10 +55,10 @@ const RAIL: {
   label: string;
   icon: "layers" | "book" | "workflow" | "calendar-check";
 }[] = [
-  { id: "todo", label: "할 일", icon: "calendar-check" },
-  { id: "til", label: "개념", icon: "layers" },
-  { id: "notes", label: "필기노트", icon: "book" },
-  { id: "diagrams", label: "다이어그램", icon: "workflow" },
+  { id: "todo", label: t("app.rail.todo"), icon: "calendar-check" },
+  { id: "til", label: t("app.rail.til"), icon: "layers" },
+  { id: "notes", label: t("app.rail.notes"), icon: "book" },
+  { id: "diagrams", label: t("app.rail.diagrams"), icon: "workflow" },
 ];
 
 
@@ -249,12 +250,16 @@ function App() {
             key={r.id}
             className={`rail-item ${section === r.id ? "active" : ""}`}
             onClick={() => setSection(r.id)}
-            title={r.id === "todo" && reportBusy ? `${r.label} · 리포트 생성 중…` : r.label}
+            title={
+              r.id === "todo" && reportBusy
+                ? `${r.label} · ${t("app.rail.reportBusy")}`
+                : r.label
+            }
           >
             <Icon name={r.icon} size={20} />
             <span>{r.label}</span>
             {r.id === "todo" && reportBusy && (
-              <span className="rail-busy" aria-label="리포트 생성 중" />
+              <span className="rail-busy" aria-label={t("app.rail.reportBusyAria")} />
             )}
           </button>
         ))}
@@ -262,10 +267,10 @@ function App() {
         <button
           className="rail-item"
           onClick={() => setSettingsOpen(true)}
-          title="설정"
+          title={t("app.rail.settings")}
         >
           <Icon name="settings" size={20} />
-          <span>설정</span>
+          <span>{t("app.rail.settings")}</span>
         </button>
       </nav>
 
@@ -273,19 +278,19 @@ function App() {
       <header className="topbar">
         <span className="brand">
           {section === "til"
-            ? "개념"
+            ? t("app.rail.til")
             : section === "notes"
-              ? "필기노트"
+              ? t("app.rail.notes")
               : section === "diagrams"
-                ? "다이어그램"
-                : "할 일"}
+                ? t("app.rail.diagrams")
+                : t("app.rail.todo")}
         </span>
         {section === "til" && (
           <div className="search-wrap">
             <Icon name="search" size={15} className="search-icon" />
             <input
               className="search"
-              placeholder="검색 (제목·요약·태그)…"
+              placeholder={t("app.search.placeholder")}
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
             />
@@ -299,19 +304,19 @@ function App() {
             disabled={!config?.provider}
           >
             <Icon name="plus" size={15} />
-            추가
+            {t("app.add")}
           </button>
         )}
         <button
           className="icon-btn"
           onClick={toggleTheme}
-          title={isDark ? "라이트 모드로" : "다크 모드로"}
+          title={isDark ? t("app.theme.toLight") : t("app.theme.toDark")}
         >
           <Icon name={isDark ? "sun" : "moon"} size={17} />
         </button>
-        <button className="btn" onClick={showWidget} title="바탕화면 위젯 열기">
+        <button className="btn" onClick={showWidget} title={t("app.widget.open")}>
           <Icon name="panel" size={15} />
-          위젯
+          {t("app.widget.label")}
         </button>
       </header>
 
@@ -351,7 +356,7 @@ function App() {
           ))}
           {activeTags.length > 0 && (
             <span className="chip btn-like" onClick={() => setActiveTags([])}>
-              필터 초기화
+              {t("app.filter.clear")}
             </span>
           )}
         </div>
@@ -366,9 +371,10 @@ function App() {
           )}
           {ready && concepts.length === 0 && !loadError && (
             <div className="empty" style={{ height: "auto", padding: 40 }}>
-              {status === "learning" ? "학습 중인 개념이 없어요." : "결과가 없어요."}
+              {status === "learning" ? t("app.empty.learning") : t("app.empty.noResults")}
               <button className="btn btn-primary btn-sm" onClick={() => setAddOpen(true)}>
-                <Icon name="plus" size={14} />첫 개념 추가
+                <Icon name="plus" size={14} />
+                {t("app.empty.addFirst")}
               </button>
             </div>
           )}
@@ -408,7 +414,7 @@ function App() {
               }}
             />
           ) : (
-            <div className="empty">개념을 선택하면 상세가 여기 나와요.</div>
+            <div className="empty">{t("app.empty.selectConcept")}</div>
           )}
         </section>
       </div>

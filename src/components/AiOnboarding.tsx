@@ -12,6 +12,7 @@ import {
   type AppConfig,
 } from "../lib/config";
 import { detectAiClis, type DetectedCli } from "../lib/ai";
+import { t } from "../lib/i18n";
 import { Modal, Spinner } from "../ui";
 import { Icon } from "../icons";
 
@@ -71,12 +72,12 @@ export function AiOnboarding({
   return (
     <Modal
       open={open}
-      title="AI 연결"
+      title={t("settings.ai.title")}
       onClose={skip}
       footer={
         <>
           <button className="btn btn-sm" onClick={skip} disabled={busy}>
-            AI 없이 사용
+            {t("settings.onb.skip")}
           </button>
           <span className="spacer" />
           <button
@@ -85,22 +86,22 @@ export function AiOnboarding({
             disabled={busy || !selected || detecting}
           >
             <Icon name="sparkles" size={15} />
-            {busy ? "연결 중…" : "연결"}
+            {busy ? t("settings.onb.connecting") : t("settings.onb.connect")}
           </button>
         </>
       }
     >
       <p className="onb-lead">
-        Amber 의 AI 기능(개념 정리·노트 작성·인라인 질문)은{" "}
-        <b>이미 쓰고 있는 AI CLI 의 로그인 세션</b>을 그대로 사용해요.
-        API 키를 따로 저장하지 않습니다.
+        {t("settings.onb.lead.pre")}
+        <b>{t("settings.onb.lead.bold")}</b>
+        {t("settings.onb.lead.post")}
       </p>
 
       {detecting ? (
         <div className="loading-box">
           <Spinner />
-          <div>설치된 AI CLI 를 찾는 중…</div>
-          <div className="hint">로그인 셸 PATH 에서 claude · codex · gemini 를 확인해요</div>
+          <div>{t("settings.ai.searching")}</div>
+          <div className="hint">{t("settings.onb.searchHint")}</div>
         </div>
       ) : detected.length > 0 ? (
         <div className="onb-grid">
@@ -122,9 +123,9 @@ export function AiOnboarding({
       ) : (
         <div className="onb-empty">
           <p>
-            설치된 AI CLI 를 찾지 못했어요.
+            {t("settings.onb.emptyTitle")}
             <br />
-            아래 중 하나를 설치·로그인한 뒤 설정(⚙)에서 다시 감지할 수 있어요.
+            {t("settings.onb.emptyBody")}
           </p>
           <div className="onb-links">
             {(Object.keys(INSTALL_LINKS) as AiProvider[]).map((p) => (
@@ -133,7 +134,7 @@ export function AiOnboarding({
                 className="btn btn-sm"
                 onClick={() => void openUrl(INSTALL_LINKS[p])}
               >
-                {PROVIDER_LABELS[p]} 설치 안내
+                {t("settings.onb.installGuide", { name: PROVIDER_LABELS[p] })}
               </button>
             ))}
           </div>
@@ -141,7 +142,7 @@ export function AiOnboarding({
       )}
 
       <div className="hint" style={{ marginTop: 12 }}>
-        나중에 설정(⚙)에서 언제든 다시 연결하거나 바꿀 수 있어요.
+        {t("settings.onb.laterHint")}
       </div>
     </Modal>
   );

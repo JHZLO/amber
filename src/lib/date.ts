@@ -5,7 +5,15 @@
 // 'YYYY-MM-DD' 문자열로 다루고, Date 로 변환할 때는 반드시 new Date(y, m-1, d)(로컬 생성자)만 쓴다.
 // new Date('YYYY-MM-DD') 는 UTC 자정으로 파싱되므로 절대 쓰지 않는다.
 
+import { getLang } from "./i18n";
+
 export const WEEKDAYS_KO = ["일", "월", "화", "수", "목", "금", "토"] as const;
+const WEEKDAYS_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+/** 요일 짧은 표기(일~토) — 캘린더 헤더 등. 언어 설정을 따른다 */
+export function weekdaysShort(): readonly string[] {
+  return getLang() === "ko" ? WEEKDAYS_KO : WEEKDAYS_EN;
+}
 
 const pad2 = (n: number) => (n < 10 ? `0${n}` : `${n}`);
 
@@ -80,10 +88,12 @@ export function monthGridDates(year: number, month: number): string[] {
   return out;
 }
 
-/** "7월 16일 목요일" */
+/** ko "7월 16일 목요일" / en "Thursday, July 16" */
 export function formatDayLong(s: string): string {
   const d = parseLocalDate(s);
-  return `${d.getMonth() + 1}월 ${d.getDate()}일 ${WEEKDAYS_KO[d.getDay()]}요일`;
+  if (getLang() === "ko")
+    return `${d.getMonth() + 1}월 ${d.getDate()}일 ${WEEKDAYS_KO[d.getDay()]}요일`;
+  return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 }
 
 /** "7/14" — 밀린 항목의 원래 날짜 등 짧은 표기 */
@@ -92,7 +102,11 @@ export function formatDayShort(s: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-/** "2026년 7월" */
+/** ko "2026년 7월" / en "July 2026" */
 export function formatMonthTitle(year: number, month: number): string {
-  return `${year}년 ${month}월`;
+  if (getLang() === "ko") return `${year}년 ${month}월`;
+  return new Date(year, month - 1, 1).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
 }

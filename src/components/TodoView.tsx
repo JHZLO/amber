@@ -51,6 +51,7 @@ import {
   todayStr,
   weekStartOf,
 } from "../lib/date";
+import { t } from "../lib/i18n";
 import { Checkbox, Modal } from "../ui";
 import { Icon } from "../icons";
 import { MiniCalendar } from "./MiniCalendar";
@@ -60,6 +61,18 @@ import { openConceptInApp } from "../lib/nav";
 import type { AppConfig } from "../lib/config";
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** 번역 문자열의 {name} 자리에 <b>제목</b> 을 끼워 넣는다 — 어순(굵힘 위치)은 언어별 사전이 정한다 */
+function withBoldName(template: string, name: string) {
+  const [before, after] = template.split("{name}");
+  return (
+    <>
+      {before}
+      <b>{name}</b>
+      {after}
+    </>
+  );
+}
 
 const OVERDUE_LIMIT = 20;
 // 중첩 단계별 들여쓰기(px). 유닛 marginLeft 로 겹쳐 적용돼 단계마다 이만큼 더 들어간다.
@@ -567,31 +580,32 @@ export function TodoView({
   const childrenOf = (pid: number) => childrenIn(todos, pid);
   const doneTop = topLevel.filter((t) => t.done === 1).length;
 
-  function renderRow(t: Todo, opts?: { overdue?: boolean }) {
+  // 파라미터를 todo 로 둔다 — t 로 줄이면 i18n 의 t() 를 가려서(shadowing) 번역 호출이 깨진다
+  function renderRow(todo: Todo, opts?: { overdue?: boolean }) {
     const isOverdue = opts?.overdue ?? false;
-    const kids = isOverdue ? [] : childrenOf(t.id);
+    const kids = isOverdue ? [] : childrenOf(todo.id);
     const kidsDone = kids.filter((k) => k.done === 1).length;
     return (
       <div
-        className={`todo-row ${t.done === 1 ? "done" : ""}`}
-        data-todo-id={t.id}
+        className={`todo-row ${todo.done === 1 ? "done" : ""}`}
+        data-todo-id={todo.id}
       >
         {!isOverdue && (
           <span
             className="todo-grip"
-            title="드래그해서 이동 · 가로로 깊이 조절"
+            title={t("todos.row.grip")}
             aria-hidden="true"
-            onMouseDown={(e) => startDrag(e, t.id)}
+            onMouseDown={(e) => startDrag(e, todo.id)}
           >
             <Icon name="grip" size={14} />
           </span>
         )}
         <Checkbox
-          checked={t.done === 1}
-          onChange={() => (isOverdue ? toggleOverdue(t) : toggle(t))}
-          label={t.content}
+          checked={todo.done === 1}
+          onChange={() => (isOverdue ? toggleOverdue(todo) : toggle(todo))}
+          label={todo.content}
         />
-        {editingId === t.id ? (
+        {editingId === todo.id ? (
           <input
             className="input todo-edit"
             autoFocus
@@ -599,23 +613,23 @@ export function TodoView({
             onChange={(e) => setEditText(e.target.value)}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing) return;
-              if (e.key === "Enter") void saveEdit(t);
+              if (e.key === "Enter") void saveEdit(todo);
               if (e.key === "Escape") cancelEdit();
             }}
             // 바깥을 클릭해도 편집 내용을 버리지 않는다 — 취소는 Esc
-            onBlur={() => void saveEdit(t)}
+            onBlur={() => void saveEdit(todo)}
           />
         ) : (
           <span
             className="todo-text"
-            onClick={() => (isOverdue ? toggleOverdue(t) : startEdit(t))}
+            onClick={() => (isOverdue ? toggleOverdue(todo) : startEdit(todo))}
           >
-            {t.content}
+            {todo.content}
           </span>
         )}
 
         {kids.length > 0 && (
-          <span className="todo-progress" title="완료 하위 / 전체">
+          <span className="todo-progress" title={t("todos.row.progress")}>
             {kidsDone}/{kids.length}
           </span>
         )}
@@ -623,14 +637,17 @@ export function TodoView({
         {isOverdue ? (
           // 밀린 스트립: 원래 날짜 + 가져오기/버리기 — 발견성 위해 항상 표시(hover 오버레이 아님)
           <span className="todo-overdue-actions">
-            <span className="todo-row-date">{formatDayShort(t.due_date)}</span>
-            <button className="btn btn-sm" onClick={() => void moveToday([t.id])}>
-              오늘로
+            <span className="todo-row-date">{formatDayShort(todo.due_date)}</span>
+            <button
+              className="btn btn-sm"
+              onClick={() => void moveToday([todo.id])}
+            >
+              {t("todos.overdue.moveOne")}
             </button>
             <button
               className="icon-btn sm danger"
-              title="삭제"
-              onClick={() => askRemove(t, true)}
+              title={t("common.delete")}
+              onClick={() => askRemove(todo, true)}
             >
               <Icon name="trash" size={13} />
             </button>
@@ -640,10 +657,10 @@ export function TodoView({
           <span className="row-actions" onClick={(e) => e.stopPropagation()}>
             <button
               className="icon-btn sm"
-              title="하위 추가"
+              title={t("todos.row.addChild")}
               onClick={() => {
                 childDone.current = false;
-                setAddingChildFor(t.id);
+                setAddingChildFor(todo.id);
                 setChildInput("");
               }}
             >
@@ -651,22 +668,22 @@ export function TodoView({
             </button>
             <button
               className="icon-btn sm"
-              title="시간표에 넣기"
-              onClick={() => void scheduleTodo(t)}
+              title={t("todos.row.schedule")}
+              onClick={() => void scheduleTodo(todo)}
             >
               <Icon name="clock" size={13} />
             </button>
             <button
               className="icon-btn sm"
-              title="이름 변경"
-              onClick={() => startEdit(t)}
+              title={t("todos.row.rename")}
+              onClick={() => startEdit(todo)}
             >
               <Icon name="pencil" size={13} />
             </button>
             <button
               className="icon-btn sm danger"
-              title="삭제"
-              onClick={() => askRemove(t, false)}
+              title={t("common.delete")}
+              onClick={() => askRemove(todo, false)}
             >
               <Icon name="trash" size={13} />
             </button>
@@ -695,7 +712,7 @@ export function TodoView({
               ref={childInputRef}
               className="input todo-edit"
               autoFocus
-              placeholder="하위 항목 — Enter 로 추가"
+              placeholder={t("todos.child.placeholder")}
               value={childInput}
               onChange={(e) => setChildInput(e.target.value)}
               onKeyDown={(e) => {
@@ -766,7 +783,7 @@ export function TodoView({
         className="todo-resizer"
         style={{ left: calWEff }}
         onMouseDown={startResize}
-        title="드래그해서 캘린더 너비 조절"
+        title={t("todos.cal.resize")}
       />
 
       <section className="detail">
@@ -780,18 +797,18 @@ export function TodoView({
               onClick={() => goDate(today)}
               disabled={isToday}
             >
-              오늘
+              {t("todos.today")}
             </button>
             <button
               className="icon-btn ghost"
-              title="전날"
+              title={t("todos.nav.prevDay")}
               onClick={() => goDate(shiftDay(selected, -1))}
             >
               <Icon name="chevron-left" size={16} />
             </button>
             <button
               className="icon-btn ghost"
-              title="다음날"
+              title={t("todos.nav.nextDay")}
               onClick={() => goDate(shiftDay(selected, 1))}
             >
               <Icon name="chevron-right" size={16} />
@@ -808,7 +825,7 @@ export function TodoView({
           <input
             ref={quickRef}
             className="input todo-quick-input"
-            placeholder="할 일을 적고 Enter"
+            placeholder={t("todos.quick.placeholder")}
             value={quick}
             onChange={(e) => setQuick(e.target.value)}
             onKeyDown={(e) => {
@@ -830,17 +847,17 @@ export function TodoView({
               <span className="todo-overdue-caret">
                 <Icon name="chevron-right" size={14} />
               </span>
-              <b>밀린 할 일</b>
+              <b>{t("todos.overdue.title")}</b>
               <span className="todo-overdue-cnt">{overdue.length}</span>
               <span className="spacer" />
               <button
                 className="btn btn-sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  void moveToday(overdue.map((t) => t.id));
+                  void moveToday(overdue.map((o) => o.id));
                 }}
               >
-                모두 오늘로 가져오기
+                {t("todos.overdue.moveAll")}
               </button>
             </div>
             <div className="todo-overdue-body">
@@ -850,7 +867,7 @@ export function TodoView({
                 ))}
                 {overdue.length > OVERDUE_LIMIT && (
                   <div className="hint todo-overdue-more">
-                    외 {overdue.length - OVERDUE_LIMIT}개
+                    {t("todos.overdue.more", { n: overdue.length - OVERDUE_LIMIT })}
                   </div>
                 )}
               </div>
@@ -860,9 +877,7 @@ export function TodoView({
 
         <div className="todo-listing" ref={listRef}>
           {todos.length === 0 ? (
-            <div className="hint todo-day-empty">
-              이 날의 할 일이 없어요 — 위 입력창에 적고 Enter.
-            </div>
+            <div className="hint todo-day-empty">{t("todos.empty.day")}</div>
           ) : (
             topLevel.map((p) => renderUnit(p, 0))
           )}
@@ -870,7 +885,7 @@ export function TodoView({
 
         {topLevel.length > 0 && (
           <div className="detail-meta">
-            {topLevel.length}개 중 {doneTop}개 완료
+            {t("todos.meta.done", { total: topLevel.length, done: doneTop })}
           </div>
         )}
 
@@ -886,13 +901,15 @@ export function TodoView({
 
         {learned.length > 0 && (
           <div className="todo-learned">
-            <div className="todo-learned-label">이날 학습완료 {learned.length}</div>
+            <div className="todo-learned-label">
+              {t("todos.learned.label", { n: learned.length })}
+            </div>
             <div className="todo-learned-chips">
               {learned.map((c) => (
                 <button
                   key={c.id}
                   className="chip btn-like"
-                  title="개념 열기"
+                  title={t("todos.learned.open")}
                   onClick={() => openConceptInApp(c.id)}
                 >
                   {c.title}
@@ -905,30 +922,32 @@ export function TodoView({
 
       <Modal
         open={confirmDelete != null}
-        title="할 일 삭제"
+        title={t("todos.delete.title")}
         narrow
         onClose={() => setConfirmDelete(null)}
         footer={
           <>
             <span className="spacer" />
             <button className="btn btn-sm" onClick={() => setConfirmDelete(null)}>
-              취소
+              {t("common.cancel")}
             </button>
             <button
               className="btn btn-sm btn-danger-ghost"
               onClick={() => confirmDelete && void remove(confirmDelete.todo)}
             >
-              삭제
+              {t("common.delete")}
             </button>
           </>
         }
       >
         {confirmDelete && (
           <p style={{ margin: 0 }}>
-            <b>{confirmDelete.todo.content}</b> 항목을 하위 {confirmDelete.count}
-            개와 함께 삭제할까요?
+            {withBoldName(
+              t("todos.delete.confirm", { n: confirmDelete.count }),
+              confirmDelete.todo.content,
+            )}
             <br />
-            되돌릴 수 없어요.
+            {t("todos.delete.irreversible")}
           </p>
         )}
       </Modal>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { appDataDir } from "@tauri-apps/api/path";
+import { emitTo } from "@tauri-apps/api/event";
 import { createBackup } from "../lib/backup";
 import type { AiProvider, AppConfig } from "../lib/config";
 import {
@@ -23,23 +24,30 @@ import {
   type SavedPrompt,
 } from "../lib/prompts";
 import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
+import { getLang, setLang, t, LANG_CHANGED_EVENT, type Lang } from "../lib/i18n";
 import { Modal, Select, Spinner } from "../ui";
 import { Icon } from "../icons";
 import { ReportSettings } from "./ReportSettings";
 
 const THEMES: { id: ThemePref; label: string }[] = [
-  { id: "system", label: "시스템 설정 따름" },
-  { id: "light", label: "라이트" },
-  { id: "dark", label: "다크" },
+  { id: "system", label: t("settings.theme.system") },
+  { id: "light", label: t("settings.theme.light") },
+  { id: "dark", label: t("settings.theme.dark") },
+];
+
+// 언어 선택지 — 라벨은 각 언어의 자기 표기(autonym) 그대로. 절대 번역하지 않는다.
+const LANGS: { id: Lang; label: string }[] = [
+  { id: "ko", label: "한국어" },
+  { id: "en", label: "English" },
 ];
 
 // 설정 카테고리 탭 — 한 화면에 다 쌓지 않고 갈래로 나눈다
 type SetTab = "ai" | "prompts" | "report" | "appearance";
 const SETTING_TABS: { id: SetTab; label: string }[] = [
-  { id: "ai", label: "AI" },
-  { id: "prompts", label: "프롬프트" },
-  { id: "report", label: "데일리 리포트" },
-  { id: "appearance", label: "모양" },
+  { id: "ai", label: t("settings.tab.ai") },
+  { id: "prompts", label: t("settings.tab.prompts") },
+  { id: "report", label: t("settings.tab.report") },
+  { id: "appearance", label: t("settings.tab.appearance") },
 ];
 
 export function SettingsModal({
@@ -63,6 +71,10 @@ export function SettingsModal({
 
   const [theme, setTheme] = useState<ThemePref>("system");
   const [tab, setTab] = useState<SetTab>("ai");
+
+  // 언어는 페이지 로드 시 고정(i18n) — 선택 즉시 적용하지 않고 확인 모달을 거쳐
+  // setLang 저장 후 창을 다시 불러온다. null = 확인 대기 없음
+  const [langPending, setLangPending] = useState<Lang | null>(null);
 
   // 백업: 폴더 선택 → Rust 가 vault 사본 + DB 스냅샷 생성. 결과는 탭과 무관하게 본문 맨 위에 남긴다
   const [backingUp, setBackingUp] = useState(false);
@@ -105,13 +117,23 @@ export function SettingsModal({
       setBackupResult(null);
       setTab("ai");
       setTheme(getThemePref());
+      setLangPending(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  function changeTheme(t: ThemePref) {
-    setTheme(t);
-    setThemePref(t); // 즉시 적용
+  function changeTheme(pref: ThemePref) {
+    setTheme(pref);
+    setThemePref(pref); // 즉시 적용
+  }
+
+  // 언어 적용 = 저장 → 위젯 창에 통지 → 이 창 리로드 (i18n 은 로드 시 고정이라 리로드가 적용)
+  async function applyLang() {
+    if (!langPending) return;
+    setLang(langPending);
+    // 위젯 창도 스스로 리로드하게 알린다 — 위젯이 없거나 실패해도 본창 적용엔 지장 없음
+    await emitTo("widget", LANG_CHANGED_EVENT, {}).catch(() => {});
+    window.location.reload();
   }
 
   // 목록 확정 = 상태 + 영속 동시에 (명시적 저장/삭제 시점에만)
@@ -154,7 +176,7 @@ export function SettingsModal({
     try {
       const v = await aiHealth(path);
       if (!alive.current) return;
-      setTestResult({ ok: true, msg: `연결 성공 — ${v}` });
+      setTestResult({ ok: true, msg: t("settings.ai.testOk", { version: v }) });
     } catch (e) {
       if (!alive.current) return;
       setTestResult({ ok: false, msg: isAiError(e) ? e.message : String(e) });
@@ -195,18 +217,21 @@ export function SettingsModal({
       const dir = await openDialog({
         directory: true,
         multiple: false,
-        title: "백업을 저장할 폴더 선택",
+        title: t("settings.backup.pickTitle"),
       });
       if (typeof dir !== "string" || !dir) return;
       setBackingUp(true);
       setBackupResult(null);
       const out = await createBackup(dir);
       if (!alive.current) return;
-      setBackupResult({ ok: true, msg: `백업 완료 — ${out}` });
+      setBackupResult({ ok: true, msg: t("settings.backup.done", { path: out }) });
     } catch (e) {
-      // 노트가 탭 위에 따로 뜨므로 무엇이 실패했는지부터 밝힌다 (Rust 메시지는 이미 한국어 문장)
+      // 노트가 탭 위에 따로 뜨므로 무엇이 실패했는지부터 밝힌다 (Rust 메시지는 한국어 문장)
       if (alive.current)
-        setBackupResult({ ok: false, msg: `백업 실패 — ${String(e)}` });
+        setBackupResult({
+          ok: false,
+          msg: t("settings.backup.fail", { err: String(e) }),
+        });
     } finally {
       backupLock.current = false;
       if (alive.current) setBackingUp(false);
@@ -222,17 +247,23 @@ export function SettingsModal({
     try {
       await openPath(await appDataDir());
     } catch (e) {
-      setTestResult({ ok: false, msg: "폴더 열기 실패: " + String(e) });
+      setTestResult({
+        ok: false,
+        msg: t("settings.openFolderFail", { err: String(e) }),
+      });
     }
   }
 
-  // 에디터 화면일 땐 X/ESC/바깥클릭이 편집만 취소(한 단계 뒤로), 아니면 설정 닫기
-  const handleClose = () => (editing ? cancelEdit() : onClose());
+  // 에디터 화면일 땐 X/ESC/바깥클릭이 편집만 취소(한 단계 뒤로), 아니면 설정 닫기.
+  // 언어 확인 모달이 위에 떠 있으면 그것만 닫는다 — Esc 는 두 모달 리스너에 모두 닿으므로
+  // 여기서 가드하지 않으면 설정까지 한 번에 닫혀버린다.
+  const handleClose = () =>
+    langPending ? setLangPending(null) : editing ? cancelEdit() : onClose();
 
   const footer = editing ? (
     <>
       <button className="btn btn-sm" onClick={cancelEdit}>
-        취소
+        {t("common.cancel")}
       </button>
       <span className="spacer" />
       <button
@@ -240,35 +271,42 @@ export function SettingsModal({
         onClick={saveEdit}
         disabled={!editText.trim()}
       >
-        저장
+        {t("common.save")}
       </button>
     </>
   ) : (
     <>
       <button className="btn btn-sm" onClick={openFolder}>
-        데이터 폴더 열기
+        {t("settings.openDataFolder")}
       </button>
       <button
         className="btn btn-sm"
         onClick={() => void backup()}
         disabled={backingUp}
       >
-        {backingUp ? "백업 중…" : "백업"}
+        {backingUp ? t("settings.backup.busy") : t("settings.backup")}
       </button>
       <span className="spacer" />
       <button className="btn btn-sm" onClick={onClose}>
-        닫기
+        {t("common.close")}
       </button>
       <button className="btn btn-primary" onClick={save} disabled={testing}>
-        저장
+        {t("common.save")}
       </button>
     </>
   );
 
   return (
+    <>
     <Modal
       open={open}
-      title={editing ? (isNew ? "새 프롬프트" : "프롬프트 편집") : "설정"}
+      title={
+        editing
+          ? isNew
+            ? t("settings.prompt.new")
+            : t("settings.prompt.editTitle")
+          : t("settings.title")
+      }
       onClose={handleClose}
       footer={footer}
       fixedHeight
@@ -277,28 +315,26 @@ export function SettingsModal({
         // 포커스 에디터 — 이름 + 큰 textarea 하나만
         <>
           <div className="field">
-            <label>이름</label>
+            <label>{t("settings.prompt.nameLabel")}</label>
             <input
               className="input"
               autoFocus
-              placeholder="예: 개념노트 보강"
+              placeholder={t("settings.prompt.namePlaceholder")}
               value={editLabel}
               onChange={(e) => setEditLabel(e.target.value)}
             />
           </div>
           <div className="field">
-            <label>프롬프트 (Claude에게 줄 지시)</label>
+            <label>{t("settings.prompt.textLabel")}</label>
             <textarea
               className="textarea"
               style={{ fontFamily: "var(--font)" }}
               rows={10}
-              placeholder="예: 진짜 개념노트처럼 대/중/소제목으로 분류하고 예시 코드와 표를 넣어 상세히 보강해줘"
+              placeholder={t("settings.prompt.textPlaceholder")}
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
             />
-            <div className="hint">
-              이름을 비우면 지시문 앞부분이 이름으로 쓰여요.
-            </div>
+            <div className="hint">{t("settings.prompt.nameHint")}</div>
           </div>
         </>
       ) : (
@@ -313,13 +349,13 @@ export function SettingsModal({
             </div>
           )}
           <div className="set-tabs">
-            {SETTING_TABS.map((t) => (
+            {SETTING_TABS.map((st) => (
               <button
-                key={t.id}
-                className={`set-tab ${tab === t.id ? "active" : ""}`}
-                onClick={() => setTab(t.id)}
+                key={st.id}
+                className={`set-tab ${tab === st.id ? "active" : ""}`}
+                onClick={() => setTab(st.id)}
               >
-                {t.label}
+                {st.label}
               </button>
             ))}
           </div>
@@ -327,7 +363,7 @@ export function SettingsModal({
           {tab === "ai" && (
           <section className="set-section">
             <div className="set-head">
-              <span className="set-eyebrow">AI 연결</span>
+              <span className="set-eyebrow">{t("settings.ai.title")}</span>
               <span className="spacer" />
               <button
                 className="btn btn-sm"
@@ -335,25 +371,22 @@ export function SettingsModal({
                 disabled={detecting}
               >
                 <Icon name="refresh" size={13} />
-                {detecting ? "감지 중…" : "다시 감지"}
+                {detecting ? t("settings.ai.detecting") : t("settings.ai.redetect")}
               </button>
             </div>
             <p className="set-desc">
               {provider
-                ? `현재 ${PROVIDER_LABELS[provider]} 에 연결돼 있어요. 로컬 CLI 의 로그인 세션을 그대로 사용합니다.`
-                : "연결된 AI 가 없어요. 설치된 CLI 를 감지해 연결하세요."}
+                ? t("settings.ai.connected", { name: PROVIDER_LABELS[provider] })
+                : t("settings.ai.none")}
             </p>
 
             {detecting && detected === null ? (
               <div className="loading-box" style={{ padding: "22px 0" }}>
                 <Spinner />
-                <div className="hint">설치된 CLI 를 찾는 중…</div>
+                <div className="hint">{t("settings.ai.searching")}</div>
               </div>
             ) : detected !== null && detected.length === 0 ? (
-              <div className="error-note">
-                설치된 AI CLI 를 찾지 못했어요. claude · codex · gemini 중 하나를
-                설치하고 로그인한 뒤 다시 감지하세요.
-              </div>
+              <div className="error-note">{t("settings.ai.notFound")}</div>
             ) : (
               <div className="onb-grid">
                 {(detected ?? []).map((d) => (
@@ -376,7 +409,9 @@ export function SettingsModal({
             {provider && (
               <div className="set-provider">
                 <div className="field">
-                  <label>{PROVIDER_LABELS[provider]} 경로</label>
+                  <label>
+                    {t("settings.ai.pathLabel", { name: PROVIDER_LABELS[provider] })}
+                  </label>
                   <div className="set-inline">
                     <input
                       className="input"
@@ -385,7 +420,7 @@ export function SettingsModal({
                       placeholder={`/opt/homebrew/bin/${provider}`}
                     />
                     <button className="btn" onClick={test} disabled={testing}>
-                      {testing ? <Spinner /> : "연결 테스트"}
+                      {testing ? <Spinner /> : t("settings.ai.test")}
                     </button>
                   </div>
                   {testResult && (
@@ -399,7 +434,7 @@ export function SettingsModal({
                 </div>
 
                 <div className="field" style={{ marginBottom: 0 }}>
-                  <label>모델</label>
+                  <label>{t("settings.ai.modelLabel")}</label>
                   <Select
                     block
                     value={model}
@@ -410,7 +445,7 @@ export function SettingsModal({
                     onChange={setModel}
                   />
                   <div className="hint" style={{ marginTop: 6 }}>
-                    AI 호출은 연결된 CLI 의 플랜/크레딧을 소모해요.
+                    {t("settings.ai.creditHint")}
                   </div>
                 </div>
               </div>
@@ -421,15 +456,27 @@ export function SettingsModal({
           {tab === "appearance" && (
           <section className="set-section">
             <div className="set-head">
-              <span className="set-eyebrow">모양</span>
+              <span className="set-eyebrow">{t("settings.tab.appearance")}</span>
             </div>
-            <div className="field" style={{ marginBottom: 0 }}>
-              <label>테마</label>
+            <div className="field">
+              <label>{t("settings.theme.label")}</label>
               <Select
                 block
                 value={theme}
-                options={THEMES.map((t) => ({ value: t.id, label: t.label }))}
+                options={THEMES.map((th) => ({ value: th.id, label: th.label }))}
                 onChange={changeTheme}
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>{t("settings.lang.label")}</label>
+              {/* 테마와 달리 즉시 적용하지 않는다 — 리로드가 필요해 확인 모달을 거친다 */}
+              <Select
+                block
+                value={getLang()}
+                options={LANGS.map((l) => ({ value: l.id, label: l.label }))}
+                onChange={(v) => {
+                  if (v !== getLang()) setLangPending(v);
+                }}
               />
             </div>
           </section>
@@ -437,21 +484,21 @@ export function SettingsModal({
           {tab === "prompts" && (
           <section className="set-section">
             <div className="set-head">
-              <span className="set-eyebrow">저장 프롬프트</span>
+              <span className="set-eyebrow">{t("settings.prompts.title")}</span>
               <span className="spacer" />
               <button className="btn btn-sm" onClick={startNew}>
-                <Icon name="plus" size={13} />새 프롬프트
+                <Icon name="plus" size={13} />
+                {t("settings.prompt.new")}
               </button>
             </div>
             <p className="set-desc">
-              자주 쓰는 지시를 저장해 두면 <b>AI로 노트 작성</b> 모달에서 칩으로
-              바로 넣을 수 있어요.
+              {t("settings.prompts.desc.pre")}
+              <b>{t("settings.prompts.desc.bold")}</b>
+              {t("settings.prompts.desc.post")}
             </p>
 
             {prompts.length === 0 ? (
-              <div className="prompt-empty">
-                저장된 프롬프트가 없어요. “새 프롬프트”로 추가하세요.
-              </div>
+              <div className="prompt-empty">{t("settings.prompts.empty")}</div>
             ) : (
               <div className="prompt-list">
                 {prompts.map((p) => (
@@ -465,7 +512,7 @@ export function SettingsModal({
                     </button>
                     <button
                       className="icon-btn ghost sm danger prompt-del"
-                      title="삭제"
+                      title={t("common.delete")}
                       onClick={() => removePrompt(p.id)}
                     >
                       <Icon name="trash" size={14} />
@@ -480,5 +527,27 @@ export function SettingsModal({
         </>
       )}
     </Modal>
+
+    {/* 언어 변경 확인 — 적용 = 리로드라서 즉시 바꾸지 않고 한 번 묻는다.
+        설정 모달 위에 겹쳐 뜨는 좁은 확인 모달(나중에 마운트 = 위에 그려짐). */}
+    <Modal
+      open={langPending !== null}
+      title={t("settings.lang.confirmTitle")}
+      onClose={() => setLangPending(null)}
+      narrow
+      footer={
+        <>
+          <button className="btn btn-sm" onClick={() => setLangPending(null)}>
+            {t("common.cancel")}
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={() => void applyLang()}>
+            {t("settings.lang.apply")}
+          </button>
+        </>
+      }
+    >
+      <p style={{ margin: 0 }}>{t("settings.lang.confirmBody")}</p>
+    </Modal>
+    </>
   );
 }

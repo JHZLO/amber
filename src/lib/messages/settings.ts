@@ -1,0 +1,180 @@
+// settings 도메인 문자열 — 키는 "settings." 접두어 (충돌 방지). en 은 ko 와 키가 1:1 (누락 = 컴파일 에러).
+// 제품명(Claude Code · OpenAI Codex CLI · Gemini CLI)과 모델명(Opus 5 등)은 번역하지 않는다 —
+// 모델 라벨은 config.ts 에서 "모델명 (수식어)" 로 조합하고 여기엔 수식어만 둔다.
+// 언어 선택지 라벨(한국어/English)은 자기 표기 그대로라 사전에 넣지 않는다 (SettingsModal 의 LANGS).
+
+const ko = {
+  // 설정 모달 공통
+  "settings.title": "설정",
+  "settings.tab.ai": "AI",
+  "settings.tab.prompts": "프롬프트",
+  "settings.tab.report": "데일리 리포트",
+  "settings.tab.appearance": "모양",
+  "settings.openDataFolder": "데이터 폴더 열기",
+  "settings.openFolderFail": "폴더 열기 실패: {err}",
+
+  // 백업
+  "settings.backup": "백업",
+  "settings.backup.busy": "백업 중…",
+  "settings.backup.pickTitle": "백업을 저장할 폴더 선택",
+  "settings.backup.done": "백업 완료 — {path}",
+  "settings.backup.fail": "백업 실패 — {err}",
+
+  // AI 연결 (설정 탭 + 온보딩 공용)
+  "settings.ai.title": "AI 연결",
+  "settings.ai.redetect": "다시 감지",
+  "settings.ai.detecting": "감지 중…",
+  "settings.ai.connected":
+    "현재 {name} 에 연결돼 있어요. 로컬 CLI 의 로그인 세션을 그대로 사용합니다.",
+  "settings.ai.none": "연결된 AI 가 없어요. 설치된 CLI 를 감지해 연결하세요.",
+  "settings.ai.searching": "설치된 AI CLI 를 찾는 중…",
+  "settings.ai.notFound":
+    "설치된 AI CLI 를 찾지 못했어요. claude · codex · gemini 중 하나를 설치하고 로그인한 뒤 다시 감지하세요.",
+  "settings.ai.pathLabel": "{name} 경로",
+  "settings.ai.test": "연결 테스트",
+  "settings.ai.testOk": "연결 성공 — {version}",
+  "settings.ai.modelLabel": "모델",
+  "settings.ai.creditHint": "AI 호출은 연결된 CLI 의 플랜/크레딧을 소모해요.",
+
+  // 모델 라벨 수식어 (config.ts 의 PROVIDER_MODELS 에서 조합)
+  "settings.model.latestQuality": "최신·품질 우선",
+  "settings.model.quality": "품질 우선",
+  "settings.model.balanced": "균형",
+  "settings.model.fast": "속도·비용 절약",
+  "settings.model.latest": "최신",
+  "settings.model.cliDefault": "CLI 기본 모델",
+
+  // 저장 프롬프트
+  "settings.prompts.title": "저장 프롬프트",
+  "settings.prompts.desc.pre": "자주 쓰는 지시를 저장해 두면 ",
+  "settings.prompts.desc.bold": "AI로 노트 작성",
+  "settings.prompts.desc.post": " 모달에서 칩으로 바로 넣을 수 있어요.",
+  "settings.prompts.empty": "저장된 프롬프트가 없어요. “새 프롬프트”로 추가하세요.",
+  "settings.prompt.new": "새 프롬프트",
+  "settings.prompt.editTitle": "프롬프트 편집",
+  "settings.prompt.nameLabel": "이름",
+  "settings.prompt.namePlaceholder": "예: 개념노트 보강",
+  "settings.prompt.textLabel": "프롬프트 (Claude에게 줄 지시)",
+  "settings.prompt.textPlaceholder":
+    "예: 진짜 개념노트처럼 대/중/소제목으로 분류하고 예시 코드와 표를 넣어 상세히 보강해줘",
+  "settings.prompt.nameHint": "이름을 비우면 지시문 앞부분이 이름으로 쓰여요.",
+
+  // 모양 — 테마·언어
+  "settings.theme.label": "테마",
+  "settings.theme.system": "시스템 설정 따름",
+  "settings.theme.light": "라이트",
+  "settings.theme.dark": "다크",
+  "settings.lang.label": "언어",
+  "settings.lang.confirmTitle": "언어 변경",
+  "settings.lang.confirmBody":
+    "언어를 바꾸면 화면을 다시 불러와요. 저장하지 않은 편집이 있다면 먼저 저장하세요.",
+  "settings.lang.apply": "바꾸기",
+
+  // AI 온보딩 (최초 1회)
+  "settings.onb.skip": "AI 없이 사용",
+  "settings.onb.connect": "연결",
+  "settings.onb.connecting": "연결 중…",
+  "settings.onb.lead.pre": "Amber 의 AI 기능(개념 정리·노트 작성·인라인 질문)은 ",
+  "settings.onb.lead.bold": "이미 쓰고 있는 AI CLI 의 로그인 세션",
+  "settings.onb.lead.post": "을 그대로 사용해요. API 키를 따로 저장하지 않습니다.",
+  "settings.onb.searchHint": "로그인 셸 PATH 에서 claude · codex · gemini 를 확인해요",
+  "settings.onb.emptyTitle": "설치된 AI CLI 를 찾지 못했어요.",
+  "settings.onb.emptyBody":
+    "아래 중 하나를 설치·로그인한 뒤 설정(⚙)에서 다시 감지할 수 있어요.",
+  "settings.onb.installGuide": "{name} 설치 안내",
+  "settings.onb.laterHint": "나중에 설정(⚙)에서 언제든 다시 연결하거나 바꿀 수 있어요.",
+
+  // 워크스페이스 루트 전환기 (RootPicker)
+  "settings.root.default": "기본 보관함",
+  "settings.root.defaultTitle": "기본 보관함 (앱 데이터 폴더)",
+  "settings.root.appData": "앱 데이터 폴더",
+  "settings.root.openFolder": "폴더 열기…",
+  "settings.root.openFolderDesc": "로컬 폴더를 워크스페이스로 사용",
+  "settings.root.openDialogTitle": "작업 폴더 열기",
+} as const;
+
+const en: Record<keyof typeof ko, string> = {
+  "settings.title": "Settings",
+  "settings.tab.ai": "AI",
+  "settings.tab.prompts": "Prompts",
+  "settings.tab.report": "Daily report",
+  "settings.tab.appearance": "Appearance",
+  "settings.openDataFolder": "Open data folder",
+  "settings.openFolderFail": "Couldn't open the folder: {err}",
+
+  "settings.backup": "Back up",
+  "settings.backup.busy": "Backing up…",
+  "settings.backup.pickTitle": "Choose a folder for the backup",
+  "settings.backup.done": "Backup complete — {path}",
+  "settings.backup.fail": "Backup failed — {err}",
+
+  "settings.ai.title": "AI connection",
+  "settings.ai.redetect": "Detect again",
+  "settings.ai.detecting": "Detecting…",
+  "settings.ai.connected":
+    "Connected to {name}. Amber reuses your local CLI's login session.",
+  "settings.ai.none": "No AI connected. Detect an installed CLI to connect one.",
+  "settings.ai.searching": "Looking for installed AI CLIs…",
+  "settings.ai.notFound":
+    "Couldn't find an installed AI CLI. Install and log in to one of claude · codex · gemini, then detect again.",
+  "settings.ai.pathLabel": "{name} path",
+  "settings.ai.test": "Test connection",
+  "settings.ai.testOk": "Connected — {version}",
+  "settings.ai.modelLabel": "Model",
+  "settings.ai.creditHint": "AI calls use the connected CLI's plan/credits.",
+
+  "settings.model.latestQuality": "latest · best quality",
+  "settings.model.quality": "best quality",
+  "settings.model.balanced": "balanced",
+  "settings.model.fast": "fast · lower cost",
+  "settings.model.latest": "latest",
+  "settings.model.cliDefault": "CLI default model",
+
+  "settings.prompts.title": "Saved prompts",
+  "settings.prompts.desc.pre":
+    "Save instructions you use often and insert them as chips right from the ",
+  "settings.prompts.desc.bold": "Write note with AI",
+  "settings.prompts.desc.post": " modal.",
+  "settings.prompts.empty": "No saved prompts yet. Add one with “New prompt”.",
+  "settings.prompt.new": "New prompt",
+  "settings.prompt.editTitle": "Edit prompt",
+  "settings.prompt.nameLabel": "Name",
+  "settings.prompt.namePlaceholder": "e.g. Expand concept note",
+  "settings.prompt.textLabel": "Prompt (instructions for Claude)",
+  "settings.prompt.textPlaceholder":
+    "e.g. Structure it like a real concept note with nested headings, and enrich it with example code and tables",
+  "settings.prompt.nameHint": "Leave the name empty to use the start of the instruction.",
+
+  "settings.theme.label": "Theme",
+  "settings.theme.system": "Follow system setting",
+  "settings.theme.light": "Light",
+  "settings.theme.dark": "Dark",
+  "settings.lang.label": "Language",
+  "settings.lang.confirmTitle": "Change language",
+  "settings.lang.confirmBody":
+    "Changing the language reloads the window. If you have unsaved edits, save them first.",
+  "settings.lang.apply": "Change",
+
+  "settings.onb.skip": "Use without AI",
+  "settings.onb.connect": "Connect",
+  "settings.onb.connecting": "Connecting…",
+  "settings.onb.lead.pre":
+    "Amber's AI features (concept summaries, note writing, inline questions) reuse ",
+  "settings.onb.lead.bold": "the login session of the AI CLI you already use",
+  "settings.onb.lead.post": ". No API key is stored.",
+  "settings.onb.searchHint": "Checks your login shell PATH for claude · codex · gemini",
+  "settings.onb.emptyTitle": "Couldn't find an installed AI CLI.",
+  "settings.onb.emptyBody":
+    "Install and log in to one below, then detect again in Settings (⚙).",
+  "settings.onb.installGuide": "{name} install guide",
+  "settings.onb.laterHint": "You can reconnect or switch anytime in Settings (⚙).",
+
+  "settings.root.default": "Default vault",
+  "settings.root.defaultTitle": "Default vault (app data folder)",
+  "settings.root.appData": "App data folder",
+  "settings.root.openFolder": "Open folder…",
+  "settings.root.openFolderDesc": "Use a local folder as the workspace",
+  "settings.root.openDialogTitle": "Open a working folder",
+} as const;
+
+export const settingsMessages = { ko, en };

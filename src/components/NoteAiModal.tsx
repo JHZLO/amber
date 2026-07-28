@@ -9,17 +9,19 @@ import { aiNoteComposeStream, friendlyError } from "../lib/ai";
 import { loadPrompts, type SavedPrompt } from "../lib/prompts";
 import { AiThinking, Modal } from "../ui";
 import { Icon } from "../icons";
+import { t } from "../lib/i18n";
 
 type Step = "prompt" | "loading" | "preview";
 type ViewMode = "diff" | "preview" | "source";
 
 // 자주 쓰는 작성 방향 (빈 노트 = 처음부터, 채워진 노트 = 보강)
+// 언어는 페이지 로드 시 고정이라 모듈 상수에서 t() 호출해도 안전 (lib/i18n.ts)
 const PRESETS = [
-  "이 주제로 처음부터 정리",
-  "구체적인 예시·코드 추가",
-  "더 깊고 자세하게",
-  "핵심만 간결하게 압축",
-  "표로 정리",
+  t("notes.ai.preset1"),
+  t("notes.ai.preset2"),
+  t("notes.ai.preset3"),
+  t("notes.ai.preset4"),
+  t("notes.ai.preset5"),
 ];
 
 export function NoteAiModal({
@@ -104,21 +106,24 @@ export function NoteAiModal({
 
   const tooShort = instruction.trim().length < 2;
 
+  // diff 안내 문구 — 언어별 어순이 달라 "{apply}" 자리에 <b>버튼 라벨</b>을 끼워 넣는다
+  const diffHint = t("notes.ai.diffHint").split("{apply}");
+
   let footer: ReactNode = null;
   if (step === "prompt") {
     footer = (
       <>
         <button className="btn btn-sm" onClick={onClose}>
-          취소
+          {t("common.cancel")}
         </button>
         <button
           className="btn btn-primary"
           onClick={run}
           disabled={tooShort || !config?.provider}
-          title={!config ? "설정을 불러오는 중이에요" : undefined}
+          title={!config ? t("notes.ai.configLoading") : undefined}
         >
           <Icon name="sparkles" size={15} />
-          AI로 작성
+          {t("notes.ai.run")}
         </button>
       </>
     );
@@ -127,11 +132,11 @@ export function NoteAiModal({
       <>
         <button className="btn btn-sm" onClick={() => setStep("prompt")}>
           <Icon name="chevron-left" size={14} />
-          다시 지시
+          {t("notes.ai.back")}
         </button>
         <span className="spacer" />
         <button className="btn btn-sm" onClick={onClose}>
-          취소
+          {t("common.cancel")}
         </button>
         <button
           className="btn btn-primary"
@@ -141,14 +146,14 @@ export function NoteAiModal({
           }}
         >
           <Icon name="check" size={15} />
-          {hasExisting ? "변경 적용" : "에디터에 적용"}
+          {hasExisting ? t("notes.ai.applyDiff") : t("notes.ai.applyNew")}
         </button>
       </>
     );
   }
 
   return (
-    <Modal open={open} title="AI로 노트 작성" onClose={onClose} footer={footer} wide>
+    <Modal open={open} title={t("notes.ai.title")} onClose={onClose} footer={footer} wide>
       {error && (
         <div className="error-note" style={{ marginBottom: 12 }}>
           {error}
@@ -158,24 +163,20 @@ export function NoteAiModal({
       {step === "prompt" && (
         <>
           <div className="field">
-            <label>무엇을 써 드릴까요? — Claude에게 지시</label>
+            <label>{t("notes.ai.instructionLabel")}</label>
             <textarea
               className="textarea"
               style={{ fontFamily: "var(--font)" }}
               rows={4}
-              placeholder="예: Rust 변수와 가변성(mut, shadowing)을 예제 코드와 함께 정리해줘 · 지금 노트에 소유권과의 관계 섹션을 추가해줘…"
+              placeholder={t("notes.ai.instructionPh")}
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
             />
-            <div className="hint">
-              현재 노트가 비어 있으면 처음부터 작성하고, 내용이 있으면 문체·구조를
-              보존하며 보강해요. 결과는 에디터 초안으로 들어가니 확인 후 ⌘S로
-              저장하세요.
-            </div>
+            <div className="hint">{t("notes.ai.hint")}</div>
           </div>
           {savedUsable.length > 0 && (
             <div className="field">
-              <label>내 프롬프트</label>
+              <label>{t("notes.ai.savedPrompts")}</label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {savedUsable.map((p) => (
                   <span
@@ -192,7 +193,7 @@ export function NoteAiModal({
             </div>
           )}
           <div className="field">
-            <label>빠른 지시</label>
+            <label>{t("notes.ai.presets")}</label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {PRESETS.map((p) => (
                 <span key={p} className="chip btn-like" onClick={() => addPreset(p)}>
@@ -208,8 +209,8 @@ export function NoteAiModal({
         <div className="note-stream">
           <AiThinking
             compact={!!streamText}
-            label="Claude가 작성하는 중…"
-            hint={streamText ? undefined : "응답을 기다리는 중…"}
+            label={t("notes.ai.writing")}
+            hint={streamText ? undefined : t("notes.ai.waiting")}
           />
           {streamText && (
             <pre className="note-stream-body" ref={streamRef}>
@@ -223,7 +224,7 @@ export function NoteAiModal({
       {step === "preview" && (
         <div className="field">
           <label style={{ display: "flex", alignItems: "center" }}>
-            {hasExisting ? "AI 편집 결과" : "작성 결과"}
+            {hasExisting ? t("notes.ai.resultEdited") : t("notes.ai.resultNew")}
             <span className="spacer" />
             <div className="segmented">
               {hasExisting && (
@@ -231,20 +232,20 @@ export function NoteAiModal({
                   className={`tab ${viewMode === "diff" ? "active" : ""}`}
                   onClick={() => setViewMode("diff")}
                 >
-                  변경사항
+                  {t("notes.ai.tabDiff")}
                 </button>
               )}
               <button
                 className={`tab ${viewMode === "preview" ? "active" : ""}`}
                 onClick={() => setViewMode("preview")}
               >
-                미리보기
+                {t("notes.ai.tabPreview")}
               </button>
               <button
                 className={`tab ${viewMode === "source" ? "active" : ""}`}
                 onClick={() => setViewMode("source")}
               >
-                소스
+                {t("notes.ai.tabSource")}
               </button>
             </div>
           </label>
@@ -264,8 +265,9 @@ export function NoteAiModal({
           )}
           {hasExisting && (
             <div className="hint">
-              현재 노트와 비교한 변경점이에요. <b>변경 적용</b>을 누르면 결과가
-              에디터 초안으로 들어가고, 저장(⌘S) 전까지 파일은 그대로예요.
+              {diffHint[0]}
+              <b>{t("notes.ai.applyDiff")}</b>
+              {diffHint[1]}
             </div>
           )}
         </div>

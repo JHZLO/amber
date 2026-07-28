@@ -14,6 +14,7 @@ import { ConfidenceDots, Modal, Spinner, StatusBadge, timeAgo } from "../ui";
 import { Icon } from "../icons";
 import { AugmentModal } from "./AugmentModal";
 import { openNoteInApp } from "../lib/nav";
+import { dateLocale, t } from "../lib/i18n";
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -58,6 +59,9 @@ export function ConceptDetail({
   const [augmenting, setAugmenting] = useState(false);
 
   const sourceNote = parseSourceNote(concept);
+
+  // 삭제 확인문 — 제목(<b>)이 문장 어디에 오는지 언어마다 다르므로 {title} 자리에서 쪼갠다
+  const delConfirm = t("concepts.delete.confirm").split("{title}");
 
   const [dTitle, setDTitle] = useState(concept.title);
   const [dSummary, setDSummary] = useState(concept.summary);
@@ -150,7 +154,7 @@ export function ConceptDetail({
     return (
       <div>
         <div className="field">
-          <label>제목</label>
+          <label>{t("concepts.field.title")}</label>
           <input
             className="input"
             value={dTitle}
@@ -158,7 +162,7 @@ export function ConceptDetail({
           />
         </div>
         <div className="field">
-          <label>요약 (위젯 표시용)</label>
+          <label>{t("concepts.field.summary")}</label>
           <textarea
             className="textarea"
             style={{ fontFamily: "var(--font)" }}
@@ -168,7 +172,7 @@ export function ConceptDetail({
           />
         </div>
         <div className="field">
-          <label>태그 (쉼표로 구분)</label>
+          <label>{t("concepts.field.tags")}</label>
           <input
             className="input"
             value={dTags}
@@ -176,7 +180,7 @@ export function ConceptDetail({
           />
         </div>
         <div className="field">
-          <label>상세 (Markdown)</label>
+          <label>{t("concepts.field.detail")}</label>
           <textarea
             className="textarea"
             rows={18}
@@ -186,14 +190,14 @@ export function ConceptDetail({
         </div>
         <div className="detail-actions">
           <button className="btn btn-primary btn-sm" onClick={save} disabled={busy}>
-            {busy ? "저장 중…" : "저장"}
+            {busy ? t("concepts.saving") : t("common.save")}
           </button>
           <button
             className="btn btn-sm"
             onClick={() => setEditing(false)}
             disabled={busy}
           >
-            취소
+            {t("common.cancel")}
           </button>
         </div>
       </div>
@@ -231,12 +235,12 @@ export function ConceptDetail({
               {concept.status === "learning" ? (
                 <>
                   <Icon name="check" size={14} />
-                  학습완료
+                  {t("concepts.action.markLearned")}
                 </>
               ) : (
                 <>
                   <Icon name="undo" size={14} />
-                  다시 학습중
+                  {t("concepts.action.backToLearning")}
                 </>
               )}
             </button>
@@ -245,7 +249,7 @@ export function ConceptDetail({
               onClick={() => changeConfidence(1)}
               disabled={busy || concept.confidence >= 3}
             >
-              자신감
+              {t("concepts.field.confidence")}
               <Icon name="plus" size={13} />
             </button>
             <button
@@ -253,7 +257,7 @@ export function ConceptDetail({
               onClick={() => changeConfidence(-1)}
               disabled={busy || concept.confidence <= 1}
             >
-              자신감
+              {t("concepts.field.confidence")}
               <Icon name="minus" size={13} />
             </button>
             <button
@@ -262,7 +266,7 @@ export function ConceptDetail({
               disabled={busy || loadingBody || !!readError}
             >
               <Icon name="pencil" size={14} />
-              편집
+              {t("concepts.action.edit")}
             </button>
             <button
               className="btn btn-sm"
@@ -270,10 +274,10 @@ export function ConceptDetail({
               disabled={
                 busy || loadingBody || !!readError || !config?.provider
               }
-              title="현재 노트를 프롬프트로 AI가 보강"
+              title={t("concepts.action.augmentTitle")}
             >
               <Icon name="sparkles" size={14} />
-              AI 보강
+              {t("concepts.action.augment")}
             </button>
           </div>
           <div className="detail-actions-group">
@@ -283,7 +287,7 @@ export function ConceptDetail({
               disabled={busy}
             >
               <Icon name="trash" size={14} />
-              삭제
+              {t("common.delete")}
             </button>
           </div>
         </div>
@@ -291,7 +295,7 @@ export function ConceptDetail({
         {loadingBody ? (
           <Spinner />
         ) : readError ? (
-          <div className="error-note">본문을 읽을 수 없어요 — {readError}</div>
+          <div className="error-note">{t("concepts.readError", { err: readError })}</div>
         ) : (
           <div className="markdown">
             <Markdown>{body}</Markdown>
@@ -306,21 +310,24 @@ export function ConceptDetail({
               title={sourceNote.anchor}
             >
               <Icon name="book" size={13} />
-              출처 노트 열기
+              {t("concepts.sourceNote.open")}
             </button>
             <span className="concept-source-name">{sourceNote.noteRel}</span>
           </div>
         )}
 
         <div className="detail-meta">
-          추가 {new Date(concept.created_at).toLocaleDateString("ko-KR")} · 수정{" "}
-          {timeAgo(concept.updated_at)} · 위젯 노출 {concept.seen_count}회
+          {t("concepts.meta", {
+            created: new Date(concept.created_at).toLocaleDateString(dateLocale()),
+            updated: timeAgo(concept.updated_at),
+            seen: concept.seen_count,
+          })}
         </div>
       </div>
 
       <Modal
         open={confirmingDelete}
-        title="개념 삭제"
+        title={t("concepts.delete.title")}
         narrow
         onClose={() => setConfirmingDelete(false)}
         footer={
@@ -330,22 +337,24 @@ export function ConceptDetail({
               onClick={() => setConfirmingDelete(false)}
               disabled={busy}
             >
-              취소
+              {t("common.cancel")}
             </button>
             <button
               className="btn btn-sm btn-danger-ghost"
               onClick={doDelete}
               disabled={busy}
             >
-              {busy ? "삭제 중…" : "삭제"}
+              {busy ? t("concepts.delete.deleting") : t("common.delete")}
             </button>
           </>
         }
       >
         <p style={{ margin: 0 }}>
-          <b>{concept.title}</b> 개념을 삭제할까요?
+          {delConfirm[0]}
+          <b>{concept.title}</b>
+          {delConfirm[1]}
           <br />
-          되돌릴 수 없어요.
+          {t("concepts.delete.irreversible")}
         </p>
       </Modal>
 

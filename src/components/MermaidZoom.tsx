@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "../icons";
+import { t } from "../lib/i18n";
 
 const MIN = 0.2;
 const MAX = 1.2; // 최대 120% 까지만 확대
@@ -184,16 +185,32 @@ export function MermaidZoom({
         <div className="mmd-zoom-toolbar">
           <span className="mmd-zoom-pct">{Math.round(scale * 100)}%</span>
           <span className="mmd-zoom-sp" />
-          <button className="icon-btn" title="축소" onClick={() => zoomBy(1 / 1.2)}>
+          <button
+            className="icon-btn"
+            title={t("diagrams.zoom.out")}
+            onClick={() => zoomBy(1 / 1.2)}
+          >
             <Icon name="minus" size={16} />
           </button>
-          <button className="btn btn-sm" onClick={reset} title="화면에 맞춤">
-            맞춤
+          <button
+            className="btn btn-sm"
+            onClick={reset}
+            title={t("diagrams.zoom.fitTitle")}
+          >
+            {t("diagrams.zoom.fit")}
           </button>
-          <button className="icon-btn" title="확대" onClick={() => zoomBy(1.2)}>
+          <button
+            className="icon-btn"
+            title={t("diagrams.zoom.in")}
+            onClick={() => zoomBy(1.2)}
+          >
             <Icon name="plus" size={16} />
           </button>
-          <button className="icon-btn" title="닫기 (Esc)" onClick={onClose}>
+          <button
+            className="icon-btn"
+            title={`${t("common.close")} (Esc)`}
+            onClick={onClose}
+          >
             <Icon name="x" size={17} />
           </button>
         </div>

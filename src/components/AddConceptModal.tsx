@@ -8,6 +8,7 @@ import { createConcept, getSetting, setSetting } from "../lib/db";
 import { detailPathFor, writeNote } from "../lib/vault";
 import { AiThinking, Modal } from "../ui";
 import { Icon } from "../icons";
+import { t } from "../lib/i18n";
 
 type Step = "paste" | "loading" | "preview";
 
@@ -99,7 +100,7 @@ export function AddConceptModal({
 
   async function save() {
     if (!title.trim() || !summary.trim()) {
-      setError("제목과 요약은 필수예요.");
+      setError(t("concepts.form.required"));
       return;
     }
     setSaving(true);
@@ -132,7 +133,7 @@ export function AddConceptModal({
     footer = (
       <>
         <button className="btn btn-sm" onClick={manual}>
-          수동 작성
+          {t("concepts.add.manual")}
         </button>
         <button
           className="btn btn-primary"
@@ -140,7 +141,7 @@ export function AddConceptModal({
           disabled={tooShort}
         >
           <Icon name="sparkles" size={15} />
-          Claude로 정리
+          {t("concepts.add.generate")}
         </button>
       </>
     );
@@ -149,65 +150,66 @@ export function AddConceptModal({
       <>
         <button className="btn btn-sm" onClick={() => setStep("paste")}>
           <Icon name="chevron-left" size={14} />
-          원문으로
+          {t("concepts.add.backToSource")}
         </button>
         <span className="spacer" />
         <button className="btn btn-sm" onClick={close}>
-          취소
+          {t("common.cancel")}
         </button>
         <button className="btn btn-primary" onClick={save} disabled={saving}>
-          {saving ? "저장 중…" : "저장 (학습중으로)"}
+          {saving ? t("concepts.saving") : t("concepts.add.save")}
         </button>
       </>
     );
   }
 
   return (
-    <Modal open={open} title="새 개념 추가" onClose={close} footer={footer} wide>
+    <Modal open={open} title={t("concepts.add.title")} onClose={close} footer={footer} wide>
       {error && <div className="error-note" style={{ marginBottom: 12 }}>{error}</div>}
 
       {step === "paste" && (
         <>
           <div className="field">
-            <label>AI와 나눈 Q&A 원문을 붙여넣으세요</label>
+            <label>{t("concepts.add.pasteLabel")}</label>
             <textarea
               className="textarea"
               style={{ fontFamily: "var(--font)" }}
               rows={12}
-              placeholder="여기에 대화 전체를 붙여넣기…"
+              placeholder={t("concepts.add.pastePlaceholder")}
               value={transcript}
               onChange={(e) => setTranscript(e.target.value)}
             />
           </div>
           <div className="hint">
-            {transcript.length}자 {tooShort && "· 최소 20자 이상 입력하세요"}
+            {t("concepts.add.charCount", { n: transcript.length })}{" "}
+            {tooShort && t("concepts.add.tooShort")}
           </div>
           <div className="field" style={{ marginTop: 16 }}>
-            <label>지시문 (선택) — Claude에게 정리 방향 지시</label>
+            <label>{t("concepts.add.instructionLabel")}</label>
             <textarea
               className="textarea"
               style={{ fontFamily: "var(--font)" }}
               rows={3}
-              placeholder="예: Postgres 관점 위주로 · 초보자도 이해하게 · 코드 예시 꼭 포함…"
+              placeholder={t("concepts.add.instructionPlaceholder")}
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
             />
-            <div className="hint">저장돼서 다음 추가 때도 기본값으로 채워져요.</div>
+            <div className="hint">{t("concepts.add.instructionHint")}</div>
           </div>
         </>
       )}
 
       {step === "loading" && (
         <AiThinking
-          label="Claude가 정리하는 중…"
-          hint="원문에서 핵심 개념 → 요약 → 상세 노트"
+          label={t("concepts.add.thinking")}
+          hint={t("concepts.add.thinkingHint")}
         />
       )}
 
       {step === "preview" && (
         <>
           <div className="field">
-            <label>제목</label>
+            <label>{t("concepts.field.title")}</label>
             <input
               className="input"
               value={title}
@@ -215,7 +217,7 @@ export function AddConceptModal({
             />
           </div>
           <div className="field">
-            <label>요약 (위젯 표시용)</label>
+            <label>{t("concepts.field.summary")}</label>
             <textarea
               className="textarea"
               style={{ fontFamily: "var(--font)" }}
@@ -225,7 +227,7 @@ export function AddConceptModal({
             />
           </div>
           <div className="field">
-            <label>태그 (쉼표로 구분)</label>
+            <label>{t("concepts.field.tags")}</label>
             <input
               className="input"
               value={tags}
@@ -233,7 +235,7 @@ export function AddConceptModal({
             />
           </div>
           <div className="field">
-            <label>자신감</label>
+            <label>{t("concepts.field.confidence")}</label>
             <div style={{ display: "flex", gap: 6 }}>
               {[1, 2, 3].map((n) => (
                 <button
@@ -245,19 +247,19 @@ export function AddConceptModal({
                 </button>
               ))}
               <span className="hint" style={{ alignSelf: "center", marginLeft: 6 }}>
-                방금 배운 것은 1을 추천
+                {t("concepts.add.confidenceHint")}
               </span>
             </div>
           </div>
           <div className="field">
             <label style={{ display: "flex", alignItems: "center" }}>
-              상세 노트 (Markdown)
+              {t("concepts.field.detailNote")}
               <span className="spacer" />
               <button
                 className="btn btn-sm"
                 onClick={() => setShowPreview((v) => !v)}
               >
-                {showPreview ? "소스 편집" : "프리뷰"}
+                {showPreview ? t("concepts.preview.source") : t("concepts.preview.show")}
               </button>
             </label>
             {showPreview ? (

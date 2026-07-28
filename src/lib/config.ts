@@ -3,29 +3,35 @@
 // ai_provider 로 저장하고, 경로/모델은 프로바이더별 키로 보관한다.
 
 import { getSetting, setSetting } from "./db";
+import { t } from "./i18n";
 
 export type AiProvider = "claude" | "codex" | "gemini";
 
+// 제품명 — 번역하지 않는다 (고유명사)
 export const PROVIDER_LABELS: Record<AiProvider, string> = {
   claude: "Claude Code",
   codex: "OpenAI Codex CLI",
   gemini: "Gemini CLI",
 };
 
-/** 프로바이더별 모델 선택지. 빈 id = CLI 기본 모델 사용(설정 파일의 model 값을 따름) */
+/** 프로바이더별 모델 선택지. 빈 id = CLI 기본 모델 사용(설정 파일의 model 값을 따름).
+ *  모델명(Opus 5 등)은 고유명사라 그대로 두고 괄호 수식어만 언어를 따른다. */
 export const PROVIDER_MODELS: Record<AiProvider, { id: string; label: string }[]> = {
   claude: [
-    { id: "claude-opus-5", label: "Opus 5 (최신·품질 우선)" },
-    { id: "claude-opus-4-8", label: "Opus 4.8 (품질 우선)" },
-    { id: "claude-sonnet-5", label: "Sonnet 5 (균형)" },
-    { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5 (속도·비용 절약)" },
+    { id: "claude-opus-5", label: `Opus 5 (${t("settings.model.latestQuality")})` },
+    { id: "claude-opus-4-8", label: `Opus 4.8 (${t("settings.model.quality")})` },
+    { id: "claude-sonnet-5", label: `Sonnet 5 (${t("settings.model.balanced")})` },
+    {
+      id: "claude-haiku-4-5-20251001",
+      label: `Haiku 4.5 (${t("settings.model.fast")})`,
+    },
   ],
   codex: [
-    { id: "gpt-5.6-sol", label: "GPT-5.6 (최신)" },
+    { id: "gpt-5.6-sol", label: `GPT-5.6 (${t("settings.model.latest")})` },
     { id: "gpt-5.5", label: "GPT-5.5" },
-    { id: "", label: "CLI 기본 모델" },
+    { id: "", label: t("settings.model.cliDefault") },
   ],
-  gemini: [{ id: "", label: "CLI 기본 모델" }],
+  gemini: [{ id: "", label: t("settings.model.cliDefault") }],
 };
 
 export interface AppConfig {

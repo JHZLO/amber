@@ -9,17 +9,18 @@ import type { AppConfig } from "../lib/config";
 import { aiErdGenerateStream, friendlyError } from "../lib/ai";
 import { AiThinking, Modal } from "../ui";
 import { Icon } from "../icons";
+import { t } from "../lib/i18n";
 
 type Step = "prompt" | "loading" | "preview";
 type ViewMode = "diff" | "preview" | "source";
 
 // 변환 방향을 바꾸는 자주 쓰는 단서들 (프롬프트의 기본 규칙을 덮어쓴다)
 const PRESETS = [
-  "감사(_aud) 테이블 제외",
-  "인덱스 표기 생략",
-  "논리 FK 도 추론해서 연결",
-  "핵심 테이블만 추리기",
-  "현재 다이어그램에 이어 붙이기",
+  t("diagrams.ai.preset.noAudit"),
+  t("diagrams.ai.preset.noIndex"),
+  t("diagrams.ai.preset.inferFk"),
+  t("diagrams.ai.preset.coreOnly"),
+  t("diagrams.ai.preset.append"),
 ];
 
 export function DiagramAiModal({
@@ -103,16 +104,16 @@ export function DiagramAiModal({
     footer = (
       <>
         <button className="btn btn-sm" onClick={onClose}>
-          취소
+          {t("common.cancel")}
         </button>
         <button
           className="btn btn-primary"
           onClick={run}
           disabled={tooShort || !config?.provider}
-          title={!config ? "설정을 불러오는 중이에요" : undefined}
+          title={!config ? t("diagrams.ai.configLoading") : undefined}
         >
           <Icon name="sparkles" size={15} />
-          ERD로 변환
+          {t("diagrams.ai.convert")}
         </button>
       </>
     );
@@ -121,11 +122,11 @@ export function DiagramAiModal({
       <>
         <button className="btn btn-sm" onClick={() => setStep("prompt")}>
           <Icon name="chevron-left" size={14} />
-          다시 변환
+          {t("diagrams.ai.back")}
         </button>
         <span className="spacer" />
         <button className="btn btn-sm" onClick={onClose}>
-          취소
+          {t("common.cancel")}
         </button>
         <button
           className="btn btn-primary"
@@ -135,7 +136,7 @@ export function DiagramAiModal({
           }}
         >
           <Icon name="check" size={15} />
-          에디터에 적용
+          {t("diagrams.ai.apply")}
         </button>
       </>
     );
@@ -144,7 +145,7 @@ export function DiagramAiModal({
   return (
     <Modal
       open={open}
-      title="DDL → ERD 변환"
+      title={t("diagrams.ai.title")}
       onClose={onClose}
       footer={footer}
       wide
@@ -159,35 +160,36 @@ export function DiagramAiModal({
       {step === "prompt" && (
         <>
           <div className="field">
-            <label>스키마 DDL</label>
+            <label>{t("diagrams.ai.ddlLabel")}</label>
             <textarea
               className="textarea"
               rows={12}
               spellCheck={false}
-              placeholder={"CREATE TABLE ts_order (\n  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '주문 ID',\n  ...\n);"}
+              placeholder={t("diagrams.ai.ddlPh")}
               value={ddl}
               onChange={(e) => setDdl(e.target.value)}
             />
             <div className="hint">
-              CREATE TABLE · ALTER TABLE 를 그대로 붙여넣으세요. 컬럼 COMMENT ·
-              인덱스 · UNIQUE · FK 제약을 읽어 ERD 표기 규칙(실선=물리 FK,
-              점선=논리 참조, <code>[NOTNULL]</code> 태그, <code>(enc)</code>,
-              enum 나열)에 맞춰 변환해요.
+              {t("diagrams.ai.ddlHint1")}
+              <code>[NOTNULL]</code>
+              {t("diagrams.ai.ddlHint2")}
+              <code>(enc)</code>
+              {t("diagrams.ai.ddlHint3")}
             </div>
           </div>
           <div className="field">
-            <label>추가 지시 (선택)</label>
+            <label>{t("diagrams.ai.instrLabel")}</label>
             <textarea
               className="textarea"
               style={{ fontFamily: "var(--font)" }}
               rows={2}
-              placeholder="예: 결제 관련 테이블만 · 컬럼 설명은 짧게 · 감사 테이블은 빼줘"
+              placeholder={t("diagrams.ai.instrPh")}
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
             />
           </div>
           <div className="field">
-            <label>빠른 지시</label>
+            <label>{t("diagrams.ai.presetsLabel")}</label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {PRESETS.map((p) => (
                 <span
@@ -207,8 +209,8 @@ export function DiagramAiModal({
         <div className="note-stream">
           <AiThinking
             compact={!!streamText}
-            label="스키마를 ERD로 옮기는 중…"
-            hint={streamText ? undefined : "응답을 기다리는 중…"}
+            label={t("diagrams.ai.generating")}
+            hint={streamText ? undefined : t("diagrams.ai.waiting")}
           />
           {streamText && (
             <pre className="note-stream-body" ref={streamRef}>
@@ -222,27 +224,27 @@ export function DiagramAiModal({
       {step === "preview" && (
         <div className="field">
           <label style={{ display: "flex", alignItems: "center" }}>
-            변환 결과
+            {t("diagrams.ai.resultLabel")}
             <span className="spacer" />
             <div className="segmented">
               <button
                 className={`tab ${viewMode === "preview" ? "active" : ""}`}
                 onClick={() => setViewMode("preview")}
               >
-                다이어그램
+                {t("diagrams.ai.tabDiagram")}
               </button>
               <button
                 className={`tab ${viewMode === "source" ? "active" : ""}`}
                 onClick={() => setViewMode("source")}
               >
-                소스
+                {t("diagrams.ai.tabSource")}
               </button>
               {hasExisting && (
                 <button
                   className={`tab ${viewMode === "diff" ? "active" : ""}`}
                   onClick={() => setViewMode("diff")}
                 >
-                  변경사항
+                  {t("diagrams.ai.tabDiff")}
                 </button>
               )}
             </div>
@@ -261,8 +263,8 @@ export function DiagramAiModal({
             <Mermaid chart={result} />
           )}
           <div className="hint">
-            <b>에디터에 적용</b>을 누르면 결과가 초안으로 들어가고, 저장(⌘S)
-            전까지 파일은 그대로예요.
+            <b>{t("diagrams.ai.apply")}</b>
+            {t("diagrams.ai.applyHint")}
           </div>
         </div>
       )}

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import svgPanZoom from "svg-pan-zoom";
 import { renderMermaid } from "./Mermaid";
 import { Icon } from "../icons";
+import { t } from "../lib/i18n";
 
 let seq = 0;
 
@@ -142,7 +143,7 @@ export function DiagramCanvas({
     let line = id ? findLineForNodeId(id, chartRef.current) : -1;
     if (line < 1 && text && text !== id)
       line = findLineForNodeId(text, chartRef.current);
-    setSel({ text: text || "(이름 없음)", id, line });
+    setSel({ text: text || t("diagrams.node.unnamed"), id, line });
   }
 
   useEffect(() => {
@@ -296,23 +297,39 @@ export function DiagramCanvas({
     >
       <div className="dgm-toolbar">
         <span className="dgm-zoom-pct">{zoomPct}%</span>
-        <span className="dgm-toolbar-hint">휠: 줌 · 드래그: 이동 · 더블클릭: 줌인</span>
+        <span className="dgm-toolbar-hint">{t("diagrams.canvas.hint")}</span>
         <span className="spacer" />
-        <button className="icon-btn ghost sm" title="확대 (+)" onClick={zoomIn}>
+        <button
+          className="icon-btn ghost sm"
+          title={`${t("diagrams.zoom.in")} (+)`}
+          onClick={zoomIn}
+        >
           <Icon name="plus" size={15} />
         </button>
-        <button className="icon-btn ghost sm" title="축소 (-)" onClick={zoomOut}>
+        <button
+          className="icon-btn ghost sm"
+          title={`${t("diagrams.zoom.out")} (-)`}
+          onClick={zoomOut}
+        >
           <Icon name="minus" size={15} />
         </button>
         <button className="btn btn-sm" title="100% (1)" onClick={reset100}>
           100%
         </button>
-        <button className="btn btn-sm" title="화면에 맞춤 (0)" onClick={fit}>
-          맞춤
+        <button
+          className="btn btn-sm"
+          title={`${t("diagrams.zoom.fitTitle")} (0)`}
+          onClick={fit}
+        >
+          {t("diagrams.zoom.fit")}
         </button>
         <button
           className="icon-btn ghost sm"
-          title={fullscreen ? "전체화면 닫기 (Esc)" : "전체화면"}
+          title={
+            fullscreen
+              ? t("diagrams.canvas.fullscreenClose")
+              : t("diagrams.canvas.fullscreen")
+          }
           onClick={() => setFullscreen((f) => !f)}
         >
           <Icon name={fullscreen ? "x" : "expand"} size={15} />
@@ -325,7 +342,9 @@ export function DiagramCanvas({
           downPosRef.current = { x: e.clientX, y: e.clientY };
         }}
       />
-      {!hasSvg && !error && <div className="dgm-canvas-empty">렌더링 중…</div>}
+      {!hasSvg && !error && (
+        <div className="dgm-canvas-empty">{t("diagrams.canvas.rendering")}</div>
+      )}
       {/* 노드 선택 정보 카드 (스튜디오의 node-info-card 대응) */}
       {sel && (
         <div className="dgm-node-info">
@@ -340,14 +359,14 @@ export function DiagramCanvas({
                   className="btn btn-sm"
                   onClick={() => onJumpToLine(sel.line)}
                 >
-                  라인 {sel.line}
+                  {t("diagrams.node.line", { n: sel.line })}
                 </button>
               )}
             </div>
           </div>
           <button
             className="icon-btn ghost sm"
-            title="선택 해제 (Esc)"
+            title={t("diagrams.node.deselect")}
             onClick={deselectNode}
           >
             <Icon name="x" size={14} />
@@ -361,7 +380,7 @@ export function DiagramCanvas({
             className="btn btn-sm"
             onClick={() => void navigator.clipboard.writeText(error)}
           >
-            복사
+            {t("diagrams.copy")}
           </button>
         </div>
       )}

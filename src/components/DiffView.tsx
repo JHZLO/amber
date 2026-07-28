@@ -3,6 +3,7 @@
 
 import { useMemo } from "react";
 import { diffLines } from "diff";
+import { t } from "../lib/i18n";
 
 type Row =
   | { type: "add" | "del" | "ctx"; text: string }
@@ -73,12 +74,12 @@ export function DiffView({
     <div className="diff-wrap">
       <div className="diff-summary">
         {unchanged ? (
-          <span className="diff-none">내용 변경이 없어요</span>
+          <span className="diff-none">{t("diagrams.diff.none")}</span>
         ) : (
           <>
             <span className="diff-stat add">+{add}</span>
             <span className="diff-stat del">−{del}</span>
-            <span className="diff-stat-label">줄 변경</span>
+            <span className="diff-stat-label">{t("diagrams.diff.lines")}</span>
           </>
         )}
       </div>
@@ -87,7 +88,9 @@ export function DiffView({
           r.type === "fold" ? (
             <div key={idx} className="diff-line fold">
               <span className="diff-gutter" />
-              <span className="diff-text">⋯ 변경 없는 {r.count}줄</span>
+              <span className="diff-text">
+                {t("diagrams.diff.fold", { n: r.count })}
+              </span>
             </div>
           ) : (
             <div key={idx} className={`diff-line ${r.type}`}>

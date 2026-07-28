@@ -12,6 +12,7 @@ import {
 import { createPortal } from "react-dom";
 import type { Confidence, ConceptStatus } from "./types";
 import { Icon, type IconName } from "./icons";
+import { dateLocale, t } from "./lib/i18n";
 
 /** 파일 트리 드래그 중 커서를 따라오는 오버레이(원본 행 복제본, dnd-kit DragOverlay 패턴).
  *  body 로 portal → 중첩 폴더의 overflow:hidden 을 벗어나므로 하위 뎁스에서도 안 잘린다.
@@ -60,7 +61,7 @@ export function TreeDragOverlay({
 
 export function ConfidenceDots({ value }: { value: Confidence }) {
   return (
-    <span className="dots" title={`자신감 ${value}/3`}>
+    <span className="dots" title={t("common.confidence", { n: value })}>
       {[1, 2, 3].map((i) => (
         <span key={i} className={`dot ${i <= value ? "on" : ""}`} />
       ))}
@@ -71,7 +72,7 @@ export function ConfidenceDots({ value }: { value: Confidence }) {
 export function StatusBadge({ status }: { status: ConceptStatus }) {
   return (
     <span className={`badge ${status}`}>
-      {status === "learning" ? "학습중" : "학습완료"}
+      {status === "learning" ? t("common.status.learning") : t("common.status.learned")}
     </span>
   );
 }
@@ -298,7 +299,7 @@ export function Modal({
       >
         <div className="modal-head">
           <h2>{title}</h2>
-          <button className="icon-btn" onClick={onClose} aria-label="닫기">
+          <button className="icon-btn" onClick={onClose} aria-label={t("common.close")}>
             <Icon name="x" />
           </button>
         </div>
@@ -312,13 +313,13 @@ export function Modal({
 export function timeAgo(ms: number): string {
   const diff = Date.now() - ms;
   const m = Math.floor(diff / 60000);
-  if (m < 1) return "방금";
-  if (m < 60) return `${m}분 전`;
+  if (m < 1) return t("common.timeago.now");
+  if (m < 60) return t("common.timeago.minutes", { m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}시간 전`;
+  if (h < 24) return t("common.timeago.hours", { h });
   const d = Math.floor(h / 24);
-  if (d < 30) return `${d}일 전`;
-  return new Date(ms).toLocaleDateString("ko-KR");
+  if (d < 30) return t("common.timeago.days", { d });
+  return new Date(ms).toLocaleDateString(dateLocale());
 }
 
 /** 드롭다운 메뉴 배치 상수 — `.select-menu`(styles.css)와 짝을 이룬다 */

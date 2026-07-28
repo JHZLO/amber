@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "../icons";
 import { MermaidZoom } from "./MermaidZoom";
+import { t } from "../lib/i18n";
 
 // mermaid 모듈 캐시 + 1회 초기화 (DiagramCanvas 등 다른 렌더러도 공유)
 export type MermaidApi = {
@@ -84,9 +85,7 @@ export function Mermaid({ chart }: { chart: string }) {
     if (failed) {
       return (
         <div className="mermaid-fail">
-          <div className="mermaid-fail-head">
-            mermaid 문법 오류 — 렌더하지 못해 원본 코드를 표시해요
-          </div>
+          <div className="mermaid-fail-head">{t("diagrams.mmd.failHead")}</div>
           {errMsg && <div className="mermaid-fail-msg">{errMsg}</div>}
           <pre className="mermaid-fallback">
             <code>{chart}</code>
@@ -94,14 +93,14 @@ export function Mermaid({ chart }: { chart: string }) {
         </div>
       );
     }
-    return <div className="mermaid-loading">다이어그램 렌더링 중…</div>;
+    return <div className="mermaid-loading">{t("diagrams.mmd.rendering")}</div>;
   }
   return (
     <>
       <div
         className="mermaid-rendered"
         onClick={() => setZoom(true)}
-        title="클릭하면 확대해서 볼 수 있어요"
+        title={t("diagrams.mmd.clickToZoom")}
       >
         {/* strict 모드로 mermaid 가 이미 살균한 SVG */}
         <div
@@ -110,12 +109,12 @@ export function Mermaid({ chart }: { chart: string }) {
         />
         {failed && (
           <span className="mermaid-error-badge">
-            문법 오류 — 마지막 정상 상태 표시 중
+            {t("diagrams.mmd.staleBadge")}
           </span>
         )}
         <span className="mermaid-expand">
           <Icon name="expand" size={13} />
-          확대
+          {t("diagrams.mmd.expand")}
         </span>
       </div>
       <MermaidZoom svg={svg} open={zoom} onClose={() => setZoom(false)} />

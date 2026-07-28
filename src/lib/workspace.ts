@@ -3,6 +3,8 @@
 // fs 플러그인은 절대경로가 오면 baseDir 를 무시하므로(PathBuf::push 의미론) 두 형태가 공존 가능.
 // localStorage 에 영속, 변경 시 이벤트를 쏘아 열려 있는 뷰가 리로드하게 한다.
 
+import { t } from "./i18n";
+
 export const DEFAULT_ROOTS = {
   notes: "vault/notes",
   diagrams: "vault/diagrams",
@@ -23,9 +25,9 @@ export function isDefaultRoot(s: SectionKey, root = getRoot(s)): boolean {
   return root === DEFAULT_ROOTS[s];
 }
 
-/** 트리 헤더 등에 보일 짧은 이름 */
+/** 트리 헤더 등에 보일 짧은 이름 (사용자 폴더명은 그대로, 기본 보관함만 번역) */
 export function rootDisplayName(s: SectionKey, root = getRoot(s)): string {
-  if (root === DEFAULT_ROOTS[s]) return "기본 보관함";
+  if (root === DEFAULT_ROOTS[s]) return t("settings.root.default");
   return root.split("/").filter(Boolean).pop() || root;
 }
 

@@ -19,27 +19,29 @@ import {
 } from "../lib/report";
 import { Checkbox, Select, Spinner } from "../ui";
 import { Icon } from "../icons";
+import { t } from "../lib/i18n";
 
 const ALL_SOURCES: ReportSourceId[] = ["github", "ai_sessions", "slack", "notion"];
 const MCP_SOURCES: ReportSourceId[] = ["slack", "notion"];
+// GitHub·Slack·Notion 은 브랜드명이라 번역하지 않는다
 const LABEL: Record<ReportSourceId, string> = {
   github: "GitHub",
-  ai_sessions: "AI 세션",
+  ai_sessions: t("report.source.aiSessions"),
   slack: "Slack",
   notion: "Notion",
 };
 const SUB: Record<ReportSourceId, string> = {
-  github: "내 계정 활동 이력",
-  ai_sessions: "로컬 세션 요약",
-  slack: "MCP · 메시지·스레드",
-  notion: "MCP · 페이지·코멘트",
+  github: t("report.sub.github"),
+  ai_sessions: t("report.sub.aiSessions"),
+  slack: t("report.sub.slack"),
+  notion: t("report.sub.notion"),
 };
 
-const MCP_STATUS_KO: Record<string, string> = {
-  connected: "연결됨",
-  needs_auth: "인증 필요",
-  failed: "연결 실패",
-  pending: "승인 대기",
+const MCP_STATUS: Record<string, string> = {
+  connected: t("report.mcpStatus.connected"),
+  needs_auth: t("report.mcpStatus.needsAuth"),
+  failed: t("report.mcpStatus.failed"),
+  pending: t("report.mcpStatus.pending"),
   unknown: "",
 };
 
@@ -193,30 +195,32 @@ export function ReportSettings() {
     if (id === "github") {
       return tools?.gh
         ? { label: `gh ${tools.gh.version.replace(/^gh version\s*/, "")}`, ok: true }
-        : { label: "gh 설치 필요", ok: false };
+        : { label: t("report.status.ghMissing"), ok: false };
     }
     if (id === "ai_sessions") {
       const has = !!(tools?.claude_sessions || tools?.codex_sessions);
-      return has ? { label: "감지됨", ok: true } : { label: "세션 없음", ok: false };
+      return has
+        ? { label: t("report.status.detected"), ok: true }
+        : { label: t("report.status.noSessions"), ok: false };
     }
     // slack / notion (MCP)
-    if (!isClaude) return { label: "claude 필요", ok: false };
+    if (!isClaude) return { label: t("report.status.claudeRequired"), ok: false };
     const server = id === "slack" ? cfg!.slackServer : cfg!.notionServer;
-    if (!server) return { label: "서버 선택", ok: false };
+    if (!server) return { label: t("report.status.pickServer"), ok: false };
     // 감지 전(null)은 '아직 모름' — 실패(빈 배열)와 구분한다. 저장은 됐는데 "미확인" 으로 보이면
     // 설정이 날아간 걸로 오해한다(claude mcp list 는 10초 이상 걸린다).
-    if (!mcpServers) return { label: "확인 중…", ok: false };
+    if (!mcpServers) return { label: t("report.status.checking"), ok: false };
     const s = mcpServers.find((x) => x.name === server);
-    if (!s) return { label: "미확인", ok: false };
+    if (!s) return { label: t("report.status.unknown"), ok: false };
     return s.connected
-      ? { label: "연결됨", ok: true }
-      : { label: MCP_STATUS_KO[s.status] || "미연결", ok: false };
+      ? { label: t("report.mcpStatus.connected"), ok: true }
+      : { label: MCP_STATUS[s.status] || t("report.status.notConnected"), ok: false };
   }
 
   function serverOptions() {
-    const opts = [{ value: "", label: "선택 안 함" }];
+    const opts = [{ value: "", label: t("report.mcp.serverNone") }];
     for (const s of mcpServers ?? []) {
-      const st = MCP_STATUS_KO[s.status];
+      const st = MCP_STATUS[s.status];
       opts.push({ value: s.name, label: s.connected ? s.name : `${s.name} · ${st}` });
     }
     return opts;
@@ -227,16 +231,14 @@ export function ReportSettings() {
   return (
     <section className="set-section">
       <div className="set-head">
-        <span className="set-eyebrow">데일리 리포트</span>
+        <span className="set-eyebrow">{t("report.title")}</span>
         <span className="spacer" />
         <button className="btn btn-sm" onClick={() => void redetect()} disabled={detecting}>
           <Icon name="refresh" size={13} />
-          {detecting ? "감지 중…" : "다시 감지"}
+          {detecting ? t("report.set.detecting") : t("report.set.redetect")}
         </button>
       </div>
-      <p className="set-desc">
-        켠 플랫폼만 수집해요. 위에 둘수록 리포트의 중심이 됩니다(순위 = 행 순서, 드래그로 조정).
-      </p>
+      <p className="set-desc">{t("report.set.desc")}</p>
 
       <div className="rep-src-list">
         {rows.map((s) => {
@@ -253,7 +255,7 @@ export function ReportSettings() {
               <div className="rep-src-head">
                 <span
                   className="todo-grip rep-src-grip"
-                  title="드래그해서 순위 변경"
+                  title={t("report.set.dragRank")}
                   aria-hidden="true"
                   onMouseDown={(e) => startDrag(e, s.id)}
                 >
@@ -278,7 +280,7 @@ export function ReportSettings() {
                 <span className={`rep-status ${st.ok ? "ok" : ""}`}>{st.label}</span>
                 <button
                   className="icon-btn ghost sm"
-                  title={isOpen ? "접기" : "펼치기"}
+                  title={isOpen ? t("report.set.collapse") : t("report.set.expand")}
                   onClick={() => setExpanded(isOpen ? null : s.id)}
                 >
                   <Icon name={isOpen ? "chevron-down" : "chevron-right"} size={15} />
@@ -291,42 +293,40 @@ export function ReportSettings() {
                     <>
                       {ghAccounts && ghAccounts.length > 0 && (
                         <div className="field">
-                          <label>조회 계정</label>
+                          <label>{t("report.gh.accountLabel")}</label>
                           <Select
                             block
                             value={cfg.githubAccount}
                             options={[
-                              { value: "", label: "활성 계정 (기본)" },
+                              { value: "", label: t("report.gh.accountDefault") },
                               ...ghAccounts.map((a) => ({
                                 value: a.login,
-                                label: a.active ? `${a.login} · 활성` : a.login,
+                                label: a.active
+                                  ? `${a.login} · ${t("report.gh.accountActive")}`
+                                  : a.login,
                               })),
                             ]}
                             onChange={(v) => update({ ...cfg, githubAccount: v })}
                           />
-                          <div className="hint">
-                            gh 에 계정이 여러 개면 리포트에 쓸 계정을 고르세요. 그 계정으로 조회해요(전역 활성 계정은 안 바뀜).
-                          </div>
+                          <div className="hint">{t("report.gh.accountHint")}</div>
                         </div>
                       )}
                       <div className="field">
-                        <label>gh CLI 경로</label>
+                        <label>{t("report.gh.pathLabel")}</label>
                         <input
                           className="input"
                           value={cfg.githubPath}
                           placeholder={tools?.gh?.path ?? "/opt/homebrew/bin/gh"}
                           onChange={(e) => update({ ...cfg, githubPath: e.target.value })}
                         />
-                        <div className="hint">
-                          비우면 로그인 셸 PATH 에서 자동으로 찾아요. gh 자체 로그인을 그대로 사용합니다.
-                        </div>
+                        <div className="hint">{t("report.gh.pathHint")}</div>
                       </div>
                       <div className="field" style={{ marginBottom: 0 }}>
-                        <label>레포 필터 (선택)</label>
+                        <label>{t("report.gh.repoLabel")}</label>
                         <input
                           className="input"
                           value={cfg.githubRepos.join(", ")}
-                          placeholder="owner/repo, owner/other — 비우면 전체"
+                          placeholder={t("report.gh.repoPlaceholder")}
                           onChange={(e) =>
                             update({
                               ...cfg,
@@ -337,7 +337,7 @@ export function ReportSettings() {
                             })
                           }
                         />
-                        <div className="hint">지정하면 그 레포 활동만 모아 잡음을 줄여요.</div>
+                        <div className="hint">{t("report.gh.repoHint")}</div>
                       </div>
                     </>
                   ) : s.id === "ai_sessions" ? (
@@ -345,23 +345,27 @@ export function ReportSettings() {
                       <Checkbox
                         checked={cfg.sessionsClaude}
                         onChange={() => update({ ...cfg, sessionsClaude: !cfg.sessionsClaude })}
-                        label="Claude Code 세션"
+                        label={t("report.sess.claude")}
                       />
                       <span className="rep-sub-label">
                         Claude Code{" "}
                         <span className="rep-sub-state">
-                          {tools?.claude_sessions ? "감지됨" : "세션 폴더 없음"}
+                          {tools?.claude_sessions
+                            ? t("report.status.detected")
+                            : t("report.sess.noFolder")}
                         </span>
                       </span>
                       <Checkbox
                         checked={cfg.sessionsCodex}
                         onChange={() => update({ ...cfg, sessionsCodex: !cfg.sessionsCodex })}
-                        label="Codex 세션"
+                        label={t("report.sess.codex")}
                       />
                       <span className="rep-sub-label">
                         Codex{" "}
                         <span className="rep-sub-state">
-                          {tools?.codex_sessions ? "감지됨" : "세션 폴더 없음"}
+                          {tools?.codex_sessions
+                            ? t("report.status.detected")
+                            : t("report.sess.noFolder")}
                         </span>
                       </span>
                     </div>
@@ -419,43 +423,43 @@ function McpSourceBody({
   if (!isClaude) {
     return (
       <div className="hint">
-        {LABEL[id]} 수집은 claude 프로바이더 전용이에요. 설정 상단 <b>AI 연결</b>에서 claude 에
-        연결하면 등록된 MCP 서버를 그대로 사용합니다.
+        {t("report.mcp.claudeOnlyPre", { name: LABEL[id] })}
+        <b>{t("report.mcp.claudeOnlyLink")}</b>
+        {t("report.mcp.claudeOnlyPost")}
       </div>
     );
   }
   return (
     <>
       <div className="field" style={{ marginBottom: 8 }}>
-        <label>MCP 서버</label>
+        <label>{t("report.mcp.serverLabel")}</label>
         {/* servers === null = 감지 전(캐시도 없음). 갱신 중에는 캐시를 계속 보여준다 —
             여기서 로딩/'없어요' 로 되돌리면 설정이 사라진 것처럼 보인다 */}
         {!servers ? (
           <div className="loading-box" style={{ padding: "12px 0" }}>
             <Spinner />
-            <span className="hint">등록된 서버를 찾는 중…</span>
+            <span className="hint">{t("report.mcp.searching")}</span>
           </div>
         ) : servers.length && hasConnected ? (
           <Select block value={value} options={options} onChange={onPick} />
         ) : (
           <div className="rep-mcp-guide">
             <div className="hint" style={{ marginBottom: 8 }}>
-              claude 에 등록·인증된 MCP 서버가 없어요. 터미널에서 한 번만 등록·인증하면 이후 자동
-              재사용돼요:
+              {t("report.mcp.noneGuide")}
             </div>
             <code className="rep-mcp-cmd">
               claude mcp add --transport http {id} https://mcp.{id}.com/mcp
             </code>
-            <code className="rep-mcp-cmd">claude → /mcp → 브라우저 인증</code>
+            <code className="rep-mcp-cmd">{t("report.mcp.authStep")}</code>
           </div>
         )}
         <div className="hint" style={{ marginTop: 6 }}>
-          인증은 claude CLI 가 관리해요. Amber 는 토큰을 저장하지 않습니다.
+          {t("report.mcp.tokenHint")}
         </div>
       </div>
       <button className="btn btn-sm" onClick={onRedetect} disabled={loading}>
         <Icon name="refresh" size={13} />
-        {loading ? "감지 중…" : "서버 다시 감지"}
+        {loading ? t("report.set.detecting") : t("report.mcp.redetect")}
       </button>
     </>
   );

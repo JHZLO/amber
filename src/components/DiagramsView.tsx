@@ -24,6 +24,7 @@ import { DiagramCanvas } from "./DiagramCanvas";
 import { DiagramAiModal } from "./DiagramAiModal";
 import { Modal, Select, Spinner, Tooltip, TreeDragOverlay, timeAgo } from "../ui";
 import { Icon } from "../icons";
+import { t } from "../lib/i18n";
 import { RootPicker } from "./RootPicker";
 import type { AppConfig } from "../lib/config";
 import { rootDisplayName, WORKSPACE_EVENT } from "../lib/workspace";
@@ -439,14 +440,14 @@ export function DiagramsView({
                     <>
                       <button
                         className="icon-btn sm"
-                        title="이 폴더에 새 다이어그램"
+                        title={t("diagrams.tree.newFileHere")}
                         onClick={() => openNameModal("new-file", n.path)}
                       >
                         <Icon name="file-plus" size={13} />
                       </button>
                       <button
                         className="icon-btn sm"
-                        title="이 폴더에 새 폴더"
+                        title={t("diagrams.tree.newFolderHere")}
                         onClick={() => openNameModal("new-folder", n.path)}
                       >
                         <Icon name="folder-plus" size={13} />
@@ -455,14 +456,14 @@ export function DiagramsView({
                   )}
                   <button
                     className="icon-btn sm"
-                    title="이름 변경"
+                    title={t("diagrams.rename")}
                     onClick={() => openRenameModal(n)}
                   >
                     <Icon name="pencil" size={13} />
                   </button>
                   <button
                     className="icon-btn sm danger"
-                    title="삭제"
+                    title={t("common.delete")}
                     onClick={() =>
                       setConfirmDelete({
                         name: n.name,
@@ -509,28 +510,28 @@ export function DiagramsView({
         <div className="notes-tree-head">
           <RootPicker section="diagrams" />
           <span className="spacer" />
-          <Tooltip label={`새 다이어그램 · ${encodeDir(activeDir)}`}>
+          <Tooltip label={t("diagrams.tooltip.newFileAt", { dir: encodeDir(activeDir) })}>
             <button
               className="icon-btn sm"
-              aria-label="새 다이어그램"
+              aria-label={t("diagrams.newFile")}
               onClick={() => openNameModal("new-file")}
             >
               <Icon name="file-plus" size={15} />
             </button>
           </Tooltip>
-          <Tooltip label={`새 폴더 · ${encodeDir(activeDir)}`}>
+          <Tooltip label={t("diagrams.tooltip.newFolderAt", { dir: encodeDir(activeDir) })}>
             <button
               className="icon-btn sm"
-              aria-label="새 폴더"
+              aria-label={t("diagrams.newFolder")}
               onClick={() => openNameModal("new-folder")}
             >
               <Icon name="folder-plus" size={15} />
             </button>
           </Tooltip>
-          <Tooltip label="새로고침 · Finder 변경 반영">
+          <Tooltip label={t("diagrams.tooltip.refresh")}>
             <button
               className="icon-btn sm"
-              aria-label="새로고침"
+              aria-label={t("diagrams.refresh")}
               onClick={() => void refreshAll()}
             >
               <Icon name="refresh" size={14} />
@@ -547,15 +548,16 @@ export function DiagramsView({
         {tree && tree.length === 0 && (
           <div className="tree-empty">
             <p>
-              아직 다이어그램이 없어요.
+              {t("diagrams.empty.tree1")}
               <br />
-              mermaid 문법으로 ERD·플로우차트를 그려 보세요.
+              {t("diagrams.empty.tree2")}
             </p>
             <button
               className="btn btn-primary btn-sm"
               onClick={() => openNameModal("new-file")}
             >
-              <Icon name="file-plus" size={14} />첫 다이어그램 만들기
+              <Icon name="file-plus" size={14} />
+              {t("diagrams.empty.create")}
             </button>
           </div>
         )}
@@ -584,7 +586,7 @@ export function DiagramsView({
               <div className="dgm-head-info">
                 <div className="note-crumb">
                   <Icon name="folder" size={12} />
-                  {["다이어그램", ...crumbDirs].join(" › ")}
+                  {[t("diagrams.title"), ...crumbDirs].join(" › ")}
                 </div>
                 <h1 className="dgm-title">{fileName}</h1>
               </div>
@@ -592,8 +594,8 @@ export function DiagramsView({
               <Tooltip
                 label={
                   config?.provider
-                    ? "스키마 DDL 을 붙여넣어 ERD 로 변환"
-                    : "AI 를 연결하면 쓸 수 있어요 (설정)"
+                    ? t("diagrams.ai.tooltip")
+                    : t("diagrams.ai.tooltipNoProvider")
                 }
               >
                 <button
@@ -614,14 +616,14 @@ export function DiagramsView({
                     onClick={() => void save()}
                     disabled={busy}
                   >
-                    {busy ? "저장 중…" : "저장 (⌘S)"}
+                    {busy ? t("diagrams.saving") : `${t("common.save")} (⌘S)`}
                   </button>
                   <button
                     className="btn btn-sm"
                     onClick={() => setEditing(false)}
                     disabled={busy}
                   >
-                    취소
+                    {t("common.cancel")}
                   </button>
                 </>
               ) : (
@@ -631,7 +633,7 @@ export function DiagramsView({
                   disabled={busy || loadingBody || !!readError}
                 >
                   <Icon name="pencil" size={14} />
-                  편집
+                  {t("diagrams.edit")}
                 </button>
               )}
               <button
@@ -646,14 +648,14 @@ export function DiagramsView({
                 disabled={busy}
               >
                 <Icon name="trash" size={14} />
-                삭제
+                {t("common.delete")}
               </button>
             </div>
 
             {opError && <div className="error-note">{opError}</div>}
             {readError && (
               <div className="error-note">
-                다이어그램을 읽을 수 없어요 — {readError}
+                {t("diagrams.readError", { msg: readError })}
               </div>
             )}
 
@@ -677,7 +679,9 @@ export function DiagramsView({
 
             <div className="detail-meta">
               {rootDisplayName("diagrams")}/{selected}
-              {mtime !== null && <> · 수정 {timeAgo(mtime)}</>}
+              {mtime !== null && (
+                <> · {t("diagrams.meta.modified", { ago: timeAgo(mtime) })}</>
+              )}
             </div>
           </div>
         ) : (
@@ -685,32 +689,34 @@ export function DiagramsView({
             <div className="notes-empty-icon">
               <Icon name="workflow" size={30} />
             </div>
-            <h2 className="notes-empty-title">다이어그램</h2>
+            <h2 className="notes-empty-title">{t("diagrams.title")}</h2>
             <p className="notes-empty-sub">
-              mermaid 문법으로 ERD·플로우차트·시퀀스를 그리고
+              {t("diagrams.empty.sub1")}
               <br />
-              폴더로 분류해 관리하세요.
+              {t("diagrams.empty.sub2")}
             </p>
             <div className="notes-empty-actions">
               <button
                 className="btn btn-primary btn-sm"
                 onClick={() => openNameModal("new-file")}
               >
-                <Icon name="file-plus" size={14} />새 다이어그램
+                <Icon name="file-plus" size={14} />
+                {t("diagrams.newFile")}
               </button>
               <button
                 className="btn btn-sm"
                 onClick={() => openNameModal("new-folder")}
               >
-                <Icon name="folder-plus" size={14} />새 폴더
+                <Icon name="folder-plus" size={14} />
+                {t("diagrams.newFolder")}
               </button>
             </div>
             <div className="notes-empty-tips">
               <span className="notes-empty-tip">
-                <Icon name="pencil" size={12} /> 편집하면 실시간 렌더
+                <Icon name="pencil" size={12} /> {t("diagrams.empty.tipEdit")}
               </span>
               <span className="notes-empty-tip">
-                <Icon name="expand" size={12} /> 클릭하면 확대 (팬·줌)
+                <Icon name="expand" size={12} /> {t("diagrams.empty.tipZoom")}
               </span>
             </div>
           </div>
@@ -722,10 +728,10 @@ export function DiagramsView({
         open={!!nameModal}
         title={
           nameModal?.kind === "new-file"
-            ? "새 다이어그램"
+            ? t("diagrams.newFile")
             : nameModal?.kind === "new-folder"
-              ? "새 폴더"
-              : "이름 변경"
+              ? t("diagrams.newFolder")
+              : t("diagrams.rename")
         }
         onClose={() => setNameModal(null)}
         footer={
@@ -735,7 +741,7 @@ export function DiagramsView({
               onClick={() => setNameModal(null)}
               disabled={busy}
             >
-              취소
+              {t("common.cancel")}
             </button>
             <button
               className="btn btn-primary btn-sm"
@@ -743,10 +749,10 @@ export function DiagramsView({
               disabled={busy}
             >
               {busy
-                ? "처리 중…"
+                ? t("diagrams.working")
                 : nameModal?.kind === "rename"
-                  ? "변경"
-                  : "만들기"}
+                  ? t("diagrams.modal.renameConfirm")
+                  : t("diagrams.modal.create")}
             </button>
           </>
         }
@@ -760,7 +766,7 @@ export function DiagramsView({
           >
             {nameModal.kind !== "rename" && (
               <div className="field">
-                <label>위치</label>
+                <label>{t("diagrams.modal.location")}</label>
                 <Select
                   value={encodeDir(nameModal.dir)}
                   options={dirOptions}
@@ -778,8 +784,8 @@ export function DiagramsView({
             <div className="field">
               <label>
                 {nameModal.kind === "new-folder"
-                  ? "폴더 이름"
-                  : "다이어그램 이름"}
+                  ? t("diagrams.modal.folderName")
+                  : t("diagrams.modal.fileName")}
               </label>
               <input
                 className="input"
@@ -787,17 +793,15 @@ export function DiagramsView({
                 value={nameModal.name}
                 placeholder={
                   nameModal.kind === "new-folder"
-                    ? "예: 서비스별"
-                    : "예: 주문 ERD  ·  주문/주문 ERD"
+                    ? t("diagrams.modal.folderPh")
+                    : t("diagrams.modal.filePh")
                 }
                 onChange={(e) =>
                   setNameModal((m) => (m ? { ...m, name: e.target.value } : m))
                 }
               />
               {nameModal.kind !== "rename" && (
-                <div className="hint">
-                  / 로 구분하면 중간 폴더가 자동으로 만들어져요.
-                </div>
+                <div className="hint">{t("diagrams.modal.pathHint")}</div>
               )}
             </div>
             {modalError && <div className="error-note">{modalError}</div>}
@@ -808,7 +812,11 @@ export function DiagramsView({
       {/* 삭제 확인 */}
       <Modal
         open={!!confirmDelete}
-        title={confirmDelete?.isDir ? "폴더 삭제" : "다이어그램 삭제"}
+        title={
+          confirmDelete?.isDir
+            ? t("diagrams.delete.folderTitle")
+            : t("diagrams.delete.fileTitle")
+        }
         narrow
         onClose={() => setConfirmDelete(null)}
         footer={
@@ -818,37 +826,38 @@ export function DiagramsView({
               onClick={() => setConfirmDelete(null)}
               disabled={busy}
             >
-              취소
+              {t("common.cancel")}
             </button>
             <button
               className="btn btn-sm btn-danger-ghost"
               onClick={() => void doDelete()}
               disabled={busy}
             >
-              {busy ? "삭제 중…" : "삭제"}
+              {busy ? t("diagrams.deleting") : t("common.delete")}
             </button>
           </>
         }
       >
         <p style={{ margin: 0 }}>
           <b>{confirmDelete?.name}</b>{" "}
-          {confirmDelete?.isDir ? "폴더와 안의 모든 다이어그램을" : "다이어그램을"}{" "}
-          삭제할까요?
+          {confirmDelete?.isDir
+            ? t("diagrams.delete.bodyDir")
+            : t("diagrams.delete.bodyFile")}
           <br />
-          휴지통으로 옮겨져요 — Finder 에서 되돌릴 수 있어요.
+          {t("diagrams.delete.trashNote")}
         </p>
       </Modal>
 
       {/* 저장 안 된 변경 → 다른 파일로 이동 */}
       <Modal
         open={!!pendingOpen}
-        title="저장하지 않은 변경"
+        title={t("diagrams.unsaved.title")}
         narrow
         onClose={() => setPendingOpen(null)}
         footer={
           <>
             <button className="btn btn-sm" onClick={() => setPendingOpen(null)}>
-              계속 편집
+              {t("diagrams.unsaved.keep")}
             </button>
             <button
               className="btn btn-sm btn-danger-ghost"
@@ -858,26 +867,24 @@ export function DiagramsView({
                 if (p) void doOpen(p);
               }}
             >
-              버리고 이동
+              {t("diagrams.unsaved.discard")}
             </button>
           </>
         }
       >
-        <p style={{ margin: 0 }}>
-          지금 다이어그램에 저장하지 않은 변경이 있어요. 버리고 이동할까요?
-        </p>
+        <p style={{ margin: 0 }}>{t("diagrams.unsaved.body")}</p>
       </Modal>
 
       {/* 외부에서 먼저 수정됨 → 덮어쓰기/다시 읽기 선택 */}
       <Modal
         open={!!conflict}
-        title="파일이 밖에서 바뀌었어요"
+        title={t("diagrams.conflict.title")}
         narrow
         onClose={() => setConflict(null)}
         footer={
           <>
             <button className="btn btn-sm" onClick={() => setConflict(null)}>
-              계속 편집
+              {t("diagrams.unsaved.keep")}
             </button>
             <button
               className="btn btn-sm"
@@ -888,7 +895,7 @@ export function DiagramsView({
               }}
               disabled={busy}
             >
-              내 편집 버리고 다시 읽기
+              {t("diagrams.conflict.reread")}
             </button>
             <button
               className="btn btn-sm btn-danger-ghost"
@@ -898,16 +905,24 @@ export function DiagramsView({
               }}
               disabled={busy}
             >
-              그래도 덮어쓰기
+              {t("diagrams.conflict.overwrite")}
             </button>
           </>
         }
       >
         <p style={{ margin: 0 }}>
-          이 다이어그램을 연 뒤에 다른 프로그램(Finder·vim·git 등)이 파일을
-          고쳤어요{conflict && <> · 디스크 수정 {timeAgo(conflict.diskMtime)}</>}.
+          {t("diagrams.conflict.body1")}
+          {conflict && (
+            <>
+              {" · "}
+              {t("diagrams.conflict.diskMtime", {
+                ago: timeAgo(conflict.diskMtime),
+              })}
+            </>
+          )}
+          .
           <br />
-          덮어쓰면 그 변경이 사라져요.
+          {t("diagrams.conflict.body2")}
         </p>
       </Modal>
 

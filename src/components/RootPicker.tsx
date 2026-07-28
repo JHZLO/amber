@@ -14,6 +14,7 @@ import {
   WORKSPACE_EVENT,
   type SectionKey,
 } from "../lib/workspace";
+import { t } from "../lib/i18n";
 import { Icon } from "../icons";
 
 export function RootPicker({ section }: { section: SectionKey }) {
@@ -64,7 +65,7 @@ export function RootPicker({ section }: { section: SectionKey }) {
     const dir = await openDialog({
       directory: true,
       multiple: false,
-      title: "작업 폴더 열기",
+      title: t("settings.root.openDialogTitle"),
     });
     if (typeof dir === "string" && dir) setRoot(section, dir);
   }
@@ -77,11 +78,14 @@ export function RootPicker({ section }: { section: SectionKey }) {
         ref={triggerRef}
         className="root-picker"
         onClick={() => setOpen((v) => !v)}
-        title={isDefaultRoot(section, root) ? "기본 보관함 (앱 데이터 폴더)" : root}
+        title={isDefaultRoot(section, root) ? t("settings.root.defaultTitle") : root}
       >
         <Icon name="folder-open" size={14} />
         <span className="root-picker-name">
-          {rootDisplayName(section, root)}
+          {/* 기본 보관함 라벨은 언어를 따라간다 — 커스텀 루트는 폴더 이름 그대로 */}
+          {isDefaultRoot(section, root)
+            ? t("settings.root.default")
+            : rootDisplayName(section, root)}
         </span>
         <svg className="select-caret" width="10" height="6" viewBox="0 0 10 6">
           <path
@@ -109,8 +113,8 @@ export function RootPicker({ section }: { section: SectionKey }) {
               >
                 <span className="select-check" />
                 <span className="root-menu-item">
-                  <span>기본 보관함</span>
-                  <span className="root-menu-path">앱 데이터 폴더</span>
+                  <span>{t("settings.root.default")}</span>
+                  <span className="root-menu-path">{t("settings.root.appData")}</span>
                 </span>
               </button>
             )}
@@ -129,9 +133,9 @@ export function RootPicker({ section }: { section: SectionKey }) {
             <button className="select-item" onClick={() => void pickFolder()}>
               <span className="select-check" />
               <span className="root-menu-item">
-                <span>폴더 열기…</span>
+                <span>{t("settings.root.openFolder")}</span>
                 <span className="root-menu-path">
-                  로컬 폴더를 워크스페이스로 사용
+                  {t("settings.root.openFolderDesc")}
                 </span>
               </span>
             </button>

@@ -3,6 +3,7 @@
 
 import { invoke, Channel } from "@tauri-apps/api/core";
 import type { Confidence } from "../types";
+import { t } from "./i18n";
 
 export interface GeneratedNote {
   title: string;
@@ -53,16 +54,16 @@ export function friendlyError(e: unknown): string {
   if (!isAiError(e)) return String(e);
   switch (e.code) {
     case "AI_NOT_FOUND":
-      return "claude CLI를 찾을 수 없어요. 설정(⚙)에서 경로를 확인하세요.";
+      return t("common.ai.notFound", { cli: "claude" });
     case "AI_AUTH":
-      return "claude 인증이 필요해요. 터미널에서 `claude` 로그인 후 다시 시도하세요.";
+      return t("common.ai.auth", { cli: "claude" });
     case "AI_RATE_LIMIT":
-      return "사용량 한도에 도달했어요. 잠시 후 다시 시도하세요.";
+      return t("common.ai.rateLimit");
     case "AI_TIMEOUT":
-      return "응답이 너무 오래 걸렸어요. 다시 시도해 주세요.";
+      return t("common.ai.timeout");
     case "AI_BAD_ENVELOPE":
     case "AI_BAD_CONTRACT":
-      return "정리 결과를 해석하지 못했어요. 다시 생성하거나 수동으로 작성하세요.";
+      return t("common.ai.badResult");
     default:
       return e.message;
   }

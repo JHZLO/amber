@@ -23,6 +23,7 @@ import {
 import { useTreeDnd } from "../lib/useTreeDnd";
 import { Modal, Select, Spinner, Tooltip, TreeDragOverlay, timeAgo } from "../ui";
 import { Icon } from "../icons";
+import { t } from "../lib/i18n";
 import type { AppConfig } from "../lib/config";
 import { NoteAiModal } from "./NoteAiModal";
 import { RootPicker } from "./RootPicker";
@@ -498,14 +499,14 @@ export function NotesView({
                     <>
                       <button
                         className="icon-btn sm"
-                        title="이 폴더에 새 노트"
+                        title={t("notes.row.newNoteHere")}
                         onClick={() => openNameModal("new-note", n.path)}
                       >
                         <Icon name="file-plus" size={13} />
                       </button>
                       <button
                         className="icon-btn sm"
-                        title="이 폴더에 새 폴더"
+                        title={t("notes.row.newFolderHere")}
                         onClick={() => openNameModal("new-folder", n.path)}
                       >
                         <Icon name="folder-plus" size={13} />
@@ -514,14 +515,14 @@ export function NotesView({
                   )}
                   <button
                     className="icon-btn sm"
-                    title="이름 변경"
+                    title={t("notes.rename")}
                     onClick={() => openRenameModal(n)}
                   >
                     <Icon name="pencil" size={13} />
                   </button>
                   <button
                     className="icon-btn sm danger"
-                    title="삭제"
+                    title={t("common.delete")}
                     onClick={() =>
                       setConfirmDelete({
                         name: n.name,
@@ -558,34 +559,39 @@ export function NotesView({
     : "";
   const crumbDirs = selected ? parentOf(selected).split("/").filter(Boolean) : [];
 
+  // 삭제 확인 문구 — 언어별 어순이 달라 "{name}" 자리에 <b>이름</b>을 끼워 넣는다
+  const delMsg = t(
+    confirmDelete?.isDir ? "notes.delete.confirmFolder" : "notes.delete.confirmNote",
+  ).split("{name}");
+
   return (
     <div className="body">
       <aside className="list">
         <div className="notes-tree-head">
           <RootPicker section="notes" />
           <span className="spacer" />
-          <Tooltip label={`새 노트 · ${encodeDir(activeDir)}`}>
+          <Tooltip label={t("notes.tooltip.newNote", { dir: encodeDir(activeDir) })}>
             <button
               className="icon-btn sm"
-              aria-label="새 노트"
+              aria-label={t("notes.newNote")}
               onClick={() => openNameModal("new-note")}
             >
               <Icon name="file-plus" size={15} />
             </button>
           </Tooltip>
-          <Tooltip label={`새 폴더 · ${encodeDir(activeDir)}`}>
+          <Tooltip label={t("notes.tooltip.newFolder", { dir: encodeDir(activeDir) })}>
             <button
               className="icon-btn sm"
-              aria-label="새 폴더"
+              aria-label={t("notes.newFolder")}
               onClick={() => openNameModal("new-folder")}
             >
               <Icon name="folder-plus" size={15} />
             </button>
           </Tooltip>
-          <Tooltip label="새로고침 · Finder 변경 반영">
+          <Tooltip label={t("notes.tooltip.refresh")}>
             <button
               className="icon-btn sm"
-              aria-label="새로고침"
+              aria-label={t("notes.refresh")}
               onClick={() => void refreshAll()}
             >
               <Icon name="refresh" size={14} />
@@ -602,15 +608,16 @@ export function NotesView({
         {tree && tree.length === 0 && (
           <div className="tree-empty">
             <p>
-              아직 노트가 없어요.
+              {t("notes.tree.empty.lead")}
               <br />
-              폴더로 분류하며 마크다운으로 기록해 보세요.
+              {t("notes.tree.empty.sub")}
             </p>
             <button
               className="btn btn-primary btn-sm"
               onClick={() => openNameModal("new-note")}
             >
-              <Icon name="file-plus" size={14} />첫 노트 만들기
+              <Icon name="file-plus" size={14} />
+              {t("notes.tree.firstNote")}
             </button>
           </div>
         )}
@@ -638,7 +645,7 @@ export function NotesView({
           <div className={`notes-detail ${editing ? "editing" : ""}`}>
             <div className="note-crumb">
               <Icon name="folder" size={12} />
-              {["필기노트", ...crumbDirs].join(" › ")}
+              {[t("notes.title"), ...crumbDirs].join(" › ")}
             </div>
             <div className="detail-head">
               <h1 className="detail-title">{fileName}</h1>
@@ -646,7 +653,9 @@ export function NotesView({
 
             {opError && <div className="error-note">{opError}</div>}
             {readError && (
-              <div className="error-note">노트를 읽을 수 없어요 — {readError}</div>
+              <div className="error-note">
+                {t("notes.readError", { error: readError })}
+              </div>
             )}
 
             <div className="detail-actions detail-actions-split">
@@ -658,23 +667,23 @@ export function NotesView({
                       onClick={() => void save()}
                       disabled={busy}
                     >
-                      {busy ? "저장 중…" : "저장 (⌘S)"}
+                      {busy ? t("notes.saving") : t("notes.saveCmd")}
                     </button>
                     <button
                       className="btn btn-sm"
                       onClick={() => setEditing(false)}
                       disabled={busy}
                     >
-                      취소
+                      {t("common.cancel")}
                     </button>
                     <button
                       className="btn btn-sm"
                       onClick={() => setAiOpen(true)}
                       disabled={busy || !config?.provider}
-                      title="현재 초안을 바탕으로 AI가 작성/보강"
+                      title={t("notes.ai.fromDraftTip")}
                     >
                       <Icon name="sparkles" size={14} />
-                      AI 작성
+                      {t("notes.aiWrite")}
                     </button>
                   </>
                 ) : (
@@ -689,7 +698,7 @@ export function NotesView({
                       disabled={busy || loadingBody || !!readError}
                     >
                       <Icon name="pencil" size={14} />
-                      편집
+                      {t("notes.edit")}
                     </button>
                     <button
                       className="btn btn-sm"
@@ -697,10 +706,10 @@ export function NotesView({
                       disabled={
                         busy || loadingBody || !!readError || !config?.provider
                       }
-                      title="현재 노트를 바탕으로 AI가 작성/보강"
+                      title={t("notes.ai.fromNoteTip")}
                     >
                       <Icon name="sparkles" size={14} />
-                      AI 작성
+                      {t("notes.aiWrite")}
                     </button>
                   </>
                 )}
@@ -718,7 +727,7 @@ export function NotesView({
                   disabled={busy}
                 >
                   <Icon name="trash" size={14} />
-                  삭제
+                  {t("common.delete")}
                 </button>
               </div>
             </div>
@@ -757,7 +766,7 @@ export function NotesView({
                 />
                 {toc.length >= 2 && (
                   <nav className="note-toc">
-                    <div className="note-toc-label">목차</div>
+                    <div className="note-toc-label">{t("notes.toc")}</div>
                     {toc.map((t) => (
                       <button
                         key={t.id}
@@ -778,13 +787,14 @@ export function NotesView({
             {!editing && madeConcepts.length > 0 && (
               <div className="note-made-concepts">
                 <span className="note-made-label">
-                  <Icon name="layers" size={12} />이 노트에서 만든 개념
+                  <Icon name="layers" size={12} />
+                  {t("notes.madeConcepts")}
                 </span>
                 {madeConcepts.map((c) => (
                   <button
                     key={c.conceptId}
                     className="chip btn-like"
-                    title={`개념 열기 — “${c.anchor}”`}
+                    title={t("notes.openConcept", { anchor: c.anchor })}
                     onClick={() => openConceptInApp(c.conceptId)}
                   >
                     {c.title}
@@ -795,8 +805,17 @@ export function NotesView({
 
             <div className="detail-meta">
               {rootDisplayName("notes")}/{selected}
-              {mtime !== null && <> · 수정 {timeAgo(mtime)}</>}
-              {commentCount > 0 && <> · 질문 {commentCount}개</>}
+              {mtime !== null && (
+                <> · {t("notes.meta.modified", { time: timeAgo(mtime) })}</>
+              )}
+              {commentCount > 0 && (
+                <>
+                  {" · "}
+                  {commentCount === 1
+                    ? t("notes.meta.qcount.one")
+                    : t("notes.meta.qcount.other", { n: commentCount })}
+                </>
+              )}
             </div>
           </div>
         ) : (
@@ -804,32 +823,34 @@ export function NotesView({
             <div className="notes-empty-icon">
               <Icon name="book" size={30} />
             </div>
-            <h2 className="notes-empty-title">필기노트</h2>
+            <h2 className="notes-empty-title">{t("notes.title")}</h2>
             <p className="notes-empty-sub">
-              왼쪽에서 노트를 열거나, 새 노트를 만들어 기록을 시작하세요.
+              {t("notes.empty.lead")}
               <br />
-              폴더로 분류하고 마크다운으로 자유롭게 적을 수 있어요.
+              {t("notes.empty.sub")}
             </p>
             <div className="notes-empty-actions">
               <button
                 className="btn btn-primary btn-sm"
                 onClick={() => openNameModal("new-note")}
               >
-                <Icon name="file-plus" size={14} />새 노트
+                <Icon name="file-plus" size={14} />
+                {t("notes.newNote")}
               </button>
               <button
                 className="btn btn-sm"
                 onClick={() => openNameModal("new-folder")}
               >
-                <Icon name="folder-plus" size={14} />새 폴더
+                <Icon name="folder-plus" size={14} />
+                {t("notes.newFolder")}
               </button>
             </div>
             <div className="notes-empty-tips">
               <span className="notes-empty-tip">
-                <Icon name="sparkles" size={12} /> AI 작성으로 초안을 받아 보강
+                <Icon name="sparkles" size={12} /> {t("notes.empty.tipAi")}
               </span>
               <span className="notes-empty-tip">
-                <Icon name="expand" size={12} /> mermaid 다이어그램 렌더 · 확대
+                <Icon name="expand" size={12} /> {t("notes.empty.tipMermaid")}
               </span>
             </div>
           </div>
@@ -841,10 +862,10 @@ export function NotesView({
         open={!!nameModal}
         title={
           nameModal?.kind === "new-note"
-            ? "새 노트"
+            ? t("notes.newNote")
             : nameModal?.kind === "new-folder"
-              ? "새 폴더"
-              : "이름 변경"
+              ? t("notes.newFolder")
+              : t("notes.rename")
         }
         onClose={() => setNameModal(null)}
         footer={
@@ -854,7 +875,7 @@ export function NotesView({
               onClick={() => setNameModal(null)}
               disabled={busy}
             >
-              취소
+              {t("common.cancel")}
             </button>
             <button
               className="btn btn-primary btn-sm"
@@ -862,10 +883,10 @@ export function NotesView({
               disabled={busy}
             >
               {busy
-                ? "처리 중…"
+                ? t("notes.working")
                 : nameModal?.kind === "rename"
-                  ? "변경"
-                  : "만들기"}
+                  ? t("notes.renameConfirm")
+                  : t("notes.create")}
             </button>
           </>
         }
@@ -879,7 +900,7 @@ export function NotesView({
           >
             {nameModal.kind !== "rename" && (
               <div className="field">
-                <label>위치</label>
+                <label>{t("notes.field.location")}</label>
                 <Select
                   value={encodeDir(nameModal.dir)}
                   options={dirOptions}
@@ -896,7 +917,9 @@ export function NotesView({
             )}
             <div className="field">
               <label>
-                {nameModal.kind === "new-folder" ? "폴더 이름" : "노트 이름"}
+                {nameModal.kind === "new-folder"
+                  ? t("notes.field.folderName")
+                  : t("notes.field.noteName")}
               </label>
               <input
                 className="input"
@@ -904,8 +927,8 @@ export function NotesView({
                 value={nameModal.name}
                 placeholder={
                   nameModal.kind === "new-folder"
-                    ? "예: 네트워크  ·  CS/네트워크"
-                    : "예: TCP 혼잡 제어  ·  네트워크/TCP"
+                    ? t("notes.ph.folderName")
+                    : t("notes.ph.noteName")
                 }
                 onChange={(e) =>
                   setNameModal((m) =>
@@ -914,9 +937,7 @@ export function NotesView({
                 }
               />
               {nameModal.kind !== "rename" && (
-                <div className="hint">
-                  / 로 구분하면 중간 폴더가 자동으로 만들어져요.
-                </div>
+                <div className="hint">{t("notes.hint.path")}</div>
               )}
             </div>
             {modalError && <div className="error-note">{modalError}</div>}
@@ -927,7 +948,11 @@ export function NotesView({
       {/* 삭제 확인 */}
       <Modal
         open={!!confirmDelete}
-        title={confirmDelete?.isDir ? "폴더 삭제" : "노트 삭제"}
+        title={
+          confirmDelete?.isDir
+            ? t("notes.delete.folderTitle")
+            : t("notes.delete.noteTitle")
+        }
         narrow
         onClose={() => setConfirmDelete(null)}
         footer={
@@ -937,24 +962,24 @@ export function NotesView({
               onClick={() => setConfirmDelete(null)}
               disabled={busy}
             >
-              취소
+              {t("common.cancel")}
             </button>
             <button
               className="btn btn-sm btn-danger-ghost"
               onClick={() => void doDelete()}
               disabled={busy}
             >
-              {busy ? "삭제 중…" : "삭제"}
+              {busy ? t("notes.deleting") : t("common.delete")}
             </button>
           </>
         }
       >
         <p style={{ margin: 0 }}>
-          <b>{confirmDelete?.name}</b>{" "}
-          {confirmDelete?.isDir ? "폴더와 안의 모든 노트를" : "노트를"}{" "}
-          삭제할까요?
+          {delMsg[0]}
+          <b>{confirmDelete?.name}</b>
+          {delMsg[1]}
           <br />
-          휴지통으로 옮겨져요 — Finder 에서 되돌릴 수 있어요.
+          {t("notes.delete.trashHint")}
         </p>
       </Modal>
 
@@ -991,7 +1016,7 @@ export function NotesView({
       {/* 저장 안 된 변경 → 다른 노트로 이동 */}
       <Modal
         open={!!pendingOpen}
-        title="저장하지 않은 변경"
+        title={t("notes.unsaved.title")}
         narrow
         onClose={() => setPendingOpen(null)}
         footer={
@@ -1000,7 +1025,7 @@ export function NotesView({
               className="btn btn-sm"
               onClick={() => setPendingOpen(null)}
             >
-              계속 편집
+              {t("notes.keepEditing")}
             </button>
             <button
               className="btn btn-sm btn-danger-ghost"
@@ -1010,26 +1035,24 @@ export function NotesView({
                 if (p) void doOpen(p);
               }}
             >
-              버리고 이동
+              {t("notes.unsaved.discard")}
             </button>
           </>
         }
       >
-        <p style={{ margin: 0 }}>
-          지금 노트에 저장하지 않은 변경이 있어요. 버리고 이동할까요?
-        </p>
+        <p style={{ margin: 0 }}>{t("notes.unsaved.body")}</p>
       </Modal>
 
       {/* 외부에서 먼저 수정됨 → 덮어쓰기/다시 읽기 선택 */}
       <Modal
         open={!!conflict}
-        title="파일이 밖에서 바뀌었어요"
+        title={t("notes.conflict.title")}
         narrow
         onClose={() => setConflict(null)}
         footer={
           <>
             <button className="btn btn-sm" onClick={() => setConflict(null)}>
-              계속 편집
+              {t("notes.keepEditing")}
             </button>
             <button
               className="btn btn-sm"
@@ -1040,7 +1063,7 @@ export function NotesView({
               }}
               disabled={busy}
             >
-              내 편집 버리고 다시 읽기
+              {t("notes.conflict.reload")}
             </button>
             <button
               className="btn btn-sm btn-danger-ghost"
@@ -1050,16 +1073,22 @@ export function NotesView({
               }}
               disabled={busy}
             >
-              그래도 덮어쓰기
+              {t("notes.conflict.overwrite")}
             </button>
           </>
         }
       >
         <p style={{ margin: 0 }}>
-          이 노트를 연 뒤에 다른 프로그램(Obsidian·vim·git 등)이 파일을
-          고쳤어요{conflict && <> · 디스크 수정 {timeAgo(conflict.diskMtime)}</>}.
+          {t("notes.conflict.body")}
+          {conflict && (
+            <>
+              {" · "}
+              {t("notes.conflict.diskTime", { time: timeAgo(conflict.diskMtime) })}
+            </>
+          )}
+          {"."}
           <br />
-          덮어쓰면 그 변경이 사라져요.
+          {t("notes.conflict.warn")}
         </p>
       </Modal>
     </div>

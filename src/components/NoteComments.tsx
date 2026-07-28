@@ -24,6 +24,7 @@ import {
 import { Markdown } from "./Markdown";
 import { AiThinking, timeAgo } from "../ui";
 import { Icon } from "../icons";
+import { t } from "../lib/i18n";
 
 const HIGHLIGHT_KEY = "note-q";
 
@@ -497,23 +498,23 @@ export function NoteCommentLayer({
         <div className="cmt-fab-bar" style={fabStyle}>
           <button
             className="cmt-fab"
-            title="선택한 부분에 질문 달기"
+            title={t("notes.cmt.askTip")}
             // mousedown 은 선택 해제 방지만, 열기는 click 에서 (앵커는 이미 캡처됨)
             onMouseDown={(e) => e.preventDefault()}
             onClick={openAsk}
           >
             <Icon name="message" size={13} />
-            질문
+            {t("notes.cmt.ask")}
           </button>
           {onPromote && (
             <button
               className="cmt-fab"
-              title="선택한 부분을 개념 카드로 만들기"
+              title={t("notes.cmt.promoteTip")}
               onMouseDown={(e) => e.preventDefault()}
               onClick={openPromote}
             >
               <Icon name="layers" size={13} />
-              개념으로
+              {t("notes.cmt.promote")}
             </button>
           )}
         </div>
@@ -529,7 +530,7 @@ export function NoteCommentLayer({
                 </div>
                 <button
                   className="icon-btn ghost sm"
-                  title="닫기"
+                  title={t("common.close")}
                   onClick={() => setPop(null)}
                   disabled={asking}
                 >
@@ -541,7 +542,7 @@ export function NoteCommentLayer({
                 style={{ fontFamily: "var(--font)" }}
                 rows={2}
                 autoFocus
-                placeholder="이 부분에서 무엇이 궁금한가요?"
+                placeholder={t("notes.cmt.askPh")}
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={(e) => {
@@ -557,11 +558,11 @@ export function NoteCommentLayer({
                 </div>
               )}
               {asking ? (
-                <AiThinking compact label="답변 생성 중…" />
+                <AiThinking compact label={t("notes.cmt.thinking")} />
               ) : (
                 <div className="cmt-actions">
                   <button className="btn btn-sm" onClick={() => setPop(null)}>
-                    취소
+                    {t("common.cancel")}
                   </button>
                   <button
                     className="btn btn-primary btn-sm"
@@ -569,7 +570,7 @@ export function NoteCommentLayer({
                     disabled={question.trim().length < 2 || !config?.provider}
                   >
                     <Icon name="sparkles" size={13} />
-                    AI에게 질문
+                    {t("notes.cmt.askAi")}
                   </button>
                 </div>
               )}
@@ -582,7 +583,7 @@ export function NoteCommentLayer({
                 </div>
                 <button
                   className="icon-btn ghost sm"
-                  title="닫기"
+                  title={t("common.close")}
                   onClick={() => setPop(null)}
                 >
                   <Icon name="x" size={14} />
@@ -607,7 +608,7 @@ export function NoteCommentLayer({
                       {pendingQ.q}
                     </div>
                     <div className="cmt-a">
-                      <AiThinking compact label="답변 생성 중…" />
+                      <AiThinking compact label={t("notes.cmt.thinking")} />
                     </div>
                   </div>
                 )}
@@ -624,7 +625,7 @@ export function NoteCommentLayer({
                   style={{ fontFamily: "var(--font)" }}
                   rows={1}
                   autoFocus
-                  placeholder="이어서 질문하기…"
+                  placeholder={t("notes.cmt.followUpPh")}
                   value={question}
                   disabled={asking}
                   onChange={(e) => setQuestion(e.target.value)}
@@ -637,7 +638,7 @@ export function NoteCommentLayer({
                 />
                 <button
                   className="btn btn-primary btn-sm"
-                  title="후속 질문 보내기"
+                  title={t("notes.cmt.followUpSend")}
                   onClick={() => void submitFollowUp()}
                   disabled={asking || question.trim().length < 2 || !config?.provider}
                 >
@@ -649,7 +650,7 @@ export function NoteCommentLayer({
                 <span className="spacer" />
                 <button
                   className="icon-btn ghost sm danger"
-                  title="질문 스레드 삭제"
+                  title={t("notes.cmt.deleteThread")}
                   onClick={() => void deleteComment(viewComment.id)}
                   disabled={asking}
                 >

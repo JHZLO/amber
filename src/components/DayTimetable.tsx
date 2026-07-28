@@ -21,7 +21,8 @@ import {
   renameBlock,
   updateBlockTime,
 } from "../lib/timeBlocks";
-import { WEEKDAYS_KO, formatDayLong, parseLocalDate } from "../lib/date";
+import { formatDayLong, parseLocalDate, weekdaysShort } from "../lib/date";
+import { t } from "../lib/i18n";
 import { Icon } from "../icons";
 
 /** 타임테이블 뷰 모드 — 부모(TodoView)가 소유·영속하고 로드 범위도 이걸로 정한다 */
@@ -43,9 +44,9 @@ const snapFloor = (m: number) => Math.floor(m / SNAP) * SNAP;
 const snapRound = (m: number) => Math.round(m / SNAP) * SNAP;
 
 const VIEW_LABELS: Record<TtView, string> = {
-  day: "일",
-  week: "주",
-  month: "월",
+  day: t("todos.tt.view.day"),
+  week: t("todos.tt.view.week"),
+  month: t("todos.tt.view.month"),
 };
 
 // 드래그 중 화면에만 반영되는 임시 상태 (커밋은 mouseup 에서 한 번). day = 컬럼 index
@@ -349,12 +350,16 @@ export function DayTimetable({
   }
 
   const plannedMin = blocks.reduce((s, b) => s + (b.end_min - b.start_min), 0);
+  const plannedH = Math.floor(plannedMin / 60);
+  const plannedM = plannedMin % 60;
+  const plannedTime = [
+    plannedH > 0 ? t("todos.tt.hours", { h: plannedH }) : "",
+    plannedM > 0 ? t("todos.tt.minutes", { m: plannedM }) : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const plannedLabel =
-    plannedMin > 0
-      ? `계획 ${Math.floor(plannedMin / 60) > 0 ? `${Math.floor(plannedMin / 60)}시간` : ""}${
-          plannedMin % 60 > 0 ? ` ${plannedMin % 60}분` : ""
-        }`.trim()
-      : null;
+    plannedMin > 0 ? t("todos.tt.planned", { time: plannedTime }) : null;
 
   // 월 아젠다: 날짜별 그룹 (blocks 는 date, start_min 순으로 로드됨)
   const agenda: [string, TimeBlock[]][] = [];
@@ -368,7 +373,7 @@ export function DayTimetable({
 
   const blockTitle = (b: TimeBlock) =>
     b.todo_id != null
-      ? (todoById.get(b.todo_id)?.content ?? "(삭제된 할 일)")
+      ? (todoById.get(b.todo_id)?.content ?? t("todos.tt.deletedTodo"))
       : b.title;
   const blockDone = (b: TimeBlock) =>
     b.todo_id != null && todoById.get(b.todo_id)?.done === 1;
@@ -377,7 +382,7 @@ export function DayTimetable({
     <div className="day-tt">
       {/* 섹션 헤더 밴드 — 캘린더와의 구분(라벨 + 계획 합계 + 뷰 전환) */}
       <div className="day-tt-head">
-        <span className="day-tt-label">타임테이블</span>
+        <span className="day-tt-label">{t("todos.tt.label")}</span>
         <span className="spacer" />
         {plannedLabel && <span className="day-tt-plan">{plannedLabel}</span>}
         <div className="segmented day-tt-seg">
@@ -407,7 +412,7 @@ export function DayTimetable({
                 className={`tt-day-cell ${cls}`}
                 onClick={() => onSelectDate(d)}
               >
-                <span className="tt-day-dow">{WEEKDAYS_KO[dd.getDay()]}</span>
+                <span className="tt-day-dow">{weekdaysShort()[dd.getDay()]}</span>
                 <span className="tt-day-num">{dd.getDate()}</span>
               </button>
             );
@@ -476,7 +481,7 @@ export function DayTimetable({
                       <input
                         className="tt-edit"
                         autoFocus
-                        placeholder="제목"
+                        placeholder={t("todos.tt.titlePlaceholder")}
                         value={editText}
                         onChange={(e) => setEditText(e.target.value)}
                         onKeyDown={(e) => {
@@ -489,7 +494,7 @@ export function DayTimetable({
                     ) : (
                       <>
                         <span className="tt-title">
-                          {title || "(제목 없음)"}
+                          {title || t("todos.tt.untitled")}
                         </span>
                         {h >= 34 && (
                           <span className="tt-time">
@@ -498,7 +503,7 @@ export function DayTimetable({
                         )}
                         <button
                           className="tt-del"
-                          aria-label="블록 삭제"
+                          aria-label={t("todos.tt.deleteBlock")}
                           onMouseDown={(e) => e.stopPropagation()}
                           onClick={() => removeBlock(b)}
                         >
@@ -545,9 +550,7 @@ export function DayTimetable({
         // 월 뷰: 아젠다 리스트 — 그 달의 블록을 날짜별로. 클릭=그 날짜 선택(우측 목록·일 뷰 연동)
         <div className="day-tt-agenda">
           {agenda.length === 0 ? (
-            <div className="hint day-tt-empty">
-              이번 달 계획이 없어요 — 일/주 뷰에서 드래그로 추가하세요.
-            </div>
+            <div className="hint day-tt-empty">{t("todos.tt.monthEmpty")}</div>
           ) : (
             agenda.map(([d, list]) => (
               <div key={d} className="tt-ag-day">
@@ -556,7 +559,9 @@ export function DayTimetable({
                   onClick={() => onSelectDate(d)}
                 >
                   {formatDayLong(d)}
-                  {d === today && <span className="tt-ag-today">오늘</span>}
+                  {d === today && (
+                    <span className="tt-ag-today">{t("todos.today")}</span>
+                  )}
                 </button>
                 {list.map((b) => (
                   <div
@@ -568,7 +573,7 @@ export function DayTimetable({
                       {fmtMin(b.start_min)} – {fmtMin(b.end_min)}
                     </span>
                     <span className="tt-ag-title">
-                      {blockTitle(b) || "(제목 없음)"}
+                      {blockTitle(b) || t("todos.tt.untitled")}
                     </span>
                   </div>
                 ))}

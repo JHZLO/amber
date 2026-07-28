@@ -7,16 +7,18 @@ import { setConceptTags, updateConceptContent } from "../lib/db";
 import { writeNote } from "../lib/vault";
 import { AiThinking, Modal } from "../ui";
 import { Icon } from "../icons";
+import { t } from "../lib/i18n";
 
 type Step = "prompt" | "loading" | "preview";
 
-// 프롬프트 칸을 빠르게 채우는 자주 쓰는 보강 방향
+// 프롬프트 칸을 빠르게 채우는 자주 쓰는 보강 방향 — 화면에 보이는 칩이자 지시문 내용이라
+// 현재 UI 언어를 따른다 (클릭 시 그 언어 그대로 AI 에 전달됨)
 const PRESETS = [
-  "구체적인 예시·코드 추가",
-  "더 깊고 자세하게",
-  "초보자도 이해하게 쉽게",
-  "핵심만 간결하게 압축",
-  "주의점·함정 보강",
+  t("concepts.augment.preset.examples"),
+  t("concepts.augment.preset.deeper"),
+  t("concepts.augment.preset.simpler"),
+  t("concepts.augment.preset.concise"),
+  t("concepts.augment.preset.pitfalls"),
 ];
 
 function parseTags(raw: string): string[] {
@@ -101,7 +103,7 @@ export function AugmentModal({
 
   async function apply() {
     if (!title.trim() || !summary.trim()) {
-      setError("제목과 요약은 필수예요.");
+      setError(t("concepts.form.required"));
       return;
     }
     setSaving(true);
@@ -129,16 +131,16 @@ export function AugmentModal({
     footer = (
       <>
         <button className="btn btn-sm" onClick={onClose}>
-          취소
+          {t("common.cancel")}
         </button>
         <button
           className="btn btn-primary"
           onClick={run}
           disabled={tooShort || !config?.provider}
-          title={!config ? "설정을 불러오는 중이에요" : undefined}
+          title={!config ? t("concepts.augment.loadingConfig") : undefined}
         >
           <Icon name="sparkles" size={15} />
-          AI로 보강
+          {t("concepts.augment.run")}
         </button>
       </>
     );
@@ -147,21 +149,21 @@ export function AugmentModal({
       <>
         <button className="btn btn-sm" onClick={() => setStep("prompt")}>
           <Icon name="chevron-left" size={14} />
-          다시 지시
+          {t("concepts.augment.again")}
         </button>
         <span className="spacer" />
         <button className="btn btn-sm" onClick={onClose} disabled={saving}>
-          취소
+          {t("common.cancel")}
         </button>
         <button className="btn btn-primary" onClick={apply} disabled={saving}>
-          {saving ? "적용 중…" : "적용"}
+          {saving ? t("concepts.augment.applying") : t("concepts.augment.apply")}
         </button>
       </>
     );
   }
 
   return (
-    <Modal open={open} title="AI로 노트 보강" onClose={onClose} footer={footer} wide>
+    <Modal open={open} title={t("concepts.augment.title")} onClose={onClose} footer={footer} wide>
       {error && (
         <div className="error-note" style={{ marginBottom: 12 }}>
           {error}
@@ -171,21 +173,19 @@ export function AugmentModal({
       {step === "prompt" && (
         <>
           <div className="field">
-            <label>어떻게 보강할까요? — Claude에게 지시</label>
+            <label>{t("concepts.augment.promptLabel")}</label>
             <textarea
               className="textarea"
               style={{ fontFamily: "var(--font)" }}
               rows={4}
-              placeholder="예: kube-proxy IPVS 모드 설정 예시를 코드블록으로 추가해줘 · 성능 비교 부분을 더 깊게 · 표로 정리해줘…"
+              placeholder={t("concepts.augment.promptPlaceholder")}
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
             />
-            <div className="hint">
-              현재 노트 전체를 바탕으로 다시 정리해요. 자신감·학습상태는 그대로 유지돼요.
-            </div>
+            <div className="hint">{t("concepts.augment.promptHint")}</div>
           </div>
           <div className="field">
-            <label>빠른 지시</label>
+            <label>{t("concepts.augment.presets")}</label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {PRESETS.map((p) => (
                 <span
@@ -203,15 +203,15 @@ export function AugmentModal({
 
       {step === "loading" && (
         <AiThinking
-          label="Claude가 노트를 보강하는 중…"
-          hint="현재 노트 + 지시 → 보강된 상세 노트"
+          label={t("concepts.augment.thinking")}
+          hint={t("concepts.augment.thinkingHint")}
         />
       )}
 
       {step === "preview" && (
         <>
           <div className="field">
-            <label>제목</label>
+            <label>{t("concepts.field.title")}</label>
             <input
               className="input"
               value={title}
@@ -219,7 +219,7 @@ export function AugmentModal({
             />
           </div>
           <div className="field">
-            <label>요약 (위젯 표시용)</label>
+            <label>{t("concepts.field.summary")}</label>
             <textarea
               className="textarea"
               style={{ fontFamily: "var(--font)" }}
@@ -229,7 +229,7 @@ export function AugmentModal({
             />
           </div>
           <div className="field">
-            <label>태그 (쉼표로 구분)</label>
+            <label>{t("concepts.field.tags")}</label>
             <input
               className="input"
               value={tags}
@@ -238,13 +238,13 @@ export function AugmentModal({
           </div>
           <div className="field">
             <label style={{ display: "flex", alignItems: "center" }}>
-              보강된 상세 노트 (Markdown)
+              {t("concepts.field.augmentedNote")}
               <span className="spacer" />
               <button
                 className="btn btn-sm"
                 onClick={() => setShowSource((v) => !v)}
               >
-                {showSource ? "프리뷰" : "소스 편집"}
+                {showSource ? t("concepts.preview.show") : t("concepts.preview.source")}
               </button>
             </label>
             {showSource ? (
