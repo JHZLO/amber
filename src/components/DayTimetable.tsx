@@ -23,6 +23,7 @@ import {
 } from "../lib/timeBlocks";
 import { formatDayLong, parseLocalDate, weekdaysShort } from "../lib/date";
 import { t } from "../lib/i18n";
+import { errText } from "../lib/errors";
 import { Icon } from "../icons";
 
 /** 타임테이블 뷰 모드 — 부모(TodoView)가 소유·영속하고 로드 범위도 이걸로 정한다 */
@@ -33,7 +34,7 @@ const SNAP = 15; // 분 스냅 (구글 캘린더와 동일)
 const MIN_DUR = 15;
 const DAY_MIN = 1440;
 
-const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+const errMsg = errText; // Rust 코드화 에러까지 번역 (lib/errors.ts)
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const fmtMin = (m: number) => `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
 const minToY = (m: number) => (m / 60) * TT_HOUR_H;

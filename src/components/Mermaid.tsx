@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "../icons";
 import { MermaidZoom } from "./MermaidZoom";
 import { t } from "../lib/i18n";
+import { errText } from "../lib/errors";
 
 // mermaid 모듈 캐시 + 1회 초기화 (DiagramCanvas 등 다른 렌더러도 공유)
 export type MermaidApi = {
@@ -72,7 +73,7 @@ export function Mermaid({ chart }: { chart: string }) {
       .catch((e: unknown) => {
         if (alive) {
           setFailed(true);
-          setErrMsg(e instanceof Error ? e.message : String(e));
+          setErrMsg(errText(e));
         }
       });
     return () => {

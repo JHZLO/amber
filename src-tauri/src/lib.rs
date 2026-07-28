@@ -2,6 +2,7 @@ mod ai;
 mod detect;
 mod report;
 
+use ai::AiError;
 use std::path::Path;
 use std::time::Duration;
 use tauri::{
@@ -22,25 +23,33 @@ fn greet(name: &str) -> String {
 /// appDataDir 기준 상대경로를 macOS 휴지통으로 이동(영구 삭제 대신 복구 가능).
 /// vault 밖 경로는 거부한다. 대상이 없으면 멱등 성공.
 #[tauri::command]
-fn move_to_trash(app: tauri::AppHandle, rel_path: String) -> Result<(), String> {
+fn move_to_trash(app: tauri::AppHandle, rel_path: String) -> Result<(), AiError> {
     // rel_path 는 appdata 상대경로(기본 보관함) 또는 절대경로("폴더 열기"로 연 워크스페이스).
-    let base = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AiError::detailed("TRASH_FAILED", e.to_string(), e.to_string()))?;
     let p = std::path::PathBuf::from(&rel_path);
     let target = if p.is_absolute() { p } else { base.join(&p) };
     if !target.exists() {
         return Ok(());
     }
-    let canon_target = target.canonicalize().map_err(|e| e.to_string())?;
-    let canon_base = base.canonicalize().map_err(|e| e.to_string())?;
-    let home = app.path().home_dir().map_err(|e| e.to_string())?;
-    let canon_home = home.canonicalize().map_err(|e| e.to_string())?;
+    let io = |e: std::io::Error| AiError::detailed("TRASH_FAILED", e.to_string(), e.to_string());
+    let canon_target = target.canonicalize().map_err(io)?;
+    let canon_base = base.canonicalize().map_err(io)?;
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|e| AiError::detailed("TRASH_FAILED", e.to_string(), e.to_string()))?;
+    let canon_home = home.canonicalize().map_err(io)?;
     // 허용: appdata 하위, 또는 홈 하위(홈 자체는 금지) — 시스템 경로 오삭제 방지
     let allowed = canon_target.starts_with(&canon_base)
         || (canon_target.starts_with(&canon_home) && canon_target != canon_home);
     if !allowed {
-        return Err("허용되지 않은 경로입니다.".into());
+        return Err(AiError::new("TRASH_FORBIDDEN", "허용되지 않은 경로입니다."));
     }
-    trash::delete(&canon_target).map_err(|e| e.to_string())?;
+    trash::delete(&canon_target)
+        .map_err(|e| AiError::detailed("TRASH_FAILED", e.to_string(), e.to_string()))?;
     Ok(())
 }
 
@@ -52,32 +61,39 @@ async fn create_backup(
     app: tauri::AppHandle,
     dest_dir: String,
     tz_offset_min: i32,
-) -> Result<String, String> {
+) -> Result<String, AiError> {
     // DB 는 sql 플러그인이 app_config_dir 기준으로 열고, vault 는 프론트가 appdata 기준으로 쓴다
     // (macOS 에선 같은 폴더지만 각자의 기준을 그대로 따른다).
     let db = app
         .path()
         .app_config_dir()
-        .map_err(|e| e.to_string())?
+        .map_err(|e| AiError::new("BACKUP_PATH", e.to_string()))?
         .join("amber.db");
-    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AiError::new("BACKUP_PATH", e.to_string()))?;
     let vault = data_dir.join("vault");
 
     let dest = std::path::PathBuf::from(dest_dir.trim());
     if !dest.is_dir() {
-        return Err("백업할 폴더를 찾을 수 없습니다.".into());
+        return Err(AiError::new("BACKUP_NO_DEST", "백업할 폴더를 찾을 수 없습니다."));
     }
     // 백업 대상이 앱 데이터 폴더 안이면 vault 를 자기 자신 안으로 무한 복사하게 된다
     if let (Ok(d), Ok(base)) = (dest.canonicalize(), data_dir.canonicalize()) {
         if d.starts_with(&base) {
-            return Err("앱 데이터 폴더 밖의 위치를 선택해 주세요.".into());
+            return Err(AiError::new(
+                "BACKUP_INSIDE_APPDATA",
+                "앱 데이터 폴더 밖의 위치를 선택해 주세요.",
+            ));
         }
     }
 
     // 같은 폴더에 여러 번 백업해도 덮어쓰지 않게 하위 폴더로 나눈다
     // (VACUUM INTO 는 대상 파일이 이미 있으면 실패한다).
     let root = dest.join(format!("amber-backup-{}", local_stamp(tz_offset_min)));
-    std::fs::create_dir_all(&root).map_err(|e| format!("백업 폴더를 만들지 못했습니다: {e}"))?;
+    std::fs::create_dir_all(&root)
+        .map_err(|e| AiError::detailed("BACKUP_MKDIR", e.to_string(), e.to_string()))?;
 
     let write = async {
         if db.exists() {
@@ -96,7 +112,8 @@ async fn create_backup(
     if let Err(e) = write.await {
         // 반쪽짜리 폴더를 남기면 온전한 백업으로 오인한다 — 방금 만든 폴더만 되돌린다
         let _ = std::fs::remove_dir_all(&root);
-        return Err(e);
+        // vacuum_into/copy_dir 의 사유는 그대로 detail 로 넘긴다(프론트가 코드로 문구를 만든다)
+        return Err(AiError::detailed("BACKUP_WRITE", e.clone(), e));
     }
     Ok(root.to_string_lossy().into_owned())
 }

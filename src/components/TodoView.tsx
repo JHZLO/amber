@@ -53,6 +53,7 @@ import {
   weekStartOf,
 } from "../lib/date";
 import { t } from "../lib/i18n";
+import { errText } from "../lib/errors";
 import { Checkbox, Modal } from "../ui";
 import { Icon } from "../icons";
 import { MiniCalendar } from "./MiniCalendar";
@@ -61,7 +62,7 @@ import { DailyReportPanel } from "./DailyReportPanel";
 import { openConceptInApp } from "../lib/nav";
 import type { AppConfig } from "../lib/config";
 
-const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+const errMsg = errText; // Rust 코드화 에러까지 번역 (lib/errors.ts)
 
 /** 번역 문자열의 {name} 자리에 <b>제목</b> 을 끼워 넣는다 — 어순(굵힘 위치)은 언어별 사전이 정한다 */
 function withBoldName(template: string, name: string) {

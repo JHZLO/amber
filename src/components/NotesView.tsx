@@ -24,6 +24,7 @@ import { useTreeDnd } from "../lib/useTreeDnd";
 import { Modal, Select, Spinner, Tooltip, TreeDragOverlay, timeAgo } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
+import { errText } from "../lib/errors";
 import type { AppConfig } from "../lib/config";
 import { NoteAiModal } from "./NoteAiModal";
 import { RootPicker } from "./RootPicker";
@@ -40,7 +41,7 @@ import { emit } from "@tauri-apps/api/event";
 const encodeDir = (d: string) => (d ? `/${d}` : "/");
 const decodeDir = (v: string) => (v === "/" ? "" : v.slice(1));
 
-const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+const errMsg = errText; // Rust 코드화 에러까지 번역 (lib/errors.ts)
 
 type NameModalState =
   | { kind: "new-note" | "new-folder"; name: string; dir: string }

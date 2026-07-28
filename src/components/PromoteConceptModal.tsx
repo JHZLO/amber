@@ -14,6 +14,7 @@ import { addNoteConcept } from "../lib/noteConcepts";
 import { AiThinking, Modal } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
+import { errText } from "../lib/errors";
 
 type Step = "loading" | "preview";
 
@@ -143,7 +144,7 @@ export function PromoteConceptModal({
       });
       onDone(conceptId, title.trim());
     } catch (e) {
-      setError(String(e));
+      setError(errText(e));
     } finally {
       setSaving(false);
     }

@@ -28,6 +28,7 @@ import { Markdown } from "./Markdown";
 import { AiThinking, Modal, Spinner } from "../ui";
 import { Icon } from "../icons";
 import { t, dateLocale } from "../lib/i18n";
+import { errText } from "../lib/errors";
 
 // GitHub·Slack·Notion 은 브랜드명이라 번역하지 않는다
 const SRC_LABEL: Record<string, string> = {
@@ -130,7 +131,7 @@ export function DailyReportPanel({
       clearRun(date);
       setLoaded(null);
     } catch (e) {
-      setOpError(e instanceof Error ? e.message : String(e));
+      setOpError(errText(e));
     }
   }
 

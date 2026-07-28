@@ -159,12 +159,13 @@ async fn spawn_simple_cli_result(
         .spawn()
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                AiError::new(
+                AiError::detailed(
                     "AI_NOT_FOUND",
                     format!("AI CLI 를 찾을 수 없습니다: {program}"),
+                    program.clone(),
                 )
             } else {
-                AiError::new("SPAWN_ERROR", e.to_string())
+                AiError::detailed("SPAWN_ERROR", e.to_string(), e.to_string())
             }
         })?;
 
@@ -173,18 +174,19 @@ async fn spawn_simple_cli_result(
         stdin
             .write_all(combined.as_bytes())
             .await
-            .map_err(|e| AiError::new("STDIN_ERROR", e.to_string()))?;
+            .map_err(|e| AiError::detailed("STDIN_ERROR", e.to_string(), e.to_string()))?;
         let _ = stdin.shutdown().await;
     }
 
     let output = match timeout(dur, child.wait_with_output()).await {
         Err(_) => {
-            return Err(AiError::new(
+            return Err(AiError::detailed(
                 "AI_TIMEOUT",
                 format!("{}초 안에 응답이 없습니다.", dur.as_secs()),
+                dur.as_secs().to_string(),
             ))
         }
-        Ok(r) => r.map_err(|e| AiError::new("WAIT_ERROR", e.to_string()))?,
+        Ok(r) => r.map_err(|e| AiError::detailed("WAIT_ERROR", e.to_string(), e.to_string()))?,
     };
 
     if !output.status.success() {
@@ -283,11 +285,20 @@ pub struct ErdResult {
     pub meta: MetaOut,
 }
 
-/// 프론트가 케이스별로 분기할 수 있게 code + message 로 반환
+/// 앱 공용 에러 봉투 (AI 뿐 아니라 백업·휴지통 등 Rust 커맨드 전반이 쓴다).
+///
+/// **문구는 프론트가 만든다.** `code` 로 분기해 `lib/errors.ts` 가 UI 언어로 번역하므로,
+/// 여기 `message` 는 번역이 없는 코드용 폴백 + 로그용이다. 새 에러를 추가하면 반드시
+/// `lib/errors.ts` 와 `messages/common.ts` 에 같은 code 를 넣어야 한다 —
+/// 안 넣으면 영어 UI 에서 이 한국어 message 가 그대로 노출된다.
+///
+/// `detail` 은 문구에 끼울 가변부만 담는다(프로그램 경로·초 수·OS 에러 텍스트).
+/// message 에 섞어 쓰면 프론트가 다시 파싱해야 하므로 분리한다.
 #[derive(Debug, Serialize)]
 pub struct AiError {
     pub code: String,
     pub message: String,
+    pub detail: Option<String>,
 }
 
 impl AiError {
@@ -295,6 +306,20 @@ impl AiError {
         Self {
             code: code.into(),
             message: message.into(),
+            detail: None,
+        }
+    }
+
+    /// 번역 문구에 끼울 가변부를 함께 담는다 (`{detail}` 자리표시자로 들어간다)
+    pub(crate) fn detailed(
+        code: &str,
+        message: impl Into<String>,
+        detail: impl Into<String>,
+    ) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+            detail: Some(detail.into()),
         }
     }
 }
@@ -363,7 +388,7 @@ pub async fn ai_generate(
 ) -> Result<GenerateResult, AiError> {
     if transcript.trim().chars().count() < MIN_INPUT_CHARS {
         return Err(AiError::new(
-            "EMPTY_INPUT",
+            "EMPTY_TRANSCRIPT",
             "입력이 너무 짧습니다. 대화 원문을 붙여넣어 주세요.",
         ));
     }
@@ -401,13 +426,13 @@ pub async fn ai_augment(
     let instr = instruction.trim();
     if instr.is_empty() {
         return Err(AiError::new(
-            "EMPTY_INPUT",
+            "EMPTY_INSTRUCTION",
             "보강 지시를 입력해 주세요.",
         ));
     }
     if markdown.trim().is_empty() {
         return Err(AiError::new(
-            "EMPTY_INPUT",
+            "EMPTY_NOTE_BODY",
             "보강할 노트 본문이 비어 있습니다.",
         ));
     }
@@ -442,7 +467,7 @@ pub async fn ai_note_compose(
 ) -> Result<NoteComposeResult, AiError> {
     let instr = instruction.trim();
     if instr.is_empty() {
-        return Err(AiError::new("EMPTY_INPUT", "작성 지시를 입력해 주세요."));
+        return Err(AiError::new("EMPTY_INSTRUCTION", "작성 지시를 입력해 주세요."));
     }
 
     let kind = provider_kind(provider.as_deref());
@@ -489,7 +514,7 @@ pub async fn ai_note_compose_stream(
 ) -> Result<NoteComposeResult, AiError> {
     let instr = instruction.trim();
     if instr.is_empty() {
-        return Err(AiError::new("EMPTY_INPUT", "작성 지시를 입력해 주세요."));
+        return Err(AiError::new("EMPTY_INSTRUCTION", "작성 지시를 입력해 주세요."));
     }
 
     let kind = provider_kind(provider.as_deref());
@@ -548,11 +573,11 @@ pub async fn ai_note_ask(
 ) -> Result<NoteAskResult, AiError> {
     let q = question.trim();
     if q.is_empty() {
-        return Err(AiError::new("EMPTY_INPUT", "질문을 입력해 주세요."));
+        return Err(AiError::new("EMPTY_QUESTION", "질문을 입력해 주세요."));
     }
     let sel = selection.trim();
     if sel.is_empty() {
-        return Err(AiError::new("EMPTY_INPUT", "선택한 문장이 비어 있습니다."));
+        return Err(AiError::new("EMPTY_SELECTION", "선택한 문장이 비어 있습니다."));
     }
 
     let kind = provider_kind(provider.as_deref());
@@ -607,7 +632,7 @@ pub async fn ai_erd_generate_stream(
 ) -> Result<ErdResult, AiError> {
     if ddl.trim().chars().count() < MIN_INPUT_CHARS {
         return Err(AiError::new(
-            "EMPTY_INPUT",
+            "EMPTY_DDL",
             "스키마 DDL 을 붙여넣어 주세요.",
         ));
     }
@@ -677,12 +702,13 @@ pub(crate) async fn stream_claude_result(
         .spawn()
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                AiError::new(
+                AiError::detailed(
                     "AI_NOT_FOUND",
                     format!("claude CLI 를 찾을 수 없습니다: {program}"),
+                    program.clone(),
                 )
             } else {
-                AiError::new("SPAWN_ERROR", e.to_string())
+                AiError::detailed("SPAWN_ERROR", e.to_string(), e.to_string())
             }
         })?;
 
@@ -691,7 +717,7 @@ pub(crate) async fn stream_claude_result(
         stdin
             .write_all(input.as_bytes())
             .await
-            .map_err(|e| AiError::new("STDIN_ERROR", e.to_string()))?;
+            .map_err(|e| AiError::detailed("STDIN_ERROR", e.to_string(), e.to_string()))?;
         let _ = stdin.shutdown().await;
     }
 
@@ -712,7 +738,7 @@ pub(crate) async fn stream_claude_result(
         while let Some(line) = lines
             .next_line()
             .await
-            .map_err(|e| AiError::new("WAIT_ERROR", e.to_string()))?
+            .map_err(|e| AiError::detailed("WAIT_ERROR", e.to_string(), e.to_string()))?
         {
             if line.trim().is_empty() {
                 continue;
@@ -752,9 +778,10 @@ pub(crate) async fn stream_claude_result(
     match timeout(dur, read_loop).await {
         Err(_) => {
             let _ = child.start_kill();
-            return Err(AiError::new(
+            return Err(AiError::detailed(
                 "AI_TIMEOUT",
                 format!("{}초 안에 응답이 없습니다.", dur.as_secs()),
+                dur.as_secs().to_string(),
             ));
         }
         Ok(r) => r?,
@@ -859,12 +886,13 @@ async fn spawn_claude_result(
         .spawn()
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                AiError::new(
+                AiError::detailed(
                     "AI_NOT_FOUND",
                     format!("claude CLI 를 찾을 수 없습니다: {program}"),
+                    program.clone(),
                 )
             } else {
-                AiError::new("SPAWN_ERROR", e.to_string())
+                AiError::detailed("SPAWN_ERROR", e.to_string(), e.to_string())
             }
         })?;
 
@@ -874,18 +902,19 @@ async fn spawn_claude_result(
         stdin
             .write_all(input.as_bytes())
             .await
-            .map_err(|e| AiError::new("STDIN_ERROR", e.to_string()))?;
+            .map_err(|e| AiError::detailed("STDIN_ERROR", e.to_string(), e.to_string()))?;
         let _ = stdin.shutdown().await;
     }
 
     let output = match timeout(dur, child.wait_with_output()).await {
         Err(_) => {
-            return Err(AiError::new(
+            return Err(AiError::detailed(
                 "AI_TIMEOUT",
                 format!("{}초 안에 응답이 없습니다.", dur.as_secs()),
+                dur.as_secs().to_string(),
             ))
         }
-        Ok(r) => r.map_err(|e| AiError::new("WAIT_ERROR", e.to_string()))?,
+        Ok(r) => r.map_err(|e| AiError::detailed("WAIT_ERROR", e.to_string(), e.to_string()))?,
     };
 
     if !output.status.success() {
@@ -1009,7 +1038,7 @@ pub async fn ai_health(cli_path: Option<String>) -> Result<String, AiError> {
                 format!("claude 를 찾을 수 없습니다: {program}"),
             )
         } else {
-            AiError::new("SPAWN_ERROR", e.to_string())
+            AiError::detailed("SPAWN_ERROR", e.to_string(), e.to_string())
         }
     })?;
     if output.status.success() {

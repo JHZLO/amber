@@ -11,12 +11,7 @@ import {
   connectProvider,
   loadConfig,
 } from "../lib/config";
-import {
-  aiHealth,
-  detectAiClis,
-  isAiError,
-  type DetectedCli,
-} from "../lib/ai";
+import { aiHealth, detectAiClis, type DetectedCli } from "../lib/ai";
 import {
   loadPrompts,
   makePrompt,
@@ -25,6 +20,7 @@ import {
 } from "../lib/prompts";
 import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
 import { getLang, setLang, t, LANG_CHANGED_EVENT, type Lang } from "../lib/i18n";
+import { errText } from "../lib/errors";
 import { Modal, Select, Spinner } from "../ui";
 import { Icon } from "../icons";
 import { ReportSettings } from "./ReportSettings";
@@ -179,7 +175,7 @@ export function SettingsModal({
       setTestResult({ ok: true, msg: t("settings.ai.testOk", { version: v }) });
     } catch (e) {
       if (!alive.current) return;
-      setTestResult({ ok: false, msg: isAiError(e) ? e.message : String(e) });
+      setTestResult({ ok: false, msg: errText(e) });
     } finally {
       if (alive.current) setTesting(false);
     }
@@ -226,11 +222,11 @@ export function SettingsModal({
       if (!alive.current) return;
       setBackupResult({ ok: true, msg: t("settings.backup.done", { path: out }) });
     } catch (e) {
-      // 노트가 탭 위에 따로 뜨므로 무엇이 실패했는지부터 밝힌다 (Rust 메시지는 한국어 문장)
+      // 노트가 탭 위에 따로 뜨므로 무엇이 실패했는지부터 밝힌다 (사유는 errText 가 번역)
       if (alive.current)
         setBackupResult({
           ok: false,
-          msg: t("settings.backup.fail", { err: String(e) }),
+          msg: t("settings.backup.fail", { err: errText(e) }),
         });
     } finally {
       backupLock.current = false;
@@ -249,7 +245,7 @@ export function SettingsModal({
     } catch (e) {
       setTestResult({
         ok: false,
-        msg: t("settings.openFolderFail", { err: String(e) }),
+        msg: t("settings.openFolderFail", { err: errText(e) }),
       });
     }
   }

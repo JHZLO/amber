@@ -3,7 +3,8 @@
 
 import { invoke, Channel } from "@tauri-apps/api/core";
 import type { Confidence } from "../types";
-import { getLang, t } from "./i18n";
+import { getLang } from "./i18n";
+import { errText } from "./errors";
 
 export interface GeneratedNote {
   title: string;
@@ -28,46 +29,12 @@ export interface GenerateResult {
   meta: InvocationMeta;
 }
 
-/** Rust AiError 와 동일 구조. invoke rejection 으로 전달됨 */
-export interface AiError {
-  code:
-    | "EMPTY_INPUT"
-    | "AI_NOT_FOUND"
-    | "AI_AUTH"
-    | "AI_RATE_LIMIT"
-    | "AI_TIMEOUT"
-    | "AI_BAD_ENVELOPE"
-    | "AI_BAD_CONTRACT"
-    | "AI_ERROR"
-    | "SPAWN_ERROR"
-    | "STDIN_ERROR"
-    | "WAIT_ERROR";
-  message: string;
-}
+/** Rust 에러 봉투 (앱 공용) — 구조·코드 목록은 lib/errors.ts 가 정본 */
+export type { CodedError as AiError } from "./errors";
+export { isCodedError as isAiError } from "./errors";
 
-export function isAiError(e: unknown): e is AiError {
-  return typeof e === "object" && e !== null && "code" in e && "message" in e;
-}
-
-/** invoke rejection 을 사용자 안내 문구로 변환 (UI 공용) */
-export function friendlyError(e: unknown): string {
-  if (!isAiError(e)) return String(e);
-  switch (e.code) {
-    case "AI_NOT_FOUND":
-      return t("common.ai.notFound", { cli: "claude" });
-    case "AI_AUTH":
-      return t("common.ai.auth", { cli: "claude" });
-    case "AI_RATE_LIMIT":
-      return t("common.ai.rateLimit");
-    case "AI_TIMEOUT":
-      return t("common.ai.timeout");
-    case "AI_BAD_ENVELOPE":
-    case "AI_BAD_CONTRACT":
-      return t("common.ai.badResult");
-    default:
-      return e.message;
-  }
-}
+/** invoke rejection 을 사용자 안내 문구로 — 문구 매핑은 lib/errors.ts 한 곳에만 둔다 */
+export const friendlyError = errText;
 
 export async function aiGenerate(params: {
   transcript: string;

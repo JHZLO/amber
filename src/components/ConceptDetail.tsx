@@ -15,8 +15,9 @@ import { Icon } from "../icons";
 import { AugmentModal } from "./AugmentModal";
 import { openNoteInApp } from "../lib/nav";
 import { dateLocale, t } from "../lib/i18n";
+import { errText } from "../lib/errors";
 
-const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+const errMsg = errText; // Rust 코드화 에러까지 번역 (lib/errors.ts)
 
 function parseTags(raw: string): string[] {
   return raw

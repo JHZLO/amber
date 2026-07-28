@@ -7,6 +7,7 @@ import svgPanZoom from "svg-pan-zoom";
 import { renderMermaid } from "./Mermaid";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
+import { errText } from "../lib/errors";
 
 let seq = 0;
 
@@ -207,7 +208,7 @@ export function DiagramCanvas({
       })
       .catch((e: unknown) => {
         // 마지막 정상 렌더 유지, 에러 메시지만 표시 (스튜디오의 에러 패널 대응)
-        if (alive) setError(e instanceof Error ? e.message : String(e));
+        if (alive) setError(errText(e));
       });
     return () => {
       alive = false;

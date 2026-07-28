@@ -8,6 +8,7 @@ import { writeNote } from "../lib/vault";
 import { AiThinking, Modal } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
+import { errText } from "../lib/errors";
 
 type Step = "prompt" | "loading" | "preview";
 
@@ -118,7 +119,7 @@ export function AugmentModal({
       onApplied(bodyMd);
       onClose();
     } catch (e) {
-      setError(String(e));
+      setError(errText(e));
     } finally {
       setSaving(false);
     }

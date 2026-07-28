@@ -1004,7 +1004,7 @@ pub async fn report_generate(
         || use_mcp;
     if !has_activity {
         return Err(AiError::new(
-            "EMPTY_INPUT",
+            "REPORT_NO_ACTIVITY",
             "이 날짜엔 정리할 활동이 없어요.",
         ));
     }
