@@ -243,6 +243,12 @@ pub fn run() {
             sql: include_str!("../migrations/0007_time_blocks.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 8,
+            description: "add_todo_carries",
+            sql: include_str!("../migrations/0008_todo_carries.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

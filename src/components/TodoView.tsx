@@ -27,7 +27,6 @@ import {
   clampDropDepth,
   descendantCount,
   flattenSubset,
-  flattenTree,
   resolveDrop,
   subtreeIds,
   visibleRoots,
@@ -207,13 +206,18 @@ export function TodoView({
     e.preventDefault();
     const listEl = listRef.current;
     if (!listEl) return;
-    const cur = todosRef.current;
+    // 이월 고스트(이 날짜에서 다른 날로 옮겨간 행)는 드래그 모델에서 제외한다 — 이 날짜의
+    // 형제 그룹이 아니라, 함께 sort_order 를 다시 매기면 실제 날짜에서의 순서가 망가진다.
+    // 고스트는 과거 날짜에만 나타나므로(lib/todos.ts listTodos) 오늘의 드래그는 그대로다.
+    const cur = todosRef.current.filter((t) => t.carried !== 1);
     const node = cur.find((t) => t.id === id);
     if (!node) return;
 
     // 트리 판단(플랫 행·서브트리·깊이 clamp·드롭 해석)은 전부 순수 모듈 lib/todoTree.ts.
     // 여기 남는 건 실측(rect)·오버레이 transform·DB 커밋뿐이다.
-    const rows = flattenTree(cur);
+    // flattenSubset 인 이유: 이월로 부모만 다른 날에 있는 자식이 이 날 목록에 남을 수 있는데
+    // (moveTodos 는 parent_id 를 안 건드린다), flattenTree 는 그런 행을 통째로 잃는다.
+    const rows = flattenSubset(cur);
     const srcDepth = rows.find((r) => r.id === id)?.depth ?? 0;
     // 드래그 서브트리 — 자기 자신/자손 안으로는 못 들어간다 (후보에서 제외 = 순환 방지)
     const subtree = subtreeIds(cur, id);
@@ -577,26 +581,35 @@ export function TodoView({
   const calWEff = bodyW
     ? Math.max(CAL_W_MIN, Math.min(calWidth, bodyW - DETAIL_MIN))
     : calWidth;
-  // 부모가 이 날에 없는 항목(밀린 항목을 가져갈 때 남겨진 완료 자식)도 루트로 그린다 —
+  // 부모가 이 날에 없는 항목(이월로 부모만 다른 날에 있는 자식)도 루트로 그린다 —
   // childrenIn(todos, null) 로만 고르면 그런 행이 어느 날에도 안 보인다
   const topLevel = visibleRoots(todos);
   const childrenOf = (pid: number) => childrenIn(todos, pid);
-  const doneTop = topLevel.filter((t) => t.done === 1).length;
-  // 밀린 목록도 본문처럼 계층으로 — 부분 집합이라 flattenTree 가 아닌 flattenSubset 을 쓴다
+  // 하단 진행률은 **이 날짜가 맡은 일**만 센다 — 고스트는 다른 날로 넘긴 기록이라 제외한다.
+  // (캘린더 점·월 요약도 due_date 기준이라 listMonthCounts 와 같은 기준이 된다)
+  const ownTop = topLevel.filter((t) => t.carried !== 1);
+  const doneTop = ownTop.filter((t) => t.done === 1).length;
+  // 밀린 목록도 본문처럼 계층으로 — 부모가 빠질 수 있는 부분 집합이라 flattenSubset
   const overdueRows = flattenSubset(overdue);
   const overdueById = new Map(overdue.map((o) => [o.id, o]));
 
   // 파라미터를 todo 로 둔다 — t 로 줄이면 i18n 의 t() 를 가려서(shadowing) 번역 호출이 깨진다
   function renderRow(todo: Todo, opts?: { overdue?: boolean }) {
     const isOverdue = opts?.overdue ?? false;
+    // 이월 고스트 — 이 날짜에 있었지만 다른 날로 넘어간 행. **체크는 된다**(그게 요점: 어제
+    // 화면에서 끝내면 그 할 일이 완료되고 도착 날짜에도 체크된 채로 남는다). 편집·드래그·
+    // 삭제·하위추가는 막는다 — 그 할 일이 지금 사는 곳은 도착 날짜라 거기서 다루게 한다.
+    const isCarried = !isOverdue && todo.carried === 1;
+    const readOnly = isOverdue || isCarried;
+    const onToggle = () => (isOverdue ? toggleOverdue(todo) : toggle(todo));
     const kids = isOverdue ? [] : childrenOf(todo.id);
     const kidsDone = kids.filter((k) => k.done === 1).length;
     return (
       <div
-        className={`todo-row ${todo.done === 1 ? "done" : ""}`}
+        className={`todo-row ${todo.done === 1 ? "done" : ""} ${isCarried ? "carried" : ""}`}
         data-todo-id={todo.id}
       >
-        {!isOverdue && (
+        {!readOnly && (
           <span
             className="todo-grip"
             title={t("todos.row.grip")}
@@ -608,10 +621,10 @@ export function TodoView({
         )}
         <Checkbox
           checked={todo.done === 1}
-          onChange={() => (isOverdue ? toggleOverdue(todo) : toggle(todo))}
+          onChange={onToggle}
           label={todo.content}
         />
-        {editingId === todo.id ? (
+        {editingId === todo.id && !readOnly ? (
           <input
             className="input todo-edit"
             autoFocus
@@ -628,7 +641,7 @@ export function TodoView({
         ) : (
           <span
             className="todo-text"
-            onClick={() => (isOverdue ? toggleOverdue(todo) : startEdit(todo))}
+            onClick={() => (readOnly ? onToggle() : startEdit(todo))}
           >
             {todo.content}
           </span>
@@ -657,6 +670,18 @@ export function TodoView({
             >
               <Icon name="trash" size={13} />
             </button>
+          </span>
+        ) : isCarried ? (
+          // 이월 고스트: 액션 대신 '어디로 갔는지'만. 이 날짜의 기록이지 조작 대상이 아니다 —
+          // 편집/삭제는 그 할 일이 지금 사는 도착 날짜에서 한다.
+          <span
+            className="todo-row-date todo-carried-to"
+            title={t("todos.row.carriedTo", {
+              date: formatDayLong(todo.due_date),
+            })}
+          >
+            <Icon name="chevron-right" size={12} />
+            {formatDayShort(todo.due_date)}
           </span>
         ) : (
           // 메인 목록: 하위추가/편집/삭제는 hover 오버레이(레이아웃을 밀지 않음)
@@ -898,9 +923,9 @@ export function TodoView({
           )}
         </div>
 
-        {topLevel.length > 0 && (
+        {ownTop.length > 0 && (
           <div className="detail-meta">
-            {t("todos.meta.done", { total: topLevel.length, done: doneTop })}
+            {t("todos.meta.done", { total: ownTop.length, done: doneTop })}
           </div>
         )}
 

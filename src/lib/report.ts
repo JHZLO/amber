@@ -361,7 +361,9 @@ export async function readReportFile(date: string): Promise<string | null> {
 
 /** 선택 날짜의 할 일 + (오늘이면) 밀린 항목을 마크다운으로. Rust 생성 프롬프트의 '계획' 재료. */
 export async function buildTodosDigest(date: string): Promise<{ md: string; count: number }> {
-  const todos = await listTodos(date);
+  // 이월 고스트(그 날짜에서 다른 날로 가져간 행)는 뺀다 — 그 날이 맡은 일이 아니라 넘긴
+  // 기록이라, 계획 축에 미완료로 섞이면 그 날 성과를 잘못 읽는다(lib/todos.ts listTodos)
+  const todos = (await listTodos(date)).filter((t) => t.carried !== 1);
   const overdue = date === todayStr() ? await listOverdueOpen(date) : [];
   if (!todos.length && !overdue.length) return { md: "", count: 0 };
 

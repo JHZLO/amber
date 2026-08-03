@@ -3502,6 +3502,20 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
+
+/* 이월 고스트 — 이 날짜에 있었지만 다른 날로 가져간 행. 그 날의 '기록'이라 흐리게 두지만
+   (§3 명암 단계 — 새 색 없이 --text-3), 체크박스는 살아 있다: 여기서 체크하면 그 할 일이
+   완료되고 도착 날짜에도 체크된 채로 남는다(행이 하나라서 — migrations/0008). */
+.todo-row.carried .todo-text {
+  color: var(--text-3);
+  cursor: pointer; /* 인라인 편집이 아니라 완료 토글 — 편집은 도착 날짜에서 */
+}
+.todo-carried-to {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+}
 .todo-overdue-more {
   padding: 6px 10px;
 }

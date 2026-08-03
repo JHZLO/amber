@@ -7,12 +7,25 @@ import type { DayTodoCount, Todo } from "../types";
 
 const now = () => Date.now();
 
-/** 특정 날짜의 할 일. 사용자가 정한 순서(sort_order) → 생성순 (idx_todos_sort 에 대응) */
+/** 특정 날짜의 할 일 = 그 날짜가 마감인 행 + **그 날짜에서 이월해 나간 행(고스트)**.
+ *  사용자가 정한 순서(sort_order) → 생성순 (idx_todos_sort 에 대응).
+ *
+ *  고스트는 사본이 아니라 같은 행이다(migrations/0008) — 가져오기로 오늘 옮겨도 어제 목록에서
+ *  사라지지 않게 하되, done 은 끝까지 하나라 어디서 체크하든 같은 항목이 완료된다.
+ *  `carried=1` 표식으로 UI 가 읽기전용 회색 행 + '→ 옮긴 날짜' 뱃지로 그린다.
+ *
+ *  이월은 항상 **오늘로만** 하므로(TodoView.moveToday) 고스트는 과거 날짜에만 나타난다 —
+ *  오늘 목록에는 carried 행이 없다. 정렬에서 고스트를 뒤로 미는 이유도 그래서 과거 한정이다. */
 export async function listTodos(date: string): Promise<Todo[]> {
   const db = await getDb();
   return db.select<Todo[]>(
-    `SELECT * FROM todos WHERE due_date = $1 ORDER BY sort_order, id`,
-    [date],
+    `SELECT t.*, 0 AS carried FROM todos t WHERE t.due_date = $1
+     UNION ALL
+     SELECT t.*, 1 AS carried FROM todos t
+       JOIN todo_carries c ON c.todo_id = t.id
+      WHERE c.date = $2 AND t.due_date <> $3
+     ORDER BY carried, sort_order, id`,
+    [date, date, date],
   );
 }
 
@@ -144,22 +157,23 @@ export async function updateTodoContent(
 
 /** 여러 항목의 날짜를 옮김 (밀린 할 일 이월). 체크 상태 자체는 바꾸지 않는다.
  *
- *  **미완료 가지만 따라간다** — 이미 체크한 자식은 끝낸 날짜의 기록이라 그대로 둔다.
- *  그런데 부모만 옮겨버리면 남은 완료 자식이 헤딩을 잃는다("누아 항공권" 밑에 1·2 를 체크해
- *  두고 부모를 가져오면 어제에서 그 부모가 사라진다). 그래서 **뒤에 남는 자식이 있는 노드는
- *  분할**한다 — 원본은 완료분의 부모로 원래 날짜에 남고, 같은 내용의 사본이 미완료 자식을
- *  데리고 옮겨간다. 어제 = `누아 항공권 › 1✓ 2✓`, 오늘 = `누아 항공권 › 3 4`.
+ *  **행을 복제하지 않는다** — 옮기는 건 due_date UPDATE 하나뿐이고, 떠나온 날짜는
+ *  `todo_carries` 에 기록만 남긴다. 그 날짜를 열면 같은 행이 고스트로 다시 보이므로
+ *  (listTodos 의 UNION) 어제 기록이 지워지지 않으면서, done 은 끝까지 하나다 — 어제에서
+ *  체크하든 오늘에서 체크하든 같은 항목이 완료된다. 사본을 만들면 한 할 일에 done 이 둘
+ *  생겨 상태가 어긋나고(한쪽만 체크) 매일 같은 내용이 밀린 목록에 한 줄씩 불어난다.
  *
- *  분할하고 남은 원본은 자식이 전부 완료이므로 완료로 재계산한다 — 그래야 그 날의 기록으로
- *  닫히고 내일 밀린 목록에 사본과 함께 두 번 뜨지 않는다.
- *  함께 오지 않는 부모 밑에 있던 항목은 도착 날짜에서 최상위로 올린다(parent_id = NULL). */
+ *  **미완료 가지만 따라간다** — 이미 체크한 자식은 끝낸 날짜의 기록이라 그대로 둔다.
+ *  parent_id 는 건드리지 않는다: 뒤에 남은 완료 자식은 부모가 그 날짜에 고스트로 계속
+ *  보이므로 헤딩을 잃지 않고("누아 항공권 › 1✓ 2✓ 3→ 4→"), 도착 날짜에서는 부모가 없는
+ *  자식을 visibleRoots/flattenSubset 이 최상위로 올려 그린다. */
 export async function moveTodos(ids: number[], dueDate: string): Promise<void> {
   if (!ids.length) return;
   const db = await getDb();
   const ph = (n: number, from: number) =>
     Array.from({ length: n }, (_, i) => `$${i + from}`).join(",");
 
-  // 씨앗과 그 자손 전부(완료 포함) — 어느 가지가 남는지 알아야 분할 여부를 판단한다
+  // 씨앗과 그 자손 전부(완료 포함) — 어느 가지를 따라갈지 판단하려면 완료 자식도 봐야 한다
   const all = await db.select<Todo[]>(
     `WITH RECURSIVE sub(id) AS (
        SELECT id FROM todos WHERE id IN (${ph(ids.length, 1)})
@@ -181,46 +195,19 @@ export async function moveTodos(ids: number[], dueDate: string): Promise<void> {
   };
   for (const id of ids) if (byId.has(id)) walk(id);
 
-  // 분할 대상 = 옮기는데 남는 자식이 있는 노드
-  const splitting = [...moving].filter((id) =>
-    kids(id).some((c) => !moving.has(c.id)),
-  );
-  const copyOf = new Map<number, number>(); // 원본 id → 도착 날짜 사본 id
-
-  /** 도착 날짜에서 이 노드를 가리키는 id — 분할했으면 사본, 아니면 원본(그대로 이동) */
-  const targetId = (id: number) => copyOf.get(id) ?? id;
-  /** 도착 날짜에서의 부모 — 부모가 함께 오지 않으면 최상위 */
-  const targetParent = (t: Todo) =>
-    t.parent_id != null && moving.has(t.parent_id) ? targetId(t.parent_id) : null;
-
-  // 부모부터 만들어야 자식이 붙을 사본 id 가 존재한다 (얕은 순서로 정렬)
-  const depthOf = (t: Todo): number => {
-    let d = 0;
-    for (let p = t.parent_id; p != null && byId.has(p); p = byId.get(p)!.parent_id)
-      d++;
-    return d;
-  };
-  for (const id of splitting.sort((a, b) => depthOf(byId.get(a)!) - depthOf(byId.get(b)!))) {
-    const t = byId.get(id)!;
-    const res = await db.execute(
-      `INSERT INTO todos (content, due_date, parent_id, sort_order) VALUES ($1, $2, $3, $4)`,
-      [t.content, dueDate, targetParent(t), t.sort_order],
-    );
-    copyOf.set(id, res.lastInsertId as number);
-  }
-
-  // 분할하지 않은 것만 실제로 이동 (분할한 원본은 제자리에 남는다)
   for (const id of moving) {
-    if (copyOf.has(id)) continue;
-    const t = byId.get(id)!;
+    const from = byId.get(id)!.due_date;
+    if (from === dueDate) continue; // 이미 그 날짜 — 옮길 것도 남길 흔적도 없다
+    // 도착 날짜에는 기록을 남기지 않는다 — 남기면 그 날 목록에 실물+고스트로 두 번 나온다
     await db.execute(
-      `UPDATE todos SET due_date = $1, updated_at = $2, parent_id = $3 WHERE id = $4`,
-      [dueDate, now(), targetParent(t), id],
+      `INSERT OR IGNORE INTO todo_carries (todo_id, date) VALUES ($1, $2)`,
+      [id, from],
+    );
+    await db.execute(
+      `UPDATE todos SET due_date = $1, updated_at = $2 WHERE id = $3`,
+      [dueDate, now(), id],
     );
   }
-
-  // 남은 원본은 이제 완료분만 거느린다 → 그 날짜의 기록으로 닫는다
-  for (const id of splitting) await recomputeChainFrom(id);
 }
 
 /** 삭제. 노드를 지우면 그 서브트리 전체(모든 자손)를 함께 — 되돌릴 수 없으므로
