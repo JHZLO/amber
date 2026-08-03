@@ -1567,7 +1567,12 @@ html.widget-root #root {
   flex-direction: column;
   gap: 1px;
 }
+/* flex-shrink:0 은 장식이 아니다 — 없으면 목차가 max-height 를 넘길 때 스크롤되는 대신
+   줄들이 눌려 글자가 서로 겹친다(항목의 overflow:hidden 이 자동 최소 높이를 0 으로 풀어
+   0 까지 찌그러진다). 제목이 많은 글에서 바로 드러난다. 눌리지 않아야 넘치고, 넘쳐야
+   위 .note-toc 의 overflow-y:auto 가 일한다. */
 .note-toc-label {
+  flex-shrink: 0;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.07em;
@@ -1577,6 +1582,7 @@ html.widget-root #root {
   padding-left: 6px;
 }
 .note-toc-item {
+  flex-shrink: 0;
   display: block;
   max-width: 100%;
   text-align: left;
