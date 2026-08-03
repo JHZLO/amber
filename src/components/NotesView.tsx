@@ -43,6 +43,34 @@ const decodeDir = (v: string) => (v === "/" ? "" : v.slice(1));
 
 const errMsg = errText; // Rust 코드화 에러까지 번역 (lib/errors.ts)
 
+/** 감소 모션이면 즉시 이동 — CSS `@media (prefers-reduced-motion)` 은 JS scrollTo 의
+ *  behavior 를 막지 못하므로 여기서 직접 본다(DESIGN.md §모션: 모든 모션에 감소 대응). */
+const scrollBehavior = (): ScrollBehavior =>
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? "auto"
+    : "smooth";
+
+/** 목차 안에서 활성 항목이 보이도록 최소한만 스크롤한다.
+ *
+ *  `scrollIntoView` 를 쓰면 안 된다 — 그건 **스크롤 가능한 조상을 전부** 움직여서 본문
+ *  컨테이너(.detail)까지 끌어당긴다. 본문 스크롤이 활성 항목을 바꾸고 그게 다시 본문을
+ *  스크롤하는 되먹임이 생긴다. 그래서 목차 자신의 scrollTop 만 직접 건드린다. */
+const followActiveInToc = (nav: HTMLElement, id: string) => {
+  if (!nav.clientHeight) return; // 좁은 창에서 목차는 display:none (styles.css @media)
+  const el = nav.querySelector<HTMLElement>(`[data-toc-id="${CSS.escape(id)}"]`);
+  if (!el) return;
+  const MARGIN = 12; // 가장자리에 딱 붙지 않게 — 위/아래로 한 항목쯤 더 보이는 여유
+  const navBox = nav.getBoundingClientRect();
+  const box = el.getBoundingClientRect();
+  const above = box.top - navBox.top; // 음수 = 위로 잘려나감
+  const below = box.bottom - navBox.bottom; // 양수 = 아래로 잘려나감
+  let delta = 0;
+  if (above < MARGIN) delta = above - MARGIN;
+  else if (below > -MARGIN) delta = below + MARGIN;
+  if (!delta) return;
+  nav.scrollTo({ top: nav.scrollTop + delta, behavior: scrollBehavior() });
+};
+
 type NameModalState =
   | { kind: "new-note" | "new-folder"; name: string; dir: string }
   | { kind: "rename"; name: string; target: NoteNode };
@@ -90,6 +118,7 @@ export function NotesView({
   // 우측 플로팅 목차 (읽기 모드, h1~h3)
   const detailRef = useRef<HTMLElement | null>(null);
   const mdRef = useRef<HTMLDivElement | null>(null);
+  const tocRef = useRef<HTMLElement | null>(null);
   const [toc, setToc] = useState<{ id: string; text: string; level: number }[]>(
     [],
   );
@@ -150,11 +179,20 @@ export function NotesView({
     return () => container.removeEventListener("scroll", onScroll);
   }, [toc]);
 
+  // 긴 글은 목차 자체가 스크롤된다(styles.css .note-toc). 본문을 내리다 활성 항목이 그
+  // 스크롤 밖으로 나가면 하이라이트가 안 보여 목차가 멈춘 것처럼 읽힌다 — 따라 움직인다.
+  useEffect(() => {
+    if (!activeHeading || !tocRef.current) return;
+    followActiveInToc(tocRef.current, activeHeading);
+    // toc 도 의존성이다 — 헤딩 id 는 인덱스 기반(note-h-0…)이라 다른 글로 넘어가도 활성 id 가
+    // 그대로일 수 있다. 그러면 목차만 이전 글의 스크롤 위치에 남는다.
+  }, [activeHeading, toc]);
+
   function scrollToHeading(id: string) {
     setActiveHeading(id);
     document
       .getElementById(id)
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      ?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
   }
 
   const reload = useCallback(async () => {
@@ -766,11 +804,12 @@ export function NotesView({
                   }
                 />
                 {toc.length >= 2 && (
-                  <nav className="note-toc">
+                  <nav className="note-toc" ref={tocRef}>
                     <div className="note-toc-label">{t("notes.toc")}</div>
                     {toc.map((t) => (
                       <button
                         key={t.id}
+                        data-toc-id={t.id}
                         className={`note-toc-item lv${t.level} ${
                           activeHeading === t.id ? "active" : ""
                         }`}
