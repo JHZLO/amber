@@ -110,3 +110,19 @@ export function formatMonthTitle(year: number, month: number): string {
     year: "numeric",
   });
 }
+
+/** ko "2026년" / en "2026" — 캘린더 월 선택 단계의 제목 */
+export function formatYearTitle(year: number): string {
+  return getLang() === "ko" ? `${year}년` : `${year}`;
+}
+
+const MONTHS_KO = Array.from({ length: 12 }, (_, i) => `${i + 1}월`);
+const MONTHS_EN = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/** 월 짧은 표기(1~12월 / Jan~Dec) — 캘린더 월 선택 그리드. 언어 설정을 따른다 */
+export function monthsShort(): readonly string[] {
+  return getLang() === "ko" ? MONTHS_KO : MONTHS_EN;
+}

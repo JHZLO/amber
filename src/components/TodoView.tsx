@@ -39,7 +39,6 @@ import {
 } from "../lib/timeBlocks";
 import { conceptsLearnedOn } from "../lib/db";
 import {
-  addMonths,
   dayRangeMs,
   formatDayLong,
   formatDayShort,
@@ -784,9 +783,7 @@ export function TodoView({
           today={today}
           counts={counts}
           onSelect={goDate}
-          onPrevMonth={() => setCursor((c) => addMonths(c, -1))}
-          onNextMonth={() => setCursor((c) => addMonths(c, 1))}
-          onToday={() => goDate(today)}
+          onCursor={(y, m) => setCursor({ year: y, month: m })}
         />
         <DayTimetable
           view={ttView}

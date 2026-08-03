@@ -38,10 +38,15 @@ const ko = {
   "todos.learned.label": "이날 학습완료 {n}",
   "todos.learned.open": "개념 열기",
 
-  // 미니 캘린더 pane
+  // 미니 캘린더 pane — 화살표 라벨은 보고 있는 단계(일/월/연)에 따라 바뀐다
   "todos.cal.prevMonth": "이전 달",
   "todos.cal.nextMonth": "다음 달",
-  "todos.cal.goToday": "오늘로",
+  "todos.cal.prevYear": "이전 해",
+  "todos.cal.nextYear": "다음 해",
+  "todos.cal.prevDecade": "이전 10년",
+  "todos.cal.nextDecade": "다음 10년",
+  "todos.cal.pickMonth": "월 선택",
+  "todos.cal.pickYear": "연도 선택",
   "todos.cal.resize": "드래그해서 캘린더 너비 조절",
 
   // 타임테이블
@@ -91,7 +96,12 @@ const en: Record<keyof typeof ko, string> = {
 
   "todos.cal.prevMonth": "Previous month",
   "todos.cal.nextMonth": "Next month",
-  "todos.cal.goToday": "Go to today",
+  "todos.cal.prevYear": "Previous year",
+  "todos.cal.nextYear": "Next year",
+  "todos.cal.prevDecade": "Previous 10 years",
+  "todos.cal.nextDecade": "Next 10 years",
+  "todos.cal.pickMonth": "Pick a month",
+  "todos.cal.pickYear": "Pick a year",
   "todos.cal.resize": "Drag to resize the calendar",
 
   "todos.tt.label": "Timetable",

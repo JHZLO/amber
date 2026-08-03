@@ -2679,6 +2679,8 @@ html.widget-root #root {
   font-size: 11px;
 }
 /* 주 뷰 요일·날짜 헤더 — 그리드 컬럼과 정렬(좌 시간라벨 46px + 우 10px inset) */
+/* 주 뷰 요일 헤더 — 스크롤 컨테이너 밖이라 padding-right 는 JS 가 인라인으로 덮어쓴다
+   (GRID_PAD_R + 실측 스크롤바 폭). 여기 10px 은 스크롤바가 없을 때의 기본값. */
 .day-tt-days {
   flex-shrink: 0;
   display: flex;
@@ -3046,6 +3048,13 @@ body.resizing-col .todo-resizer::after {
 .cal-title:hover {
   background: var(--surface-2);
 }
+/* 연 단계는 천장이라 제목이 비활성 — 흐려지진 않는다(여전히 그 판의 제목이다) */
+.cal-title:disabled {
+  cursor: default;
+}
+.cal-title:disabled:hover {
+  background: transparent;
+}
 .cal-title:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.12);
@@ -3115,6 +3124,45 @@ body.resizing-col .todo-resizer::after {
 }
 .cal-cell.today .cal-num,
 .cal-cell.today:hover .cal-num {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+  font-weight: 700;
+}
+/* 월/연 선택 판 — 12칸 3×4 (연은 앞뒤 한 칸이 옆 판의 해라 10+2). 일 그리드와 같은
+   .cal-grid 위에 열 수만 바꾼다. 총 높이 313px = 요일 헤더 25px + 6행 × 48px 로, 판을
+   오갈 때 아래 타임테이블이 밀리지 않는다. 4행이라 남는 세로는 가운데 정렬로 흡수. */
+.cal-grid-pick {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-height: 313px;
+  align-content: center;
+}
+/* 라벨이 '1월'·'2026' 이라 원(.cal-num)엔 안 들어간다 — 알약 꼴로 바꾸되 상태 문법은 §3 그대로:
+   hover=surface-2, 선택=surface-3, 오늘=primary 반전 필, 옆 판의 해=흐림. */
+.cal-pick {
+  height: 44px;
+  margin: 3px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  transition: background 0.12s, color 0.12s, transform 0.16s var(--ease-out);
+}
+.cal-pick:hover {
+  background: var(--surface-2);
+}
+.cal-pick:active {
+  transform: scale(0.96);
+}
+.cal-pick.adjacent {
+  color: var(--text-3);
+}
+.cal-pick.selected {
+  background: var(--surface-3);
+  font-weight: 600;
+}
+.cal-pick.today,
+.cal-pick.today:hover {
   background: var(--primary-bg);
   color: var(--primary-fg);
   font-weight: 700;
