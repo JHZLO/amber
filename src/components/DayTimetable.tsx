@@ -33,6 +33,9 @@ export const TT_HOUR_H = 44; // px/시간 — styles.css --tt-hour 와 동기
 const SNAP = 15; // 분 스냅 (구글 캘린더와 동일)
 const MIN_DUR = 15;
 const DAY_MIN = 1440;
+// 그리드 오른쪽 여백 — styles.css 의 `.day-tt-grid { right: 10px }` 와 같은 값이어야 한다.
+// 주 뷰 요일 헤더가 그리드와 같은 트랙을 쓰도록 여기서 다시 계산한다(아래 sbw 주석).
+const GRID_PAD_R = 10;
 
 const errMsg = errText; // Rust 코드화 에러까지 번역 (lib/errors.ts)
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -124,6 +127,24 @@ export function DayTimetable({
   const [editText, setEditText] = useState("");
 
   const isTimeGrid = view !== "month";
+
+  // 주 뷰 요일 헤더는 스크롤 컨테이너 **밖**이라, 세로 스크롤바가 layout 폭을 차지하는 환경
+  // (macOS '스크롤 막대 항상 표시' · Windows)에서는 아래 그리드보다 딱 그만큼 넓어진다.
+  // 그러면 열이 오른쪽으로 갈수록 어긋난다(금·토 칸이 눈에 띄게 밀림). 스크롤바 실폭을
+  // 재서 헤더 오른쪽에 같은 만큼을 비워 두 트랙의 시작·끝을 맞춘다.
+  // 오버레이 스크롤바(macOS 기본)면 0 이라 아무것도 달라지지 않는다.
+  const [sbw, setSbw] = useState(0);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () => setSbw(el.offsetWidth - el.clientWidth);
+    measure();
+    // 창 크기·캘린더 pane 드래그로 폭이 바뀔 때 다시 잰다 (숨김→표시 전환도 여기서 흡수)
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isTimeGrid]);
+
   const todoById = new Map(todos.map((t) => [t.id, t]));
   const dayIdx = new Map(days.map((d, i) => [d, i]));
   const todayCol = dayIdx.get(today);
@@ -401,7 +422,10 @@ export function DayTimetable({
 
       {/* 주 뷰: 요일·날짜 헤더 (그리드 컬럼과 정렬, 클릭=날짜 선택) */}
       {view === "week" && (
-        <div className="day-tt-days">
+        <div
+          className="day-tt-days"
+          style={{ paddingRight: GRID_PAD_R + sbw }}
+        >
           <span className="tt-days-gutter" aria-hidden="true" />
           {days.map((d) => {
             const dd = parseLocalDate(d);
