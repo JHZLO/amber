@@ -921,7 +921,10 @@ select {
   width: 40%;
   border-radius: 999px;
   background: var(--text);
-  animation: ai-sweep 1.15s ease-in-out infinite;
+  /* linear 고정 (DESIGN.md §9.1 ③) — 바가 들고 나는 지점이 이동 경로의 양 끝이라
+     ease-in-out 은 그 양 끝에서 감속해, 클리핑된 조각이 기어 나오다 중간만 확 스치고
+     다시 조각으로 기어 들어간다. 등속이어야 끝까지 도달하는 스윕으로 읽힌다. */
+  animation: ai-sweep 1.15s linear infinite;
 }
 @keyframes ai-sweep {
   0% {
