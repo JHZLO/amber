@@ -5,6 +5,9 @@
 // 인터랙션(§8 포인터 드래그 규약): 빈 곳 세로 드래그=생성(15분 스냅, 누른 컬럼 날짜), 블록 드래그=
 // 이동(5px 임계, 주 뷰에선 가로로 다른 날짜 컬럼까지), 아래 가장자리=리사이즈. 드래그 중엔 ghost
 // 상태만 갱신하고 놓을 때 DB 커밋 → onChanged 로 부모가 재로딩.
+// 겹쳐 만들기: 컬럼 우측 GUTTER 는 항상 맨 그리드라 블록이 컬럼을 덮어도 생성 드래그를 시작할
+// 표면이 있다(주 제스처). ⌥ 를 누르면 블록 위에서도 된다 — onBlockDown 이 비켜서 여기로 버블링.
+// 겹침 배치(포함=캐스케이드 / 교차=lane 분할)는 lib/ttLayout.ts 가 정본.
 // 상태 문법(§3): 미완료=아웃라인+좌측 바, 진행 중=primary 필, 완료(연동)=text-3+취소선. 색 없음.
 
 import {
@@ -24,6 +27,16 @@ import {
 import { formatDayLong, parseLocalDate, weekdaysShort } from "../lib/date";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
+import {
+  BLOCK_GAP,
+  GUTTER,
+  MAX_DEPTH,
+  boxLeft,
+  boxWidth,
+  layoutColumn,
+  type Box,
+  type Placed,
+} from "../lib/ttLayout";
 import { Icon } from "../icons";
 
 /** 타임테이블 뷰 모드 — 부모(TodoView)가 소유·영속하고 로드 범위도 이걸로 정한다 */
@@ -58,40 +71,6 @@ type Ghost =
   | { kind: "create"; day: number; start: number; end: number }
   | { kind: "move"; id: number; day: number; start: number; end: number }
   | { kind: "resize"; id: number; day: number; start: number; end: number };
-
-/** 겹침 lane 배치 — 구글 캘린더처럼 "서로(이행적으로) 겹치는 묶음" 안에서 폭을 균등 분할.
- *  cluster = start 순으로 훑으며 진행 중인 묶음의 최대 end 이전에 시작하는 블록들. */
-function layoutLanes(
-  blocks: TimeBlock[],
-): { b: TimeBlock; lane: number; lanes: number }[] {
-  const sorted = [...blocks].sort(
-    (a, b) => a.start_min - b.start_min || b.end_min - a.end_min || a.id - b.id,
-  );
-  const out: { b: TimeBlock; lane: number; lanes: number }[] = [];
-  let cluster: { b: TimeBlock; lane: number; lanes: number }[] = [];
-  let laneEnds: number[] = [];
-  let clusterEnd = -1;
-  const flush = () => {
-    for (const item of cluster) item.lanes = laneEnds.length;
-    out.push(...cluster);
-    cluster = [];
-    laneEnds = [];
-    clusterEnd = -1;
-  };
-  for (const b of sorted) {
-    if (cluster.length && b.start_min >= clusterEnd) flush();
-    let lane = laneEnds.findIndex((end) => end <= b.start_min);
-    if (lane === -1) {
-      lane = laneEnds.length;
-      laneEnds.push(0);
-    }
-    laneEnds[lane] = b.end_min;
-    cluster.push({ b, lane, lanes: 1 });
-    clusterEnd = Math.max(clusterEnd, b.end_min);
-  }
-  flush();
-  return out;
-}
 
 export function DayTimetable({
   view,
@@ -133,17 +112,41 @@ export function DayTimetable({
   // 그러면 열이 오른쪽으로 갈수록 어긋난다(금·토 칸이 눈에 띄게 밀림). 스크롤바 실폭을
   // 재서 헤더 오른쪽에 같은 만큼을 비워 두 트랙의 시작·끝을 맞춘다.
   // 오버레이 스크롤바(macOS 기본)면 0 이라 아무것도 달라지지 않는다.
+  // gridW 는 lane 하한(MIN_LANE) 판정용 — 컬럼이 좁으면 더 쪼개는 대신 캐스케이드로 얹는다.
   const [sbw, setSbw] = useState(0);
+  const [gridW, setGridW] = useState(0);
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const measure = () => setSbw(el.offsetWidth - el.clientWidth);
+    const measure = () => {
+      setSbw(el.offsetWidth - el.clientWidth);
+      if (gridRef.current) setGridW(gridRef.current.clientWidth);
+    };
     measure();
     // 창 크기·캘린더 pane 드래그로 폭이 바뀔 때 다시 잰다 (숨김→표시 전환도 여기서 흡수)
     const ro = new ResizeObserver(measure);
     ro.observe(el);
+    if (gridRef.current) ro.observe(gridRef.current);
     return () => ro.disconnect();
   }, [isTimeGrid]);
+
+  // ⌥ 를 누르고 있는 동안엔 블록 위 드래그도 '겹쳐 만들기' — 커서로 그 상태를 알린다.
+  // 창을 벗어나면 keyup 이 안 오므로 blur 에서 반드시 푼다.
+  const [altDown, setAltDown] = useState(false);
+  useEffect(() => {
+    if (!active || !isTimeGrid) return;
+    const sync = (e: KeyboardEvent) => setAltDown(e.altKey);
+    const clear = () => setAltDown(false);
+    window.addEventListener("keydown", sync);
+    window.addEventListener("keyup", sync);
+    window.addEventListener("blur", clear);
+    return () => {
+      window.removeEventListener("keydown", sync);
+      window.removeEventListener("keyup", sync);
+      window.removeEventListener("blur", clear);
+      setAltDown(false);
+    };
+  }, [active, isTimeGrid]);
 
   const todoById = new Map(todos.map((t) => [t.id, t]));
   const dayIdx = new Map(days.map((d, i) => [d, i]));
@@ -203,7 +206,9 @@ export function DayTimetable({
   function onGridDown(e: ReactMouseEvent) {
     if (e.button !== 0 || editingId != null) return;
     const target = e.target as HTMLElement;
-    if (target.closest(".tt-block")) return;
+    // 평소엔 블록 위 mousedown 은 이동(onBlockDown)이 가져간다. ⌥ 를 누르고 있으면
+    // 그쪽이 스스로 비켜서 여기까지 버블링되고, 블록 위에서도 겹쳐 만들기가 된다.
+    if (!e.altKey && target.closest(".tt-block")) return;
     e.preventDefault(); // 텍스트 선택 방지(§8)
     const y0 = e.clientY;
     const press = gridPos(e.clientX, y0);
@@ -250,6 +255,8 @@ export function DayTimetable({
   // 블록 몸통 드래그 = 이동(5px 임계, 주 뷰에선 가로로 날짜 이동). 임계 미만 = 클릭 → 인라인 편집.
   function onBlockDown(e: ReactMouseEvent, b: TimeBlock) {
     if (e.button !== 0) return;
+    // ⌥ 드래그 = 이 블록 위에 겹쳐 만들기. stopPropagation 없이 빠져서 그리드로 넘긴다.
+    if (e.altKey) return;
     const target = e.target as HTMLElement;
     if (target.closest(".tt-resize") || target.closest(".tt-del")) return;
     if (target.closest("input")) return; // 편집 중인 입력은 드래그로 뺏지 않는다
@@ -361,12 +368,17 @@ export function DayTimetable({
       .catch((err) => onError(errMsg(err)));
   }
 
-  // 겹침 lane 은 날짜(컬럼)별로 독립 계산
-  const laneById = new Map<number, { lane: number; lanes: number }>();
+  // 겹침 배치는 날짜(컬럼)별로 독립 계산. 컬럼 내부 = 폭 colW% 에서 거터 GUTTER px 를 뺀 만큼.
+  const placedById = new Map<number, Placed>();
   if (isTimeGrid) {
-    for (const d of days) {
-      for (const item of layoutLanes(blocks.filter((b) => b.date === d))) {
-        laneById.set(item.b.id, { lane: item.lane, lanes: item.lanes });
+    for (const [i, d] of days.entries()) {
+      const root: Box = { pctL: i * colW, pxL: 0, pctW: colW, pxW: -GUTTER };
+      for (const p of layoutColumn(
+        blocks.filter((b) => b.date === d),
+        root,
+        gridW,
+      )) {
+        placedById.set(p.b.id, p);
       }
     }
   }
@@ -401,7 +413,7 @@ export function DayTimetable({
     b.todo_id != null && todoById.get(b.todo_id)?.done === 1;
 
   return (
-    <div className="day-tt">
+    <div className={`day-tt ${altDown ? "alt" : ""}`}>
       {/* 섹션 헤더 밴드 — 캘린더와의 구분(라벨 + 계획 합계 + 뷰 전환) */}
       <div className="day-tt-head">
         <span className="day-tt-label">{t("todos.tt.label")}</span>
@@ -477,9 +489,14 @@ export function DayTimetable({
                 const start = g ? g.start : b.start_min;
                 const end = g ? g.end : b.end_min;
                 const dCol = g ? g.day : col;
-                const { lane, lanes } = laneById.get(b.id) ?? {
-                  lane: 0,
-                  lanes: 1,
+                const placed = placedById.get(b.id);
+                const depth = placed?.depth ?? 0;
+                // placed 는 항상 있다(같은 blocks 로 배치했으므로) — 폴백은 방어용
+                const box: Box = placed?.box ?? {
+                  pctL: col * colW,
+                  pxL: 0,
+                  pctW: colW,
+                  pxW: -GUTTER,
                 };
                 const title = blockTitle(b);
                 const done = blockDone(b);
@@ -489,16 +506,21 @@ export function DayTimetable({
                 return (
                   <div
                     key={b.id}
-                    className={`tt-block ${running ? "now" : ""} ${done ? "done" : ""} ${g ? "dragging" : ""} ${title ? "" : "untitled"}`}
+                    className={`tt-block ${running ? "now" : ""} ${done ? "done" : ""} ${g ? "dragging" : ""} ${title ? "" : "untitled"} ${depth > 0 ? "cascade" : ""}`}
                     style={{
                       top: minToY(start),
                       height: Math.max(h - 2, 12),
-                      left: g
-                        ? `${dCol * colW}%`
-                        : `${col * colW + (lane / lanes) * colW}%`,
+                      // 드래그 중엔 lane/캐스케이드를 풀고 컬럼 폭으로 '들려서' 움직인다
+                      left: g ? `${dCol * colW}%` : boxLeft(box),
                       width: g
-                        ? `calc(${colW}% - 2px)`
-                        : `calc(${colW / lanes}% - 2px)`,
+                        ? `calc(${colW}% - ${GUTTER + BLOCK_GAP}px)`
+                        : boxWidth(box),
+                      // 드래그 중엔 인라인 z 를 비운다 — 안 그러면 .dragging 의 z-index:6 을
+                      // 인라인이 이겨서 '들린' 블록이 오히려 남들 아래로 깔린다
+                      zIndex:
+                        !g && depth > 0
+                          ? Math.min(depth, MAX_DEPTH)
+                          : undefined,
                     }}
                     onMouseDown={(e) => onBlockDown(e, b)}
                   >
@@ -550,7 +572,7 @@ export function DayTimetable({
                     top: minToY(ghost.start),
                     height: Math.max(minToY(ghost.end - ghost.start) - 2, 12),
                     left: `${ghost.day * colW}%`,
-                    width: `calc(${colW}% - 2px)`,
+                    width: `calc(${colW}% - ${GUTTER + BLOCK_GAP}px)`,
                   }}
                 >
                   <span className="tt-time">

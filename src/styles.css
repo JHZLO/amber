@@ -2841,10 +2841,30 @@ html.widget-root #root {
 .tt-block.done .tt-title {
   text-decoration: line-through;
 }
+/* 캐스케이드 = 큰 블록 '안'의 일정. 색이 아니라 고도로 말한다(§3) — 들여쓰기(인라인 style)
+   + 그림자로 떠 있고, --surface 링으로 아래 블록의 테두리와 붙지 않게 뗀다. */
+.tt-block.cascade {
+  box-shadow: inset 2px 0 0 var(--text), 0 0 0 1px var(--surface), var(--shadow);
+}
+.tt-block.cascade.done {
+  box-shadow: inset 2px 0 0 var(--text-3), 0 0 0 1px var(--surface),
+    var(--shadow);
+}
+.tt-block.cascade.now {
+  box-shadow: 0 0 0 1px var(--surface), var(--shadow);
+}
 .tt-block.dragging {
   box-shadow: var(--shadow);
   z-index: 6;
   cursor: grabbing;
+}
+/* 커서로 제스처를 알린다: 맨 그리드(컬럼 우측 거터 포함) = 끌어서 만들기,
+   블록 = 잡아서 옮기기. ⌥ 를 누르고 있으면 블록 위도 '겹쳐 만들기'로 바뀐다. */
+.day-tt-grid {
+  cursor: crosshair;
+}
+.day-tt.alt .tt-block {
+  cursor: crosshair;
 }
 /* 생성 고스트 — 드래그 중 범위 미리보기 */
 .tt-ghost {
