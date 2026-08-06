@@ -84,9 +84,12 @@ const signed = (px: number) =>
 
 export const boxLeft = (box: Box) =>
   `calc(${round(box.pctL)}% ${signed(box.pxL)})`;
-/** gap = 이웃 블록과의 간격. 아무리 좁아도 잡을 수 있게 하한을 둔다 */
+/** gap = 이웃 블록과의 간격.
+ *  하한(아무리 좁아도 잡을 수 있게)은 여기서 `max()` 로 감싸지 않고 CSS `min-width` 로 준다 —
+ *  이 값은 lane 밀림 때 transition 으로 보간되는데, WebKit 은 `max()` 가 섞인 값을 보간할 때
+ *  불안정하다(웹뷰가 통째로 날아간 실측 사례). 보간 대상은 단순 `calc()` 로 유지한다. */
 export const boxWidth = (box: Box, gap = BLOCK_GAP) =>
-  `max(28px, calc(${round(box.pctW)}% ${signed(box.pxW - gap)}))`;
+  `calc(${round(box.pctW)}% ${signed(box.pxW - gap)})`;
 
 /** a 가 b 를 진짜로(같은 범위는 제외) 감싸는가 — 같은 범위끼리는 교차로 봐서 나란히 놓는다 */
 const swallows = (a: TimeBlock, b: TimeBlock) =>

@@ -319,7 +319,7 @@ describe("boxLeft / boxWidth — CSS 합성", () => {
     const css = out.flatMap((p) => [boxLeft(p.box), boxWidth(p.box)]);
     for (const s of css) {
       expect(s).not.toMatch(/[+-]\s*-/);
-      expect(s).toMatch(/^(max\(28px, )?calc\(-?[\d.]+% [+-] [\d.]+px\)\)?$/);
+      expect(s).toMatch(/^calc\(-?[\d.]+% [+-] [\d.]+px\)$/);
     }
   });
 
@@ -327,13 +327,13 @@ describe("boxLeft / boxWidth — CSS 합성", () => {
     const [p] = layoutColumn([blk(H(9), H(18))], weekRoot(3), WEEK_W);
     // 300/7 = 42.857142857142854 → 소수 4자리
     expect(boxLeft(p.box)).toBe("calc(42.8571% + 0px)");
-    expect(boxWidth(p.box)).toBe("max(28px, calc(14.2857% - 14px))");
+    expect(boxWidth(p.box)).toBe("calc(14.2857% - 14px)");
   });
 
   it("겹침이 없으면 컬럼에서 거터+간격만 뺀다", () => {
     const [p] = layoutColumn([blk(H(9), H(18))], dayRoot(), DAY_W);
     expect(boxLeft(p.box)).toBe("calc(0% + 0px)");
-    expect(boxWidth(p.box)).toBe("max(28px, calc(100% - 14px))");
+    expect(boxWidth(p.box)).toBe("calc(100% - 14px)");
   });
 });
 

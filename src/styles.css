@@ -2790,6 +2790,7 @@ html.widget-root #root {
 /* 시간 블록 — 미완료=아웃라인+좌측 바(선택 시그니처 §3), 진행 중=primary 필, 완료=흐림+취소선 */
 .tt-block {
   position: absolute;
+  min-width: 28px; /* lane 이 아무리 좁아져도 잡을 수 있게 (폭 하한 — ttLayout.boxWidth 주석) */
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   background: var(--surface);
