@@ -249,6 +249,12 @@ pub fn run() {
             sql: include_str!("../migrations/0008_todo_carries.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 9,
+            description: "add_todo_soft_delete",
+            sql: include_str!("../migrations/0009_todo_soft_delete.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

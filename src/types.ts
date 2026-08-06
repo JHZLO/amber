@@ -63,6 +63,9 @@ export interface Todo {
   sort_order: number; // 표시 순서(드래그로 조정), 형제 그룹 내 오름차순
   created_at: number; // UTC ms
   updated_at: number; // UTC ms
+  /** 지워진 시각(UTC ms) — null 이면 살아있다. 이월 이력이 있는 항목만 이렇게 남는다
+   *  (migrations/0009): 사는 날짜·밀린 목록에선 빠지고, 거쳐온 날짜엔 '삭제됨' 고스트로 남는다. */
+  deleted_at: number | null;
   /** 이 날짜 목록에서 '이월 고스트'인가 — 조회한 날짜에 있었지만 지금은 due_date 가 다른 행.
    *  DB 컬럼이 아니라 listTodos 가 붙이는 표식이라, 다른 조회는 undefined 로 온다.
    *  고스트도 **같은 행**이다 — 여기서 체크하면 그 할 일이 완료된다(migrations/0008 참조). */

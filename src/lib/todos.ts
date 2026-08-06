@@ -8,6 +8,8 @@ import type { DayTodoCount, Todo } from "../types";
 const now = () => Date.now();
 
 /** 특정 날짜의 할 일 = 그 날짜가 마감인 행 + **그 날짜에서 이월해 나간 행(고스트)**.
+ *  지워진 행(deleted_at)은 사는 날짜에서만 빠지고 거쳐온 날짜엔 고스트로 남는다 —
+ *  오늘 지운 일이 어제의 기록을 소급해 고치면 안 되기 때문(migrations/0009).
  *  사용자가 정한 순서(sort_order) → 생성순 (idx_todos_sort 에 대응).
  *
  *  고스트는 사본이 아니라 같은 행이다(migrations/0008) — 가져오기로 오늘 옮겨도 어제 목록에서
@@ -19,7 +21,8 @@ const now = () => Date.now();
 export async function listTodos(date: string): Promise<Todo[]> {
   const db = await getDb();
   return db.select<Todo[]>(
-    `SELECT t.*, 0 AS carried FROM todos t WHERE t.due_date = $1
+    `SELECT t.*, 0 AS carried FROM todos t
+      WHERE t.due_date = $1 AND t.deleted_at IS NULL
      UNION ALL
      SELECT t.*, 1 AS carried FROM todos t
        JOIN todo_carries c ON c.todo_id = t.id
@@ -37,7 +40,8 @@ export async function listMonthCounts(
   const db = await getDb();
   return db.select<DayTodoCount[]>(
     `SELECT due_date, COUNT(*) AS total, COALESCE(SUM(done), 0) AS done
-       FROM todos WHERE due_date BETWEEN $1 AND $2 GROUP BY due_date`,
+       FROM todos WHERE due_date BETWEEN $1 AND $2 AND deleted_at IS NULL
+      GROUP BY due_date`,
     [from, to],
   );
 }
@@ -47,7 +51,8 @@ export async function listMonthCounts(
 export async function listOverdueOpen(before: string): Promise<Todo[]> {
   const db = await getDb();
   return db.select<Todo[]>(
-    `SELECT * FROM todos WHERE done = 0 AND due_date < $1
+    `SELECT * FROM todos
+      WHERE done = 0 AND due_date < $1 AND deleted_at IS NULL
       ORDER BY due_date, sort_order, id`,
     [before],
   );
@@ -104,7 +109,8 @@ export async function setSubtreeDone(id: number, done: 0 | 1): Promise<void> {
        UNION ALL
        SELECT t.id FROM todos t JOIN sub ON t.parent_id = sub.id
      )
-     UPDATE todos SET done = $1 WHERE done <> $1 AND id IN (SELECT id FROM sub)`,
+     UPDATE todos SET done = $1
+      WHERE done <> $1 AND deleted_at IS NULL AND id IN (SELECT id FROM sub)`,
     [done, id],
   );
 }
@@ -114,7 +120,7 @@ export async function recomputeParentDone(parentId: number): Promise<void> {
   const db = await getDb();
   const rows = await db.select<{ open: number; total: number }[]>(
     `SELECT COALESCE(SUM(done = 0), 0) AS open, COUNT(*) AS total
-       FROM todos WHERE parent_id = $1`,
+       FROM todos WHERE parent_id = $1 AND deleted_at IS NULL`,
     [parentId],
   );
   const r = rows[0] ?? { open: 0, total: 0 };
@@ -179,7 +185,9 @@ export async function moveTodos(ids: number[], dueDate: string): Promise<void> {
        SELECT id FROM todos WHERE id IN (${ph(ids.length, 1)})
        UNION SELECT t.id FROM todos t JOIN sub ON t.parent_id = sub.id
      )
-     SELECT * FROM todos WHERE id IN (SELECT id FROM sub) ORDER BY sort_order, id`,
+     SELECT * FROM todos
+      WHERE id IN (SELECT id FROM sub) AND deleted_at IS NULL
+      ORDER BY sort_order, id`,
     ids,
   );
   if (!all.length) return;
@@ -212,16 +220,35 @@ export async function moveTodos(ids: number[], dueDate: string): Promise<void> {
 
 /** 삭제. 노드를 지우면 그 서브트리 전체(모든 자손)를 함께 — 되돌릴 수 없으므로
  *  자손이 있을 때만 호출부가 확인 모달을 띄운다(홑 항목은 값싼 대상이라 즉시 삭제, DESIGN §8).
- *  삭제 후 부모 완료 상태 재계산은 호출부(recomputeChainFrom)가 담당. */
+ *  삭제 후 부모 완료 상태 재계산은 호출부(recomputeChainFrom)가 담당.
+ *
+ *  **이월 이력이 있으면 행을 지우지 않고 deleted_at 을 찍는다**(migrations/0009). 이월은 행을
+ *  복제하지 않으므로(0008) 행을 없애면 CASCADE 로 todo_carries 까지 날아가 *떠나온 날짜의
+ *  기록*까지 사라진다 — 어제 목록은 어제 뭐가 있었는지의 기록이라 오늘 지운 일이 소급해
+ *  고쳐선 안 된다. 이력이 없으면 남길 게 없으니 예전처럼 행째로 지운다(행이 쌓이지 않게). */
 export async function deleteTodo(id: number): Promise<void> {
   const db = await getDb();
-  await db.execute(
-    `WITH RECURSIVE sub(id) AS (
+  const sub = `WITH RECURSIVE sub(id) AS (
        SELECT $1
        UNION ALL
        SELECT t.id FROM todos t JOIN sub ON t.parent_id = sub.id
-     )
-     DELETE FROM todos WHERE id IN (SELECT id FROM sub)`,
+     )`;
+  const carried = await db.select<{ n: number }[]>(
+    `${sub}
+     SELECT COUNT(*) AS n FROM todo_carries WHERE todo_id IN (SELECT id FROM sub)`,
     [id],
   );
+  if ((carried[0]?.n ?? 0) > 0) {
+    // 서브트리를 통째로 소프트 삭제 — 부분만 남기면 고스트가 부모(헤딩)를 잃는다
+    await db.execute(
+      `${sub}
+       UPDATE todos SET deleted_at = $2, updated_at = $2
+        WHERE deleted_at IS NULL AND id IN (SELECT id FROM sub)`,
+      [id, now()],
+    );
+    return;
+  }
+  await db.execute(`${sub} DELETE FROM todos WHERE id IN (SELECT id FROM sub)`, [
+    id,
+  ]);
 }

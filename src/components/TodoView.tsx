@@ -599,13 +599,20 @@ export function TodoView({
     // 화면에서 끝내면 그 할 일이 완료되고 도착 날짜에도 체크된 채로 남는다). 편집·드래그·
     // 삭제·하위추가는 막는다 — 그 할 일이 지금 사는 곳은 도착 날짜라 거기서 다루게 한다.
     const isCarried = !isOverdue && todo.carried === 1;
+    // 지워진 이월 고스트 — 이 날짜에 있었다는 기록만 남은 줄. 완료할 할 일이 더는 없으므로
+    // 체크도 막는다(살아있는 고스트와 다른 점은 이것뿐).
+    const isGone = isCarried && todo.deleted_at != null;
     const readOnly = isOverdue || isCarried;
-    const onToggle = () => (isOverdue ? toggleOverdue(todo) : toggle(todo));
+    const onToggle = () => {
+      if (isGone) return;
+      if (isOverdue) toggleOverdue(todo);
+      else toggle(todo);
+    };
     const kids = isOverdue ? [] : childrenOf(todo.id);
     const kidsDone = kids.filter((k) => k.done === 1).length;
     return (
       <div
-        className={`todo-row ${todo.done === 1 ? "done" : ""} ${isCarried ? "carried" : ""}`}
+        className={`todo-row ${todo.done === 1 ? "done" : ""} ${isCarried ? "carried" : ""} ${isGone ? "gone" : ""}`}
         data-todo-id={todo.id}
       >
         {!readOnly && (
@@ -669,6 +676,15 @@ export function TodoView({
             >
               <Icon name="trash" size={13} />
             </button>
+          </span>
+        ) : isGone ? (
+          // 지워진 고스트: 갈 곳이 없으니 '→ 날짜' 대신 지워졌다는 사실만. 어제 목록은
+          // 어제의 기록이라 오늘 지운 일이 이 줄을 걷어가지 않는다(migrations/0009).
+          <span
+            className="todo-row-date todo-carried-to"
+            title={t("todos.row.deletedGhost")}
+          >
+            {t("todos.row.deleted")}
           </span>
         ) : isCarried ? (
           // 이월 고스트: 액션 대신 '어디로 갔는지'만. 이 날짜의 기록이지 조작 대상이 아니다 —

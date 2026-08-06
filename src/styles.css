@@ -3598,6 +3598,15 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   color: var(--text-3);
   cursor: pointer; /* 인라인 편집이 아니라 완료 토글 — 편집은 도착 날짜에서 */
 }
+/* 지워진 이월 고스트 — 기록만 남은 줄. 체크할 할 일이 없으니 체크박스를 눌리지 않게 죽인다
+   (색이 아니라 명암으로, §3). 취소선은 '완료' 문법이라 여기 쓰지 않는다 — 뱃지가 뜻을 진다. */
+.todo-row.gone .checkbox {
+  pointer-events: none;
+  opacity: 0.4;
+}
+.todo-row.gone .todo-text {
+  cursor: default;
+}
 .todo-carried-to {
   display: inline-flex;
   align-items: center;

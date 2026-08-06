@@ -19,6 +19,8 @@ const ko = {
   "todos.row.rename": "이름 변경",
   // 이월 고스트 뱃지 — 이 날짜에 있었지만 다른 날로 가져간 항목 (여기서 체크해도 완료된다)
   "todos.row.carriedTo": "{date}로 가져간 항목 — 여기서 체크해도 완료돼요",
+  "todos.row.deleted": "삭제됨",
+  "todos.row.deletedGhost": "지워진 항목 — 이 날짜에 있었다는 기록만 남습니다",
 
   // 하위 항목 추가 입력
   "todos.child.placeholder": "하위 항목 — Enter 로 추가",
@@ -79,6 +81,8 @@ const en: Record<keyof typeof ko, string> = {
   "todos.row.schedule": "Add to timetable",
   "todos.row.rename": "Rename",
   "todos.row.carriedTo": "Moved to {date} — checking it here completes it too",
+  "todos.row.deleted": "Deleted",
+  "todos.row.deletedGhost": "Deleted — kept only as a record that it was here",
 
   "todos.child.placeholder": "Sub-item — press Enter to add",
 
