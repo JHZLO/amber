@@ -5,11 +5,13 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  GHOST_ID,
   GUTTER,
   MAX_DEPTH,
   boxLeft,
   boxWidth,
   layoutColumn,
+  withGhost,
   type Box,
 } from "./ttLayout";
 import type { TimeBlock } from "../types";
@@ -192,6 +194,118 @@ describe("layoutColumn — 좁은 컬럼 강등", () => {
       DAY_W,
     );
     expect(out.every((p) => p.depth === 0)).toBe(true);
+  });
+});
+
+describe("withGhost — 드래그 중 라이브 배치", () => {
+  const D = "2026-08-06";
+
+  it("드래그 중이 아니면 원본 배열 그대로 (쓸데없는 리렌더 방지)", () => {
+    const blocks = [blk(H(9), H(12))];
+    expect(withGhost(blocks, null)).toBe(blocks);
+  });
+
+  it("만드는 중인 범위도 배치에 참여한다", () => {
+    const out = withGhost([blk(H(9), H(12))], {
+      id: null,
+      date: D,
+      start: H(10),
+      end: H(14),
+    });
+    expect(out).toHaveLength(2);
+    expect(out[1]).toMatchObject({
+      id: GHOST_ID,
+      date: D,
+      start_min: H(10),
+      end_min: H(14),
+    });
+  });
+
+  it("옮기는 중인 블록은 원본을 건드리지 않고 좌표만 갈아끼운다", () => {
+    const b = blk(H(9), H(12));
+    const blocks = [b];
+    const out = withGhost(blocks, {
+      id: b.id,
+      date: "2026-08-07",
+      start: H(13),
+      end: H(16),
+    });
+    expect(out[0]).toMatchObject({
+      id: b.id,
+      date: "2026-08-07",
+      start_min: H(13),
+      end_min: H(16),
+    });
+    expect(b.start_min).toBe(H(9)); // 원본 불변 (커밋은 mouseup 에서 한 번)
+  });
+
+  it("남의 시간대를 침범하는 순간 둘 다 2열이 된다 — 놓기 전에", () => {
+    const parked = blk(H(9), H(12));
+    const dragged = blk(H(14), H(17));
+    const blocks = [parked, dragged];
+    const interior = DAY_W - GUTTER;
+
+    // 침범 전: 서로 안 겹치니 각자 컬럼을 다 쓴다
+    const before = layoutColumn(blocks, dayRoot(), DAY_W);
+    for (const p of before) expect(px(p.box, DAY_W).width).toBe(interior);
+
+    // 드래그로 09–12 위에 올라탄 순간
+    const during = layoutColumn(
+      withGhost(blocks, {
+        id: dragged.id,
+        date: D,
+        start: H(11),
+        end: H(14),
+      }),
+      dayRoot(),
+      DAY_W,
+    );
+    const byId = new Map(during.map((p) => [p.b.id, p]));
+    expect(px(byId.get(parked.id)!.box, DAY_W)).toEqual({
+      left: 0,
+      width: interior / 2,
+    });
+    expect(px(byId.get(dragged.id)!.box, DAY_W)).toEqual({
+      left: interior / 2,
+      width: interior / 2,
+    });
+  });
+
+  it("감싸는 범위로 끌면 2열이 아니라 캐스케이드로 미리 보인다", () => {
+    const outer = blk(H(9), H(18));
+    const dragged = blk(H(20), H(21));
+    const during = layoutColumn(
+      withGhost([outer, dragged], {
+        id: dragged.id,
+        date: D,
+        start: H(10),
+        end: H(11),
+      }),
+      dayRoot(),
+      DAY_W,
+    );
+    const byId = new Map(during.map((p) => [p.b.id, p]));
+    expect(byId.get(outer.id)!.depth).toBe(0);
+    expect(px(byId.get(outer.id)!.box, DAY_W).width).toBe(DAY_W - GUTTER);
+    expect(byId.get(dragged.id)!.depth).toBe(1);
+  });
+
+  it("빠져나오면 원래 폭으로 되돌아간다 (밀림이 되돌려진다)", () => {
+    const parked = blk(H(9), H(12));
+    const dragged = blk(H(11), H(14));
+    const out = layoutColumn(
+      withGhost([parked, dragged], {
+        id: dragged.id,
+        date: D,
+        start: H(15),
+        end: H(18),
+      }),
+      dayRoot(),
+      DAY_W,
+    );
+    for (const p of out) {
+      expect(px(p.box, DAY_W).width).toBe(DAY_W - GUTTER);
+    }
   });
 });
 

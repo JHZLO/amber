@@ -2803,7 +2803,11 @@ html.widget-root #root {
   gap: 1px;
   cursor: grab;
   user-select: none;
-  transition: background 0.12s, box-shadow 0.12s;
+  /* left/width 는 lane 밀림 전용 — 드래그가 남의 시간대를 침범하는 순간 이웃이 실시간으로
+     밀려 2열이 된다. transform 으로는 폭이 안 바뀌어(글자가 찌그러진다) 예외로 둔다:
+     블록은 position:absolute 라 형제 레이아웃을 다시 흘리지 않는다. (DESIGN.md §9.2) */
+  transition: background 0.12s, box-shadow 0.12s,
+    left 0.18s var(--ease-out), width 0.18s var(--ease-out);
 }
 .tt-block:hover {
   background: var(--surface-2);
@@ -2853,10 +2857,12 @@ html.widget-root #root {
 .tt-block.cascade.now {
   box-shadow: 0 0 0 1px var(--surface), var(--shadow);
 }
+/* 잡고 있는 것과 만드는 중인 것은 커서를 1:1 로 따른다 — 밀리는 건 이웃뿐(§8) */
 .tt-block.dragging {
   box-shadow: var(--shadow);
   z-index: 6;
   cursor: grabbing;
+  transition: none;
 }
 /* 커서로 제스처를 알린다: 맨 그리드(컬럼 우측 거터 포함) = 끌어서 만들기,
    블록 = 잡아서 옮기기. ⌥ 를 누르고 있으면 블록 위도 '겹쳐 만들기'로 바뀐다. */
@@ -2873,6 +2879,10 @@ html.widget-root #root {
   box-shadow: none;
   pointer-events: none;
   z-index: 5;
+  transition: none;
+}
+.tt-ghost.cascade {
+  box-shadow: 0 0 0 1px var(--surface), var(--shadow);
 }
 /* 아래 가장자리 리사이즈 핸들 */
 .tt-resize {

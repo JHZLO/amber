@@ -16,6 +16,46 @@ export const MAX_DEPTH = 3; // 들여쓰기 누적 상한 (그 아래는 z 만 �
 export const MIN_LANE = 56; // lane 최소 폭(px) — 이보다 좁으면 제목이 한 글자도 안 남는다
 export const BLOCK_GAP = 2; // 이웃 블록 사이 간격(px)
 
+export const GHOST_ID = -1; // 아직 DB 에 없는 '만드는 중' 블록 — 배치에만 참여한다
+
+/** 드래그 중 위치. id 가 null 이면 '만드는 중'(아직 DB 에 없음) */
+export type GhostAt = {
+  id: number | null;
+  date: string;
+  start: number;
+  end: number;
+};
+
+/** 드래그 중인 위치를 반영한 '미리보기 목록'.
+ *  이걸 layoutColumn 에 먹이면 침범당한 블록들이 놓기 **전에** 밀려 2열이 된다.
+ *  DB 는 건드리지 않는다 — 커밋은 여전히 mouseup 에서 한 번. */
+export function withGhost(
+  blocks: TimeBlock[],
+  ghost: GhostAt | null,
+): TimeBlock[] {
+  if (!ghost) return blocks;
+  if (ghost.id == null) {
+    return [
+      ...blocks,
+      {
+        id: GHOST_ID,
+        date: ghost.date,
+        start_min: ghost.start,
+        end_min: ghost.end,
+        title: "",
+        todo_id: null,
+        created_at: 0,
+        updated_at: 0,
+      },
+    ];
+  }
+  return blocks.map((b) =>
+    b.id === ghost.id
+      ? { ...b, date: ghost.date, start_min: ghost.start, end_min: ghost.end }
+      : b,
+  );
+}
+
 /** 블록 가로 위치 — 컬럼 폭은 %, 거터·들여쓰기는 고정 px 이라 둘을 함께 들고 다닌다.
  *  최종 CSS 는 `calc(pctL% + pxL px)` / `calc(pctW% + pxW px)` 로 합성. */
 export type Box = { pctL: number; pxL: number; pctW: number; pxW: number };

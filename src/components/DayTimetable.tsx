@@ -28,12 +28,13 @@ import { formatDayLong, parseLocalDate, weekdaysShort } from "../lib/date";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
 import {
-  BLOCK_GAP,
+  GHOST_ID,
   GUTTER,
   MAX_DEPTH,
   boxLeft,
   boxWidth,
   layoutColumn,
+  withGhost,
   type Box,
   type Placed,
 } from "../lib/ttLayout";
@@ -104,6 +105,33 @@ export function DayTimetable({
   const [ghost, setGhost] = useState<Ghost | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
+
+  // 놓은 뒤 ghost 를 곧바로 지우면 커밋 **전** 좌표로 한 번 되돌아갔다가 새 blocks 가 와서
+  // 다시 밀린다. lane 전이에 transition 이 걸려 있어 그 왕복이 눈에 보이므로, 커밋을 건 뒤엔
+  // 새 blocks 가 도착할 때까지 미리보기를 유지한다. (실패 경로에선 즉시 푼다 — 아래 catch)
+  const settleRef = useRef(false);
+  const settleTimer = useRef<number | null>(null);
+  const clearSettle = () => {
+    settleRef.current = false;
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = null;
+  };
+  /** 커밋을 걸었으니 새 blocks 가 올 때까지 미리보기를 붙잡는다.
+   *  부모 재로딩이 실패하면 blocks 가 영영 안 와 블록이 미리보기 자리에 얼어붙으므로 안전망을 둔다. */
+  const settle = () => {
+    clearSettle();
+    settleRef.current = true;
+    settleTimer.current = window.setTimeout(() => {
+      clearSettle();
+      setGhost(null);
+    }, 2000);
+  };
+  useEffect(() => {
+    if (!settleRef.current) return;
+    clearSettle();
+    setGhost(null);
+  }, [blocks]);
+  useEffect(() => () => clearSettle(), []);
 
   const isTimeGrid = view !== "month";
 
@@ -234,9 +262,12 @@ export function DayTimetable({
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       document.body.classList.remove("dragging-rows");
-      setGhost(null);
-      if (!moved) return;
+      if (!moved) {
+        setGhost(null);
+        return;
+      }
       const { start, end } = calc(ev.clientY);
+      settle(); // 새 blocks 가 올 때까지 미리보기 유지
       void (async () => {
         try {
           const id = await createBlock(days[press.day], start, end, "");
@@ -244,6 +275,8 @@ export function DayTimetable({
           setEditingId(id); // 생성 직후 제목 인라인 입력
           setEditText("");
         } catch (err) {
+          clearSettle();
+          setGhost(null);
           onError(errMsg(err));
         }
       })();
@@ -296,8 +329,8 @@ export function DayTimetable({
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       document.body.classList.remove("dragging-rows");
-      setGhost(null);
       if (!moved) {
+        setGhost(null);
         // 클릭 = 이름 편집 (연동 블록 제목은 할 일 내용을 미러하므로 편집 없음)
         if (b.todo_id == null) {
           setEditingId(b.id);
@@ -305,10 +338,18 @@ export function DayTimetable({
         }
         return;
       }
-      if (lastStart === b.start_min && days[lastDay] === b.date) return;
+      if (lastStart === b.start_min && days[lastDay] === b.date) {
+        setGhost(null); // 제자리 — 커밋할 게 없으니 바로 푼다
+        return;
+      }
+      settle();
       void updateBlockTime(b.id, days[lastDay], lastStart, lastStart + dur)
         .then(onChanged)
-        .catch((err) => onError(errMsg(err)));
+        .catch((err) => {
+          clearSettle();
+          setGhost(null);
+          onError(errMsg(err));
+        });
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -340,11 +381,18 @@ export function DayTimetable({
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       document.body.classList.remove("resizing-tt");
-      setGhost(null);
-      if (lastEnd === b.end_min) return;
+      if (lastEnd === b.end_min) {
+        setGhost(null);
+        return;
+      }
+      settle();
       void updateBlockTime(b.id, b.date, b.start_min, lastEnd)
         .then(onChanged)
-        .catch((err) => onError(errMsg(err)));
+        .catch((err) => {
+          clearSettle();
+          setGhost(null);
+          onError(errMsg(err));
+        });
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -368,13 +416,25 @@ export function DayTimetable({
       .catch((err) => onError(errMsg(err)));
   }
 
+  // 드래그 중엔 ghost 를 반영한 목록으로 배치한다 — 침범당한 블록들이 놓기 **전에** 실시간으로
+  // 밀려 2열이 된다(§8 직접 조작: 결과를 놓기 전에 보여준다). 커밋은 여전히 mouseup 에서 한 번.
+  const preview = withGhost(
+    blocks,
+    ghost && {
+      id: ghost.kind === "create" ? null : ghost.id,
+      date: days[ghost.day],
+      start: ghost.start,
+      end: ghost.end,
+    },
+  );
+
   // 겹침 배치는 날짜(컬럼)별로 독립 계산. 컬럼 내부 = 폭 colW% 에서 거터 GUTTER px 를 뺀 만큼.
   const placedById = new Map<number, Placed>();
   if (isTimeGrid) {
     for (const [i, d] of days.entries()) {
       const root: Box = { pctL: i * colW, pxL: 0, pctW: colW, pxW: -GUTTER };
       for (const p of layoutColumn(
-        blocks.filter((b) => b.date === d),
+        preview.filter((b) => b.date === d),
         root,
         gridW,
       )) {
@@ -382,6 +442,12 @@ export function DayTimetable({
       }
     }
   }
+  const ghostBox: Box = placedById.get(GHOST_ID)?.box ?? {
+    pctL: (ghost?.kind === "create" ? ghost.day : 0) * colW,
+    pxL: 0,
+    pctW: colW,
+    pxW: -GUTTER,
+  };
 
   const plannedMin = blocks.reduce((s, b) => s + (b.end_min - b.start_min), 0);
   const plannedH = Math.floor(plannedMin / 60);
@@ -510,11 +576,10 @@ export function DayTimetable({
                     style={{
                       top: minToY(start),
                       height: Math.max(h - 2, 12),
-                      // 드래그 중엔 lane/캐스케이드를 풀고 컬럼 폭으로 '들려서' 움직인다
-                      left: g ? `${dCol * colW}%` : boxLeft(box),
-                      width: g
-                        ? `calc(${colW}% - ${GUTTER + BLOCK_GAP}px)`
-                        : boxWidth(box),
+                      // 드래그 중인 블록도 배치 결과를 그대로 쓴다 — 그래야 침범한 순간
+                      // 둘이 나란히 2열로 보인다(컬럼 폭으로 들리면 밀려난 이웃을 덮어버린다)
+                      left: boxLeft(box),
+                      width: boxWidth(box),
                       // 드래그 중엔 인라인 z 를 비운다 — 안 그러면 .dragging 의 z-index:6 을
                       // 인라인이 이겨서 '들린' 블록이 오히려 남들 아래로 깔린다
                       zIndex:
@@ -566,13 +631,14 @@ export function DayTimetable({
                 );
               })}
               {ghost?.kind === "create" && (
+                // 만드는 중인 범위도 배치에 참여한다 — 겹치면 미리 2열로, 감싸이면 캐스케이드로
                 <div
-                  className="tt-block tt-ghost"
+                  className={`tt-block tt-ghost ${(placedById.get(GHOST_ID)?.depth ?? 0) > 0 ? "cascade" : ""}`}
                   style={{
                     top: minToY(ghost.start),
                     height: Math.max(minToY(ghost.end - ghost.start) - 2, 12),
-                    left: `${ghost.day * colW}%`,
-                    width: `calc(${colW}% - ${GUTTER + BLOCK_GAP}px)`,
+                    left: boxLeft(ghostBox),
+                    width: boxWidth(ghostBox),
                   }}
                 >
                   <span className="tt-time">
