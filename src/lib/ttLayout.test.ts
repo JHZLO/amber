@@ -309,6 +309,40 @@ describe("withGhost — 드래그 중 라이브 배치", () => {
   });
 });
 
+describe("layoutColumn — 고스트 id 충돌", () => {
+  // 실측 버그(2026-08-06): 최상위 그룹 키와 GHOST_ID 가 둘 다 -1 이라, 생성 드래그를 시작하면
+  // 고스트를 처리할 때 kids.get(-1) 이 '자기가 든 최상위 그룹'을 돌려줘 무한 재귀에 빠졌다.
+  // 화면은 통째로 먹통이 됐다. 센티넬은 블록 id 와 절대 겹치면 안 된다.
+  it("id 가 GHOST_ID 인 블록이 섞여도 재귀에 빠지지 않는다", () => {
+    const withCreateGhost = withGhost([blk(H(9), H(12))], {
+      id: null,
+      date: "2026-08-06",
+      start: H(14),
+      end: H(16),
+    });
+    expect(withCreateGhost.some((b) => b.id === GHOST_ID)).toBe(true);
+    const out = layoutColumn(withCreateGhost, dayRoot(), DAY_W);
+    expect(out).toHaveLength(2);
+  });
+
+  it("고스트가 기존 블록을 감쌀 때도 (부모가 되는 쪽) 안전하다", () => {
+    const out = layoutColumn(
+      withGhost([blk(H(10), H(11))], {
+        id: null,
+        date: "2026-08-06",
+        start: H(9),
+        end: H(18),
+      }),
+      dayRoot(),
+      DAY_W,
+    );
+    expect(out).toHaveLength(2);
+    const ghost = out.find((p) => p.b.id === GHOST_ID)!;
+    expect(ghost.depth).toBe(0); // 고스트가 바깥, 기존 블록이 안쪽으로 얹힌다
+    expect(out.find((p) => p.b.id !== GHOST_ID)!.depth).toBe(1);
+  });
+});
+
 describe("boxLeft / boxWidth — CSS 합성", () => {
   it("부호를 직접 붙인다 — `calc(100% + -14px)` 같은 꼴을 만들지 않는다", () => {
     const out = layoutColumn(

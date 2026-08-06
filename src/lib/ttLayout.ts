@@ -86,8 +86,8 @@ export const boxLeft = (box: Box) =>
   `calc(${round(box.pctL)}% ${signed(box.pxL)})`;
 /** gap = 이웃 블록과의 간격.
  *  하한(아무리 좁아도 잡을 수 있게)은 여기서 `max()` 로 감싸지 않고 CSS `min-width` 로 준다 —
- *  이 값은 lane 밀림 때 transition 으로 보간되는데, WebKit 은 `max()` 가 섞인 값을 보간할 때
- *  불안정하다(웹뷰가 통째로 날아간 실측 사례). 보간 대상은 단순 `calc()` 로 유지한다. */
+ *  하한은 폭 계산이 아니라 제약이라 그쪽이 제 자리이고, 이 값은 lane 밀림 때 transition 으로
+ *  보간되므로 보간 대상은 단순 `calc()` 로 두는 편이 안전하다. */
 export const boxWidth = (box: Box, gap = BLOCK_GAP) =>
   `calc(${round(box.pctW)}% ${signed(box.pxW - gap)})`;
 
@@ -162,7 +162,9 @@ export function layoutColumn(
   // 부모 = 자기를 감싸는 것 중 가장 작은 것 (없으면 최상위). 포함은 길이 기준 부분순서라
   // 순환이 생기지 않는다.
   const dur = (b: TimeBlock) => b.end_min - b.start_min;
-  const kids = new Map<number, TimeBlock[]>(); // 부모 id → 직속 자식들 (-1 = 최상위)
+  // 최상위 센티넬은 **null** 이어야 한다. 숫자를 쓰면 그 id 를 가진 블록(GHOST_ID = -1 이 정확히
+  // 그랬다)이 자기 자신이 든 최상위 그룹을 자식으로 받아 무한 재귀에 빠진다 — 화면이 먹통이 됐다.
+  const kids = new Map<number | null, TimeBlock[]>(); // 부모 id → 직속 자식들 (null = 최상위)
   for (const b of blocks) {
     let best: TimeBlock | null = null;
     for (const a of blocks) {
@@ -174,7 +176,7 @@ export function layoutColumn(
       )
         best = a;
     }
-    const key = best?.id ?? -1;
+    const key = best?.id ?? null;
     const list = kids.get(key);
     if (list) list.push(b);
     else kids.set(key, [b]);
@@ -198,6 +200,6 @@ export function layoutColumn(
       if (mine) place(mine, d < MAX_DEPTH ? insetBox(myBox) : myBox, d + 1);
     }
   };
-  place(kids.get(-1) ?? [], root, 0);
+  place(kids.get(null) ?? [], root, 0);
   return out;
 }
