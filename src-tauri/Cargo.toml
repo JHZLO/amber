@@ -1,6 +1,6 @@
 [package]
 name = "amber"
-version = "0.14.0"
+version = "0.14.1"
 description = "Amber — 배움을 잊히지 않게 보존하는 로컬 지식 보관함"
 authors = ["JHZLO"]
 edition = "2021"
