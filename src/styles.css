@@ -925,6 +925,8 @@ select {
      ease-in-out 은 그 양 끝에서 감속해, 클리핑된 조각이 기어 나오다 중간만 확 스치고
      다시 조각으로 기어 들어간다. 등속이어야 끝까지 도달하는 스윕으로 읽힌다. */
   animation: ai-sweep 1.15s linear infinite;
+  /* 컴포지터 레이어 승격 — 스트리밍 리렌더로 메인 스레드가 바빠도 스윕이 멈추지 않게. */
+  will-change: transform;
 }
 @keyframes ai-sweep {
   0% {

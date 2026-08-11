@@ -106,7 +106,9 @@ export function AiThinking({
         <span>{label}</span>
       </div>
       <div className="ai-progress" aria-hidden="true">
-        <span className="ai-progress-bar" />
+        {/* compact 전환은 트랙 폭을 240px→전체로 바꾼다 — WKWebView 가 퍼센트 transform
+            애니메이션을 시작 시점 크기로 굳힐 수 있어, 리마운트로 새 크기에서 다시 돌린다. */}
+        <span key={compact ? "wide" : "narrow"} className="ai-progress-bar" />
       </div>
       {hint && <div className="hint ai-thinking-hint">{hint}</div>}
     </div>

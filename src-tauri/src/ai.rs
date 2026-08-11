@@ -734,6 +734,12 @@ pub(crate) async fn stream_claude_result(
     let mut lines = BufReader::new(stdout).lines();
     let mut envelope: Option<Envelope> = None;
 
+    // 델타를 토큰마다 그대로 보내면 IPC·리렌더가 초당 수십 번 일어나 WebView 메인
+    // 스레드가 포화되고 로딩 스윕까지 얼어붙는다 — 80ms 로 모아서 흘린다.
+    const DELTA_FLUSH: Duration = Duration::from_millis(80);
+    let mut delta_buf = String::new();
+    let mut last_flush = std::time::Instant::now();
+
     let read_loop = async {
         while let Some(line) = lines
             .next_line()
@@ -761,7 +767,11 @@ pub(crate) async fn stream_claude_result(
                             .and_then(|d| d.get("text"))
                             .and_then(|t| t.as_str())
                         {
-                            let _ = on_delta.send(text.to_string());
+                            delta_buf.push_str(text);
+                            if last_flush.elapsed() >= DELTA_FLUSH {
+                                let _ = on_delta.send(std::mem::take(&mut delta_buf));
+                                last_flush = std::time::Instant::now();
+                            }
                         }
                     }
                 }
@@ -785,6 +795,12 @@ pub(crate) async fn stream_claude_result(
             ));
         }
         Ok(r) => r?,
+    }
+
+    // 80ms 창에 걸려 못 나간 꼬리 델타 방출 (최종본은 어차피 envelope 가 정본이지만
+    // 스트림 뷰가 마지막 문장 없이 끝나 보이지 않게).
+    if !delta_buf.is_empty() {
+        let _ = on_delta.send(std::mem::take(&mut delta_buf));
     }
 
     // 결과 봉투까지 다 받아도 child 종료는 별개다 — 여기서 무한정 기다리면 호출부(리포트 생성 등)가
