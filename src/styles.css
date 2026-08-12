@@ -2170,6 +2170,36 @@ html.widget-root #root {
 .dgm-canvas svg.dgm-focused g.edgeLabels > g.edgeLabel.dgm-rel {
   opacity: 1;
 }
+/* 살아남은 테이블 테두리 = 캔버스를 가로질러 흐르는 하나의 스펙트럼.
+   그라디언트는 JS 가 SVG 안에 심고(userSpaceOnUse + spreadMethod:repeat),
+   그 url() 을 --dgm-iris 로 건네준다. 색은 §2 의 mermaid 캔버스 예외.
+   선(엣지)에는 일부러 안 넣는다 — 전부 무지개면 강조가 강조가 아니게 된다. */
+/* ER 엔티티의 테두리는 g.outer-path 안의 둘째 path 다(첫째는 면, 둘째가 선).
+   다른 다이어그램 종류는 g.node 바로 아래 도형이라 둘 다 걸어둔다. */
+.dgm-canvas svg.dgm-focused g.node.dgm-rel g.outer-path > path:last-of-type,
+.dgm-canvas svg.dgm-focused g.node.dgm-rel > rect:first-of-type,
+.dgm-canvas svg.dgm-focused g.node.dgm-rel > circle:first-of-type,
+.dgm-canvas svg.dgm-focused g.node.dgm-rel > polygon:first-of-type,
+.dgm-canvas svg.dgm-focused g.node.dgm-rel > ellipse:first-of-type,
+.dgm-canvas svg.dgm-focused g.node.dgm-rel > path:first-of-type {
+  stroke: var(--dgm-iris) !important;
+  stroke-width: 2.5px !important;
+}
+/* 고른 테이블은 이웃보다 한 단계 더 — 굵기로만 구분한다(색은 이미 같은 띠를 공유).
+   위 .dgm-rel 규칙과 명시도가 같으면 밀리므로 두 클래스를 겹쳐 이긴다. */
+.dgm-canvas svg.dgm-focused g.node.dgm-rel.node-selected g.outer-path > path:last-of-type,
+.dgm-canvas svg.dgm-focused .node-selected > rect:first-of-type,
+.dgm-canvas svg.dgm-focused .node-selected > circle:first-of-type,
+.dgm-canvas svg.dgm-focused .node-selected > polygon:first-of-type,
+.dgm-canvas svg.dgm-focused .node-selected > ellipse:first-of-type,
+.dgm-canvas svg.dgm-focused .node-selected > path:first-of-type {
+  stroke: var(--dgm-iris) !important;
+  stroke-width: 4px !important;
+}
+/* 파란 글로우는 포커스 중엔 걷어낸다 — 무지개와 겹치면 탁해진다 */
+.dgm-canvas svg.dgm-focused .node-selected {
+  filter: none;
+}
 @media (prefers-reduced-motion: reduce) {
   /* 이동이 아니라 상태 전이라 페이드는 남겨도 되지만, 더 짧게 */
   .dgm-canvas svg.dgm-focused g.node,

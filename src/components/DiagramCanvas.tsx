@@ -57,6 +57,64 @@ function extractNodeId(node: Element): string {
     );
 }
 
+// 포커스된 엔티티 테두리에 흘려보낼 이리데슨트 스펙트럼.
+// 캔버스는 mermaid 의 밝은 테마 고정이라(§2 의 mermaid 캔버스 예외) 밝은 배경 기준으로 고른
+// 중간 채도 톤이다. 쨍한 원색 무지개는 값싸 보여서 피했다.
+const IRIS_STOPS = [
+  "#8b5cf6", // violet
+  "#3b82f6", // blue
+  "#06b6d4", // cyan
+  "#10b981", // emerald
+  "#f59e0b", // amber
+  "#ec4899", // pink
+];
+/** 그라디언트 한 주기의 길이(user unit). 이만큼 밀면 다음 주기와 정확히 맞물린다. */
+const IRIS_SPAN = 700;
+const IRIS_DURATION = "7s";
+
+/** 테두리용 무지개 그라디언트를 SVG 안에 심고, 이를 가리키는 url() 을 CSS 변수로 노출한다.
+ *  spreadMethod=repeat + 한 주기만큼 translate → 이음매 없이 무한히 흐른다. */
+export function injectIrisGradient(svgEl: SVGElement, animate: boolean): void {
+  const NS = "http://www.w3.org/2000/svg";
+  const gid = `${svgEl.id || "dgm"}-iris`;
+  let defs = svgEl.querySelector("defs");
+  if (!defs) {
+    defs = document.createElementNS(NS, "defs");
+    svgEl.insertBefore(defs, svgEl.firstChild);
+  }
+  const grad = document.createElementNS(NS, "linearGradient");
+  grad.setAttribute("id", gid);
+  // userSpaceOnUse = 도형마다가 아니라 캔버스 전체를 가로지르는 하나의 스펙트럼.
+  // 하이라이트된 테이블들이 같은 띠를 공유해 한 줄기로 흐르는 느낌이 된다.
+  grad.setAttribute("gradientUnits", "userSpaceOnUse");
+  grad.setAttribute("spreadMethod", "repeat");
+  grad.setAttribute("x1", "0");
+  grad.setAttribute("y1", "0");
+  grad.setAttribute("x2", String(IRIS_SPAN));
+  grad.setAttribute("y2", String(IRIS_SPAN * 0.35)); // 살짝 기울여 대각선으로 흐르게
+  // 첫 색을 끝에 한 번 더 찍어야 주기가 매끄럽게 이어진다
+  const stops = [...IRIS_STOPS, IRIS_STOPS[0]];
+  stops.forEach((color, i) => {
+    const stop = document.createElementNS(NS, "stop");
+    stop.setAttribute("offset", `${(i / (stops.length - 1)) * 100}%`);
+    stop.setAttribute("stop-color", color);
+    grad.appendChild(stop);
+  });
+  if (animate) {
+    const anim = document.createElementNS(NS, "animateTransform");
+    anim.setAttribute("attributeName", "gradientTransform");
+    anim.setAttribute("type", "translate");
+    anim.setAttribute("from", "0 0");
+    anim.setAttribute("to", `${IRIS_SPAN} ${IRIS_SPAN * 0.35}`);
+    anim.setAttribute("dur", IRIS_DURATION);
+    anim.setAttribute("repeatCount", "indefinite");
+    grad.appendChild(anim);
+  }
+  defs.appendChild(grad);
+  // id 는 렌더마다 달라지므로 CSS 가 하드코딩할 수 없다 — 변수로 건네준다
+  svgEl.style.setProperty("--dgm-iris", `url(#${gid})`);
+}
+
 /** 렌더된 SVG 에서 읽어낸 연결 관계 (포커스 모드용) */
 interface DiagramGraph {
   /** 노드 id(다이어그램 접두사 뗀 것) → 노드 g 엘리먼트 */
@@ -271,6 +329,11 @@ export function DiagramCanvas({
         if (!svgEl) return;
         normalizeSvg(svgEl);
         graphRef.current = buildGraph(svgEl); // 포커스 모드용 연결 관계
+        // SMIL 은 CSS 미디어쿼리로 못 끄니 여기서 판단해 애니메이션 자체를 빼둔다
+        injectIrisGradient(
+          svgEl,
+          !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+        );
         // 클릭 = 노드 선택 토글 (드래그 팬 후에는 무시 — 4px 이동 가드)
         svgEl.addEventListener("click", (e) => {
           const down = downPosRef.current;
