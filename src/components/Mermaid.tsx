@@ -11,18 +11,29 @@ import { errText } from "../lib/errors";
 export type MermaidApi = {
   initialize: (c: Record<string, unknown>) => void;
   render: (id: string, text: string) => Promise<{ svg: string }>;
+  registerLayoutLoaders: (loaders: unknown[]) => void;
 };
 let mermaidPromise: Promise<MermaidApi> | null = null;
 export function getMermaid(): Promise<MermaidApi> {
   if (!mermaidPromise) {
-    mermaidPromise = import("mermaid").then((m) => {
+    mermaidPromise = Promise.all([
+      import("mermaid"),
+      import("@mermaid-js/layout-elk"),
+    ]).then(([m, elk]) => {
       const api = m.default as unknown as MermaidApi;
+      // 레이아웃 엔진을 dagre → ELK 로. 등록 자체는 가볍다(로더만 담긴 배열) —
+      // 실제 elkjs 번들은 첫 렌더 때 lazy 로 받아온다.
+      api.registerLayoutLoaders(elk.default);
       api.initialize({
         startOnLoad: false,
         theme: "neutral", // 앱의 흑백 미니멀 톤과 어울림
         securityLevel: "strict", // 라벨을 HTML 로 해석하지 않음(XSS 방지)
         suppressErrorRendering: true, // 실패 시 mermaid 가 에러 SVG 를 DOM 에 심지 않게
         fontFamily: "var(--font)",
+        // dagre 는 ER 자기참조(self FK)를 3토막 난 선으로 흘려버린다 — mermaid 의
+        // 자기루프 병합이 flowchart/state 에만 걸려 있고 er 은 빠져 있기 때문.
+        // ELK 는 자기루프를 테이블에 붙는 짧은 루프로 그리고 배선도 직교로 정리한다.
+        layout: "elk",
       });
       return api;
     });
