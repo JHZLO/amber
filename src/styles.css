@@ -2170,12 +2170,67 @@ html.widget-root #root {
   flex-direction: column;
   gap: 6px;
 }
+/* 이름 = 클릭하면 복사되는 pressable. 쉬는 상태에서도 눌러 보이도록 흐린 '복사' 힌트를
+   달아 두고(§8 커서로 제스처를 알린다), hover 에서 surface-2 + 힌트가 또렷해진다. */
+.dgm-node-info-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: -4px -6px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    transform 0.16s var(--ease-out);
+}
+.dgm-node-info-name:hover {
+  background: var(--surface-2);
+}
+.dgm-node-info-name:active {
+  transform: scale(0.98);
+}
+.dgm-node-info-name:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.12);
+}
 .dgm-node-info-text {
+  min-width: 0;
   font-size: 13px;
   font-weight: 700;
   word-break: break-word;
   max-height: 90px;
   overflow-y: auto;
+}
+/* '복사' → '복사됨' 으로 글자가 늘어도 카드가 흔들리지 않게 자리를 미리 잡아 둔다 */
+.dgm-node-info-hint {
+  flex: none;
+  min-width: 54px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-3);
+  opacity: 0.6;
+  transition: opacity 0.12s ease;
+}
+.dgm-node-info-name:hover .dgm-node-info-hint,
+.dgm-node-info-name:focus-visible .dgm-node-info-hint,
+.dgm-node-info-name.copied .dgm-node-info-hint {
+  opacity: 1;
+}
+.dgm-node-info-name.copied .dgm-node-info-hint {
+  color: var(--text);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dgm-node-info-name:active {
+    transform: none;
+  }
 }
 .dgm-node-info-meta {
   display: flex;

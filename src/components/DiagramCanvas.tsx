@@ -125,10 +125,31 @@ export function DiagramCanvas({
   chartRef.current = chart;
   const downPosRef = useRef<{ x: number; y: number } | null>(null);
 
+  // 이름 복사 피드백 — 리포트 복사 버튼과 같은 문법(1.5s 뒤 원래대로)
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+    },
+    [],
+  );
+  async function copyName(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* 클립보드 실패는 조용히 무시 */
+    }
+  }
+
   const deselectNode = () => {
     selectedElRef.current?.classList.remove("node-selected");
     selectedElRef.current = null;
     setSel(null);
+    setCopied(false); // 다른 노드를 골랐는데 '복사됨'이 남아 있으면 거짓말이 된다
   };
 
   function selectNode(node: Element) {
@@ -136,6 +157,7 @@ export function DiagramCanvas({
       deselectNode(); // 같은 노드 재클릭 = 토글 해제
       return;
     }
+    setCopied(false);
     selectedElRef.current?.classList.remove("node-selected");
     selectedElRef.current = node;
     node.classList.add("node-selected");
@@ -350,7 +372,19 @@ export function DiagramCanvas({
       {sel && (
         <div className="dgm-node-info">
           <div className="dgm-node-info-body">
-            <div className="dgm-node-info-text">{sel.text}</div>
+            {/* 이름 = 클릭하면 클립보드로. 힌트('복사')는 자리를 잡아둔 채 흐리게 늘 떠 있고
+                hover 에서 또렷해진다 — 나타났다 사라지면 카드 폭이 흔들린다(§9.2) */}
+            <button
+              className={`dgm-node-info-name${copied ? " copied" : ""}`}
+              onClick={() => void copyName(sel.text)}
+              aria-label={`${t("diagrams.node.copyName")}: ${sel.text}`}
+            >
+              <span className="dgm-node-info-text">{sel.text}</span>
+              <span className="dgm-node-info-hint" aria-hidden="true">
+                <Icon name={copied ? "check" : "copy"} size={12} />
+                {copied ? t("diagrams.node.copied") : t("diagrams.copy")}
+              </span>
+            </button>
             <div className="dgm-node-info-meta">
               {sel.id && sel.id !== sel.text && (
                 <span className="dgm-node-info-id">{sel.id}</span>

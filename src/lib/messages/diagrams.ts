@@ -109,6 +109,8 @@ const ko = {
   "diagrams.node.unnamed": "(이름 없음)",
   "diagrams.node.line": "라인 {n}",
   "diagrams.node.deselect": "선택 해제 (Esc)",
+  "diagrams.node.copyName": "이름 복사",
+  "diagrams.node.copied": "복사됨",
 
   // mermaid 인라인 렌더러
   "diagrams.mmd.failHead": "mermaid 문법 오류 — 렌더하지 못해 원본 코드를 표시해요",
@@ -223,6 +225,8 @@ const en: Record<keyof typeof ko, string> = {
   "diagrams.node.unnamed": "(unnamed)",
   "diagrams.node.line": "Line {n}",
   "diagrams.node.deselect": "Clear selection (Esc)",
+  "diagrams.node.copyName": "Copy name",
+  "diagrams.node.copied": "Copied",
 
   "diagrams.mmd.failHead": "Mermaid syntax error — couldn't render, showing the source instead",
   "diagrams.mmd.rendering": "Rendering diagram…",
