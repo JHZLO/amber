@@ -14,6 +14,7 @@ import {
   setDiagramLayout,
   useDiagramLayout,
 } from "../lib/diagramLayout";
+import { neighborsOf, parseEdgeEndpoints } from "../lib/diagramGraph";
 
 let seq = 0;
 
@@ -54,6 +55,42 @@ function extractNodeId(node: Element): string {
       /^(flowchart|graph|state|actor|classId|class|er|mindmap|note|gantt|pie|quadrant|sankey)-/i,
       "",
     );
+}
+
+/** 렌더된 SVG 에서 읽어낸 연결 관계 (포커스 모드용) */
+interface DiagramGraph {
+  /** 노드 id(다이어그램 접두사 뗀 것) → 노드 g 엘리먼트 */
+  nodes: Map<string, Element>;
+  edges: {
+    el: Element;
+    /** 짝이 맞을 때만 — 라벨은 id 가 없어 순서로만 대응된다 */
+    label: Element | null;
+    source: string;
+    target: string;
+  }[];
+}
+
+/** mermaid 가 붙인 id 로 연결 관계를 복원한다. 못 읽으면 빈 그래프(포커스 비활성). */
+function buildGraph(svgEl: SVGElement): DiagramGraph {
+  const prefix = svgEl.id ? `${svgEl.id}-` : "";
+  const nodes = new Map<string, Element>();
+  for (const el of svgEl.querySelectorAll("g.node")) {
+    const raw = el.getAttribute("id") ?? "";
+    if (!raw.startsWith(prefix)) continue;
+    nodes.set(raw.slice(prefix.length), el);
+  }
+  const paths = [...svgEl.querySelectorAll("g.edgePaths > path")];
+  const labels = [...svgEl.querySelectorAll("g.edgeLabels > g.edgeLabel")];
+  // 라벨엔 id 가 없다 — 개수가 같을 때만 순서로 짝지운다(어긋나면 라벨은 건드리지 않음)
+  const pairable = labels.length === paths.length;
+  const ids = [...nodes.keys()];
+  const edges: DiagramGraph["edges"] = [];
+  paths.forEach((el, i) => {
+    const ends = parseEdgeEndpoints(el.getAttribute("data-id") ?? "", ids);
+    if (ends)
+      edges.push({ el, label: pairable ? labels[i] : null, ...ends });
+  });
+  return { nodes, edges };
 }
 
 /** 소스 코드에서 노드 id 가 등장하는 첫 줄 번호 (1-base, 없으면 -1) */
@@ -152,11 +189,47 @@ export function DiagramCanvas({
     }
   }
 
+  // 포커스 모드: 고른 노드 + 직접 연결된 노드/엣지만 남기고 나머지를 죽인다.
+  const graphRef = useRef<DiagramGraph | null>(null);
+
+  /** 클릭된 엘리먼트에서 그래프가 아는 노드 id 로 거슬러 올라간다
+   *  (클릭 대상이 g.node 가 아니라 안쪽 rect/label 일 수 있다) */
+  function graphIdOf(el: Element): string | null {
+    const g = graphRef.current;
+    if (!g) return null;
+    for (const [id, nodeEl] of g.nodes)
+      if (nodeEl === el || nodeEl.contains(el)) return id;
+    return null;
+  }
+
+  function applyFocus(nodeId: string | null) {
+    const g = graphRef.current;
+    const svgEl = hostRef.current?.querySelector("svg");
+    if (!g || !svgEl) return;
+    // 연결 정보를 못 읽었으면 아무것도 흐리게 하지 않는다 — 전부 죽어버리는 것보단 낫다
+    if (!nodeId || g.edges.length === 0) {
+      svgEl.classList.remove("dgm-focused");
+      for (const el of svgEl.querySelectorAll(".dgm-rel"))
+        el.classList.remove("dgm-rel");
+      return;
+    }
+    const keep = neighborsOf(nodeId, g.edges);
+    keep.add(nodeId);
+    for (const [id, el] of g.nodes) el.classList.toggle("dgm-rel", keep.has(id));
+    for (const e of g.edges) {
+      const on = e.source === nodeId || e.target === nodeId;
+      e.el.classList.toggle("dgm-rel", on);
+      e.label?.classList.toggle("dgm-rel", on);
+    }
+    svgEl.classList.add("dgm-focused");
+  }
+
   const deselectNode = () => {
     selectedElRef.current?.classList.remove("node-selected");
     selectedElRef.current = null;
     setSel(null);
     setCopied(false); // 다른 노드를 골랐는데 '복사됨'이 남아 있으면 거짓말이 된다
+    applyFocus(null);
   };
 
   function selectNode(node: Element) {
@@ -168,6 +241,7 @@ export function DiagramCanvas({
     selectedElRef.current?.classList.remove("node-selected");
     selectedElRef.current = node;
     node.classList.add("node-selected");
+    applyFocus(graphIdOf(node));
     const text = getNodeText(node);
     const id = extractNodeId(node);
     let line = id ? findLineForNodeId(id, chartRef.current) : -1;
@@ -191,10 +265,12 @@ export function DiagramCanvas({
         pzRef.current = null;
         selectedElRef.current = null;
         setSel(null);
+        graphRef.current = null;
         hostRef.current.innerHTML = svg;
         const svgEl = hostRef.current.querySelector("svg");
         if (!svgEl) return;
         normalizeSvg(svgEl);
+        graphRef.current = buildGraph(svgEl); // 포커스 모드용 연결 관계
         // 클릭 = 노드 선택 토글 (드래그 팬 후에는 무시 — 4px 이동 가드)
         svgEl.addEventListener("click", (e) => {
           const down = downPosRef.current;

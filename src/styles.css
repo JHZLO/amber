@@ -2155,6 +2155,29 @@ html.widget-root #root {
   stroke: #2563eb !important;
   stroke-width: 2.5px !important;
 }
+/* 포커스 모드 — 노드를 고르면 그것과 직접 이어진 것만 남고 나머지는 물러난다.
+   `.dgm-rel` 이 붙은 것만 살아남는 뺄셈 방식이라, 관계를 못 읽었을 때는 아무것도
+   흐려지지 않게 JS 가 .dgm-focused 자체를 붙이지 않는다.
+   opacity 만 건드린다(§9.2) — 레이아웃도 색도 그대로라 그림이 흔들리지 않는다. */
+.dgm-canvas svg.dgm-focused g.node,
+.dgm-canvas svg.dgm-focused g.edgePaths > path,
+.dgm-canvas svg.dgm-focused g.edgeLabels > g.edgeLabel {
+  opacity: 0.1;
+  transition: opacity 0.16s var(--ease-out);
+}
+.dgm-canvas svg.dgm-focused g.node.dgm-rel,
+.dgm-canvas svg.dgm-focused g.edgePaths > path.dgm-rel,
+.dgm-canvas svg.dgm-focused g.edgeLabels > g.edgeLabel.dgm-rel {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* 이동이 아니라 상태 전이라 페이드는 남겨도 되지만, 더 짧게 */
+  .dgm-canvas svg.dgm-focused g.node,
+  .dgm-canvas svg.dgm-focused g.edgePaths > path,
+  .dgm-canvas svg.dgm-focused g.edgeLabels > g.edgeLabel {
+    transition-duration: 0.01s;
+  }
+}
 /* 노드 정보 카드 — 캔버스 하단 중앙에 뜸 */
 .dgm-node-info {
   position: absolute;
