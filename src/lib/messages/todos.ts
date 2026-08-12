@@ -50,6 +50,7 @@ const ko = {
   "todos.cal.pickMonth": "월 선택",
   "todos.cal.pickYear": "연도 선택",
   "todos.cal.resize": "드래그해서 캘린더 너비 조절",
+  "todos.cal.generating": "리포트 생성 중",
 
   // 타임테이블
   "todos.tt.label": "타임테이블",
@@ -107,6 +108,7 @@ const en: Record<keyof typeof ko, string> = {
   "todos.cal.pickMonth": "Pick a month",
   "todos.cal.pickYear": "Pick a year",
   "todos.cal.resize": "Drag to resize the calendar",
+  "todos.cal.generating": "Generating report",
 
   "todos.tt.label": "Timetable",
   "todos.tt.view.day": "Day",

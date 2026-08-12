@@ -37,7 +37,23 @@ export interface RunState {
 
 const runs = new Map<string, RunState>();
 const listeners = new Set<() => void>();
-const emit = () => listeners.forEach((l) => l());
+
+// 생성 중인 날짜 집합의 캐시 스냅샷. useSyncExternalStore 의 getSnapshot 은 값이 같으면
+// **같은 참조**를 돌려줘야 해서(새 Set 을 매번 만들면 무한 렌더) 구성이 바뀔 때만 새로 만든다.
+let runningDates: ReadonlySet<string> = new Set();
+function refreshRunningDates() {
+  const next: string[] = [];
+  for (const [date, r] of runs)
+    if (r.phase === "collecting" || r.phase === "streaming") next.push(date);
+  if (next.length === runningDates.size && next.every((d) => runningDates.has(d)))
+    return;
+  runningDates = new Set(next);
+}
+
+const emit = () => {
+  refreshRunningDates();
+  listeners.forEach((l) => l());
+};
 
 function patch(date: string, p: Partial<RunState>) {
   const cur =
@@ -72,9 +88,7 @@ function subscribe(l: () => void): () => void {
 }
 
 function anyRunning(): boolean {
-  for (const r of runs.values())
-    if (r.phase === "collecting" || r.phase === "streaming") return true;
-  return false;
+  return runningDates.size > 0;
 }
 
 /** 특정 날짜의 실행 상태 구독 (없으면 undefined) */
@@ -88,6 +102,11 @@ export function useReportRun(date: string): RunState | undefined {
 /** 아무 날짜라도 생성 중인지 — 전역 로딩 표시(레일 등)용 */
 export function useAnyReportGenerating(): boolean {
   return useSyncExternalStore(subscribe, anyRunning);
+}
+
+/** 지금 생성 중인 날짜들 — 캘린더처럼 여러 날을 한 번에 그리는 곳에서 쓴다 */
+export function useReportGeneratingDates(): ReadonlySet<string> {
+  return useSyncExternalStore(subscribe, () => runningDates);
 }
 
 /** 리포트 생성 시작 — 컴포넌트와 무관하게 끝까지 돌아 파일/DB 에 저장.

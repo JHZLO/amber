@@ -32,6 +32,7 @@ export function MiniCalendar({
   selected,
   today,
   counts,
+  generating,
   onSelect,
   onCursor,
 }: {
@@ -40,6 +41,8 @@ export function MiniCalendar({
   selected: string;
   today: string;
   counts: Record<string, DayTodoCount>;
+  /** 데일리 리포트를 생성 중인 날짜들 — 그날의 점이 깜빡인다 */
+  generating: ReadonlySet<string>;
   onSelect: (date: string) => void;
   /** 보고 있는 달을 옮긴다 (화살표·월/연 선택) */
   onCursor: (year: number, month: number) => void;
@@ -129,6 +132,9 @@ export function MiniCalendar({
                 d.getMonth() + 1 === month && d.getFullYear() === year;
               const c = counts[date];
               const hasOpen = c ? c.done < c.total : false;
+              // AI 가 이날의 리포트를 만드는 중이면 점이 깜빡인다. 할 일이 없어 점이 숨겨진
+              // 날도 이때만은 보여준다 — 어느 날이 도는지가 안 보이면 표시의 뜻이 없다.
+              const gen = generating.has(date);
               const cls =
                 date === today
                   ? "today"
@@ -142,10 +148,11 @@ export function MiniCalendar({
                   key={date}
                   className={`cal-cell ${cls}`}
                   onClick={() => onSelect(date)}
+                  title={gen ? t("todos.cal.generating") : undefined}
                 >
                   <span className="cal-num">{d.getDate()}</span>
                   <span
-                    className={`cal-dot ${!c ? "none" : hasOpen ? "" : "on"}`}
+                    className={`cal-dot ${!c ? "none" : hasOpen ? "" : "on"}${gen ? " gen" : ""}`}
                     aria-hidden="true"
                   />
                 </button>

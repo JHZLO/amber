@@ -57,6 +57,7 @@ import { Icon } from "../icons";
 import { MiniCalendar } from "./MiniCalendar";
 import { DayTimetable, type TtView } from "./DayTimetable";
 import { DailyReportPanel } from "./DailyReportPanel";
+import { useReportGeneratingDates } from "../lib/reportRun";
 import { openConceptInApp } from "../lib/nav";
 import type { AppConfig } from "../lib/config";
 
@@ -130,6 +131,8 @@ export function TodoView({
     null,
   );
   const [counts, setCounts] = useState<Record<string, DayTodoCount>>({});
+  // 리포트를 생성 중인 날짜 — 캘린더의 그날 점을 깜빡이게 한다
+  const generatingDates = useReportGeneratingDates();
   const [overdue, setOverdue] = useState<Todo[]>([]);
   const [overdueOpen, setOverdueOpen] = useState(false);
   const [learned, setLearned] = useState<{ id: number; title: string }[]>([]);
@@ -798,6 +801,7 @@ export function TodoView({
           selected={selected}
           today={today}
           counts={counts}
+          generating={generatingDates}
           onSelect={goDate}
           onCursor={(y, m) => setCursor({ year: y, month: m })}
         />
