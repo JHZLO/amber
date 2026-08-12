@@ -2174,27 +2174,79 @@ html.widget-root #root {
    그라디언트는 JS 가 SVG 안에 심고(userSpaceOnUse + spreadMethod:repeat),
    그 url() 을 --dgm-iris 로 건네준다. 색은 §2 의 mermaid 캔버스 예외.
    선(엣지)에는 일부러 안 넣는다 — 전부 무지개면 강조가 강조가 아니게 된다. */
-/* ER 엔티티의 테두리는 g.outer-path 안의 둘째 path 다(첫째는 면, 둘째가 선).
-   다른 다이어그램 종류는 g.node 바로 아래 도형이라 둘 다 걸어둔다. */
-.dgm-canvas svg.dgm-focused g.node.dgm-rel g.outer-path > path:last-of-type,
+/* 테두리 = 두 겹.
+   ① .dgm-border  — 이리데슨트 색 + 베벨 필터로 깎인 모서리(빛은 왼쪽 위 고정)
+   ② .dgm-runner  — 그 위를 시계방향으로 도는 빛 한 토막
+   러너는 항상 DOM 에 깔려 있고 포커스된 노드에서만 보인다. */
+.dgm-canvas svg.dgm-focused g.node.dgm-rel .dgm-border,
 .dgm-canvas svg.dgm-focused g.node.dgm-rel > rect:first-of-type,
 .dgm-canvas svg.dgm-focused g.node.dgm-rel > circle:first-of-type,
 .dgm-canvas svg.dgm-focused g.node.dgm-rel > polygon:first-of-type,
 .dgm-canvas svg.dgm-focused g.node.dgm-rel > ellipse:first-of-type,
 .dgm-canvas svg.dgm-focused g.node.dgm-rel > path:first-of-type {
   stroke: var(--dgm-iris) !important;
-  stroke-width: 2.5px !important;
+  stroke-width: 3px !important;
+  /* 테두리는 한 바퀴 빈틈없이 채운다 — 끊기는 건 위를 지나는 반사뿐이다 */
+  filter: var(--dgm-bevel);
 }
-/* 고른 테이블은 이웃보다 한 단계 더 — 굵기로만 구분한다(색은 이미 같은 띠를 공유).
-   위 .dgm-rel 규칙과 명시도가 같으면 밀리므로 두 클래스를 겹쳐 이긴다. */
-.dgm-canvas svg.dgm-focused g.node.dgm-rel.node-selected g.outer-path > path:last-of-type,
-.dgm-canvas svg.dgm-focused .node-selected > rect:first-of-type,
-.dgm-canvas svg.dgm-focused .node-selected > circle:first-of-type,
-.dgm-canvas svg.dgm-focused .node-selected > polygon:first-of-type,
-.dgm-canvas svg.dgm-focused .node-selected > ellipse:first-of-type,
-.dgm-canvas svg.dgm-focused .node-selected > path:first-of-type {
-  stroke: var(--dgm-iris) !important;
+/* 고른 테이블은 한 단계 두껍게 — 색은 같은 띠를 공유하므로 굵기로만 구분한다.
+   위 규칙과 명시도가 같으면 밀리므로 두 클래스를 겹쳐 이긴다. */
+.dgm-canvas svg.dgm-focused g.node.dgm-rel.node-selected .dgm-border {
   stroke-width: 4px !important;
+}
+
+/* 도는 빛 반사 — 채워진 테두리 위를 미끄러지는 하이라이트. 기본은 숨김.
+   넓고 옅은 것(번짐) + 좁고 밝은 것(핵) 두 겹이 같은 속도로 돈다. */
+.dgm-canvas svg .dgm-glint,
+.dgm-canvas svg .dgm-glint-core {
+  display: none;
+  fill: none;
+  pointer-events: none;
+  stroke: #fff;
+  stroke-linecap: round;
+  /* 흰색을 얹어 그 구간만 밝아지게 — 색을 덮는 게 아니라 빛을 더한다 */
+  mix-blend-mode: screen;
+}
+.dgm-canvas svg.dgm-focused g.node.dgm-rel .dgm-glint,
+.dgm-canvas svg.dgm-focused g.node.dgm-rel .dgm-glint-core {
+  display: block;
+  animation: dgm-glint 4.5s linear infinite;
+}
+/* 번짐: 테두리보다 넓게 깔아 가장자리가 부드럽게 흐려 보이도록 */
+.dgm-canvas svg.dgm-focused g.node.dgm-rel .dgm-glint {
+  stroke-width: 9px;
+  opacity: 0.22;
+  stroke-dasharray: calc(var(--dgm-len) * 0.2) calc(var(--dgm-len) * 0.8);
+}
+/* 핵: 번짐의 앞머리에 얹혀 혜성처럼 보인다 */
+.dgm-canvas svg.dgm-focused g.node.dgm-rel .dgm-glint-core {
+  stroke-width: 3px;
+  opacity: 0.8;
+  stroke-dasharray: calc(var(--dgm-len) * 0.07) calc(var(--dgm-len) * 0.93);
+}
+.dgm-canvas svg.dgm-focused g.node.dgm-rel.node-selected .dgm-glint {
+  stroke-width: 12px;
+  opacity: 0.28;
+}
+.dgm-canvas svg.dgm-focused g.node.dgm-rel.node-selected .dgm-glint-core {
+  stroke-width: 4px;
+  opacity: 1;
+}
+/* 음수 방향 = 경로 진행 방향. 경로를 좌상단→우측으로 그렸으므로 시계방향. */
+@keyframes dgm-glint {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: calc(var(--dgm-len) * -1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* 도는 반사는 순수 장식이라 감소 모션에선 통째로 뺀다. 베벨과 색은 남는다. */
+  .dgm-canvas svg.dgm-focused g.node.dgm-rel .dgm-glint,
+  .dgm-canvas svg.dgm-focused g.node.dgm-rel .dgm-glint-core {
+    display: none;
+  }
 }
 /* 파란 글로우는 포커스 중엔 걷어낸다 — 무지개와 겹치면 탁해진다 */
 .dgm-canvas svg.dgm-focused .node-selected {

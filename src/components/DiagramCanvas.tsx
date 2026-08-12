@@ -57,41 +57,47 @@ function extractNodeId(node: Element): string {
     );
 }
 
-// 포커스된 엔티티 테두리에 흘려보낼 이리데슨트 스펙트럼.
-// 캔버스는 mermaid 의 밝은 테마 고정이라(§2 의 mermaid 캔버스 예외) 밝은 배경 기준으로 고른
-// 중간 채도 톤이다. 쨍한 원색 무지개는 값싸 보여서 피했다.
+// 포커스된 엔티티 테두리에 쓰는 이리데슨트 스펙트럼.
+// 캔버스는 mermaid 밝은 테마 고정이라(DESIGN.md §2 의 mermaid 캔버스 예외) 밝은 배경 기준.
+// 원색·형광·노랑 계열은 뺐다 — 유막(oil slick)처럼 명도가 고른 한 벌이라야 테두리가
+// 조각조각 튀지 않고 한 줄기로 읽힌다.
 const IRIS_STOPS = [
-  "#8b5cf6", // violet
-  "#3b82f6", // blue
-  "#06b6d4", // cyan
-  "#10b981", // emerald
-  "#f59e0b", // amber
-  "#ec4899", // pink
+  "#6B5FA7", // indigo
+  "#4C7FB0", // steel blue
+  "#3D8F9E", // teal
+  "#8A7BB8", // periwinkle
+  "#9C6F97", // plum
 ];
-/** 그라디언트 한 주기의 길이(user unit). 이만큼 밀면 다음 주기와 정확히 맞물린다. */
-const IRIS_SPAN = 700;
-const IRIS_DURATION = "7s";
+/** 그라디언트 한 주기 길이(user unit) — 캔버스를 가로지르는 색 띠의 폭 */
+const IRIS_SPAN = 620;
 
-/** 테두리용 무지개 그라디언트를 SVG 안에 심고, 이를 가리키는 url() 을 CSS 변수로 노출한다.
- *  spreadMethod=repeat + 한 주기만큼 translate → 이음매 없이 무한히 흐른다. */
-export function injectIrisGradient(svgEl: SVGElement, animate: boolean): void {
+/** 빛 방향 (feDistantLight). y 축이 아래로 향하는 필터 좌표계 기준 — 왼쪽 위에서 비춘다. */
+const LIGHT_AZIMUTH = 235;
+const LIGHT_ELEVATION = 58;
+
+/** 테두리에 쓸 그라디언트와 베벨 필터를 SVG 안에 심고, url() 을 CSS 변수로 노출한다.
+ *  id 는 렌더마다 달라지므로 CSS 가 하드코딩할 수 없어 변수로 건넨다. */
+export function injectIrisDefs(svgEl: SVGElement): void {
   const NS = "http://www.w3.org/2000/svg";
-  const gid = `${svgEl.id || "dgm"}-iris`;
+  const base = svgEl.id || "dgm";
   let defs = svgEl.querySelector("defs");
   if (!defs) {
     defs = document.createElementNS(NS, "defs");
     svgEl.insertBefore(defs, svgEl.firstChild);
   }
+
+  // ── 색: 캔버스 전체를 가로지르는 하나의 띠(userSpaceOnUse).
+  // 테이블마다 따로 무지개를 돌리면 제각각 놀아서 산만하다. 같은 띠를 공유하면
+  // 테두리를 도는 빛이 위치에 따라 색을 바꿔 물고 간다.
+  const gid = `${base}-iris`;
   const grad = document.createElementNS(NS, "linearGradient");
   grad.setAttribute("id", gid);
-  // userSpaceOnUse = 도형마다가 아니라 캔버스 전체를 가로지르는 하나의 스펙트럼.
-  // 하이라이트된 테이블들이 같은 띠를 공유해 한 줄기로 흐르는 느낌이 된다.
   grad.setAttribute("gradientUnits", "userSpaceOnUse");
   grad.setAttribute("spreadMethod", "repeat");
   grad.setAttribute("x1", "0");
   grad.setAttribute("y1", "0");
   grad.setAttribute("x2", String(IRIS_SPAN));
-  grad.setAttribute("y2", String(IRIS_SPAN * 0.35)); // 살짝 기울여 대각선으로 흐르게
+  grad.setAttribute("y2", String(IRIS_SPAN * 0.35));
   // 첫 색을 끝에 한 번 더 찍어야 주기가 매끄럽게 이어진다
   const stops = [...IRIS_STOPS, IRIS_STOPS[0]];
   stops.forEach((color, i) => {
@@ -100,19 +106,92 @@ export function injectIrisGradient(svgEl: SVGElement, animate: boolean): void {
     stop.setAttribute("stop-color", color);
     grad.appendChild(stop);
   });
-  if (animate) {
-    const anim = document.createElementNS(NS, "animateTransform");
-    anim.setAttribute("attributeName", "gradientTransform");
-    anim.setAttribute("type", "translate");
-    anim.setAttribute("from", "0 0");
-    anim.setAttribute("to", `${IRIS_SPAN} ${IRIS_SPAN * 0.35}`);
-    anim.setAttribute("dur", IRIS_DURATION);
-    anim.setAttribute("repeatCount", "indefinite");
-    grad.appendChild(anim);
-  }
   defs.appendChild(grad);
-  // id 는 렌더마다 달라지므로 CSS 가 하드코딩할 수 없다 — 변수로 건네준다
+
+  // ── 입체: 알파를 살짝 흐려 높이맵으로 삼고 한 방향에서 조명 → 빛을 마주한 모서리만
+  // 하얗게 서는 베벨. diffuse 그늘까지 얹어 봤더니 색을 먹어 회색으로 죽길래
+  // specular(하이라이트) 한 겹만 더한다 — 색은 그대로 두고 입체만 얻는다.
+  const fid = `${base}-bevel`;
+  defs.insertAdjacentHTML(
+    "beforeend",
+    `<filter id="${fid}" x="-25%" y="-25%" width="150%" height="150%"
+             color-interpolation-filters="sRGB">
+       <feGaussianBlur in="SourceAlpha" stdDeviation="0.6" result="h"/>
+       <feSpecularLighting in="h" surfaceScale="5" specularConstant="1.15"
+                           specularExponent="11" lighting-color="#ffffff" result="sp">
+         <feDistantLight azimuth="${LIGHT_AZIMUTH}" elevation="${LIGHT_ELEVATION}"/>
+       </feSpecularLighting>
+       <feComposite in="sp" in2="SourceAlpha" operator="in" result="spCut"/>
+       <feComposite in="SourceGraphic" in2="spCut" operator="arithmetic"
+                    k1="0" k2="1" k3="1" k4="0"/>
+     </filter>`,
+  );
+
   svgEl.style.setProperty("--dgm-iris", `url(#${gid})`);
+  svgEl.style.setProperty("--dgm-bevel", `url(#${fid})`);
+}
+
+/** 시계방향(화면 기준: 위→오른쪽→아래→왼쪽)으로 한 바퀴 도는 닫힌 사각 경로 */
+function clockwiseRectPath(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): string {
+  const rr = Math.min(r, w / 2, h / 2);
+  return [
+    `M${x + rr} ${y}`,
+    `H${x + w - rr}`,
+    `A${rr} ${rr} 0 0 1 ${x + w} ${y + rr}`,
+    `V${y + h - rr}`,
+    `A${rr} ${rr} 0 0 1 ${x + w - rr} ${y + h}`,
+    `H${x + rr}`,
+    `A${rr} ${rr} 0 0 1 ${x} ${y + h - rr}`,
+    `V${y + rr}`,
+    `A${rr} ${rr} 0 0 1 ${x + rr} ${y}`,
+    "Z",
+  ].join(" ");
+}
+
+/** 테두리 위를 도는 "빛 반사" 오버레이를 깔아둔다(보이기는 CSS 가 결정).
+ *
+ *  테두리 자체는 끊지 않는다 — 색은 한 바퀴 다 채워져 있고, 그 위를 미끄러지는 건
+ *  하이라이트뿐이다. 그래서 dash 는 바탕이 아니라 이 오버레이에만 쓴다.
+ *  넓고 옅은 것 + 좁고 밝은 것 두 겹을 겹쳐 번지는 반사처럼 보이게 한다.
+ *
+ *  mermaid 의 윤곽선을 복제하지 않는 이유: ER 의 g.outer-path 는 변마다 끊긴
+ *  **subpath 8개**(중복 포함, Z 도 없음)라 dash 가 한 바퀴 도는 게 아니라 조각 사이를
+ *  건너뛴다. bbox 로 시계방향 닫힌 사각형을 직접 그려야 진행 방향까지 우리가 정한다. */
+export function addGlintOverlays(svgEl: SVGElement): void {
+  const NS = "http://www.w3.org/2000/svg";
+  for (const node of svgEl.querySelectorAll("g.node")) {
+    // ER 엔티티는 g.outer-path 안 둘째 path 가 윤곽선(첫째는 면)
+    const border = node.querySelector<SVGPathElement>(
+      "g.outer-path > path:last-of-type",
+    );
+    if (!border) continue;
+    border.classList.add("dgm-border");
+    let box: DOMRect | null = null;
+    try {
+      box = border.getBBox();
+    } catch {
+      /* 지오메트리를 못 재면 하이라이트 없이 정적 테두리만 */
+    }
+    if (!box || box.width <= 0 || box.height <= 0) continue;
+
+    const d = clockwiseRectPath(box.x, box.y, box.width, box.height, 2);
+    let len = 0;
+    for (const cls of ["dgm-glint", "dgm-glint-core"]) {
+      const p = document.createElementNS(NS, "path") as SVGPathElement;
+      p.setAttribute("class", cls);
+      p.setAttribute("d", d);
+      // 붙인 뒤에 재야 한다 — 떨어져 있는 엘리먼트는 엔진에 따라 길이를 못 준다
+      border.parentElement?.appendChild(p);
+      len = len || p.getTotalLength() || 2 * (box.width + box.height);
+      p.style.setProperty("--dgm-len", String(len));
+    }
+  }
 }
 
 /** 렌더된 SVG 에서 읽어낸 연결 관계 (포커스 모드용) */
@@ -329,11 +408,8 @@ export function DiagramCanvas({
         if (!svgEl) return;
         normalizeSvg(svgEl);
         graphRef.current = buildGraph(svgEl); // 포커스 모드용 연결 관계
-        // SMIL 은 CSS 미디어쿼리로 못 끄니 여기서 판단해 애니메이션 자체를 빼둔다
-        injectIrisGradient(
-          svgEl,
-          !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-        );
+        injectIrisDefs(svgEl);
+        addGlintOverlays(svgEl); // 움직임은 CSS 라 prefers-reduced-motion 이 그대로 먹는다
         // 클릭 = 노드 선택 토글 (드래그 팬 후에는 무시 — 4px 이동 가드)
         svgEl.addEventListener("click", (e) => {
           const down = downPosRef.current;
