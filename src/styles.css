@@ -2195,58 +2195,22 @@ html.widget-root #root {
   stroke-width: 4px !important;
 }
 
-/* 도는 빛 반사 — 채워진 테두리 위를 미끄러지는 하이라이트. 기본은 숨김.
-   넓고 옅은 것(번짐) + 좁고 밝은 것(핵) 두 겹이 같은 속도로 돈다. */
-.dgm-canvas svg .dgm-glint,
-.dgm-canvas svg .dgm-glint-core {
+/* 도는 빛 반사(sheen) — 채워진 테두리 위에 얹는 반투명 흰 광택. 기본은 숨김.
+   밝기 분포는 노드별 회전 그라디언트(stroke 로 참조)가 만들고, 회전은 SMIL 이 돌린다.
+   dash 없음(테두리가 끊겨 보일 일이 없다) · 블렌드 없음 · 필터 없음 — 렉의 3요소를 뺐다.
+   감소 모션에선 JS 가 회전 자체를 안 심으므로 여기선 숨길 필요가 없다(정적 광택은 남는다). */
+.dgm-canvas svg .dgm-sheen {
   display: none;
   fill: none;
   pointer-events: none;
-  stroke: #fff;
-  stroke-linecap: round;
-  /* 흰색을 얹어 그 구간만 밝아지게 — 색을 덮는 게 아니라 빛을 더한다 */
-  mix-blend-mode: screen;
+  stroke-linejoin: round;
 }
-.dgm-canvas svg.dgm-focused g.node.dgm-rel .dgm-glint,
-.dgm-canvas svg.dgm-focused g.node.dgm-rel .dgm-glint-core {
+.dgm-canvas svg.dgm-focused g.node.dgm-rel .dgm-sheen {
   display: block;
-  animation: dgm-glint 4.5s linear infinite;
-}
-/* 번짐: 테두리보다 넓게 깔아 가장자리가 부드럽게 흐려 보이도록 */
-.dgm-canvas svg.dgm-focused g.node.dgm-rel .dgm-glint {
-  stroke-width: 9px;
-  opacity: 0.22;
-  stroke-dasharray: calc(var(--dgm-len) * 0.2) calc(var(--dgm-len) * 0.8);
-}
-/* 핵: 번짐의 앞머리에 얹혀 혜성처럼 보인다 */
-.dgm-canvas svg.dgm-focused g.node.dgm-rel .dgm-glint-core {
   stroke-width: 3px;
-  opacity: 0.8;
-  stroke-dasharray: calc(var(--dgm-len) * 0.07) calc(var(--dgm-len) * 0.93);
 }
-.dgm-canvas svg.dgm-focused g.node.dgm-rel.node-selected .dgm-glint {
-  stroke-width: 12px;
-  opacity: 0.28;
-}
-.dgm-canvas svg.dgm-focused g.node.dgm-rel.node-selected .dgm-glint-core {
+.dgm-canvas svg.dgm-focused g.node.dgm-rel.node-selected .dgm-sheen {
   stroke-width: 4px;
-  opacity: 1;
-}
-/* 음수 방향 = 경로 진행 방향. 경로를 좌상단→우측으로 그렸으므로 시계방향. */
-@keyframes dgm-glint {
-  from {
-    stroke-dashoffset: 0;
-  }
-  to {
-    stroke-dashoffset: calc(var(--dgm-len) * -1);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  /* 도는 반사는 순수 장식이라 감소 모션에선 통째로 뺀다. 베벨과 색은 남는다. */
-  .dgm-canvas svg.dgm-focused g.node.dgm-rel .dgm-glint,
-  .dgm-canvas svg.dgm-focused g.node.dgm-rel .dgm-glint-core {
-    display: none;
-  }
 }
 /* 파란 글로우는 포커스 중엔 걷어낸다 — 무지개와 겹치면 탁해진다 */
 .dgm-canvas svg.dgm-focused .node-selected {

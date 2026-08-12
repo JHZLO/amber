@@ -154,17 +154,25 @@ function clockwiseRectPath(
   ].join(" ");
 }
 
-/** 테두리 위를 도는 "빛 반사" 오버레이를 깔아둔다(보이기는 CSS 가 결정).
+/** 테두리 위를 도는 "빛 반사(sheen)" 오버레이를 깔아둔다(보이기는 CSS 가 결정).
  *
- *  테두리 자체는 끊지 않는다 — 색은 한 바퀴 다 채워져 있고, 그 위를 미끄러지는 건
- *  하이라이트뿐이다. 그래서 dash 는 바탕이 아니라 이 오버레이에만 쓴다.
- *  넓고 옅은 것 + 좁고 밝은 것 두 겹을 겹쳐 번지는 반사처럼 보이게 한다.
+ *  테두리 자체는 끊지 않는다 — 색은 한 바퀴 다 채워져 있고, 그 위에 얹는 건
+ *  반투명 흰 광택뿐이다. 스포트라이트처럼 한 점만 밝히는 게 아니라, 노드 중심에서
+ *  뻗는 그라디언트를 **통째로 회전**시켜 금속면 위를 훑는 반사처럼 보이게 한다.
+ *
+ *  성능: 이전 구현(mix-blend-mode + dash 애니메이션 + 움직이는 레이어 위 SVG 필터)은
+ *  매 프레임 블렌딩·필터 재평가가 겹쳐 컴포지터를 벗어났다. 지금은 움직이는 것이
+ *  그라디언트 각도 하나뿐이고(SMIL), 블렌드 모드도 필터도 없다 — 필터(베벨)는
+ *  변하지 않는 바탕 테두리에만 걸려 있어 한 번 계산되고 캐시된다.
  *
  *  mermaid 의 윤곽선을 복제하지 않는 이유: ER 의 g.outer-path 는 변마다 끊긴
- *  **subpath 8개**(중복 포함, Z 도 없음)라 dash 가 한 바퀴 도는 게 아니라 조각 사이를
- *  건너뛴다. bbox 로 시계방향 닫힌 사각형을 직접 그려야 진행 방향까지 우리가 정한다. */
-export function addGlintOverlays(svgEl: SVGElement): void {
+ *  **subpath 8개**(중복 포함, Z 도 없음)라 그대로 쓰기엔 지오메트리가 지저분하다.
+ *  bbox 로 닫힌 사각형을 직접 그려 광택 전용 경로로 쓴다. */
+export function addSheenOverlays(svgEl: SVGElement, animate: boolean): void {
   const NS = "http://www.w3.org/2000/svg";
+  const defs = svgEl.querySelector("defs");
+  if (!defs) return;
+  let seq = 0;
   for (const node of svgEl.querySelectorAll("g.node")) {
     // ER 엔티티는 g.outer-path 안 둘째 path 가 윤곽선(첫째는 면)
     const border = node.querySelector<SVGPathElement>(
@@ -176,21 +184,55 @@ export function addGlintOverlays(svgEl: SVGElement): void {
     try {
       box = border.getBBox();
     } catch {
-      /* 지오메트리를 못 재면 하이라이트 없이 정적 테두리만 */
+      /* 지오메트리를 못 재면 광택 없이 정적 테두리만 */
     }
     if (!box || box.width <= 0 || box.height <= 0) continue;
 
-    const d = clockwiseRectPath(box.x, box.y, box.width, box.height, 2);
-    let len = 0;
-    for (const cls of ["dgm-glint", "dgm-glint-core"]) {
-      const p = document.createElementNS(NS, "path") as SVGPathElement;
-      p.setAttribute("class", cls);
-      p.setAttribute("d", d);
-      // 붙인 뒤에 재야 한다 — 떨어져 있는 엘리먼트는 엔진에 따라 길이를 못 준다
-      border.parentElement?.appendChild(p);
-      len = len || p.getTotalLength() || 2 * (box.width + box.height);
-      p.style.setProperty("--dgm-len", String(len));
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    const r = Math.hypot(box.width, box.height) / 2;
+
+    // 노드 중심 → 바깥으로 뻗는 그라디언트. 끝쪽만 흰색이라, 회전하면
+    // 그 방향을 향한 테두리 구간만 밝아진다 = 빛이 테두리를 훑고 돈다.
+    const gid = `${svgEl.id || "dgm"}-sheen-${(seq += 1)}`;
+    const grad = document.createElementNS(NS, "linearGradient");
+    grad.setAttribute("id", gid);
+    grad.setAttribute("gradientUnits", "userSpaceOnUse");
+    grad.setAttribute("x1", String(cx));
+    grad.setAttribute("y1", String(cy));
+    grad.setAttribute("x2", String(cx + r));
+    grad.setAttribute("y2", String(cy));
+    for (const [offset, opacity] of [
+      [0, 0],
+      [0.45, 0],
+      [0.75, 0.55], // 어깨 — 반사가 넓게 번지는 부분
+      [0.92, 0.95], // 정점
+      [1, 0.4], // 꼬리를 살짝 남겨 뚝 끊기지 않게
+    ] as const) {
+      const stop = document.createElementNS(NS, "stop");
+      stop.setAttribute("offset", String(offset));
+      stop.setAttribute("stop-color", "#ffffff");
+      stop.setAttribute("stop-opacity", String(opacity));
+      grad.appendChild(stop);
     }
+    if (animate) {
+      // SVG 좌표계(y 아래)에서 양의 회전 = 화면 기준 시계방향
+      const anim = document.createElementNS(NS, "animateTransform");
+      anim.setAttribute("attributeName", "gradientTransform");
+      anim.setAttribute("type", "rotate");
+      anim.setAttribute("from", `0 ${cx} ${cy}`);
+      anim.setAttribute("to", `360 ${cx} ${cy}`);
+      anim.setAttribute("dur", "3.6s");
+      anim.setAttribute("repeatCount", "indefinite");
+      grad.appendChild(anim);
+    }
+    defs.appendChild(grad);
+
+    const p = document.createElementNS(NS, "path") as SVGPathElement;
+    p.setAttribute("class", "dgm-sheen");
+    p.setAttribute("d", clockwiseRectPath(box.x, box.y, box.width, box.height, 2));
+    p.style.stroke = `url(#${gid})`;
+    border.parentElement?.appendChild(p);
   }
 }
 
@@ -409,7 +451,11 @@ export function DiagramCanvas({
         normalizeSvg(svgEl);
         graphRef.current = buildGraph(svgEl); // 포커스 모드용 연결 관계
         injectIrisDefs(svgEl);
-        addGlintOverlays(svgEl); // 움직임은 CSS 라 prefers-reduced-motion 이 그대로 먹는다
+        // SMIL 은 CSS 미디어쿼리로 못 끄니 여기서 판단해 애니메이션 자체를 빼둔다
+        addSheenOverlays(
+          svgEl,
+          !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+        );
         // 클릭 = 노드 선택 토글 (드래그 팬 후에는 무시 — 4px 이동 가드)
         svgEl.addEventListener("click", (e) => {
           const down = downPosRef.current;
