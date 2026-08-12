@@ -10,6 +10,7 @@ import {
   getRoot,
   isDefaultRoot,
   rootDisplayName,
+  rootDisplayPath,
   setRoot,
   WORKSPACE_EVENT,
   type SectionKey,
@@ -19,6 +20,7 @@ import { Icon } from "../icons";
 
 export function RootPicker({ section }: { section: SectionKey }) {
   const [root, setRootState] = useState(() => getRoot(section));
+  const [path, setPath] = useState(""); // 루트의 ~ 축약 절대경로 (비동기 해석)
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -30,6 +32,16 @@ export function RootPicker({ section }: { section: SectionKey }) {
     window.addEventListener(WORKSPACE_EVENT, h);
     return () => window.removeEventListener(WORKSPACE_EVENT, h);
   }, [section]);
+
+  useEffect(() => {
+    let alive = true;
+    void rootDisplayPath(section, root).then((p) => {
+      if (alive) setPath(p);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [section, root]);
 
   const place = useCallback(() => {
     const r = triggerRef.current?.getBoundingClientRect();
@@ -87,6 +99,7 @@ export function RootPicker({ section }: { section: SectionKey }) {
             ? t("settings.root.default")
             : rootDisplayName(section, root)}
         </span>
+        {path && <span className="root-picker-path">{path}</span>}
         <svg className="select-caret" width="10" height="6" viewBox="0 0 10 6">
           <path
             d="M1 1l4 4 4-4"

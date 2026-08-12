@@ -3,6 +3,7 @@
 // fs 플러그인은 절대경로가 오면 baseDir 를 무시하므로(PathBuf::push 의미론) 두 형태가 공존 가능.
 // localStorage 에 영속, 변경 시 이벤트를 쏘아 열려 있는 뷰가 리로드하게 한다.
 
+import { appDataDir, homeDir, join } from "@tauri-apps/api/path";
 import { t } from "./i18n";
 
 export const DEFAULT_ROOTS = {
@@ -29,6 +30,13 @@ export function isDefaultRoot(s: SectionKey, root = getRoot(s)): boolean {
 export function rootDisplayName(s: SectionKey, root = getRoot(s)): string {
   if (root === DEFAULT_ROOTS[s]) return t("settings.root.default");
   return root.split("/").filter(Boolean).pop() || root;
+}
+
+/** 루트의 절대경로를 ~ 축약 표기로 (트리 헤더의 보조 경로) — 기본 보관함은 appdata 상대라 풀어준다 */
+export async function rootDisplayPath(s: SectionKey, root = getRoot(s)): Promise<string> {
+  const abs = isDefaultRoot(s, root) ? await join(await appDataDir(), root) : root;
+  const home = (await homeDir()).replace(/\/+$/, "");
+  return abs === home || abs.startsWith(home + "/") ? `~${abs.slice(home.length)}` : abs;
 }
 
 /** 최근 연 폴더 목록 (절대경로, 최신순, 기본 보관함 제외) */
