@@ -112,6 +112,12 @@ const ko = {
   "diagrams.node.copyName": "이름 복사",
   "diagrams.node.copied": "복사됨",
 
+  // 레이아웃 엔진 선택 (캔버스 툴바)
+  "diagrams.layout.elk": "각지게",
+  "diagrams.layout.dagre": "둥글게",
+  "diagrams.layout.hint":
+    "배치 방식 · 각지게(ELK)는 직교 배선 + 자기참조 루프가 깔끔, 둥글게(Dagre)는 곡선 배선",
+
   // mermaid 인라인 렌더러
   "diagrams.mmd.failHead": "mermaid 문법 오류 — 렌더하지 못해 원본 코드를 표시해요",
   "diagrams.mmd.rendering": "다이어그램 렌더링 중…",
@@ -227,6 +233,11 @@ const en: Record<keyof typeof ko, string> = {
   "diagrams.node.deselect": "Clear selection (Esc)",
   "diagrams.node.copyName": "Copy name",
   "diagrams.node.copied": "Copied",
+
+  "diagrams.layout.elk": "Angular",
+  "diagrams.layout.dagre": "Curved",
+  "diagrams.layout.hint":
+    "Layout · Angular (ELK) routes orthogonally with tidy self-loops, Curved (Dagre) uses splines",
 
   "diagrams.mmd.failHead": "Mermaid syntax error — couldn't render, showing the source instead",
   "diagrams.mmd.rendering": "Rendering diagram…",

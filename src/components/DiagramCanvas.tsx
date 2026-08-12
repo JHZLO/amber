@@ -6,8 +6,14 @@ import { useEffect, useRef, useState } from "react";
 import svgPanZoom from "svg-pan-zoom";
 import { renderMermaid } from "./Mermaid";
 import { Icon } from "../icons";
+import { Tooltip } from "../ui";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
+import {
+  DIAGRAM_LAYOUTS,
+  setDiagramLayout,
+  useDiagramLayout,
+} from "../lib/diagramLayout";
 
 let seq = 0;
 
@@ -117,6 +123,7 @@ export function DiagramCanvas({
   const [fullscreen, setFullscreen] = useState(false);
   const fullscreenRef = useRef(false);
   fullscreenRef.current = fullscreen;
+  const layout = useDiagramLayout(); // 바뀌면 아래 렌더 effect 가 다시 돈다
 
   // 노드 선택 (스튜디오의 selectNode/deselectNode 대응)
   const selectedElRef = useRef<Element | null>(null);
@@ -235,7 +242,7 @@ export function DiagramCanvas({
     return () => {
       alive = false;
     };
-  }, [chart]);
+  }, [chart, layout]);
 
   // 언마운트 시 pan-zoom 정리
   useEffect(
@@ -322,6 +329,21 @@ export function DiagramCanvas({
         <span className="dgm-zoom-pct">{zoomPct}%</span>
         <span className="dgm-toolbar-hint">{t("diagrams.canvas.hint")}</span>
         <span className="spacer" />
+        {/* 레이아웃 엔진 — 두 배치를 오가며 볼 수 있게. 선택은 앱 전역에 남는다.
+            네이티브 title 은 WKWebView 에서 안 뜨므로 공용 Tooltip 으로 감싼다 */}
+        <Tooltip label={t("diagrams.layout.hint")}>
+          <div className="segmented dgm-layout-seg">
+            {DIAGRAM_LAYOUTS.map((l) => (
+              <button
+                key={l}
+                className={`tab ${layout === l ? "active" : ""}`}
+                onClick={() => setDiagramLayout(l)}
+              >
+                {t(`diagrams.layout.${l}`)}
+              </button>
+            ))}
+          </div>
+        </Tooltip>
         <button
           className="icon-btn ghost sm"
           title={`${t("diagrams.zoom.in")} (+)`}

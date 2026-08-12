@@ -2046,9 +2046,27 @@ html.widget-root #root {
   font-variant-numeric: tabular-nums;
   min-width: 44px;
 }
+/* 좁아지면 줄바꿈으로 툴바가 2~3줄이 되어버린다 — 힌트는 한 줄로 두고 잘라낸다
+   (툴바에서 가장 덜 중요한 요소라 여기가 먼저 양보하는 게 맞다) */
 .dgm-toolbar-hint {
   font-size: 11px;
   color: var(--text-3);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 레이아웃 엔진 세그먼트 — 타임테이블 일/주/월(.day-tt-seg)과 같은 축소 치수.
+   툴바가 좁아지면 힌트 텍스트가 아니라 이쪽이 먼저 찌그러지므로 줄바꿈을 막고 고정한다. */
+.dgm-layout-seg {
+  padding: 2px;
+  margin-right: 4px;
+  flex: none;
+}
+.dgm-layout-seg .tab {
+  padding: 2px 8px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 .dgm-canvas {
   flex: 1;

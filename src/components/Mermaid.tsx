@@ -6,6 +6,11 @@ import { Icon } from "../icons";
 import { MermaidZoom } from "./MermaidZoom";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
+import {
+  getDiagramLayout,
+  useDiagramLayout,
+  type DiagramLayout,
+} from "../lib/diagramLayout";
 
 // mermaid 모듈 캐시 + 1회 초기화 (DiagramCanvas 등 다른 렌더러도 공유)
 export type MermaidApi = {
@@ -13,6 +18,24 @@ export type MermaidApi = {
   render: (id: string, text: string) => Promise<{ svg: string }>;
   registerLayoutLoaders: (loaders: unknown[]) => void;
 };
+const BASE_CONFIG = {
+  startOnLoad: false,
+  theme: "neutral", // 앱의 흑백 미니멀 톤과 어울림
+  securityLevel: "strict", // 라벨을 HTML 로 해석하지 않음(XSS 방지)
+  suppressErrorRendering: true, // 실패 시 mermaid 가 에러 SVG 를 DOM 에 심지 않게
+  fontFamily: "var(--font)",
+};
+
+// mermaid 설정은 전역(싱글턴)이라 레이아웃도 전역이다. 마지막으로 적용한 값을 들고
+// 있다가 달라졌을 때만 재초기화한다 — initialize 는 부분 병합이 아니라 BASE 를 통째로
+// 다시 넘겨, 재호출이 다른 설정을 흘리지 않게 한다.
+let appliedLayout: DiagramLayout | null = null;
+function applyLayout(api: MermaidApi, layout: DiagramLayout): void {
+  if (appliedLayout === layout) return;
+  api.initialize({ ...BASE_CONFIG, layout });
+  appliedLayout = layout;
+}
+
 let mermaidPromise: Promise<MermaidApi> | null = null;
 export function getMermaid(): Promise<MermaidApi> {
   if (!mermaidPromise) {
@@ -21,20 +44,10 @@ export function getMermaid(): Promise<MermaidApi> {
       import("@mermaid-js/layout-elk"),
     ]).then(([m, elk]) => {
       const api = m.default as unknown as MermaidApi;
-      // 레이아웃 엔진을 dagre → ELK 로. 등록 자체는 가볍다(로더만 담긴 배열) —
-      // 실제 elkjs 번들은 첫 렌더 때 lazy 로 받아온다.
+      // ELK 를 레이아웃 후보로 등록. 등록 자체는 가볍다(로더만 담긴 배열) —
+      // 실제 elkjs 번들은 ELK 로 첫 렌더를 할 때 lazy 로 받아온다.
       api.registerLayoutLoaders(elk.default);
-      api.initialize({
-        startOnLoad: false,
-        theme: "neutral", // 앱의 흑백 미니멀 톤과 어울림
-        securityLevel: "strict", // 라벨을 HTML 로 해석하지 않음(XSS 방지)
-        suppressErrorRendering: true, // 실패 시 mermaid 가 에러 SVG 를 DOM 에 심지 않게
-        fontFamily: "var(--font)",
-        // dagre 는 ER 자기참조(self FK)를 3토막 난 선으로 흘려버린다 — mermaid 의
-        // 자기루프 병합이 flowchart/state 에만 걸려 있고 er 은 빠져 있기 때문.
-        // ELK 는 자기루프를 테이블에 붙는 짧은 루프로 그리고 배선도 직교로 정리한다.
-        layout: "elk",
-      });
+      applyLayout(api, getDiagramLayout());
       return api;
     });
   }
@@ -55,6 +68,7 @@ export async function renderMermaid(
   chart: string,
 ): Promise<{ svg: string }> {
   const mermaid = await getMermaid();
+  applyLayout(mermaid, getDiagramLayout()); // 사용자가 그새 엔진을 바꿨을 수 있다
   try {
     return await mermaid.render(id, chart);
   } catch (e) {
@@ -69,6 +83,7 @@ export function Mermaid({ chart }: { chart: string }) {
   const [failed, setFailed] = useState(false);
   const [errMsg, setErrMsg] = useState("");
   const [zoom, setZoom] = useState(false);
+  const layout = useDiagramLayout(); // 엔진을 바꾸면 노트 안 다이어그램도 다시 그린다
 
   useEffect(() => {
     let alive = true;
@@ -90,7 +105,7 @@ export function Mermaid({ chart }: { chart: string }) {
     return () => {
       alive = false;
     };
-  }, [chart]);
+  }, [chart, layout]);
 
   // 한 번도 성공 못 했을 때만 폴백/로딩 (렌더 실패해도 내용은 보이게)
   if (!svg) {
