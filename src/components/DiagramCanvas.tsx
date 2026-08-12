@@ -57,25 +57,22 @@ function extractNodeId(node: Element): string {
     );
 }
 
-// 포커스된 엔티티 테두리에 쓰는 이리데슨트 스펙트럼.
-// 캔버스는 mermaid 밝은 테마 고정이라(DESIGN.md §2 의 mermaid 캔버스 예외) 밝은 배경 기준.
-// 원색·형광·노랑 계열은 뺐다 — 유막(oil slick)처럼 명도가 고른 한 벌이라야 테두리가
-// 조각조각 튀지 않고 한 줄기로 읽힌다.
-const IRIS_STOPS = [
-  "#6B5FA7", // indigo
-  "#4C7FB0", // steel blue
-  "#3D8F9E", // teal
-  "#8A7BB8", // periwinkle
-  "#9C6F97", // plum
+// 포커스된 엔티티 테두리 = 스틸 금속. (DESIGN.md §2 의 mermaid 캔버스 예외)
+// 세로 그라디언트로 위가 밝고 아래가 어두운 봉(rod) 느낌을 내고, 그 위를 흰 광대가 돈다.
+// 무채색에 가까운 냉색 스틸 — 유채색 띠는 한 테이블 안에서 색이 갈라져 산만했다(실측).
+// 흰 광대가 지나갈 때 보이려면 바탕 금속이 충분히 어두워야 한다(밝은 스틸에선 묻힌다 — 실측).
+const METAL_STOPS: readonly [number, string][] = [
+  [0, "#aab0bf"], // 윗면 — 하늘을 받아 밝다
+  [0.42, "#6f7688"],
+  [0.58, "#525a6c"], // 몸통 아래 — 어둡게 말린다
+  [1, "#7d8494"], // 바닥 반사광
 ];
-/** 그라디언트 한 주기 길이(user unit) — 캔버스를 가로지르는 색 띠의 폭 */
-const IRIS_SPAN = 620;
 
 /** 빛 방향 (feDistantLight). y 축이 아래로 향하는 필터 좌표계 기준 — 왼쪽 위에서 비춘다. */
 const LIGHT_AZIMUTH = 235;
 const LIGHT_ELEVATION = 58;
 
-/** 테두리에 쓸 그라디언트와 베벨 필터를 SVG 안에 심고, url() 을 CSS 변수로 노출한다.
+/** 테두리에 쓸 금속 그라디언트와 베벨 필터를 SVG 안에 심고, url() 을 CSS 변수로 노출한다.
  *  id 는 렌더마다 달라지므로 CSS 가 하드코딩할 수 없어 변수로 건넨다. */
 export function injectIrisDefs(svgEl: SVGElement): void {
   const NS = "http://www.w3.org/2000/svg";
@@ -86,31 +83,27 @@ export function injectIrisDefs(svgEl: SVGElement): void {
     svgEl.insertBefore(defs, svgEl.firstChild);
   }
 
-  // ── 색: 캔버스 전체를 가로지르는 하나의 띠(userSpaceOnUse).
-  // 테이블마다 따로 무지개를 돌리면 제각각 놀아서 산만하다. 같은 띠를 공유하면
-  // 테두리를 도는 빛이 위치에 따라 색을 바꿔 물고 간다.
-  const gid = `${base}-iris`;
+  // ── 색: 도형 기준(objectBoundingBox) 세로 그라디언트 하나를 전원이 공유한다.
+  // 도형 기준이라 어느 테이블이든 "위 밝고 아래 어두운" 같은 금속으로 보인다 —
+  // 캔버스 좌표 기준 띠를 쓰면 한 테이블 안에서 색이 갈라진다(이전 구현의 실패).
+  const gid = `${base}-metal`;
   const grad = document.createElementNS(NS, "linearGradient");
   grad.setAttribute("id", gid);
-  grad.setAttribute("gradientUnits", "userSpaceOnUse");
-  grad.setAttribute("spreadMethod", "repeat");
   grad.setAttribute("x1", "0");
   grad.setAttribute("y1", "0");
-  grad.setAttribute("x2", String(IRIS_SPAN));
-  grad.setAttribute("y2", String(IRIS_SPAN * 0.35));
-  // 첫 색을 끝에 한 번 더 찍어야 주기가 매끄럽게 이어진다
-  const stops = [...IRIS_STOPS, IRIS_STOPS[0]];
-  stops.forEach((color, i) => {
+  grad.setAttribute("x2", "0");
+  grad.setAttribute("y2", "1");
+  for (const [offset, color] of METAL_STOPS) {
     const stop = document.createElementNS(NS, "stop");
-    stop.setAttribute("offset", `${(i / (stops.length - 1)) * 100}%`);
+    stop.setAttribute("offset", String(offset));
     stop.setAttribute("stop-color", color);
     grad.appendChild(stop);
-  });
+  }
   defs.appendChild(grad);
 
   // ── 입체: 알파를 살짝 흐려 높이맵으로 삼고 한 방향에서 조명 → 빛을 마주한 모서리만
   // 하얗게 서는 베벨. diffuse 그늘까지 얹어 봤더니 색을 먹어 회색으로 죽길래
-  // specular(하이라이트) 한 겹만 더한다 — 색은 그대로 두고 입체만 얻는다.
+  // specular(하이라이트) 한 겹만 더한다. 바탕 테두리는 정적이라 한 번 계산되고 캐시된다.
   const fid = `${base}-bevel`;
   defs.insertAdjacentHTML(
     "beforeend",
@@ -157,8 +150,8 @@ function clockwiseRectPath(
 /** 테두리 위를 도는 "빛 반사(sheen)" 오버레이를 깔아둔다(보이기는 CSS 가 결정).
  *
  *  테두리 자체는 끊지 않는다 — 색은 한 바퀴 다 채워져 있고, 그 위에 얹는 건
- *  반투명 흰 광택뿐이다. 스포트라이트처럼 한 점만 밝히는 게 아니라, 노드 중심에서
- *  뻗는 그라디언트를 **통째로 회전**시켜 금속면 위를 훑는 반사처럼 보이게 한다.
+ *  반투명 흰 광택뿐이다. 노드 중앙을 지나는 광대(band) 그라디언트를 **통째로
+ *  회전**시켜, 금속판을 스치는 빛줄기가 테두리를 훑고 도는 것처럼 보이게 한다.
  *
  *  성능: 이전 구현(mix-blend-mode + dash 애니메이션 + 움직이는 레이어 위 SVG 필터)은
  *  매 프레임 블렌딩·필터 재평가가 겹쳐 컴포지터를 벗어났다. 지금은 움직이는 것이
@@ -192,22 +185,27 @@ export function addSheenOverlays(svgEl: SVGElement, animate: boolean): void {
     const cy = box.y + box.height / 2;
     const r = Math.hypot(box.width, box.height) / 2;
 
-    // 노드 중심 → 바깥으로 뻗는 그라디언트. 끝쪽만 흰색이라, 회전하면
-    // 그 방향을 향한 테두리 구간만 밝아진다 = 빛이 테두리를 훑고 돈다.
+    // 대각선 전체를 가로지르는 그라디언트에 **중앙을 지나는 흰 광대(band)** 하나.
+    // 중앙을 지나야 하는 이유: 가로로 긴 테이블은 위아래 변이 중심에서 0.1r 밖에 안
+    // 떨어져 있어서, 광대를 끝쪽에 두면 회전 중 대부분 아무 변도 지나지 않는다(실측 —
+    // "움직이지 않는" 것처럼 보였던 원인). 중앙 광대는 어느 각도에서든 테두리와 만나고,
+    // 회전하면 금속판을 스치는 빛줄기처럼 마주보는 두 구간이 함께 시계방향으로 돈다.
     const gid = `${svgEl.id || "dgm"}-sheen-${(seq += 1)}`;
     const grad = document.createElementNS(NS, "linearGradient");
     grad.setAttribute("id", gid);
     grad.setAttribute("gradientUnits", "userSpaceOnUse");
-    grad.setAttribute("x1", String(cx));
+    grad.setAttribute("x1", String(cx - r));
     grad.setAttribute("y1", String(cy));
     grad.setAttribute("x2", String(cx + r));
     grad.setAttribute("y2", String(cy));
     for (const [offset, opacity] of [
       [0, 0],
-      [0.45, 0],
-      [0.75, 0.55], // 어깨 — 반사가 넓게 번지는 부분
-      [0.92, 0.95], // 정점
-      [1, 0.4], // 꼬리를 살짝 남겨 뚝 끊기지 않게
+      [0.3, 0],
+      [0.42, 0.85], // 광대 어깨
+      [0.5, 1], // 정점
+      [0.58, 0.85],
+      [0.7, 0],
+      [1, 0],
     ] as const) {
       const stop = document.createElementNS(NS, "stop");
       stop.setAttribute("offset", String(offset));
@@ -222,7 +220,7 @@ export function addSheenOverlays(svgEl: SVGElement, animate: boolean): void {
       anim.setAttribute("type", "rotate");
       anim.setAttribute("from", `0 ${cx} ${cy}`);
       anim.setAttribute("to", `360 ${cx} ${cy}`);
-      anim.setAttribute("dur", "3.6s");
+      anim.setAttribute("dur", "5s");
       anim.setAttribute("repeatCount", "indefinite");
       grad.appendChild(anim);
     }
