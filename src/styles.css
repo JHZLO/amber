@@ -2374,6 +2374,130 @@ html.widget-root #root {
   color: var(--text-3);
   word-break: break-all;
 }
+/* 펼친 동안은 눌린 상태로 — 색이 아니라 채움으로(§3) */
+.dgm-node-info-meta .btn.active {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}
+/* ---- 컬럼 패널 — 테이블을 고르고 '컬럼 N' 을 누르면 우측에서 밀려 들어온다 ----
+   위는 줌 플로팅(≈46px) 아래에서 시작하고, 아래는 정보 카드와 겹치지 않게 잘라 둔다. */
+.dgm-cols {
+  position: absolute;
+  z-index: 3;
+  top: 56px;
+  right: 10px;
+  width: min(380px, calc(100% - 24px));
+  max-height: calc(100% - 150px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  animation: dgm-cols-in 0.18s var(--ease-out);
+}
+/* 오른쪽에서 들어오므로 오른쪽에서 나온다(§9 공간 일관성) */
+@keyframes dgm-cols-in {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dgm-cols {
+    animation: none;
+  }
+}
+.dgm-cols-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 9px 8px 9px 13px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.dgm-cols-title {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.dgm-cols-name {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  word-break: break-all;
+}
+.dgm-cols-count {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+/* **드래그해서 긁어 복사**하라고 만든 영역이라 선택을 살려 둔다 */
+.dgm-cols-body {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 13px 10px;
+  overflow-y: auto;
+  user-select: text;
+  cursor: text;
+}
+/* 한 줄 = 블록 하나, 칸은 inline-block. grid 로 짜면 셀마다 블록이 되어 복사했을 때
+   `bigint⏎id⏎PK` 처럼 낱개로 쪼개진다(실측) — 이 목록은 긁어서 붙여넣으라고 만든 것이라
+   **한 컬럼이 한 줄**로 나와야 한다. 코멘트가 접히는 soft wrap 은 개행을 넣지 않아 무방하다. */
+/* 걸어 들여쓰기(padding-left + 음수 text-indent)는 쓰지 말 것 — 첫 줄이 통째로 왼쪽으로
+   끌려 나가 이름이 패널 밖으로 잘린다(실측). 접힌 코멘트는 왼쪽 정렬로 둔다. */
+.dgm-col-row {
+  padding: 4px 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  border-bottom: 1px solid var(--border);
+}
+.dgm-col-row:last-child {
+  border-bottom: none;
+}
+/* 이름이 먼저 — 찾을 때 눈이 훑는 건 타입이 아니라 이름이다 */
+.dgm-col-name {
+  display: inline-block;
+  min-width: 150px;
+  margin-right: 4px;
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--text);
+  word-break: break-all;
+  vertical-align: top;
+}
+.dgm-col-type {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+/* PK/FK/UK — 색 대신 아웃라인 배지(§3) */
+.dgm-col-keys {
+  display: inline-block;
+  margin-right: 2px;
+  padding: 0 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  color: var(--text-2);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.dgm-col-comment {
+  color: var(--text-3);
+  word-break: break-word;
+}
 
 /* ---- 필기노트 인라인 질문(노션 댓글식) ---- */
 /* 질문이 달린 텍스트 하이라이트 (CSS Custom Highlight — DOM 무변경) */

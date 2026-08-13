@@ -110,6 +110,7 @@ const ko = {
   "diagrams.node.deselect": "선택 해제 (Esc)",
   "diagrams.node.copyName": "이름 복사",
   "diagrams.node.copied": "복사됨",
+  "diagrams.node.columns": "컬럼 {n}",
 
   // 레이아웃 엔진 선택 (캔버스 좌하단 플로팅)
   "diagrams.layout.elk": "각지게",
@@ -231,6 +232,7 @@ const en: Record<keyof typeof ko, string> = {
   "diagrams.node.deselect": "Clear selection (Esc)",
   "diagrams.node.copyName": "Copy name",
   "diagrams.node.copied": "Copied",
+  "diagrams.node.columns": "{n} columns",
 
   "diagrams.layout.elk": "Angular",
   "diagrams.layout.dagre": "Curved",

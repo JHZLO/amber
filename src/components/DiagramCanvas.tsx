@@ -110,10 +110,58 @@ function findLineForNodeId(nodeId: string, code: string): number {
   return -1;
 }
 
+/** ER 엔티티 한 줄 (렌더된 라벨에서 그대로 읽는다) */
+interface NodeColumn {
+  type: string;
+  name: string;
+  keys: string;
+  comment: string;
+}
+
 interface NodeSel {
   text: string;
   id: string;
   line: number;
+  columns: NodeColumn[];
+}
+
+type ColumnField = keyof NodeColumn;
+const COLUMN_FIELD: Record<string, ColumnField> = {
+  "attribute-type": "type",
+  "attribute-name": "name",
+  "attribute-keys": "keys",
+  "attribute-comment": "comment",
+};
+
+/** ER 엔티티의 컬럼 목록. mermaid 원문을 다시 파싱하지 않고 **렌더 결과**를 읽는다 —
+ *  엔티티 본문은 이미 `g.label.attribute-{type|name|keys|comment}` 로 쪼개져 있어서
+ *  타입·이름·키·코멘트가 화면에 보이는 그대로 나온다(따옴표·별칭 파싱 걱정 없음).
+ *
+ *  한 줄이 항상 4칸은 아니다 — 코멘트가 하나도 없는 엔티티는 mermaid 가 코멘트 칸 자체를
+ *  안 그린다. 그래서 개수를 가정하지 않고 **이미 채운 칸이 다시 나오면 다음 줄**로 넘긴다. */
+function readColumns(nodeEl: Element): NodeColumn[] {
+  const rows: NodeColumn[] = [];
+  let cur: Partial<NodeColumn> = {};
+  const flush = () => {
+    if (Object.keys(cur).length === 0) return;
+    rows.push({
+      type: cur.type ?? "",
+      name: cur.name ?? "",
+      keys: cur.keys ?? "",
+      comment: cur.comment ?? "",
+    });
+    cur = {};
+  };
+  for (const el of nodeEl.querySelectorAll("g.label")) {
+    const cls = el.getAttribute("class") ?? "";
+    // 엔티티 이름(g.label.name)은 attribute- 접두어가 없어 자연히 걸러진다
+    const field = Object.entries(COLUMN_FIELD).find(([k]) => cls.includes(k))?.[1];
+    if (!field) continue;
+    if (field in cur) flush();
+    cur[field] = el.textContent?.trim() ?? "";
+  }
+  flush();
+  return rows;
 }
 
 /** 스튜디오와 동일한 SVG 정규화: viewBox 보장 + 크기를 컨테이너에 맡김 */
@@ -173,6 +221,8 @@ export function DiagramCanvas({
   chartRef.current = chart;
   const downPosRef = useRef<{ x: number; y: number } | null>(null);
 
+  // 컬럼 목록 펼침 — 노드를 바꿔 고르면 접힌 상태로 돌아간다
+  const [showCols, setShowCols] = useState(false);
   // 이름 복사 피드백 — 리포트 복사 버튼과 같은 문법(1.5s 뒤 원래대로)
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -233,6 +283,7 @@ export function DiagramCanvas({
     selectedElRef.current = null;
     setSel(null);
     setCopied(false); // 다른 노드를 골랐는데 '복사됨'이 남아 있으면 거짓말이 된다
+    setShowCols(false);
     applyFocus(null);
   };
 
@@ -242,6 +293,7 @@ export function DiagramCanvas({
       return;
     }
     setCopied(false);
+    setShowCols(false); // 다른 테이블의 컬럼이 펼쳐진 채로 남지 않게
     selectedElRef.current?.classList.remove("node-selected");
     selectedElRef.current = node;
     node.classList.add("node-selected");
@@ -251,7 +303,13 @@ export function DiagramCanvas({
     let line = id ? findLineForNodeId(id, chartRef.current) : -1;
     if (line < 1 && text && text !== id)
       line = findLineForNodeId(text, chartRef.current);
-    setSel({ text: text || t("diagrams.node.unnamed"), id, line });
+    setSel({
+      text: text || t("diagrams.node.unnamed"),
+      id,
+      line,
+      // 컬럼은 g.node 기준으로 읽는다 — 클릭 지점이 안쪽 rect 일 수 있다
+      columns: readColumns(node.closest("g.node") ?? node),
+    });
   }
 
   useEffect(() => {
@@ -512,6 +570,16 @@ export function DiagramCanvas({
               {sel.id && sel.id !== sel.text && (
                 <span className="dgm-node-info-id">{sel.id}</span>
               )}
+              {sel.columns.length > 0 && (
+                <button
+                  className={`btn btn-sm${showCols ? " active" : ""}`}
+                  aria-expanded={showCols}
+                  onClick={() => setShowCols((v) => !v)}
+                >
+                  <Icon name="layers" size={13} />
+                  {t("diagrams.node.columns", { n: sel.columns.length })}
+                </button>
+              )}
               {sel.line > 0 && onJumpToLine && (
                 <button
                   className="btn btn-sm"
@@ -529,6 +597,49 @@ export function DiagramCanvas({
           >
             <Icon name="x" size={14} />
           </button>
+        </div>
+      )}
+
+      {/* 컬럼 패널 — 우측에서 밀려 들어온다. 줌 플로팅 아래에서 시작하고, 아래쪽은
+          정보 카드와 겹치지 않게 높이를 잘라 둔다. */}
+      {showCols && sel && sel.columns.length > 0 && (
+        <div className="dgm-cols" role="dialog" aria-label={sel.text}>
+          <div className="dgm-cols-head">
+            <div className="dgm-cols-title">
+              <span className="dgm-cols-name">{sel.text}</span>
+              <span className="dgm-cols-count">
+                {t("diagrams.node.columns", { n: sel.columns.length })}
+              </span>
+            </div>
+            <button
+              className="icon-btn ghost sm"
+              aria-label={t("common.close")}
+              onClick={() => setShowCols(false)}
+            >
+              <Icon name="x" size={14} />
+            </button>
+          </div>
+          {/* 긁어서 복사하라고 만든 목록이라 선택을 살려 둔다.
+              칸 사이의 {" "} 는 장식이 아니다 — CSS 마진은 복사한 텍스트에 남지 않아
+              이게 없으면 `id bigint PK` 가 `idbigintPK` 로 붙어 나온다(실측).
+              코멘트가 길어 줄이 접히는 건 상관없다: soft wrap 은 개행을 넣지 않아
+              **한 컬럼이 한 줄**로 복사된다. */}
+          <div className="dgm-cols-body">
+            {sel.columns.map((c, i) => (
+              <div className="dgm-col-row" key={`${c.name}-${i}`}>
+                <span className="dgm-col-name">{c.name}</span>{" "}
+                <span className="dgm-col-type">{c.type}</span>{" "}
+                {c.keys && (
+                  <>
+                    <span className="dgm-col-keys">{c.keys}</span>{" "}
+                  </>
+                )}
+                {c.comment && (
+                  <span className="dgm-col-comment">{c.comment}</span>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {error && (
