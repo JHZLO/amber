@@ -32,11 +32,16 @@ export function rootDisplayName(s: SectionKey, root = getRoot(s)): string {
   return root.split("/").filter(Boolean).pop() || root;
 }
 
-/** 루트의 절대경로를 ~ 축약 표기로 (트리 헤더의 보조 경로) — 기본 보관함은 appdata 상대라 풀어준다 */
-export async function rootDisplayPath(s: SectionKey, root = getRoot(s)): Promise<string> {
+/** 트리 헤더용 경로 한 쌍 — `abs` 는 복사·붙여넣기용 절대경로, `display` 는 홈을 `~` 로 줄인 표기.
+ *  기본 보관함 루트는 appdata 상대경로라 여기서 절대경로로 풀어준다. */
+export async function rootPaths(
+  s: SectionKey,
+  root = getRoot(s),
+): Promise<{ abs: string; display: string }> {
   const abs = isDefaultRoot(s, root) ? await join(await appDataDir(), root) : root;
   const home = (await homeDir()).replace(/\/+$/, "");
-  return abs === home || abs.startsWith(home + "/") ? `~${abs.slice(home.length)}` : abs;
+  const inHome = abs === home || abs.startsWith(home + "/");
+  return { abs, display: inHome ? `~${abs.slice(home.length)}` : abs };
 }
 
 /** 최근 연 폴더 목록 (절대경로, 최신순, 기본 보관함 제외) */

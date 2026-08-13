@@ -1343,9 +1343,15 @@ html.widget-root #root {
 }
 /* 트리 헤더 버튼도 고스트 톤으로 (사이드바 시각 무게 축소) */
 .notes-tree-head .icon-btn {
+  flex-shrink: 0; /* 좁아져도 액션은 그대로 — 압력은 경로(.root-path)가 흡수한다 */
   border: none;
   background: transparent;
   color: var(--text-2);
+}
+/* Tooltip 래퍼(inline-flex)는 기본 min-width:auto 라 안쪽 경로가 줄어들지 못한다.
+   경로를 감싼 래퍼에만 푼다 — 전부 풀면 아이콘 버튼 래퍼도 줄어 버튼이 밖으로 삐져나온다. */
+.notes-tree-head .tip-wrap:has(.root-path) {
+  min-width: 0;
 }
 .notes-tree-head .icon-btn:hover {
   background: var(--surface-2);
@@ -2647,7 +2653,8 @@ html.widget-root #root {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: 220px;
+  flex-shrink: 0;
+  max-width: 170px;
   padding: 4px 8px;
   border: none;
   border-radius: 6px;
@@ -2656,7 +2663,10 @@ html.widget-root #root {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.12s;
+  transition: background 0.12s, transform 0.16s var(--ease-out);
+}
+.root-picker:active {
+  transform: scale(0.96);
 }
 .root-picker:hover {
   background: var(--surface-2);
@@ -2666,22 +2676,46 @@ html.widget-root #root {
   color: var(--text-3);
 }
 .root-picker-name {
-  flex-shrink: 0; /* 경로보다 이름이 우선 — 이름은 자체 상한에서만 말줄임 */
-  max-width: 130px;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 이름 옆 보조 경로(~ 축약) — 넘치면 이름보다 먼저 줄어들고 끝부분(폴더명 쪽)이 보인다 */
-.root-picker-path {
+/* 이름 옆 현재 경로(~ 축약) — 클릭하면 절대경로가 클립보드로.
+   화면이 좁아지면 헤더에서 **유일하게 줄어드는** 요소다(아이콘 버튼은 고정). */
+.root-path {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   min-width: 0;
-  flex: 0 1 auto;
+  max-width: 210px;
+  margin-left: -2px;
+  padding: 3px 6px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, transform 0.16s var(--ease-out);
+}
+.root-path:hover {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.root-path:active {
+  transform: scale(0.96);
+}
+.root-path svg {
+  flex-shrink: 0;
+}
+/* 넘치면 앞을 자르고 끝(폴더명 쪽)을 남긴다 — 문자열의 LRM 접두어와 짝(RootPicker.tsx 참고) */
+.root-path-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--text-3);
   direction: rtl;
   text-align: left;
 }

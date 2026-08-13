@@ -91,6 +91,8 @@ const ko = {
   "settings.root.openFolder": "폴더 열기…",
   "settings.root.openFolderDesc": "로컬 폴더를 워크스페이스로 사용",
   "settings.root.openDialogTitle": "작업 폴더 열기",
+  "settings.root.copyPath": "경로 복사",
+  "settings.root.copied": "복사됨",
 } as const;
 
 const en: Record<keyof typeof ko, string> = {
@@ -175,6 +177,8 @@ const en: Record<keyof typeof ko, string> = {
   "settings.root.openFolder": "Open folder…",
   "settings.root.openFolderDesc": "Use a local folder as the workspace",
   "settings.root.openDialogTitle": "Open a working folder",
+  "settings.root.copyPath": "Copy path",
+  "settings.root.copied": "Copied",
 } as const;
 
 export const settingsMessages = { ko, en };

@@ -10,17 +10,24 @@ import {
   getRoot,
   isDefaultRoot,
   rootDisplayName,
-  rootDisplayPath,
+  rootPaths,
   setRoot,
   WORKSPACE_EVENT,
   type SectionKey,
 } from "../lib/workspace";
 import { t } from "../lib/i18n";
 import { Icon } from "../icons";
+import { Tooltip } from "../ui";
+
+/** LEFT-TO-RIGHT MARK — 아래 `.root-path-text` 주석 참고 */
+const LRM = "‎";
 
 export function RootPicker({ section }: { section: SectionKey }) {
   const [root, setRootState] = useState(() => getRoot(section));
-  const [path, setPath] = useState(""); // 루트의 ~ 축약 절대경로 (비동기 해석)
+  // 현재 루트의 경로 — 표시는 ~ 축약, 복사는 절대경로 (비동기 해석)
+  const [paths, setPaths] = useState<{ abs: string; display: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -35,13 +42,33 @@ export function RootPicker({ section }: { section: SectionKey }) {
 
   useEffect(() => {
     let alive = true;
-    void rootDisplayPath(section, root).then((p) => {
-      if (alive) setPath(p);
+    void rootPaths(section, root).then((p) => {
+      if (alive) setPaths(p);
     });
     return () => {
       alive = false;
     };
   }, [section, root]);
+
+  useEffect(
+    () => () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+    },
+    [],
+  );
+
+  // 경로 복사 — 붙여넣는 쪽(터미널/Finder)이 확실하도록 ~ 축약이 아닌 절대경로를 넣는다
+  async function copyPath() {
+    if (!paths) return;
+    try {
+      await navigator.clipboard.writeText(paths.abs);
+      setCopied(true);
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* 클립보드 실패는 조용히 무시 */
+    }
+  }
 
   const place = useCallback(() => {
     const r = triggerRef.current?.getBoundingClientRect();
@@ -99,7 +126,6 @@ export function RootPicker({ section }: { section: SectionKey }) {
             ? t("settings.root.default")
             : rootDisplayName(section, root)}
         </span>
-        {path && <span className="root-picker-path">{path}</span>}
         <svg className="select-caret" width="10" height="6" viewBox="0 0 10 6">
           <path
             d="M1 1l4 4 4-4"
@@ -111,6 +137,20 @@ export function RootPicker({ section }: { section: SectionKey }) {
           />
         </svg>
       </button>
+      {paths && (
+        <Tooltip label={t(copied ? "settings.root.copied" : "settings.root.copyPath")}>
+          <button
+            className="root-path"
+            aria-label={t("settings.root.copyPath")}
+            onClick={() => void copyPath()}
+          >
+            {/* U+200E(LRM): 경로가 `~` 로 시작하면 rtl 문맥(왼쪽 말줄임)에서 bidi 가 그 중립문자를
+                줄 끝으로 밀어 `…notes/~` 로 읽힌다. 문자열을 LTR 로 못 박아 순서를 지킨다. */}
+            <span className="root-path-text">{LRM + paths.display}</span>
+            <Icon name={copied ? "check" : "copy"} size={11} />
+          </button>
+        </Tooltip>
+      )}
       {open &&
         pos &&
         createPortal(
