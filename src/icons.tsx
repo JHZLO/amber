@@ -18,7 +18,7 @@ export type IconName =
   | "x"
   | "undo"
   | "expand"
-  | "fullscreen"
+  | "fit-screen"
   | "zoom-in"
   | "zoom-out"
   | "panel"
@@ -105,8 +105,8 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M3 21l7-7" />
     </>
   ),
-  // 네 귀퉁이 브래킷 — 전체화면(expand 의 대각 화살표와 헷갈리지 않게 모서리만)
-  fullscreen: (
+  // 네 귀퉁이 브래킷 = 화면에 맞춤(프레임 안에 담는다). 전체화면은 대각 화살표(expand).
+  "fit-screen": (
     <>
       <path d="M3 8V5a2 2 0 0 1 2-2h3" />
       <path d="M16 3h3a2 2 0 0 1 2 2v3" />

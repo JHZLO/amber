@@ -414,25 +414,16 @@ export function DiagramCanvas({
       />
 
       {/* 우상단 — 화면 조작. 캔버스 위에 떠 있어 그림 폭을 잡아먹지 않는다.
+          아이콘 뜻: 네 귀퉁이 브래킷 = 프레임에 담는다(맞춤), 대각 화살표 = 밖으로 펼친다(전체화면).
           네이티브 title 은 WKWebView 에서 안 뜨므로 공용 Tooltip 으로 감싼다. */}
       <div className="dgm-float dgm-float-tr">
-        <Tooltip
-          label={
-            fullscreen
-              ? t("diagrams.canvas.fullscreenClose")
-              : t("diagrams.canvas.fullscreen")
-          }
-        >
+        <Tooltip label={`${t("diagrams.zoom.fitTitle")} (0)`}>
           <button
             className="dgm-float-btn"
-            aria-label={
-              fullscreen
-                ? t("diagrams.canvas.fullscreenClose")
-                : t("diagrams.canvas.fullscreen")
-            }
-            onClick={() => setFullscreen((f) => !f)}
+            aria-label={t("diagrams.zoom.fitTitle")}
+            onClick={fit}
           >
-            <Icon name={fullscreen ? "x" : "fullscreen"} size={16} />
+            <Icon name="fit-screen" size={16} />
           </button>
         </Tooltip>
         <Tooltip label={`${t("diagrams.zoom.out")} (-)`}>
@@ -463,13 +454,23 @@ export function DiagramCanvas({
             <Icon name="zoom-in" size={16} />
           </button>
         </Tooltip>
-        <Tooltip label={`${t("diagrams.zoom.fitTitle")} (0)`}>
+        <Tooltip
+          label={
+            fullscreen
+              ? t("diagrams.canvas.fullscreenClose")
+              : t("diagrams.canvas.fullscreen")
+          }
+        >
           <button
             className="dgm-float-btn"
-            aria-label={t("diagrams.zoom.fitTitle")}
-            onClick={fit}
+            aria-label={
+              fullscreen
+                ? t("diagrams.canvas.fullscreenClose")
+                : t("diagrams.canvas.fullscreen")
+            }
+            onClick={() => setFullscreen((f) => !f)}
           >
-            <Icon name="expand" size={16} />
+            <Icon name={fullscreen ? "x" : "expand"} size={16} />
           </button>
         </Tooltip>
       </div>
