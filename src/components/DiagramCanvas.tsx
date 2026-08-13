@@ -115,7 +115,14 @@ interface NodeColumn {
   type: string;
   name: string;
   keys: string;
-  comment: string;
+  /** 코멘트에서 뽑은 `[NULL]`/`[NOTNULL]` 표기. 설명 본문은 싣지 않는다 */
+  flag: string;
+}
+
+/** 코멘트 앞머리의 널 표기만 뽑는다. 설명 본문은 길이가 제각각이라 줄이 접히며
+ *  목록의 통일성을 깨서 패널에 싣지 않는다 — 본문은 다이어그램에 이미 그려져 있다. */
+function nullFlagOf(comment: string): string {
+  return /\[\s*(?:NOT\s*NULL|NULL)\s*\]/i.exec(comment)?.[0] ?? "";
 }
 
 interface NodeSel {
@@ -125,8 +132,9 @@ interface NodeSel {
   columns: NodeColumn[];
 }
 
-type ColumnField = keyof NodeColumn;
-const COLUMN_FIELD: Record<string, ColumnField> = {
+/** 라벨 클래스 → 모아 담을 칸. comment 는 널 표기만 뽑아 쓰므로 원문 그대로 받아 둔다. */
+type RawField = "type" | "name" | "keys" | "comment";
+const COLUMN_FIELD: Record<string, RawField> = {
   "attribute-type": "type",
   "attribute-name": "name",
   "attribute-keys": "keys",
@@ -141,14 +149,14 @@ const COLUMN_FIELD: Record<string, ColumnField> = {
  *  안 그린다. 그래서 개수를 가정하지 않고 **이미 채운 칸이 다시 나오면 다음 줄**로 넘긴다. */
 function readColumns(nodeEl: Element): NodeColumn[] {
   const rows: NodeColumn[] = [];
-  let cur: Partial<NodeColumn> = {};
+  let cur: Partial<Record<RawField, string>> = {};
   const flush = () => {
     if (Object.keys(cur).length === 0) return;
     rows.push({
       type: cur.type ?? "",
       name: cur.name ?? "",
       keys: cur.keys ?? "",
-      comment: cur.comment ?? "",
+      flag: nullFlagOf(cur.comment ?? ""),
     });
     cur = {};
   };
@@ -631,16 +639,17 @@ export function DiagramCanvas({
           <div className="dgm-cols-body">
             {sel.columns.map((c, i) => (
               <div className="dgm-col-row" key={`${c.name}-${i}`}>
+                {/* 칸마다 고정 폭 inline-block — 블록으로 쪼개면 복사할 때 줄이 갈라지고,
+                    폭을 안 주면 칸이 들쭉날쭉해진다.
+                    칸 사이 공백은 반드시 셀 **바깥**에 둔다 — 셀 안 끝에 두면 inline-block
+                    줄 끝이라 브라우저가 지워버려 `PK[NOTNULL]` 로 붙는다(실측).
+                    키가 없는 줄은 공백이 하나 더 들어가지만, 그래야 칸 위치가 어긋나지 않는다. */}
                 <span className="dgm-col-name">{c.name}</span>{" "}
                 <span className="dgm-col-type">{c.type}</span>{" "}
-                {c.keys && (
-                  <>
-                    <span className="dgm-col-keys">{c.keys}</span>{" "}
-                  </>
-                )}
-                {c.comment && (
-                  <span className="dgm-col-comment">{c.comment}</span>
-                )}
+                <span className="dgm-col-keycell">
+                  {c.keys && <span className="dgm-col-keys">{c.keys}</span>}
+                </span>{" "}
+                {c.flag && <span className="dgm-col-flag">{c.flag}</span>}
               </div>
             ))}
           </div>
