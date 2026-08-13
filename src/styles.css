@@ -2300,6 +2300,21 @@ html.widget-root #root {
   flex-direction: column;
   gap: 6px;
 }
+/* 윗줄: 이름(줄어드는 쪽) + 컬럼 버튼(고정) */
+.dgm-node-info-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dgm-node-info-top .dgm-node-info-name {
+  min-width: 0;
+  flex: 1;
+}
+.dgm-cols-toggle {
+  flex: none;
+  gap: 5px;
+  white-space: nowrap;
+}
 /* 이름 = 클릭하면 복사되는 pressable. 쉬는 상태에서도 눌러 보이도록 흐린 '복사' 힌트를
    달아 두고(§8 커서로 제스처를 알린다), hover 에서 surface-2 + 힌트가 또렷해진다. */
 .dgm-node-info-name {
@@ -2375,7 +2390,7 @@ html.widget-root #root {
   word-break: break-all;
 }
 /* 펼친 동안은 눌린 상태로 — 색이 아니라 채움으로(§3) */
-.dgm-node-info-meta .btn.active {
+.dgm-node-info .btn.active {
   background: var(--surface-3);
   border-color: var(--border-strong);
 }
@@ -2386,7 +2401,8 @@ html.widget-root #root {
   z-index: 3;
   top: 56px;
   right: 10px;
-  width: min(380px, calc(100% - 24px));
+  /* 코멘트가 긴 스키마가 흔해 380px 에선 줄이 자주 접혀 정렬이 흐트러졌다 — 넓게 잡는다 */
+  width: min(520px, calc(100% - 24px));
   max-height: calc(100% - 150px);
   display: flex;
   flex-direction: column;
@@ -2422,7 +2438,9 @@ html.widget-root #root {
   border-bottom: 1px solid var(--border);
   background: var(--surface-2);
 }
+/* flex:1 이라야 닫기 버튼이 맨 오른쪽으로 밀린다 — 없으면 제목 바로 옆에 붙는다 */
 .dgm-cols-title {
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -2467,7 +2485,8 @@ html.widget-root #root {
 /* 이름이 먼저 — 찾을 때 눈이 훑는 건 타입이 아니라 이름이다 */
 .dgm-col-name {
   display: inline-block;
-  min-width: 150px;
+  /* 긴 컬럼명(esign_external_contract_id 급)까지 담아야 타입 칸이 들쭉날쭉하지 않다 */
+  min-width: 210px;
   margin-right: 4px;
   font-family: var(--mono);
   font-weight: 700;

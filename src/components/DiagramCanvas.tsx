@@ -553,32 +553,36 @@ export function DiagramCanvas({
       {sel && (
         <div className="dgm-node-info">
           <div className="dgm-node-info-body">
-            {/* 이름 = 클릭하면 클립보드로. 힌트('복사')는 자리를 잡아둔 채 흐리게 늘 떠 있고
-                hover 에서 또렷해진다 — 나타났다 사라지면 카드 폭이 흔들린다(§9.2) */}
-            <button
-              className={`dgm-node-info-name${copied ? " copied" : ""}`}
-              onClick={() => void copyName(sel.text)}
-              aria-label={`${t("diagrams.node.copyName")}: ${sel.text}`}
-            >
-              <span className="dgm-node-info-text">{sel.text}</span>
-              <span className="dgm-node-info-hint" aria-hidden="true">
-                <Icon name={copied ? "check" : "copy"} size={12} />
-                {copied ? t("diagrams.node.copied") : t("diagrams.copy")}
-              </span>
-            </button>
-            <div className="dgm-node-info-meta">
-              {sel.id && sel.id !== sel.text && (
-                <span className="dgm-node-info-id">{sel.id}</span>
-              )}
+            {/* 윗줄 = 이름 + 컬럼 버튼. 컬럼 버튼을 아래 meta 줄에 두면 긴 id 에 밀려
+                줄바꿈이 나므로 여기로 올린다 — 길이가 변하는 건 id 뿐이라야 한다. */}
+            <div className="dgm-node-info-top">
+              {/* 이름 = 클릭하면 클립보드로. 힌트('복사')는 자리를 잡아둔 채 흐리게 늘 떠 있고
+                  hover 에서 또렷해진다 — 나타났다 사라지면 카드 폭이 흔들린다(§9.2) */}
+              <button
+                className={`dgm-node-info-name${copied ? " copied" : ""}`}
+                onClick={() => void copyName(sel.text)}
+                aria-label={`${t("diagrams.node.copyName")}: ${sel.text}`}
+              >
+                <span className="dgm-node-info-text">{sel.text}</span>
+                <span className="dgm-node-info-hint" aria-hidden="true">
+                  <Icon name={copied ? "check" : "copy"} size={12} />
+                  {copied ? t("diagrams.node.copied") : t("diagrams.copy")}
+                </span>
+              </button>
               {sel.columns.length > 0 && (
                 <button
-                  className={`btn btn-sm${showCols ? " active" : ""}`}
+                  className={`btn btn-sm dgm-cols-toggle${showCols ? " active" : ""}`}
                   aria-expanded={showCols}
                   onClick={() => setShowCols((v) => !v)}
                 >
                   <Icon name="layers" size={13} />
                   {t("diagrams.node.columns", { n: sel.columns.length })}
                 </button>
+              )}
+            </div>
+            <div className="dgm-node-info-meta">
+              {sel.id && sel.id !== sel.text && (
+                <span className="dgm-node-info-id">{sel.id}</span>
               )}
               {sel.line > 0 && onJumpToLine && (
                 <button
