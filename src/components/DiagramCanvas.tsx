@@ -57,155 +57,6 @@ function extractNodeId(node: Element): string {
     );
 }
 
-// 포커스된 엔티티 테두리 = 스틸 금속. (DESIGN.md §2 의 mermaid 캔버스 예외)
-// 세로 그라디언트로 위가 밝고 아래가 어두운 봉(rod) 느낌을 내고, 그 위를 흰 광대가 돈다.
-// 무채색에 가까운 냉색 스틸 — 유채색 띠는 한 테이블 안에서 색이 갈라져 산만했다(실측).
-// 흰 광대가 지나갈 때 보이려면 바탕 금속이 충분히 어두워야 한다(밝은 스틸에선 묻힌다 — 실측).
-const METAL_STOPS: readonly [number, string][] = [
-  [0, "#aab0bf"], // 윗면 — 하늘을 받아 밝다
-  [0.42, "#6f7688"],
-  [0.58, "#525a6c"], // 몸통 아래 — 어둡게 말린다
-  [1, "#7d8494"], // 바닥 반사광
-];
-
-/** 빛 방향 (feDistantLight). y 축이 아래로 향하는 필터 좌표계 기준 — 왼쪽 위에서 비춘다. */
-const LIGHT_AZIMUTH = 235;
-const LIGHT_ELEVATION = 58;
-
-/** 테두리에 쓸 금속 그라디언트와 베벨 필터를 SVG 안에 심고, url() 을 CSS 변수로 노출한다.
- *  id 는 렌더마다 달라지므로 CSS 가 하드코딩할 수 없어 변수로 건넨다. */
-export function injectIrisDefs(svgEl: SVGElement): void {
-  const NS = "http://www.w3.org/2000/svg";
-  const base = svgEl.id || "dgm";
-  let defs = svgEl.querySelector("defs");
-  if (!defs) {
-    defs = document.createElementNS(NS, "defs");
-    svgEl.insertBefore(defs, svgEl.firstChild);
-  }
-
-  // ── 색: 도형 기준(objectBoundingBox) 세로 그라디언트 하나를 전원이 공유한다.
-  // 도형 기준이라 어느 테이블이든 "위 밝고 아래 어두운" 같은 금속으로 보인다 —
-  // 캔버스 좌표 기준 띠를 쓰면 한 테이블 안에서 색이 갈라진다(이전 구현의 실패).
-  const gid = `${base}-metal`;
-  const grad = document.createElementNS(NS, "linearGradient");
-  grad.setAttribute("id", gid);
-  grad.setAttribute("x1", "0");
-  grad.setAttribute("y1", "0");
-  grad.setAttribute("x2", "0");
-  grad.setAttribute("y2", "1");
-  for (const [offset, color] of METAL_STOPS) {
-    const stop = document.createElementNS(NS, "stop");
-    stop.setAttribute("offset", String(offset));
-    stop.setAttribute("stop-color", color);
-    grad.appendChild(stop);
-  }
-  defs.appendChild(grad);
-
-  // ── 입체: 알파를 살짝 흐려 높이맵으로 삼고 한 방향에서 조명 → 빛을 마주한 모서리만
-  // 하얗게 서는 베벨. diffuse 그늘까지 얹어 봤더니 색을 먹어 회색으로 죽길래
-  // specular(하이라이트) 한 겹만 더한다. 바탕 테두리는 정적이라 한 번 계산되고 캐시된다.
-  const fid = `${base}-bevel`;
-  defs.insertAdjacentHTML(
-    "beforeend",
-    `<filter id="${fid}" x="-25%" y="-25%" width="150%" height="150%"
-             color-interpolation-filters="sRGB">
-       <feGaussianBlur in="SourceAlpha" stdDeviation="0.6" result="h"/>
-       <feSpecularLighting in="h" surfaceScale="5" specularConstant="1.15"
-                           specularExponent="11" lighting-color="#ffffff" result="sp">
-         <feDistantLight azimuth="${LIGHT_AZIMUTH}" elevation="${LIGHT_ELEVATION}"/>
-       </feSpecularLighting>
-       <feComposite in="sp" in2="SourceAlpha" operator="in" result="spCut"/>
-       <feComposite in="SourceGraphic" in2="spCut" operator="arithmetic"
-                    k1="0" k2="1" k3="1" k4="0"/>
-     </filter>`,
-  );
-
-  svgEl.style.setProperty("--dgm-iris", `url(#${gid})`);
-  svgEl.style.setProperty("--dgm-bevel", `url(#${fid})`);
-}
-
-/** 시계방향(화면 기준: 위→오른쪽→아래→왼쪽)으로 한 바퀴 도는 닫힌 사각 경로 */
-function clockwiseRectPath(
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-): string {
-  const rr = Math.min(r, w / 2, h / 2);
-  return [
-    `M${x + rr} ${y}`,
-    `H${x + w - rr}`,
-    `A${rr} ${rr} 0 0 1 ${x + w} ${y + rr}`,
-    `V${y + h - rr}`,
-    `A${rr} ${rr} 0 0 1 ${x + w - rr} ${y + h}`,
-    `H${x + rr}`,
-    `A${rr} ${rr} 0 0 1 ${x} ${y + h - rr}`,
-    `V${y + rr}`,
-    `A${rr} ${rr} 0 0 1 ${x + rr} ${y}`,
-    "Z",
-  ].join(" ");
-}
-
-/** 테두리 위를 도는 "빛 반사(sheen)" 오버레이를 깔아둔다(보이기는 CSS 가 결정).
- *
- *  테두리 자체는 끊지 않는다 — 금속색은 바탕 테두리가 한 바퀴 다 채우고, 그 위를
- *  반투명 흰 광택 한 토막이 시계방향으로 돈다.
- *
- *  움직임은 **Web Animations API 로 stroke-dashoffset 을 0 → -둘레** 로 돌린다.
- *  앞서 두 번 "안 움직인다"고 한 원인이 각각 여기 있었다:
- *   1) SMIL(`animateTransform` 으로 그라디언트 회전) — 이 WebView 에서 값이 갱신되지 않음.
- *   2) CSS `@keyframes { to { stroke-dashoffset: calc(var(--dgm-len) * -1) } }` —
- *      `var()` 가 든 calc 는 보간이 안 돼 0 과 끝값 사이를 **중간 없이 튄다**(실측:
- *      t=1000ms 에서 0px, t=2000ms 에서 -1206px). 정지처럼 보이는 게 당연했다.
- *  그래서 길이를 아는 JS 에서 **숫자 그대로** 넘긴다 — 보간이 보장된다.
- *
- *  광택이 지나가도 테두리가 비지 않는 이유: 흰색을 반투명(stroke-opacity)으로만 얹는다.
- *  `mix-blend-mode: screen` 으로 얹었더니 밝은 캔버스에서 그 구간이 하얗게 날아가
- *  선이 사라진 것처럼 보였다(실측). 지금은 그냥 "밝아진 금속"으로 보인다.
- *
- *  mermaid 의 윤곽선을 복제하지 않는 이유: ER 의 g.outer-path 는 변마다 끊긴
- *  **subpath 8개**(중복 포함, Z 도 없음)라 dash 가 한 바퀴 돌지 못하고 조각을 건너뛴다.
- *  bbox 로 닫힌 사각형을 직접 그려야 진행 방향(시계방향)까지 우리가 정한다. */
-export function addSheenOverlays(svgEl: SVGElement): void {
-  const NS = "http://www.w3.org/2000/svg";
-  // WAAPI 는 CSS 미디어쿼리를 안 타므로 여기서 직접 본다
-  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  for (const node of svgEl.querySelectorAll("g.node")) {
-    // ER 엔티티는 g.outer-path 안 둘째 path 가 윤곽선(첫째는 면)
-    const border = node.querySelector<SVGPathElement>(
-      "g.outer-path > path:last-of-type",
-    );
-    if (!border) continue;
-    border.classList.add("dgm-border");
-    let box: DOMRect | null = null;
-    try {
-      box = border.getBBox();
-    } catch {
-      /* 지오메트리를 못 재면 광택 없이 정적 테두리만 */
-    }
-    if (!box || box.width <= 0 || box.height <= 0) continue;
-
-    const p = document.createElementNS(NS, "path") as SVGPathElement;
-    p.setAttribute("class", "dgm-sheen");
-    p.setAttribute(
-      "d",
-      clockwiseRectPath(box.x, box.y, box.width, box.height, 2),
-    );
-    // 붙인 뒤에 재야 한다 — 떨어져 있는 엘리먼트는 엔진에 따라 길이를 못 준다
-    border.parentElement?.appendChild(p);
-    const len = p.getTotalLength() || 2 * (box.width + box.height);
-    p.style.setProperty("--dgm-len", String(len)); // dasharray 는 CSS 가 계산(정적이라 무방)
-    if (reduced) continue; // 감소 모션: 금속색·베벨만 남기고 움직임은 뺀다
-    // 음수 방향 = 경로 진행 방향. 경로를 좌상단→오른쪽으로 그렸으므로 시계방향.
-    const anim = p.animate(
-      [{ strokeDashoffset: "0" }, { strokeDashoffset: String(-len) }],
-      { duration: 4000, iterations: Infinity, easing: "linear" },
-    );
-    anim.pause(); // 포커스된 노드만 applyFocus 가 깨운다
-  }
-}
-
 /** 렌더된 SVG 에서 읽어낸 연결 관계 (포커스 모드용) */
 interface DiagramGraph {
   /** 노드 id(다이어그램 접두사 뗀 것) → 노드 g 엘리먼트 */
@@ -351,12 +202,6 @@ export function DiagramCanvas({
     return null;
   }
 
-  /** 안 보이는 노드의 광택은 재워 둔다 — 39개짜리 ERD 에서 전부 돌리면 낭비다 */
-  function setSheenPlaying(nodeEl: Element, on: boolean) {
-    for (const s of nodeEl.querySelectorAll(".dgm-sheen"))
-      for (const a of s.getAnimations()) (on ? a.play : a.pause).call(a);
-  }
-
   function applyFocus(nodeId: string | null) {
     const g = graphRef.current;
     const svgEl = hostRef.current?.querySelector("svg");
@@ -366,16 +211,11 @@ export function DiagramCanvas({
       svgEl.classList.remove("dgm-focused");
       for (const el of svgEl.querySelectorAll(".dgm-rel"))
         el.classList.remove("dgm-rel");
-      for (const el of g.nodes.values()) setSheenPlaying(el, false);
       return;
     }
     const keep = neighborsOf(nodeId, g.edges);
     keep.add(nodeId);
-    for (const [id, el] of g.nodes) {
-      const on = keep.has(id);
-      el.classList.toggle("dgm-rel", on);
-      setSheenPlaying(el, on);
-    }
+    for (const [id, el] of g.nodes) el.classList.toggle("dgm-rel", keep.has(id));
     for (const e of g.edges) {
       const on = e.source === nodeId || e.target === nodeId;
       e.el.classList.toggle("dgm-rel", on);
@@ -431,8 +271,6 @@ export function DiagramCanvas({
         if (!svgEl) return;
         normalizeSvg(svgEl);
         graphRef.current = buildGraph(svgEl); // 포커스 모드용 연결 관계
-        injectIrisDefs(svgEl);
-        addSheenOverlays(svgEl); // 움직임은 CSS 라 prefers-reduced-motion 이 그대로 먹는다
         // 클릭 = 노드 선택 토글 (드래그 팬 후에는 무시 — 4px 이동 가드)
         svgEl.addEventListener("click", (e) => {
           const down = downPosRef.current;
