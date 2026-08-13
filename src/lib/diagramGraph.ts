@@ -10,6 +10,42 @@
 //   자기루프 {node}-cyclic-special-{1|mid|2}  ← dagre 가 자기참조를 3토막 낼 때만
 // ELK 는 자기참조도 일반 형식(source===target)으로 낸다.
 
+// ── ER 컬럼의 널 허용 여부 ──────────────────────────────────────────────
+// 두 가지 표기를 모두 읽는다. mermaid 는 널 여부를 **모델링하지 않으므로**
+// (11.16 의 Attribute 는 {type,name,keys,comment} 뿐) 둘 다 우리가 해석한다.
+//   ① 타입 뒤 `?`  — `string? middle_name`. 파서가 `?` 를 타입 문자열에 그대로 남긴다(실측).
+//   ② 코멘트의 `[NULL]`/`[NOTNULL]` — 이 저장소의 기존 ERD 들이 쓰던 방식.
+
+/** `string?` → { type: "string", optional: true }. `?` 없으면 그대로. */
+export function splitOptionalType(raw: string): {
+  type: string;
+  optional: boolean;
+} {
+  const optional = raw.endsWith("?");
+  return { type: optional ? raw.slice(0, -1) : raw, optional };
+}
+
+/** 코멘트 앞머리의 `[NULL]`/`[NOTNULL]` 만 뽑는다(없으면 빈 문자열). */
+export function nullFlagOf(comment: string): string {
+  return /\[\s*(?:NOT\s*NULL|NULL)\s*\]/i.exec(comment)?.[0] ?? "";
+}
+
+/** 한 컬럼에 표시할 널 표기.
+ *
+ *  `entityUsesOptional` = 이 엔티티의 **어느 컬럼이든** `?` 를 쓰고 있는가.
+ *  이게 필요한 이유: "`?` 없음 = NOT NULL" 은 작성자가 `?` 규약을 쓸 때만 참이다.
+ *  두 규약 다 안 쓰는 다이어그램에까지 `[NOTNULL]` 을 붙이면 **없는 정보를 지어내는** 셈이라,
+ *  같은 표에서 `?` 를 한 번이라도 봤을 때만 나머지를 NOT NULL 로 읽는다. */
+export function nullabilityFlag(
+  rawType: string,
+  comment: string,
+  entityUsesOptional: boolean,
+): string {
+  if (splitOptionalType(rawType).optional) return "[NULL]";
+  if (entityUsesOptional) return "[NOTNULL]";
+  return nullFlagOf(comment);
+}
+
 /** 엣지 data-id 에서 양 끝 노드 id 를 뽑는다. 해석 불가면 null. */
 export function parseEdgeEndpoints(
   dataId: string,

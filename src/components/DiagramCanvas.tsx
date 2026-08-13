@@ -14,7 +14,12 @@ import {
   setDiagramLayout,
   useDiagramLayout,
 } from "../lib/diagramLayout";
-import { neighborsOf, parseEdgeEndpoints } from "../lib/diagramGraph";
+import {
+  neighborsOf,
+  nullabilityFlag,
+  parseEdgeEndpoints,
+  splitOptionalType,
+} from "../lib/diagramGraph";
 
 let seq = 0;
 
@@ -112,17 +117,12 @@ function findLineForNodeId(nodeId: string, code: string): number {
 
 /** ER 엔티티 한 줄 (렌더된 라벨에서 그대로 읽는다) */
 interface NodeColumn {
+  /** `?` 는 떼어낸 순수 타입 — 널 여부는 flag 로 통일해 보여준다 */
   type: string;
   name: string;
   keys: string;
-  /** 코멘트에서 뽑은 `[NULL]`/`[NOTNULL]` 표기. 설명 본문은 싣지 않는다 */
+  /** `[NULL]`/`[NOTNULL]`. 설명 본문은 싣지 않는다(길이가 제각각이라 줄이 접힌다) */
   flag: string;
-}
-
-/** 코멘트 앞머리의 널 표기만 뽑는다. 설명 본문은 길이가 제각각이라 줄이 접히며
- *  목록의 통일성을 깨서 패널에 싣지 않는다 — 본문은 다이어그램에 이미 그려져 있다. */
-function nullFlagOf(comment: string): string {
-  return /\[\s*(?:NOT\s*NULL|NULL)\s*\]/i.exec(comment)?.[0] ?? "";
 }
 
 interface NodeSel {
@@ -148,15 +148,15 @@ const COLUMN_FIELD: Record<string, RawField> = {
  *  한 줄이 항상 4칸은 아니다 — 코멘트가 하나도 없는 엔티티는 mermaid 가 코멘트 칸 자체를
  *  안 그린다. 그래서 개수를 가정하지 않고 **이미 채운 칸이 다시 나오면 다음 줄**로 넘긴다. */
 function readColumns(nodeEl: Element): NodeColumn[] {
-  const rows: NodeColumn[] = [];
+  const raw: Record<RawField, string>[] = [];
   let cur: Partial<Record<RawField, string>> = {};
   const flush = () => {
     if (Object.keys(cur).length === 0) return;
-    rows.push({
+    raw.push({
       type: cur.type ?? "",
       name: cur.name ?? "",
       keys: cur.keys ?? "",
-      flag: nullFlagOf(cur.comment ?? ""),
+      comment: cur.comment ?? "",
     });
     cur = {};
   };
@@ -169,7 +169,15 @@ function readColumns(nodeEl: Element): NodeColumn[] {
     cur[field] = el.textContent?.trim() ?? "";
   }
   flush();
-  return rows;
+
+  // `?` 규약을 쓰는 표인지 먼저 본다 — 그래야 나머지 컬럼을 NOT NULL 로 읽어도 된다
+  const usesOptional = raw.some((r) => splitOptionalType(r.type).optional);
+  return raw.map((r) => ({
+    type: splitOptionalType(r.type).type,
+    name: r.name,
+    keys: r.keys,
+    flag: nullabilityFlag(r.type, r.comment, usesOptional),
+  }));
 }
 
 /** 스튜디오와 동일한 SVG 정규화: viewBox 보장 + 크기를 컨테이너에 맡김 */

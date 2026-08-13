@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { neighborsOf, parseEdgeEndpoints } from "./diagramGraph";
+import {
+  neighborsOf,
+  nullFlagOf,
+  nullabilityFlag,
+  parseEdgeEndpoints,
+  splitOptionalType,
+} from "./diagramGraph";
 
 // 실제 렌더 결과에서 가져온 노드 id 들 (이름에 '_' 가 들어가는 게 핵심 함정)
 const NODES = [
@@ -86,5 +92,54 @@ describe("neighborsOf", () => {
 
   it("returns empty for an unconnected node", () => {
     expect(neighborsOf("zzz", edges).size).toBe(0);
+  });
+});
+
+describe("splitOptionalType", () => {
+  it("strips a trailing ? and marks the column optional", () => {
+    expect(splitOptionalType("string?")).toEqual({ type: "string", optional: true });
+    // 괄호가 붙은 타입도 mermaid 가 그대로 통과시킨다(실측)
+    expect(splitOptionalType("varchar(31)?")).toEqual({
+      type: "varchar(31)",
+      optional: true,
+    });
+  });
+
+  it("leaves a plain type untouched", () => {
+    expect(splitOptionalType("bigint")).toEqual({ type: "bigint", optional: false });
+    expect(splitOptionalType("")).toEqual({ type: "", optional: false });
+  });
+});
+
+describe("nullFlagOf", () => {
+  it("picks the marker out of a comment, whatever follows it", () => {
+    expect(nullFlagOf("[NOTNULL] 논리 FK -> x.id; uk(a,b)")).toBe("[NOTNULL]");
+    expect(nullFlagOf("[NULL] 출국편 잔여 좌석 수")).toBe("[NULL]");
+    expect(nullFlagOf("[NOT NULL]")).toBe("[NOT NULL]");
+  });
+
+  it("returns empty when the comment is prose", () => {
+    expect(nullFlagOf("출발 공항 IATA")).toBe("");
+    expect(nullFlagOf("")).toBe("");
+  });
+});
+
+describe("nullabilityFlag", () => {
+  it("reads the ? suffix first", () => {
+    expect(nullabilityFlag("string?", "", true)).toBe("[NULL]");
+    // ? 가 코멘트 표기를 이긴다 — 타입 쪽이 더 구체적인 선언이다
+    expect(nullabilityFlag("string?", "[NOTNULL] 설명", true)).toBe("[NULL]");
+  });
+
+  it("infers NOT NULL only when the table actually uses ?", () => {
+    expect(nullabilityFlag("bigint", "", true)).toBe("[NOTNULL]");
+    // ? 를 아무도 안 쓰는 표에서 NOT NULL 을 지어내면 안 된다
+    expect(nullabilityFlag("bigint", "", false)).toBe("");
+  });
+
+  it("falls back to the comment convention", () => {
+    expect(nullabilityFlag("bigint", "[NOTNULL] 회원 ID", false)).toBe("[NOTNULL]");
+    expect(nullabilityFlag("int", "[NULL] 잔여 좌석", false)).toBe("[NULL]");
+    expect(nullabilityFlag("varchar", "출발 공항", false)).toBe("");
   });
 });
