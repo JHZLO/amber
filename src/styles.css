@@ -1368,6 +1368,8 @@ html.widget-root #root {
   display: flex;
   align-items: center;
   gap: 2px;
+  /* 좁아진 pane 을 헤더 스스로 감지해 경로 표기를 접는다 (아래 @container) */
+  container-type: inline-size;
   padding: 9px 10px 9px 16px;
   border-bottom: 1px solid var(--border);
   position: sticky;
@@ -2753,6 +2755,32 @@ html.widget-root #root {
   white-space: nowrap;
   direction: rtl;
   text-align: left;
+}
+/* pane 을 좁히면 경로는 `…rams` 같은 조각이 되어 읽히지도, 예쁘지도 않다.
+   그 구간에선 텍스트를 접고 **액션 버튼과 같은 24px 정사각형**으로 만든다 — 복사 기능은
+   그대로 남고 헤더는 아이콘 줄로 정돈된다. (컨테이너 폭은 헤더 content box = pane − 26px) */
+@container (max-width: 300px) {
+  .root-path-text {
+    display: none;
+  }
+  .root-path {
+    flex-shrink: 0; /* 정사각형을 지킨다 — 여기서 줄면 아이콘이 찌그러진다 */
+    width: 24px;
+    height: 24px;
+    margin-left: 0;
+    padding: 0;
+    justify-content: center;
+  }
+  .root-path svg {
+    width: 15px;
+    height: 15px;
+  }
+  /* 대신 이 구간에선 보관함 이름이 압력을 받는다 — 잘려도 읽히는 유일한 요소다.
+     min-width:0 이 없으면 flex 기본값(auto)이 콘텐츠 폭을 하한으로 잡아 긴 폴더명이 넘친다. */
+  .root-picker {
+    flex-shrink: 1;
+    min-width: 0;
+  }
 }
 .root-menu {
   max-width: 340px;
