@@ -58,6 +58,7 @@ import { MiniCalendar } from "./MiniCalendar";
 import { DayTimetable, type TtView } from "./DayTimetable";
 import { DailyReportPanel } from "./DailyReportPanel";
 import { useReportGeneratingDates } from "../lib/reportRun";
+import { usePaneResize } from "../lib/usePaneResize";
 import { openConceptInApp } from "../lib/nav";
 import type { AppConfig } from "../lib/config";
 
@@ -98,13 +99,12 @@ function ttRange(view: TtView, selected: string): [string, string] {
   return [selected, selected];
 }
 
-// 캘린더 pane 너비(드래그 조절, localStorage 영속). 가로 비중은 사용자가 직접 정한다.
+// 캘린더 pane 너비(드래그 조절 — 공용 usePaneResize). 캘린더는 트리보다 넓어야 읽히므로
+// 기본 치수만 따로 준다: 최소 260 은 셀 안 날짜 원이 들어가는 하한.
 const CAL_W_KEY = "amber.todo.cal-width";
-const CAL_W_MIN = 260; // 캘린더 최소 폭 (셀 안 날짜 원이 들어가는 하한)
+const CAL_W_MIN = 260;
 const CAL_W_MAX = 780;
 const CAL_W_DEFAULT = 460;
-// 오른쪽 체크리스트가 항상 확보할 최소 폭 — 창이 좁아지면 캘린더가 이만큼 양보(반응형)
-const DETAIL_MIN = 340;
 
 export function TodoView({
   active,
@@ -156,47 +156,17 @@ export function TodoView({
   // blur 가 한 번 더 와도 중복 저장/되살아나지 않도록 '이미 정리됨'을 ref 로 기억한다.
   const editDone = useRef(false);
   const childDone = useRef(false);
-  const bodyRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const todosRef = useRef(todos);
   todosRef.current = todos;
 
-  const [calWidth, setCalWidth] = useState(() => {
-    const s = Number(localStorage.getItem(CAL_W_KEY));
-    return s >= CAL_W_MIN && s <= CAL_W_MAX ? s : CAL_W_DEFAULT;
+  const pane = usePaneResize({
+    storageKey: CAL_W_KEY,
+    active,
+    min: CAL_W_MIN,
+    max: CAL_W_MAX,
+    defaultWidth: CAL_W_DEFAULT,
   });
-  useEffect(() => {
-    localStorage.setItem(CAL_W_KEY, String(Math.round(calWidth)));
-  }, [calWidth]);
-
-  // 반응형: .body 실측 폭을 추적. calWidth 는 '희망 폭'으로 두고, 실제 렌더 폭(calWEff)은
-  // 창이 좁으면 줄고 넓어지면 다시 커진다 — 체크리스트는 항상 DETAIL_MIN 이상 확보.
-  const [bodyW, setBodyW] = useState(0);
-  useEffect(() => {
-    if (!active) return;
-    const measure = () => setBodyW(bodyRef.current?.clientWidth ?? 0);
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [active]);
-
-  function startResize(e: ReactMouseEvent) {
-    e.preventDefault();
-    const rect = bodyRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    document.body.classList.add("resizing-col");
-    const onMove = (ev: MouseEvent) => {
-      const maxCal = Math.min(CAL_W_MAX, rect.width - DETAIL_MIN);
-      setCalWidth(Math.max(CAL_W_MIN, Math.min(maxCal, ev.clientX - rect.left)));
-    };
-    const onUp = () => {
-      document.body.classList.remove("resizing-col");
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  }
 
   // 할 일 트리 드래그 (포인터 기반 — WKWebView 에서 HTML5 DnD 보다 안정적).
   // Todoist 문법: **세로 = 삽입 위치, 가로 = 깊이(들여쓰기)**. 한 제스처로 재정렬과
@@ -579,10 +549,6 @@ export function TodoView({
 
   const today = todayStr();
   const isToday = selected === today;
-  // 렌더용 캘린더 폭: 희망 폭(calWidth)을 창 폭에 맞춰 clamp (오른쪽 최소 DETAIL_MIN 보장)
-  const calWEff = bodyW
-    ? Math.max(CAL_W_MIN, Math.min(calWidth, bodyW - DETAIL_MIN))
-    : calWidth;
   // 부모가 이 날에 없는 항목(이월로 부모만 다른 날에 있는 자식)도 루트로 그린다 —
   // childrenIn(todos, null) 로만 고르면 그런 행이 어느 날에도 안 보인다
   const topLevel = visibleRoots(todos);
@@ -789,11 +755,7 @@ export function TodoView({
   }
 
   return (
-    <div
-      className="body todo-body"
-      ref={bodyRef}
-      style={{ gridTemplateColumns: `${calWEff}px 1fr` }}
-    >
+    <div className="body todo-body" {...pane.bodyProps}>
       <aside className="list todo-cal-pane">
         <MiniCalendar
           year={cursor.year}
@@ -827,12 +789,7 @@ export function TodoView({
         />
       </aside>
 
-      <div
-        className="todo-resizer"
-        style={{ left: calWEff }}
-        onMouseDown={startResize}
-        title={t("todos.cal.resize")}
-      />
+      <div {...pane.resizerProps} />
 
       <section className="detail">
         <div className="detail-head todo-head">

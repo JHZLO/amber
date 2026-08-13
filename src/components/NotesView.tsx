@@ -21,6 +21,7 @@ import {
   type NoteNode,
 } from "../lib/notes";
 import { useTreeDnd } from "../lib/useTreeDnd";
+import { usePaneResize } from "../lib/usePaneResize";
 import { Modal, Select, Spinner, Tooltip, TreeDragOverlay, timeAgo } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
@@ -489,6 +490,8 @@ export function NotesView({
     onError: setOpError,
   });
 
+  const pane = usePaneResize({ storageKey: "amber.notes.list-width", active });
+
   // 컴포넌트가 아닌 렌더 함수 — 렌더마다 트리 DOM 이 리마운트되지 않게.
   // 하위는 조건부 언마운트 대신 항상 렌더하고 CSS grid(0fr↔1fr)로 펼침 → 부드러운 전개 애니메이션.
   function renderRows(nodes: NoteNode[], depth: number) {
@@ -604,7 +607,7 @@ export function NotesView({
   ).split("{name}");
 
   return (
-    <div className="body">
+    <div className="body" {...pane.bodyProps}>
       <aside className="list">
         <div className="notes-tree-head">
           <RootPicker section="notes" />
@@ -678,6 +681,8 @@ export function NotesView({
       {dnd.drag && (
         <TreeDragOverlay drag={dnd.drag} leafIcon="file" overlayRef={dnd.overlayRef} />
       )}
+
+      <div {...pane.resizerProps} />
 
       <section className="detail" ref={detailRef}>
         {selected ? (

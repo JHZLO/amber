@@ -25,6 +25,7 @@ import { SearchModal, type SearchHit } from "./components/SearchModal";
 import { THEME_EVENT, resolvedTheme, toggleTheme } from "./lib/theme";
 import { OPEN_CONCEPT, OPEN_NOTE, openDiagramInApp, openNoteInApp } from "./lib/nav";
 import { t } from "./lib/i18n";
+import { usePaneResize } from "./lib/usePaneResize";
 
 type StatusTab = ConceptStatus | "all";
 type Section = "til" | "notes" | "diagrams" | "todo";
@@ -74,6 +75,11 @@ function App() {
   useEffect(() => {
     localStorage.setItem("til.section", section);
   }, [section]);
+
+  const pane = usePaneResize({
+    storageKey: "amber.concepts.list-width",
+    active: section === "til",
+  });
 
   const [status, setStatus] = useState<StatusTab>("learning");
   const [searchInput, setSearchInput] = useState("");
@@ -362,7 +368,7 @@ function App() {
         </div>
       )}
 
-      <div className="body">
+      <div className="body" {...pane.bodyProps}>
         <aside className="list">
           {loadError && (
             <div className="error-note" style={{ margin: 12 }}>
@@ -400,6 +406,8 @@ function App() {
             </div>
           ))}
         </aside>
+
+        <div {...pane.resizerProps} />
 
         <section className="detail">
           {selected ? (

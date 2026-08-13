@@ -20,6 +20,7 @@ import {
   type DiagramNode,
 } from "../lib/diagrams";
 import { useTreeDnd } from "../lib/useTreeDnd";
+import { usePaneResize } from "../lib/usePaneResize";
 import { DiagramCanvas } from "./DiagramCanvas";
 import { DiagramAiModal } from "./DiagramAiModal";
 import { Modal, Select, Spinner, Tooltip, TreeDragOverlay, timeAgo } from "../ui";
@@ -393,6 +394,8 @@ export function DiagramsView({
     onError: setOpError,
   });
 
+  const pane = usePaneResize({ storageKey: "amber.diagrams.list-width", active });
+
   // 컴포넌트가 아닌 렌더 함수 — 렌더마다 트리 DOM 이 리마운트되지 않게
   function renderRows(nodes: DiagramNode[], depth: number) {
     return (
@@ -506,7 +509,7 @@ export function DiagramsView({
     : [];
 
   return (
-    <div className="body">
+    <div className="body" {...pane.bodyProps}>
       <aside className="list">
         <div className="notes-tree-head">
           <RootPicker section="diagrams" />
@@ -577,6 +580,8 @@ export function DiagramsView({
       {dnd.drag && (
         <TreeDragOverlay drag={dnd.drag} leafIcon="workflow" overlayRef={dnd.overlayRef} />
       )}
+
+      <div {...pane.resizerProps} />
 
       <section className="detail dgm">
         {selected ? (

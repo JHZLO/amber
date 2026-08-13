@@ -6,6 +6,7 @@ const ko = {
   "common.cancel": "취소",
   "common.save": "저장",
   "common.delete": "삭제",
+  "common.resizePane": "드래그해서 좌측 너비 조절",
 
   "common.status.learning": "학습중",
   "common.status.learned": "학습완료",
@@ -67,6 +68,7 @@ const en: Record<keyof typeof ko, string> = {
   "common.cancel": "Cancel",
   "common.save": "Save",
   "common.delete": "Delete",
+  "common.resizePane": "Drag to resize the left pane",
 
   "common.status.learning": "Learning",
   "common.status.learned": "Learned",
