@@ -95,7 +95,6 @@ const ko = {
   "diagrams.ai.tabDiff": "변경사항",
 
   // 렌더 캔버스 툴바/줌 (DiagramCanvas·MermaidZoom 공용)
-  "diagrams.canvas.hint": "휠: 줌 · 드래그: 이동 · 더블클릭: 줌인",
   "diagrams.canvas.fullscreen": "전체화면",
   "diagrams.canvas.fullscreenClose": "전체화면 닫기 (Esc)",
   "diagrams.canvas.rendering": "렌더링 중…",
@@ -112,11 +111,11 @@ const ko = {
   "diagrams.node.copyName": "이름 복사",
   "diagrams.node.copied": "복사됨",
 
-  // 레이아웃 엔진 선택 (캔버스 툴바)
+  // 레이아웃 엔진 선택 (캔버스 좌하단 플로팅)
   "diagrams.layout.elk": "각지게",
   "diagrams.layout.dagre": "둥글게",
-  "diagrams.layout.hint":
-    "배치 방식 · 각지게(ELK)는 직교 배선 + 자기참조 루프가 깔끔, 둥글게(Dagre)는 곡선 배선",
+  "diagrams.layout.elk.hint": "직교 배선 · 자기참조 루프가 깔끔 (ELK)",
+  "diagrams.layout.dagre.hint": "곡선 배선 (Dagre · mermaid 기본)",
 
   // mermaid 인라인 렌더러
   "diagrams.mmd.failHead": "mermaid 문법 오류 — 렌더하지 못해 원본 코드를 표시해요",
@@ -218,7 +217,6 @@ const en: Record<keyof typeof ko, string> = {
   "diagrams.ai.tabSource": "Source",
   "diagrams.ai.tabDiff": "Changes",
 
-  "diagrams.canvas.hint": "Wheel: zoom · Drag: pan · Double-click: zoom in",
   "diagrams.canvas.fullscreen": "Full screen",
   "diagrams.canvas.fullscreenClose": "Exit full screen (Esc)",
   "diagrams.canvas.rendering": "Rendering…",
@@ -236,8 +234,8 @@ const en: Record<keyof typeof ko, string> = {
 
   "diagrams.layout.elk": "Angular",
   "diagrams.layout.dagre": "Curved",
-  "diagrams.layout.hint":
-    "Layout · Angular (ELK) routes orthogonally with tidy self-loops, Curved (Dagre) uses splines",
+  "diagrams.layout.elk.hint": "Orthogonal routing · tidy self-loops (ELK)",
+  "diagrams.layout.dagre.hint": "Spline routing (Dagre · mermaid default)",
 
   "diagrams.mmd.failHead": "Mermaid syntax error — couldn't render, showing the source instead",
   "diagrams.mmd.rendering": "Rendering diagram…",

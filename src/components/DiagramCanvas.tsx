@@ -57,6 +57,10 @@ function extractNodeId(node: Element): string {
     );
 }
 
+/** 배율(%) — 0 크기 컨테이너에서 pan-zoom 이 NaN 을 뱉는 일이 있어 100 으로 눌러 둔다 */
+const safePct = (level: number) =>
+  Number.isFinite(level) && level > 0 ? Math.round(level * 100) : 100;
+
 /** 렌더된 SVG 에서 읽어낸 연결 관계 (포커스 모드용) */
 interface DiagramGraph {
   /** 노드 id(다이어그램 접두사 뗀 것) → 노드 g 엘리먼트 */
@@ -302,9 +306,9 @@ export function DiagramCanvas({
             dblClickZoomEnabled: true,
             mouseWheelZoomEnabled: true,
             preventMouseEventsDefault: true,
-            onZoom: (level: number) => setZoomPct(Math.round(level * 100)),
+            onZoom: (level: number) => setZoomPct(safePct(level)),
           });
-          setZoomPct(Math.round(pzRef.current.getZoom() * 100));
+          setZoomPct(safePct(pzRef.current.getZoom()));
         } catch {
           /* 0 크기 컨테이너 등 초기화 실패 — svg 는 그대로 보임 */
         }
@@ -401,61 +405,6 @@ export function DiagramCanvas({
         hoverRef.current = false;
       }}
     >
-      <div className="dgm-toolbar">
-        <span className="dgm-zoom-pct">{zoomPct}%</span>
-        <span className="dgm-toolbar-hint">{t("diagrams.canvas.hint")}</span>
-        <span className="spacer" />
-        {/* 레이아웃 엔진 — 두 배치를 오가며 볼 수 있게. 선택은 앱 전역에 남는다.
-            네이티브 title 은 WKWebView 에서 안 뜨므로 공용 Tooltip 으로 감싼다 */}
-        <Tooltip label={t("diagrams.layout.hint")}>
-          <div className="segmented dgm-layout-seg">
-            {DIAGRAM_LAYOUTS.map((l) => (
-              <button
-                key={l}
-                className={`tab ${layout === l ? "active" : ""}`}
-                onClick={() => setDiagramLayout(l)}
-              >
-                {t(`diagrams.layout.${l}`)}
-              </button>
-            ))}
-          </div>
-        </Tooltip>
-        <button
-          className="icon-btn ghost sm"
-          title={`${t("diagrams.zoom.in")} (+)`}
-          onClick={zoomIn}
-        >
-          <Icon name="plus" size={15} />
-        </button>
-        <button
-          className="icon-btn ghost sm"
-          title={`${t("diagrams.zoom.out")} (-)`}
-          onClick={zoomOut}
-        >
-          <Icon name="minus" size={15} />
-        </button>
-        <button className="btn btn-sm" title="100% (1)" onClick={reset100}>
-          100%
-        </button>
-        <button
-          className="btn btn-sm"
-          title={`${t("diagrams.zoom.fitTitle")} (0)`}
-          onClick={fit}
-        >
-          {t("diagrams.zoom.fit")}
-        </button>
-        <button
-          className="icon-btn ghost sm"
-          title={
-            fullscreen
-              ? t("diagrams.canvas.fullscreenClose")
-              : t("diagrams.canvas.fullscreen")
-          }
-          onClick={() => setFullscreen((f) => !f)}
-        >
-          <Icon name={fullscreen ? "x" : "expand"} size={15} />
-        </button>
-      </div>
       <div
         ref={hostRef}
         className="dgm-canvas"
@@ -463,6 +412,81 @@ export function DiagramCanvas({
           downPosRef.current = { x: e.clientX, y: e.clientY };
         }}
       />
+
+      {/* 우상단 — 화면 조작. 캔버스 위에 떠 있어 그림 폭을 잡아먹지 않는다.
+          네이티브 title 은 WKWebView 에서 안 뜨므로 공용 Tooltip 으로 감싼다. */}
+      <div className="dgm-float dgm-float-tr">
+        <Tooltip
+          label={
+            fullscreen
+              ? t("diagrams.canvas.fullscreenClose")
+              : t("diagrams.canvas.fullscreen")
+          }
+        >
+          <button
+            className="dgm-float-btn"
+            aria-label={
+              fullscreen
+                ? t("diagrams.canvas.fullscreenClose")
+                : t("diagrams.canvas.fullscreen")
+            }
+            onClick={() => setFullscreen((f) => !f)}
+          >
+            <Icon name={fullscreen ? "x" : "fullscreen"} size={16} />
+          </button>
+        </Tooltip>
+        <Tooltip label={`${t("diagrams.zoom.out")} (-)`}>
+          <button
+            className="dgm-float-btn"
+            aria-label={t("diagrams.zoom.out")}
+            onClick={zoomOut}
+          >
+            <Icon name="zoom-out" size={16} />
+          </button>
+        </Tooltip>
+        {/* 배율 자체가 100% 복귀 버튼 — 레퍼런스엔 없지만 읽고 되돌리는 걸 한 자리에서 */}
+        <Tooltip label={`100% (1)`}>
+          <button
+            className="dgm-float-btn dgm-float-pct"
+            aria-label={`100%`}
+            onClick={reset100}
+          >
+            {zoomPct}%
+          </button>
+        </Tooltip>
+        <Tooltip label={`${t("diagrams.zoom.in")} (+)`}>
+          <button
+            className="dgm-float-btn"
+            aria-label={t("diagrams.zoom.in")}
+            onClick={zoomIn}
+          >
+            <Icon name="zoom-in" size={16} />
+          </button>
+        </Tooltip>
+        <Tooltip label={`${t("diagrams.zoom.fitTitle")} (0)`}>
+          <button
+            className="dgm-float-btn"
+            aria-label={t("diagrams.zoom.fitTitle")}
+            onClick={fit}
+          >
+            <Icon name="expand" size={16} />
+          </button>
+        </Tooltip>
+      </div>
+
+      {/* 좌하단 — 레이아웃 엔진. 선택은 앱 전역에 남는다 */}
+      <div className="dgm-float dgm-float-bl">
+        {DIAGRAM_LAYOUTS.map((l) => (
+          <Tooltip key={l} label={t(`diagrams.layout.${l}.hint`)}>
+            <button
+              className={`dgm-float-btn dgm-float-tab ${layout === l ? "active" : ""}`}
+              onClick={() => setDiagramLayout(l)}
+            >
+              {t(`diagrams.layout.${l}`)}
+            </button>
+          </Tooltip>
+        ))}
+      </div>
       {!hasSvg && !error && (
         <div className="dgm-canvas-empty">{t("diagrams.canvas.rendering")}</div>
       )}

@@ -18,6 +18,9 @@ export type IconName =
   | "x"
   | "undo"
   | "expand"
+  | "fullscreen"
+  | "zoom-in"
+  | "zoom-out"
   | "panel"
   | "folder"
   | "folder-open"
@@ -100,6 +103,30 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M9 21H3v-6" />
       <path d="M21 3l-7 7" />
       <path d="M3 21l7-7" />
+    </>
+  ),
+  // 네 귀퉁이 브래킷 — 전체화면(expand 의 대각 화살표와 헷갈리지 않게 모서리만)
+  fullscreen: (
+    <>
+      <path d="M3 8V5a2 2 0 0 1 2-2h3" />
+      <path d="M16 3h3a2 2 0 0 1 2 2v3" />
+      <path d="M21 16v3a2 2 0 0 1-2 2h-3" />
+      <path d="M8 21H5a2 2 0 0 1-2-2v-3" />
+    </>
+  ),
+  "zoom-in": (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.9-3.9" />
+      <path d="M11 8v6" />
+      <path d="M8 11h6" />
+    </>
+  ),
+  "zoom-out": (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.9-3.9" />
+      <path d="M8 11h6" />
     </>
   ),
   panel: (

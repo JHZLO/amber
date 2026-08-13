@@ -2082,43 +2082,78 @@ html.widget-root #root {
   overflow: hidden;
   background: #ffffff; /* 다이어그램은 다크에서도 밝은 캔버스 */
 }
-.dgm-toolbar {
-  display: flex;
+/* 캔버스 위에 떠 있는 도구 묶음 (우상단=화면 조작, 좌하단=레이아웃).
+   상단 바를 두면 좁은 화면에서 그림이 먹히는 세로 공간이 생겨 캔버스 위로 올렸다.
+   캔버스는 다크에서도 흰 바탕이라 패널도 밝은 톤 고정 — 토큰을 쓰면 다크에서 검게 떠서
+   그림 위에 구멍처럼 보인다(§2 의 mermaid 캔버스 예외와 같은 이유). */
+.dgm-float {
+  position: absolute;
+  z-index: 2;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-  flex-shrink: 0;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(24, 24, 27, 0.1);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 1px 3px rgba(24, 24, 27, 0.1);
 }
-.dgm-zoom-pct {
-  font-size: 12px;
+.dgm-float-tr {
+  top: 10px;
+  right: 10px;
+}
+.dgm-float-bl {
+  bottom: 10px;
+  left: 10px;
+}
+.dgm-float-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #52525b;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--text-2);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    transform 0.16s var(--ease-out);
+}
+.dgm-float-btn:hover {
+  background: rgba(24, 24, 27, 0.06);
+  color: #18181b;
+}
+.dgm-float-btn:active {
+  transform: scale(0.94);
+}
+.dgm-float-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.12);
+}
+/* 배율 표시 겸 100% 복귀 — 숫자가 바뀌어도 폭이 흔들리지 않게 */
+.dgm-float-pct {
+  min-width: 46px;
   font-variant-numeric: tabular-nums;
-  min-width: 44px;
 }
-/* 좁아지면 줄바꿈으로 툴바가 2~3줄이 되어버린다 — 힌트는 한 줄로 두고 잘라낸다
-   (툴바에서 가장 덜 중요한 요소라 여기가 먼저 양보하는 게 맞다) */
-.dgm-toolbar-hint {
-  font-size: 11px;
-  color: var(--text-3);
-  min-width: 0;
+/* 레이아웃 탭 — 고른 쪽만 채움(§3 의 채움/아웃라인 문법) */
+.dgm-float-tab {
+  padding: 0 10px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-/* 레이아웃 엔진 세그먼트 — 타임테이블 일/주/월(.day-tt-seg)과 같은 축소 치수.
-   툴바가 좁아지면 힌트 텍스트가 아니라 이쪽이 먼저 찌그러지므로 줄바꿈을 막고 고정한다. */
-.dgm-layout-seg {
-  padding: 2px;
-  margin-right: 4px;
-  flex: none;
+.dgm-float-tab.active {
+  background: #18181b;
+  color: #ffffff;
 }
-.dgm-layout-seg .tab {
-  padding: 2px 8px;
-  font-size: 11px;
-  white-space: nowrap;
+.dgm-float-tab.active:hover {
+  background: #333333;
+  color: #ffffff;
 }
 .dgm-canvas {
   flex: 1;
