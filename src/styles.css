@@ -2200,23 +2200,35 @@ html.widget-root #root {
   stroke-width: 4px !important;
 }
 
-/* 도는 빛 반사(sheen) — 채워진 테두리 위에 얹는 반투명 흰 광택. 기본은 숨김.
-   밝기 분포는 노드별 회전 그라디언트(stroke 로 참조)가 만들고, 회전은 SMIL 이 돌린다.
-   dash 없음(테두리가 끊겨 보일 일이 없다) · 블렌드 없음 · 필터 없음 — 렉의 3요소를 뺐다.
-   감소 모션에선 JS 가 회전 자체를 안 심으므로 여기선 숨길 필요가 없다(정적 광택은 남는다). */
+/* 도는 빛 반사(sheen) — 채워진 금속 테두리 위를 시계방향으로 도는 반투명 흰 광택.
+   기본은 숨김.
+
+   **움직임은 여기(CSS)가 아니라 JS(WAAPI)가 만든다.** 두 번 실패한 방식이라 남겨 둔다:
+   ① SMIL 로 그라디언트 회전 → 이 WebView 에서 값이 갱신되지 않아 멈춰 보였다.
+   ② `@keyframes { to { stroke-dashoffset: calc(var(--dgm-len) * -1) } }` →
+      `var()` 든 calc 는 **보간이 안 돼** 중간 없이 튄다(실측). 정지처럼 보인다.
+   경로 길이를 아는 JS 에서 숫자로 넘겨야 한다 — `DiagramCanvas.addSheenOverlays` 참조.
+
+   블렌드 모드 없음 · 움직이는 레이어에 필터 없음 — 렉의 두 원인을 뺀 상태를 유지한다.
+   흰색을 반투명으로만 얹으므로 지나가도 테두리가 비지 않고 "밝아진 금속"이 된다. */
 .dgm-canvas svg .dgm-sheen {
   display: none;
   fill: none;
   pointer-events: none;
-  stroke-linejoin: round;
+  stroke: #fff;
+  stroke-linecap: round;
 }
-/* 테두리보다 살짝 넓게 — 광대가 지날 때 확실히 덮어야 반짝임이 읽힌다 */
 .dgm-canvas svg.dgm-focused g.node.dgm-rel .dgm-sheen {
   display: block;
   stroke-width: 3.5px;
+  stroke-opacity: 0.5;
+  /* 둘레의 16% 만 켜고 나머지는 비운다 → 켜진 한 토막이 테두리를 따라 돈다.
+     dasharray 는 정적이라 calc(var()) 로 둬도 안전하다(보간하지 않으므로). */
+  stroke-dasharray: calc(var(--dgm-len) * 0.16) calc(var(--dgm-len) * 0.84);
 }
 .dgm-canvas svg.dgm-focused g.node.dgm-rel.node-selected .dgm-sheen {
   stroke-width: 5px;
+  stroke-opacity: 0.72;
 }
 /* 파란 글로우는 포커스 중엔 걷어낸다 — 무지개와 겹치면 탁해진다 */
 .dgm-canvas svg.dgm-focused .node-selected {
