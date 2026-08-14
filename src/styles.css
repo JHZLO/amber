@@ -32,6 +32,12 @@
      대비: 라이트 6.2:1(sun)·6.4:1(sat) on --bg, 선택 원(--surface-3) 위에서도 5.3:1 이상 */
   --cal-sun: #b91c1c;
   --cal-sat: #1d4ed8;
+  /* 휴가(연차·반차) — 모노톤 예외 3. 노랑만은 '글자 색'으로 못 쓴다: 라이트에서 AA(4.5:1)를
+     넘기려면 #816412 같은 황토색까지 어두워져 노랑으로 안 읽힌다. 그래서 §3 의 '채움' 문법을
+     쓴다 — 연한 노랑 필 + 진한 앰버 글자면 노랑으로 보이면서 대비 7.5:1 이다. */
+  --vacation: #854d0e; /* 라벨·아이콘 (bg 위 6.6:1) */
+  --vacation-soft: #fef08a; /* 날짜 원·칩 배경 */
+  --vacation-text: #713f12; /* soft 위에 얹는 글자 (7.5:1) */
 
   /* primary 버튼(라이트=검정, 다크=흰색으로 반전) */
   --primary-bg: #18181b;
@@ -84,6 +90,10 @@
   /* 다크에선 채도를 낮추고 밝기를 올린다 (9.4~10.2:1 on --bg, 선택 원 위 6.9:1 이상) */
   --cal-sun: #fca5a5;
   --cal-sat: #93b4ff;
+  /* 다크에선 노랑이 글자로도 읽히지만(13:1) 라이트와 형태를 맞춰 똑같이 채움을 쓴다 */
+  --vacation: #fcd34d;
+  --vacation-soft: #3f3413;
+  --vacation-text: #fcd34d;
 
   --primary-bg: #f4f4f5;
   --primary-fg: #18181b;
@@ -3562,11 +3572,33 @@ body.resizing-tt * {
   color: var(--cal-sat);
   opacity: 0.5;
 }
+/* 휴가 = 연한 노랑 '채움'(§3). 노랑은 글자 색으로 쓰면 대비를 맞추다 황토색이 돼 노랑으로
+   안 읽힌다 — 그래서 요일·공휴일(글자 색)과 달리 필로 그린다. 오늘 필(검정)은 그대로 이긴다:
+   오늘이 어디인지가 더 급한 정보고, 휴가는 아래 라벨이 계속 노랑이라 사라지지 않는다. */
+.cal-cell.vac .cal-num {
+  background: var(--vacation-soft);
+  color: var(--vacation-text);
+  font-weight: 600;
+}
+.cal-cell.vac .cal-hol {
+  color: var(--vacation);
+}
+.cal-cell.adjacent.vac .cal-num {
+  opacity: 0.5;
+}
 /* 선택=surface-3 원, 오늘=primary 반전 필 (색 아닌 채움/명암, §3).
    ↑ 주말 색과 명시도가 같고 뒤에 오므로 오늘/선택 표시가 색을 이긴다 — 의도된 우선순위다. */
 .cal-cell.selected .cal-num {
   background: var(--surface-3);
   font-weight: 600;
+}
+/* 휴가인 날을 고르면 노랑을 회색으로 덮지 않고 링으로 선택을 표시한다 — 방금 휴가로 찍은
+   날이 곧 선택된 날이라, 여기서 노랑이 사라지면 표시가 먹힌 것처럼 보인다. */
+.cal-cell.selected.vac .cal-num {
+  background: var(--vacation-soft);
+  /* 링은 무채색 --text-3 — surface-3(평소 선택 필)로는 노랑 위에서 거의 안 보이고,
+     노랑 계열로 링을 그리면 선택이 아니라 또 다른 휴가 상태처럼 읽힌다 */
+  box-shadow: 0 0 0 2px var(--text-3);
 }
 .cal-cell.today .cal-num,
 .cal-cell.today:hover .cal-num {
@@ -3664,6 +3696,22 @@ body.resizing-tt * {
   flex-wrap: wrap;
   row-gap: 8px;
   margin-bottom: 18px;
+}
+/* 휴가 토글 — 날짜 네비 왼쪽. 꺼짐은 [오늘]과 같은 .btn-sm 이고, 켜지면 노랑 칩(Select)이
+   된다. 두 상태의 높이를 28px 로 맞춰 켤 때 헤더가 위아래로 흔들리지 않게 한다. */
+.todo-vac {
+  margin-right: 8px;
+}
+.todo-vac.on .select-trigger {
+  height: 28px;
+  padding: 0 8px 0 10px;
+  font-size: 12px;
+  background: var(--vacation-soft);
+  border-color: transparent;
+  color: var(--vacation-text);
+}
+.todo-vac.on .select-trigger:hover {
+  border-color: transparent;
 }
 /* 날짜 네비게이션 그룹: [오늘] ‹ › */
 .todo-nav {

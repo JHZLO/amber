@@ -255,6 +255,12 @@ pub fn run() {
             sql: include_str!("../migrations/0009_todo_soft_delete.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 10,
+            description: "add_vacations",
+            sql: include_str!("../migrations/0010_vacations.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

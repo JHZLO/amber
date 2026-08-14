@@ -37,6 +37,15 @@ import {
   listBlocks,
   nowMinute,
 } from "../lib/timeBlocks";
+import {
+  DEFAULT_KIND,
+  VACATION_KINDS,
+  listVacations,
+  removeVacation,
+  setVacation,
+  vacationLabel,
+  type VacationKind,
+} from "../lib/vacations";
 import { conceptsLearnedOn } from "../lib/db";
 import {
   dayRangeMs,
@@ -52,7 +61,7 @@ import {
 } from "../lib/date";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
-import { Checkbox, Modal } from "../ui";
+import { Checkbox, Modal, Select } from "../ui";
 import { Icon } from "../icons";
 import { MiniCalendar } from "./MiniCalendar";
 import { DayTimetable, type TtView } from "./DayTimetable";
@@ -131,6 +140,8 @@ export function TodoView({
     null,
   );
   const [counts, setCounts] = useState<Record<string, DayTodoCount>>({});
+  // 휴가로 표시한 날짜 → 종류. 캘린더 그리드 범위만 들고 있는다(counts 와 같은 주기로 갱신)
+  const [vacations, setVacations] = useState<Record<string, VacationKind>>({});
   // 리포트를 생성 중인 날짜 — 캘린더의 그날 점을 깜빡이게 한다
   const generatingDates = useReportGeneratingDates();
   const [overdue, setOverdue] = useState<Todo[]>([]);
@@ -349,14 +360,16 @@ export function TodoView({
     }
   }, [selected, ttView]);
 
-  // 표시 중인 달 그리드 범위의 날짜별 개수 (캘린더 점·월 요약)
+  // 표시 중인 달 그리드 범위의 날짜별 개수 + 휴가 (캘린더 점·월 요약)
   const reloadCounts = useCallback(async () => {
     try {
       const dates = monthGridDates(cursor.year, cursor.month);
-      const rows = await listMonthCounts(dates[0], dates[dates.length - 1]);
+      const [from, to] = [dates[0], dates[dates.length - 1]];
+      const rows = await listMonthCounts(from, to);
       const map: Record<string, DayTodoCount> = {};
       for (const r of rows) map[r.due_date] = r;
       setCounts(map);
+      setVacations(await listVacations(from, to));
     } catch (e) {
       setError(errMsg(e));
     }
@@ -401,6 +414,19 @@ export function TodoView({
     setCursor(monthOf(date));
     setEditingId(null);
   };
+
+  // 선택한 날의 휴가. 하루에 하나뿐이라(vacations.date PK) 상태는 '있다/없다' 둘뿐 —
+  // kind=null 이 곧 해제다. 갱신은 reloadCounts 하나로 끝난다(캘린더가 유일한 표시처).
+  const selectedVac = vacations[selected] ?? null;
+  async function changeVacation(kind: VacationKind | null) {
+    try {
+      if (kind) await setVacation(selected, kind);
+      else await removeVacation(selected);
+      await reloadCounts();
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  }
 
   /** keepFocus=false 는 blur 로 저장하는 경로 — 사용자가 방금 클릭한 곳에서 포커스를 뺏지 않는다 */
   async function add(keepFocus = true) {
@@ -763,6 +789,7 @@ export function TodoView({
           selected={selected}
           today={today}
           counts={counts}
+          vacations={vacations}
           generating={generatingDates}
           onSelect={goDate}
           onCursor={(y, m) => setCursor({ year: y, month: m })}
@@ -795,6 +822,33 @@ export function TodoView({
         <div className="detail-head todo-head">
           <h1 className="detail-title">{formatDayLong(selected)}</h1>
           <span className="spacer" />
+          {/* 휴가 — 안 잡힌 날엔 조용한 버튼 하나(한 번 누르면 연차), 잡힌 날엔 노랑 칩이 되어
+              종류 변경·해제를 연다. 매일 보는 헤더라 평소엔 가볍게 두고 켜졌을 때만 무게를 준다.
+              쓰는 빈도(1년에 몇 번)와 보는 빈도(매일)가 다를 땐 후자에 맞춘다(DESIGN §1). */}
+          {selectedVac ? (
+            <div className="todo-vac on">
+              <Select<VacationKind | "">
+                value={selectedVac}
+                options={[
+                  ...VACATION_KINDS.map((k) => ({
+                    value: k as VacationKind | "",
+                    label: vacationLabel(k),
+                  })),
+                  { value: "", label: t("todos.vac.clear") },
+                ]}
+                onChange={(v) => void changeVacation(v || null)}
+                align="right"
+              />
+            </div>
+          ) : (
+            <button
+              className="btn btn-sm todo-vac"
+              title={t("todos.vac.setHint")}
+              onClick={() => void changeVacation(DEFAULT_KIND)}
+            >
+              {t("todos.vac.set")}
+            </button>
+          )}
           {/* 캘린더 앱 표준: [오늘] ‹ › — 오늘이면 '오늘' 버튼 비활성(이미 오늘임을 표시) */}
           <div className="todo-nav">
             <button

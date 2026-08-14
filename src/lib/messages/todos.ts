@@ -71,6 +71,17 @@ const ko = {
   "todos.hol.temporary": "임시공휴일",
   "todos.hol.election": "선거일",
 
+  // 휴가 (vacations.ts) — 헤더 버튼/칩 + 달력 라벨
+  "todos.vac.set": "휴가",
+  "todos.vac.setHint": "이 날을 휴가로 표시",
+  "todos.vac.change": "휴가 종류 변경",
+  "todos.vac.clear": "휴가 해제",
+  "todos.vac.kind.annual": "연차",
+  "todos.vac.kind.half": "반차",
+  "todos.vac.kind.sick": "병가",
+  "todos.vac.kind.public": "공가",
+  "todos.vac.kind.special": "특별휴가",
+
   // 타임테이블
   "todos.tt.label": "타임테이블",
   "todos.tt.view.day": "일",
@@ -146,6 +157,17 @@ const en: Record<keyof typeof ko, string> = {
   "todos.hol.substitute": "Substitute holiday",
   "todos.hol.temporary": "Temporary holiday",
   "todos.hol.election": "Election Day",
+
+  // 휴가 — en 도 칸 폭에 맞춰 짧게
+  "todos.vac.set": "Time off",
+  "todos.vac.setHint": "Mark this day as time off",
+  "todos.vac.change": "Change type",
+  "todos.vac.clear": "Clear time off",
+  "todos.vac.kind.annual": "Annual leave",
+  "todos.vac.kind.half": "Half day",
+  "todos.vac.kind.sick": "Sick leave",
+  "todos.vac.kind.public": "Public duty",
+  "todos.vac.kind.special": "Special leave",
 
   "todos.tt.label": "Timetable",
   "todos.tt.view.day": "Day",

@@ -17,6 +17,7 @@ import {
   weekdaysShort,
 } from "../lib/date";
 import { holidayOf } from "../lib/holidays";
+import { vacationLabel, type VacationKind } from "../lib/vacations";
 import { t } from "../lib/i18n";
 import { Icon } from "../icons";
 
@@ -33,6 +34,7 @@ export function MiniCalendar({
   selected,
   today,
   counts,
+  vacations,
   generating,
   onSelect,
   onCursor,
@@ -42,6 +44,8 @@ export function MiniCalendar({
   selected: string;
   today: string;
   counts: Record<string, DayTodoCount>;
+  /** 휴가로 표시한 날짜 → 종류. 공휴일과 겹치면 이쪽(사용자가 직접 정한 것)을 그린다 */
+  vacations: Record<string, VacationKind>;
   /** 데일리 리포트를 생성 중인 날짜들 — 그날의 점이 깜빡인다 */
   generating: ReadonlySet<string>;
   onSelect: (date: string) => void;
@@ -149,10 +153,22 @@ export function MiniCalendar({
                       : "adjacent";
               // 쉬는 날은 일요일과 같은 빨강 — 공휴일이 곧 '일요일 취급'이라는 관례를 따른다.
               // 이름은 칸이 좁아 말줄임되므로 전체 이름은 tooltip 으로 함께 준다.
+              //
+              // 휴가는 노랑 필로 따로 센다: 공휴일은 모두에게 같은 사실이고 휴가는 내가 정한
+              // 것이라 뜻이 다르다. 겹치면 휴가가 이긴다 — 내가 표시한 것이 안 보이면 표시의
+              // 뜻이 없다(공휴일에 굳이 연차를 걸었다면 그건 의도한 기록이다).
+              const vac = vacations[date];
               const hol = holidayOf(date);
               const dow = d.getDay();
-              const tone = dow === 0 || hol ? " sun" : dow === 6 ? " sat" : "";
-              const tip = [hol?.name, gen ? t("todos.cal.generating") : null]
+              const tone = vac
+                ? " vac"
+                : dow === 0 || hol
+                  ? " sun"
+                  : dow === 6
+                    ? " sat"
+                    : "";
+              const label = vac ? vacationLabel(vac) : (hol?.name ?? "");
+              const tip = [label, gen ? t("todos.cal.generating") : null]
                 .filter(Boolean)
                 .join(" · ");
               return (
@@ -167,8 +183,8 @@ export function MiniCalendar({
                     className={`cal-dot ${!c ? "none" : hasOpen ? "" : "on"}${gen ? " gen" : ""}`}
                     aria-hidden="true"
                   />
-                  {/* 공휴일이 없어도 빈 칸을 남긴다 — 있는 날만 렌더하면 그 행만 위로 밀린다 */}
-                  <span className="cal-hol">{hol?.name ?? ""}</span>
+                  {/* 표시할 게 없어도 빈 칸을 남긴다 — 있는 날만 렌더하면 그 행만 위로 밀린다 */}
+                  <span className="cal-hol">{label}</span>
                 </button>
               );
             })}
