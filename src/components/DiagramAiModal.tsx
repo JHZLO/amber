@@ -1,6 +1,6 @@
 // 다이어그램 AI 모달: 스키마 DDL 붙여넣기 → ai_erd_generate_stream → 프리뷰 → 에디터 초안으로 적용.
 // 파일에 바로 저장하지 않는다 — 적용 후 사용자가 라이브 프리뷰로 확인하고 ⌘S 로 저장 (AI 출력은 초안).
-// 변환 규칙(선 종류·[NOTNULL] 태그·(enc)·인덱스 표기 등)은 src-tauri/context/diagram-erd.md 가 정본.
+// 변환 규칙(선 종류·타입 뒤 ? 로 nullable·(enc)·인덱스 표기 등)은 src-tauri/context/diagram-erd.md 가 정본.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Mermaid } from "./Mermaid";
@@ -171,7 +171,7 @@ export function DiagramAiModal({
             />
             <div className="hint">
               {t("diagrams.ai.ddlHint1")}
-              <code>[NOTNULL]</code>
+              <code>varchar?</code>
               {t("diagrams.ai.ddlHint2")}
               <code>(enc)</code>
               {t("diagrams.ai.ddlHint3")}

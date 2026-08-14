@@ -31,39 +31,43 @@ Output ONLY the Mermaid source.
 
 ## Entity attribute lines
 
-`<type> <name> [<key markers>] "[<nullability>] <description>"`
+`<type>[?] <name> [<key markers>] ["<description>"]`
 
 - **Type** — the lowercase physical DB type with no length or precision: `bigint` `int` `varchar` `text` `datetime` `date` `tinyint` `decimal` `json`. Never a Java/Kotlin/TypeScript type, never `varchar(255)`.
+- **Nullability is a `?` on the end of the type** — this is the one place it is recorded.
+  - Read it from the DDL: a column declared `NOT NULL`, or a `PRIMARY KEY` column, is **not** nullable → plain type (`bigint`, `varchar`).
+  - Everything else is nullable → append `?` directly to the type with no space (`varchar?`, `datetime?`, `bigint?`).
+  - Decide this for **every** attribute — the absence of `?` is a positive claim that the column is NOT NULL, so never leave it off just because the DDL was terse. If the DDL genuinely does not say (a schema description rather than real DDL), follow the usual SQL default and mark it nullable.
+  - Never write `[NOTNULL]` / `[NULL]` in the description. That was the old convention, replaced because it repeated on every line and crowded out the actual meaning.
 - **Key markers** — `PK`, `FK`, `UK`; combine with a comma and no space (`FK,UK`, `PK,FK`).
   - `FK` covers both physical and logical FKs, but only when the referenced entity is **also drawn in this diagram**. A column that points outside the diagram (a user id owned by another service, a polymorphic `reference_id`) gets **no marker** — say it in the description instead.
   - `UK` marks a single-column UNIQUE. A multi-column UNIQUE gets no marker; it goes in the description as `uk(col_a,col_b)`.
-- **The description string is required on every attribute** and must begin with `[NOTNULL]` or `[NULL]`. Mermaid has no nullability syntax, so this tag is how nullability is carried — never omit it (except in audit tables, below). When there is nothing more to say, the tag alone is the whole description: `bigint id PK "[NOTNULL]"`.
+- **The description is optional now.** Write it only when it adds something the line does not already say; drop the `""` entirely when it would be empty (`bigint id PK`, `datetime created_at`).
 
 ### What goes into the description, in this order
 
-1. `[NOTNULL]` / `[NULL]` — always first.
-2. A short noun phrase in the [Output language] for what the column means. Take it from the DDL `COMMENT` when there is one; otherwise infer briefly from the name; if the name already says it (`id`, `created_at`), write nothing.
-3. `(enc)` when the value is stored encrypted (the comment says so, or the column is an oversized `varchar`/`text` holding a name, phone, email, or ID number in a table whose siblings are encrypted).
-4. Enum candidates joined with `/` for status/type columns — `PENDING/COMPLETED/FAILED`. Source them from a `CHECK` constraint, an `ENUM(...)` type, or the comment. Never invent values.
-5. Index info in parentheses with the real index name — `(ix_user_id)`, `(idx_status)`. If an index exists but its name is unknown, write `(ix)`.
-6. Composite unique — `uk(col_a,col_b)`.
-7. Reference target — `논리 FK -> table.column` or `물리 FK -> table.column`. Drop the shared table-name prefix when the schema uses one (`ts_identity_esigns` → `esigns`).
-8. A surprising absence, when it is worth recording — `DB 제약 없음`, `UNIQUE 아님`, `DB 제약/인덱스 없음`.
+1. A short noun phrase in the [Output language] for what the column means. Take it from the DDL `COMMENT` when there is one; otherwise infer briefly from the name; if the name already says it (`id`, `created_at`), write nothing.
+2. `(enc)` when the value is stored encrypted (the comment says so, or the column is an oversized `varchar`/`text` holding a name, phone, email, or ID number in a table whose siblings are encrypted).
+3. Enum candidates joined with `/` for status/type columns — `PENDING/COMPLETED/FAILED`. Source them from a `CHECK` constraint, an `ENUM(...)` type, or the comment. Never invent values.
+4. Index info in parentheses with the real index name — `(ix_user_id)`, `(idx_status)`. If an index exists but its name is unknown, write `(ix)`.
+5. Composite unique — `uk(col_a,col_b)`.
+6. Reference target — `논리 FK -> table.column` or `물리 FK -> table.column`. Drop the shared table-name prefix when the schema uses one (`ts_identity_esigns` → `esigns`).
+7. A surprising absence, when it is worth recording — `DB 제약 없음`, `UNIQUE 아님`, `DB 제약/인덱스 없음`.
 
-Join two independent facts with `; ` — `"[NOTNULL] 물리 FK -> esigns.id; uk(esign_id,doc_type)"`. No trailing period.
+Join two independent facts with `; ` — `"물리 FK -> esigns.id; uk(esign_id,doc_type)"`. No trailing period.
 
 ### Column order
 
-Keep the DDL's column order, except `created_at` and `updated_at`, which always go last in that order with the nullability tag as their entire description. Append-only tables keep just `created_at`.
+Keep the DDL's column order, except `created_at` and `updated_at`, which always go last in that order and normally carry no description at all. Append-only tables keep just `created_at`.
 
 ## Audit tables (`*_aud`, `revinfo`)
 
 Hibernate Envers audit tables are deliberately abbreviated — they record *what is versioned*, not the full schema.
 
-- Omit the nullability tag and descriptions entirely: just `<type> <name> [<markers>]`.
+- Omit the `?` and descriptions entirely: just `<type> <name> [<markers>]`. Audit rows mirror whatever the base table held, so nullability there is noise.
 - Fixed head: `bigint id PK` · `int rev PK,FK` · `tinyint revtype`.
 - List only the audited columns; drop `created_at` / `updated_at`.
-- `revinfo` keeps the normal style: `int rev PK "[NOTNULL]"` · `bigint revtstmp "[NOTNULL]"`.
+- `revinfo` keeps the normal style: `int rev PK` · `bigint revtstmp`.
 - Relate each one as `revinfo ||..o{ <table>_aud : "Envers rev"`.
 
 ## Fidelity
@@ -92,33 +96,33 @@ erDiagram
     revinfo ||..o{ ts_order_aud : "Envers rev"
 
     ts_order {
-        bigint id PK "[NOTNULL]"
-        bigint user_id "[NOTNULL] 주문자 ID (idx_user_id)"
-        varchar order_no UK "[NOTNULL] 주문번호"
-        varchar buyer_name "[NULL] 주문자명 (enc)"
-        varchar status "[NOTNULL] PENDING/PAID/CANCELED (idx_status)"
-        datetime created_at "[NOTNULL]"
-        datetime updated_at "[NOTNULL]"
+        bigint id PK
+        bigint user_id "주문자 ID (idx_user_id)"
+        varchar order_no UK "주문번호"
+        varchar? buyer_name "주문자명 (enc)"
+        varchar status "PENDING/PAID/CANCELED (idx_status)"
+        datetime created_at
+        datetime updated_at
     }
 
     ts_order_item {
-        bigint id PK "[NOTNULL]"
-        bigint order_id FK "[NOTNULL] 물리 FK -> order.id (ix_order_id)"
-        int quantity "[NOTNULL]"
-        datetime created_at "[NOTNULL]"
+        bigint id PK
+        bigint order_id FK "물리 FK -> order.id (ix_order_id)"
+        int quantity
+        datetime created_at
     }
 
     ts_order_payment {
-        bigint id PK "[NOTNULL]"
-        bigint order_id FK,UK "[NOTNULL] 논리 FK -> order.id"
-        bigint payer_user_id "[NOTNULL] svc_accounts 논리 참조"
-        datetime created_at "[NOTNULL]"
-        datetime updated_at "[NOTNULL]"
+        bigint id PK
+        bigint order_id FK,UK "논리 FK -> order.id"
+        bigint? payer_user_id "svc_accounts 논리 참조"
+        datetime created_at
+        datetime? updated_at
     }
 
     revinfo {
-        int rev PK "[NOTNULL]"
-        bigint revtstmp "[NOTNULL]"
+        int rev PK
+        bigint revtstmp
     }
 
     ts_order_aud {

@@ -77,7 +77,7 @@ const ko = {
     "CREATE TABLE ts_order (\n  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '주문 ID',\n  ...\n);",
   "diagrams.ai.ddlHint1":
     "CREATE TABLE · ALTER TABLE 를 그대로 붙여넣으세요. 컬럼 COMMENT · 인덱스 · UNIQUE · FK 제약을 읽어 ERD 표기 규칙(실선=물리 FK, 점선=논리 참조, ",
-  "diagrams.ai.ddlHint2": " 태그, ",
+  "diagrams.ai.ddlHint2": " 로 nullable 표시, ",
   "diagrams.ai.ddlHint3": ", enum 나열)에 맞춰 변환해요.",
   "diagrams.ai.instrLabel": "추가 지시 (선택)",
   "diagrams.ai.instrPh": "예: 결제 관련 테이블만 · 컬럼 설명은 짧게 · 감사 테이블은 빼줘",
@@ -200,7 +200,7 @@ const en: Record<keyof typeof ko, string> = {
     "CREATE TABLE ts_order (\n  id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Order ID',\n  ...\n);",
   "diagrams.ai.ddlHint1":
     "Paste CREATE TABLE / ALTER TABLE statements as-is. Column COMMENTs, indexes, UNIQUE and FK constraints are read and converted with the ERD notation rules (solid = physical FK, dotted = logical reference, ",
-  "diagrams.ai.ddlHint2": " tags, ",
+  "diagrams.ai.ddlHint2": " for nullable, ",
   "diagrams.ai.ddlHint3": ", enum lists).",
   "diagrams.ai.instrLabel": "Extra instructions (optional)",
   "diagrams.ai.instrPh":
