@@ -51,6 +51,26 @@ const ko = {
   "todos.cal.pickYear": "연도 선택",
   "todos.cal.generating": "리포트 생성 중",
 
+  // 공휴일 이름 (holidays.ts) — 달력 칸 아래 작은 글씨. 칸 폭이 좁아 넘치면 말줄임되므로
+  // 되도록 짧게 쓴다(전체 이름은 칸 tooltip 으로 보인다).
+  "todos.hol.newYear": "신정",
+  "todos.hol.seollal": "설날",
+  "todos.hol.seollalHoliday": "설 연휴",
+  "todos.hol.independence": "삼일절",
+  "todos.hol.buddha": "부처님오신날",
+  "todos.hol.children": "어린이날",
+  "todos.hol.memorial": "현충일",
+  "todos.hol.constitution": "제헌절",
+  "todos.hol.liberation": "광복절",
+  "todos.hol.chuseok": "추석",
+  "todos.hol.chuseokHoliday": "추석 연휴",
+  "todos.hol.foundation": "개천절",
+  "todos.hol.hangeul": "한글날",
+  "todos.hol.christmas": "성탄절",
+  "todos.hol.substitute": "대체공휴일",
+  "todos.hol.temporary": "임시공휴일",
+  "todos.hol.election": "선거일",
+
   // 타임테이블
   "todos.tt.label": "타임테이블",
   "todos.tt.view.day": "일",
@@ -107,6 +127,25 @@ const en: Record<keyof typeof ko, string> = {
   "todos.cal.pickMonth": "Pick a month",
   "todos.cal.pickYear": "Pick a year",
   "todos.cal.generating": "Generating report",
+
+  // 한국 공휴일 — en 도 칸 폭에 맞춰 짧게 (Seollal/Chuseok 은 고유명사라 그대로 음차)
+  "todos.hol.newYear": "New Year",
+  "todos.hol.seollal": "Seollal",
+  "todos.hol.seollalHoliday": "Seollal",
+  "todos.hol.independence": "March 1st",
+  "todos.hol.buddha": "Buddha's Birthday",
+  "todos.hol.children": "Children's Day",
+  "todos.hol.memorial": "Memorial Day",
+  "todos.hol.constitution": "Constitution Day",
+  "todos.hol.liberation": "Liberation Day",
+  "todos.hol.chuseok": "Chuseok",
+  "todos.hol.chuseokHoliday": "Chuseok",
+  "todos.hol.foundation": "Foundation Day",
+  "todos.hol.hangeul": "Hangeul Day",
+  "todos.hol.christmas": "Christmas",
+  "todos.hol.substitute": "Substitute holiday",
+  "todos.hol.temporary": "Temporary holiday",
+  "todos.hol.election": "Election Day",
 
   "todos.tt.label": "Timetable",
   "todos.tt.view.day": "Day",

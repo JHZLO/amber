@@ -16,6 +16,7 @@ import {
   parseLocalDate,
   weekdaysShort,
 } from "../lib/date";
+import { holidayOf } from "../lib/holidays";
 import { t } from "../lib/i18n";
 import { Icon } from "../icons";
 
@@ -119,9 +120,12 @@ export function MiniCalendar({
 
       {level === "day" && (
         <>
+          {/* 일=빨강, 토=파랑 (한국 달력 관례) — 헤더도 같은 색을 쓴다 */}
           <div className="cal-dow">
-            {weekdaysShort().map((d) => (
-              <span key={d}>{d}</span>
+            {weekdaysShort().map((d, i) => (
+              <span key={d} className={i === 0 ? "sun" : i === 6 ? "sat" : ""}>
+                {d}
+              </span>
             ))}
           </div>
 
@@ -143,18 +147,28 @@ export function MiniCalendar({
                     : inMonth
                       ? ""
                       : "adjacent";
+              // 쉬는 날은 일요일과 같은 빨강 — 공휴일이 곧 '일요일 취급'이라는 관례를 따른다.
+              // 이름은 칸이 좁아 말줄임되므로 전체 이름은 tooltip 으로 함께 준다.
+              const hol = holidayOf(date);
+              const dow = d.getDay();
+              const tone = dow === 0 || hol ? " sun" : dow === 6 ? " sat" : "";
+              const tip = [hol?.name, gen ? t("todos.cal.generating") : null]
+                .filter(Boolean)
+                .join(" · ");
               return (
                 <button
                   key={date}
-                  className={`cal-cell ${cls}`}
+                  className={`cal-cell ${cls}${tone}`}
                   onClick={() => onSelect(date)}
-                  title={gen ? t("todos.cal.generating") : undefined}
+                  title={tip || undefined}
                 >
                   <span className="cal-num">{d.getDate()}</span>
                   <span
                     className={`cal-dot ${!c ? "none" : hasOpen ? "" : "on"}${gen ? " gen" : ""}`}
                     aria-hidden="true"
                   />
+                  {/* 공휴일이 없어도 빈 칸을 남긴다 — 있는 날만 렌더하면 그 행만 위로 밀린다 */}
+                  <span className="cal-hol">{hol?.name ?? ""}</span>
                 </button>
               );
             })}
