@@ -187,6 +187,32 @@ function firstHitLine(body: string, q: string): string | null {
   return null;
 }
 
+/** 'CS/네트워크/TCP' → ['CS', 'CS/네트워크', 'CS/네트워크/TCP'] — 그 폴더와 모든 조상.
+ *  트리에서 어떤 경로를 드러낼 때 펼쳐야 할 폴더 목록이다. 빈 경로(루트)는 펼칠 게 없다. */
+export function ancestorPaths(dir: string): string[] {
+  if (!dir) return [];
+  const parts = dir.split("/").filter(Boolean);
+  return parts.map((_, i) => parts.slice(0, i + 1).join("/"));
+}
+
+/** 폴더 이름이 바뀌었을 때 경로 하나를 새 접두사로 옮긴다.
+ *  정확히 그 폴더거나 그 하위인 경로만 바뀌고, 이름이 접두사로만 겹치는 형제
+ *  ('CS' 를 옮길 때의 'CS수업.md')는 건드리지 않는다 — 구분자까지 봐야 하는 이유. */
+export function remapPath(path: string, oldPrefix: string, newPrefix: string): string {
+  if (path === oldPrefix) return newPrefix;
+  if (path.startsWith(`${oldPrefix}/`)) return newPrefix + path.slice(oldPrefix.length);
+  return path;
+}
+
+/** 경로 집합 전체를 remapPath 로 옮긴다 (펼침·마운트 상태 재매핑용) */
+export function remapPaths(
+  paths: Iterable<string>,
+  oldPrefix: string,
+  newPrefix: string,
+): Set<string> {
+  return new Set([...paths].map((p) => remapPath(p, oldPrefix, newPrefix)));
+}
+
 export interface VaultTreeConfig {
   /** 루트 폴더. appdata 상대경로('vault/notes') 또는 절대경로('/Users/…').
    *  getter 를 주면 호출 시점마다 해석 — "폴더 열기"로 루트가 바뀌어도 인스턴스 재생성 불필요. */

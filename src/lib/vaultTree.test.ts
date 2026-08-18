@@ -8,6 +8,9 @@ import {
   invalidPathReason,
   normalizePath,
   parentOf,
+  ancestorPaths,
+  remapPath,
+  remapPaths,
   searchFiles,
   type VaultNode,
 } from "./vaultTree";
@@ -174,5 +177,48 @@ describe("searchFiles", () => {
     expect(hit.snippet).toContain("바늘");
     expect(hit.snippet!.startsWith("…")).toBe(true);
     expect(hit.snippet!.length).toBeLessThanOrEqual(122); // 120 + 양끝 말줄임
+  });
+});
+
+describe("ancestorPaths", () => {
+  it("폴더와 모든 조상을 위에서부터 준다", () => {
+    expect(ancestorPaths("CS/네트워크/TCP")).toEqual([
+      "CS",
+      "CS/네트워크",
+      "CS/네트워크/TCP",
+    ]);
+  });
+
+  it("루트('')는 펼칠 게 없다", () => {
+    expect(ancestorPaths("")).toEqual([]);
+  });
+
+  it("양끝·연속 슬래시를 흘리지 않는다", () => {
+    expect(ancestorPaths("/CS//네트워크/")).toEqual(["CS", "CS/네트워크"]);
+  });
+});
+
+describe("remapPath", () => {
+  it("그 폴더 자신을 옮긴다", () => {
+    expect(remapPath("CS", "CS", "컴퓨터과학")).toBe("컴퓨터과학");
+  });
+
+  it("하위 경로를 따라 옮긴다", () => {
+    expect(remapPath("CS/tcp.md", "CS", "컴퓨터과학")).toBe("컴퓨터과학/tcp.md");
+  });
+
+  it("이름이 접두사로만 겹치는 형제는 건드리지 않는다", () => {
+    // 'CS' 를 옮길 때 'CS수업.md' 까지 끌려가면 안 된다 — 구분자까지 봐야 하는 이유
+    expect(remapPath("CS수업.md", "CS", "컴퓨터과학")).toBe("CS수업.md");
+    expect(remapPath("CSS/reset.md", "CS", "컴퓨터과학")).toBe("CSS/reset.md");
+  });
+
+  it("무관한 경로는 그대로", () => {
+    expect(remapPath("회고.md", "CS", "컴퓨터과학")).toBe("회고.md");
+  });
+
+  it("집합 전체를 한 번에 옮긴다", () => {
+    const out = remapPaths(["CS", "CS/net", "CS수업.md", "회고.md"], "CS", "X");
+    expect([...out].sort()).toEqual(["X", "X/net", "CS수업.md", "회고.md"].sort());
   });
 });

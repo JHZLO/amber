@@ -20,6 +20,7 @@ import {
   writeNoteFile,
   type NoteNode,
 } from "../lib/notes";
+import { ancestorPaths, remapPath, remapPaths } from "../lib/vaultTree";
 import { useTreeDnd } from "../lib/useTreeDnd";
 import { usePaneResize } from "../lib/usePaneResize";
 import {
@@ -257,24 +258,16 @@ export function NotesView({
   /** dir 와 그 조상 폴더를 모두 펼침 */
   function expandTo(dir: string) {
     if (!dir) return;
-    const parts = dir.split("/");
-    const paths: string[] = [];
-    for (let i = 0; i < parts.length; i++)
-      paths.push(parts.slice(0, i + 1).join("/"));
+    const paths = ancestorPaths(dir);
     setExpanded((prev) => new Set([...prev, ...paths]));
     setMountedDirs((prev) => new Set([...prev, ...paths]));
   }
 
   /** 폴더 이름 변경 시 selected/activeDir/expanded 경로 프리픽스 재매핑 */
   function remapPrefix(oldP: string, newP: string) {
-    const map = (s: string) =>
-      s === oldP
-        ? newP
-        : s.startsWith(`${oldP}/`)
-          ? newP + s.slice(oldP.length)
-          : s;
-    setExpanded((prev) => new Set([...prev].map(map)));
-    setMountedDirs((prev) => new Set([...prev].map(map)));
+    const map = (s: string) => remapPath(s, oldP, newP);
+    setExpanded((prev) => remapPaths(prev, oldP, newP));
+    setMountedDirs((prev) => remapPaths(prev, oldP, newP));
     setSelected((prev) => (prev ? map(prev) : prev));
     setActiveDir((prev) => map(prev));
   }
