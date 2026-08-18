@@ -20,6 +20,7 @@ import { holidayOf } from "../lib/holidays";
 import { vacationLabel, type VacationKind } from "../lib/vacations";
 import { t } from "../lib/i18n";
 import { Icon } from "../icons";
+import { Tooltip } from "../ui";
 
 /** 제목 클릭으로 오르내리는 단계 */
 type Level = "day" | "month" | "year";
@@ -171,12 +172,11 @@ export function MiniCalendar({
               const tip = [label, gen ? t("todos.cal.generating") : null]
                 .filter(Boolean)
                 .join(" · ");
-              return (
+              const cell = (
                 <button
                   key={date}
                   className={`cal-cell ${cls}${tone}`}
                   onClick={() => onSelect(date)}
-                  title={tip || undefined}
                 >
                   <span className="cal-num">{d.getDate()}</span>
                   <span
@@ -184,6 +184,15 @@ export function MiniCalendar({
                     aria-hidden="true"
                   />
                 </button>
+              );
+              // 공휴일/휴가 이름은 hover 로만 — 네이티브 title 은 WKWebView 에서 엉뚱한
+              // 자리에 뜨거나 안 떠서(ui.tsx Tooltip 도입 사유) 공용 Tooltip 으로 감싼다.
+              return tip ? (
+                <Tooltip key={date} label={tip}>
+                  {cell}
+                </Tooltip>
+              ) : (
+                cell
               );
             })}
           </div>
