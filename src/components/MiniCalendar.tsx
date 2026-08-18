@@ -152,7 +152,7 @@ export function MiniCalendar({
                       ? ""
                       : "adjacent";
               // 쉬는 날은 일요일과 같은 빨강 — 공휴일이 곧 '일요일 취급'이라는 관례를 따른다.
-              // 이름은 칸이 좁아 말줄임되므로 전체 이름은 tooltip 으로 함께 준다.
+              // 이름은 칸에 그리지 않는다(그리면 판이 복잡해 보인다) — hover tooltip 으로만.
               //
               // 휴가는 노랑 필로 따로 센다: 공휴일은 모두에게 같은 사실이고 휴가는 내가 정한
               // 것이라 뜻이 다르다. 겹치면 휴가가 이긴다 — 내가 표시한 것이 안 보이면 표시의
@@ -183,8 +183,6 @@ export function MiniCalendar({
                     className={`cal-dot ${!c ? "none" : hasOpen ? "" : "on"}${gen ? " gen" : ""}`}
                     aria-hidden="true"
                   />
-                  {/* 표시할 게 없어도 빈 칸을 남긴다 — 있는 날만 렌더하면 그 행만 위로 밀린다 */}
-                  <span className="cal-hol">{label}</span>
                 </button>
               );
             })}
