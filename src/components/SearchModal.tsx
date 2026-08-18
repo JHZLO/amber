@@ -33,9 +33,13 @@ const PER_KIND = 8;
 async function runSearch(q: string): Promise<SearchHit[]> {
   // 루트가 사라졌거나 DB 가 아직 준비 전이면 그 종류만 조용히 비운다(검색 전체를 죽이지 않음)
   const [concepts, notes, diagrams] = await Promise.all([
-    listConcepts({ status: "all", search: q, sort: "recent_updated" }).catch(
-      () => [],
-    ),
+    // limit 없이 부르면 'a' 한 글자에 아카이브 전체가 IPC 를 건너온다 — 8줄만 그리면서
+    listConcepts({
+      status: "all",
+      search: q,
+      sort: "recent_updated",
+      limit: PER_KIND,
+    }).catch(() => []),
     searchFiles(
       { listTree: listNoteTree, readFile: readNoteFile },
       q,
@@ -49,7 +53,7 @@ async function runSearch(q: string): Promise<SearchHit[]> {
   ]);
 
   return [
-    ...concepts.slice(0, PER_KIND).map<SearchHit>((c) => ({
+    ...concepts.map<SearchHit>((c) => ({
       kind: "concept",
       id: c.id,
       title: c.title,

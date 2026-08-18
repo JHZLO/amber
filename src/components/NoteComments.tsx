@@ -22,7 +22,7 @@ import {
   type NoteComment,
 } from "../lib/comments";
 import { Markdown } from "./Markdown";
-import { AiThinking, timeAgo } from "../ui";
+import { AiThinking, timeAgo, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 
@@ -584,14 +584,16 @@ export function NoteCommentLayer({
                 <div className="cmt-anchor" title={pop.anchor}>
                   “{pop.anchor}”
                 </div>
-                <button
-                  className="icon-btn ghost sm"
-                  title={t("common.close")}
-                  onClick={() => setPop(null)}
-                  disabled={asking}
-                >
-                  <Icon name="x" size={14} />
-                </button>
+                <Tooltip label={t("common.close")}>
+                  <button
+                    aria-label={t("common.close")}
+                    className="icon-btn ghost sm"
+                    onClick={() => setPop(null)}
+                    disabled={asking}
+                  >
+                    <Icon name="x" size={14} />
+                  </button>
+                </Tooltip>
               </div>
               <textarea
                 className="textarea"
@@ -637,13 +639,15 @@ export function NoteCommentLayer({
                 <div className="cmt-anchor" title={viewComment.anchor}>
                   “{viewComment.anchor}”
                 </div>
-                <button
-                  className="icon-btn ghost sm"
-                  title={t("common.close")}
-                  onClick={() => setPop(null)}
-                >
-                  <Icon name="x" size={14} />
-                </button>
+                <Tooltip label={t("common.close")}>
+                  <button
+                    aria-label={t("common.close")}
+                    className="icon-btn ghost sm"
+                    onClick={() => setPop(null)}
+                  >
+                    <Icon name="x" size={14} />
+                  </button>
+                </Tooltip>
               </div>
               <div className="cmt-thread" ref={threadRef}>
                 {turns.map((t, i) => (
@@ -704,14 +708,16 @@ export function NoteCommentLayer({
               <div className="cmt-meta">
                 {timeAgo(turns[turns.length - 1]?.createdAt ?? viewComment.createdAt)}
                 <span className="spacer" />
-                <button
-                  className="icon-btn ghost sm danger"
-                  title={t("notes.cmt.deleteThread")}
-                  onClick={() => void deleteComment(viewComment.id)}
-                  disabled={asking}
-                >
-                  <Icon name="trash" size={13} />
-                </button>
+                <Tooltip label={t("notes.cmt.deleteThread")}>
+                  <button
+                    aria-label={t("notes.cmt.deleteThread")}
+                    className="icon-btn ghost sm danger"
+                    onClick={() => void deleteComment(viewComment.id)}
+                    disabled={asking}
+                  >
+                    <Icon name="trash" size={13} />
+                  </button>
+                </Tooltip>
               </div>
             </>
           ) : null}

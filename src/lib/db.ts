@@ -83,10 +83,20 @@ export async function listConcepts(
     title: "c.title COLLATE NOCASE ASC",
   }[filter.sort ?? "recent_updated"];
 
-  const sql =
-    `SELECT c.*, ${TAGS_SUBQUERY} FROM concepts c` +
+  // c.* 대신 컬럼을 명시한다 — source 에는 붙여넣은 Q&A 원문 전체가 들어 있어(source_kind='paste')
+  // 목록 한 번에 수 MB 가 IPC 를 건넌다. 목록 화면 중 원문을 쓰는 곳은 없다.
+  // 단 승격 개념의 백링크(source_kind='file' 의 JSON)는 상세가 쓰므로 그것만 남긴다.
+  let sql =
+    `SELECT c.id, c.ulid, c.title, c.summary, c.detail_path, c.status, c.confidence,` +
+    ` c.seen_count, c.last_seen_at, c.learned_at, c.created_at, c.updated_at, c.source_kind,` +
+    ` CASE WHEN c.source_kind = 'file' THEN c.source END AS source,` +
+    ` ${TAGS_SUBQUERY} FROM concepts c` +
     (where.length ? ` WHERE ${where.join(" AND ")}` : "") +
     ` ORDER BY ${orderBy}`;
+  if (filter.limit != null) {
+    sql += ` LIMIT $${p++}`;
+    params.push(filter.limit);
+  }
 
   const rows = await db.select<ConceptRow[]>(sql, params);
   return rows.map(toWithTags);

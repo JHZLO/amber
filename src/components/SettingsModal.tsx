@@ -21,7 +21,7 @@ import {
 import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
 import { getLang, setLang, t, LANG_CHANGED_EVENT, type Lang } from "../lib/i18n";
 import { errText } from "../lib/errors";
-import { Modal, Select, Spinner } from "../ui";
+import { Modal, Select, Spinner, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { ReportSettings } from "./ReportSettings";
 
@@ -506,13 +506,15 @@ export function SettingsModal({
                     >
                       {p.label.trim() || p.text.slice(0, 24)}
                     </button>
-                    <button
-                      className="icon-btn ghost sm danger prompt-del"
-                      title={t("common.delete")}
-                      onClick={() => removePrompt(p.id)}
-                    >
-                      <Icon name="trash" size={14} />
-                    </button>
+                    <Tooltip label={t("common.delete")}>
+                      <button
+                        aria-label={t("common.delete")}
+                        className="icon-btn ghost sm danger prompt-del"
+                        onClick={() => removePrompt(p.id)}
+                      >
+                        <Icon name="trash" size={14} />
+                      </button>
+                    </Tooltip>
                   </div>
                 ))}
               </div>

@@ -77,9 +77,11 @@ export function useTreeDnd(opts: {
     setDropDir(d);
   }
 
-  // path 로 트리 행 DOM 찾기 (특수문자 안전 — 셀렉터 대신 dataset 순회)
-  function findRow(path: string): HTMLElement | null {
-    const rows = document.querySelectorAll<HTMLElement>("[data-tree-row]");
+  // path 로 트리 행 DOM 찾기 (특수문자 안전 — 셀렉터 대신 dataset 순회).
+  // scope 를 반드시 넘긴다: 노트·다이어그램 트리가 둘 다 항상 마운트돼 있어(숨김만 됨)
+  // document 전체를 훑으면 같은 이름의 폴더에서 안 보이는 쪽 행을 잡는다.
+  function findRow(path: string, scope?: HTMLElement | null): HTMLElement | null {
+    const rows = (scope ?? document).querySelectorAll<HTMLElement>("[data-tree-row]");
     for (const r of rows) if (r.dataset.treePath === path) return r;
     return null;
   }
@@ -158,7 +160,7 @@ export function useTreeDnd(opts: {
       if (target != null) {
         // '쏙 들어가는' 흡수 — 오버레이가 대상 폴더(루트면 트리 상단)로 축소·페이드
         if (ov) {
-          const dest = target === "" ? treeEl : findRow(target);
+          const dest = target === "" ? treeEl : findRow(target, treeEl);
           const dr = dest?.getBoundingClientRect();
           ov.style.transition = `transform ${ABSORB_MS}ms cubic-bezier(0.4, 0, 1, 1), opacity ${ABSORB_MS}ms ease`;
           if (dr) {

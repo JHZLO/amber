@@ -194,7 +194,15 @@ export async function moveTodos(ids: number[], dueDate: string): Promise<void> {
   );
   if (!all.length) return;
   const byId = new Map(all.map((t) => [t.id, t]));
-  const kids = (pid: number) => all.filter((t) => t.parent_id === pid);
+  // parent_id 로 미리 묶는다 — 매번 filter 를 돌면 서브트리 크기에 O(n²) 이 된다
+  const byParent = new Map<number, Todo[]>();
+  for (const t of all) {
+    if (t.parent_id == null) continue;
+    const list = byParent.get(t.parent_id);
+    if (list) list.push(t);
+    else byParent.set(t.parent_id, [t]);
+  }
+  const kids = (pid: number) => byParent.get(pid) ?? [];
 
   // 옮길 대상 = 씨앗 + 미완료 자식만 따라간 자손 (완료된 가지는 그 아래까지 통째로 남는다)
   const moving = new Set<number>();
@@ -205,19 +213,22 @@ export async function moveTodos(ids: number[], dueDate: string): Promise<void> {
   };
   for (const id of ids) if (byId.has(id)) walk(id);
 
-  for (const id of moving) {
-    const from = byId.get(id)!.due_date;
-    if (from === dueDate) continue; // 이미 그 날짜 — 옮길 것도 남길 흔적도 없다
-    // 도착 날짜에는 기록을 남기지 않는다 — 남기면 그 날 목록에 실물+고스트로 두 번 나온다
-    await db.execute(
-      `INSERT OR IGNORE INTO todo_carries (todo_id, date) VALUES ($1, $2)`,
-      [id, from],
-    );
-    await db.execute(
-      `UPDATE todos SET due_date = $1, updated_at = $2 WHERE id = $3`,
-      [dueDate, now(), id],
-    );
-  }
+  // 이미 그 날짜인 것은 옮길 것도 남길 흔적도 없다
+  const targets = [...moving].filter((id) => byId.get(id)!.due_date !== dueDate);
+  if (!targets.length) return;
+
+  // 행마다 2회 왕복하던 것을 집합 기반 2문으로. "밀린 할 일 전부 오늘로"가 한 번에 수십 건이다.
+  // 도착 날짜에는 기록을 남기지 않는다 — 남기면 그 날 목록에 실물+고스트로 두 번 나온다.
+  await db.execute(
+    `INSERT OR IGNORE INTO todo_carries (todo_id, date)
+     SELECT id, due_date FROM todos WHERE id IN (${ph(targets.length, 1)})`,
+    targets,
+  );
+  await db.execute(
+    `UPDATE todos SET due_date = $1, updated_at = $2
+      WHERE id IN (${ph(targets.length, 3)})`,
+    [dueDate, now(), ...targets],
+  );
 }
 
 /** 삭제. 노드를 지우면 그 서브트리 전체(모든 자손)를 함께 — 되돌릴 수 없으므로

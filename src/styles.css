@@ -786,6 +786,9 @@ body.resizing-col .pane-resizer::after {
 /* 호버 툴팁 (Tooltip) — body 로 portal 되는 작은 라벨. 네이티브 title 이 WKWebView 에서 안 떠서 씀 */
 .tip-wrap {
   display: inline-flex;
+  /* 툴팁을 씌우면 이 래퍼가 flex 아이템이 된다 — 안쪽 버튼의 flex-shrink:0 이 더는 안 먹으므로
+     래퍼가 대신 받는다. 아이콘 버튼은 좁아져도 줄지 않는다(압력은 옆의 텍스트가 흡수). */
+  flex-shrink: 0;
 }
 .tip {
   position: fixed;
@@ -2722,9 +2725,14 @@ html.widget-root #root {
   gap: 6px;
   margin-bottom: 8px;
 }
-.cmt-pop-head .icon-btn {
+.cmt-pop-head .icon-btn,
+.cmt-pop-head .tip-wrap {
   flex-shrink: 0;
   margin: -2px -2px 0 0;
+}
+/* 래퍼가 여백을 맡았으면 안쪽 버튼은 0 으로 (이중 적용 방지) */
+.cmt-pop-head .tip-wrap .icon-btn {
+  margin: 0;
 }
 .cmt-anchor {
   flex: 1;

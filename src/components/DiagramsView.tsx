@@ -460,42 +460,50 @@ export function DiagramsView({
                 >
                   {n.isDir && (
                     <>
-                      <button
-                        className="icon-btn sm"
-                        title={t("diagrams.tree.newFileHere")}
-                        onClick={() => openNameModal("new-file", n.path)}
-                      >
-                        <Icon name="file-plus" size={13} />
-                      </button>
-                      <button
-                        className="icon-btn sm"
-                        title={t("diagrams.tree.newFolderHere")}
-                        onClick={() => openNameModal("new-folder", n.path)}
-                      >
-                        <Icon name="folder-plus" size={13} />
-                      </button>
+                      <Tooltip label={t("diagrams.tree.newFileHere")}>
+                        <button
+                          aria-label={t("diagrams.tree.newFileHere")}
+                          className="icon-btn sm"
+                          onClick={() => openNameModal("new-file", n.path)}
+                        >
+                          <Icon name="file-plus" size={13} />
+                        </button>
+                      </Tooltip>
+                      <Tooltip label={t("diagrams.tree.newFolderHere")}>
+                        <button
+                          aria-label={t("diagrams.tree.newFolderHere")}
+                          className="icon-btn sm"
+                          onClick={() => openNameModal("new-folder", n.path)}
+                        >
+                          <Icon name="folder-plus" size={13} />
+                        </button>
+                      </Tooltip>
                     </>
                   )}
-                  <button
-                    className="icon-btn sm"
-                    title={t("diagrams.rename")}
-                    onClick={() => openRenameModal(n)}
-                  >
-                    <Icon name="pencil" size={13} />
-                  </button>
-                  <button
-                    className="icon-btn sm danger"
-                    title={t("common.delete")}
-                    onClick={() =>
-                      setConfirmDelete({
-                        name: n.name,
-                        path: n.path,
-                        isDir: n.isDir,
-                      })
-                    }
-                  >
-                    <Icon name="trash" size={13} />
-                  </button>
+                  <Tooltip label={t("diagrams.rename")}>
+                    <button
+                      aria-label={t("diagrams.rename")}
+                      className="icon-btn sm"
+                      onClick={() => openRenameModal(n)}
+                    >
+                      <Icon name="pencil" size={13} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip label={t("common.delete")}>
+                    <button
+                      aria-label={t("common.delete")}
+                      className="icon-btn sm danger"
+                      onClick={() =>
+                        setConfirmDelete({
+                          name: n.name,
+                          path: n.path,
+                          isDir: n.isDir,
+                        })
+                      }
+                    >
+                      <Icon name="trash" size={13} />
+                    </button>
+                  </Tooltip>
                 </span>
               </div>
               {n.isDir && n.children && n.children.length > 0 && (

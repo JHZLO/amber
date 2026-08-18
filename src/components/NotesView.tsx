@@ -558,42 +558,50 @@ export function NotesView({
                 >
                   {n.isDir && (
                     <>
-                      <button
-                        className="icon-btn sm"
-                        title={t("notes.row.newNoteHere")}
-                        onClick={() => openNameModal("new-note", n.path)}
-                      >
-                        <Icon name="file-plus" size={13} />
-                      </button>
-                      <button
-                        className="icon-btn sm"
-                        title={t("notes.row.newFolderHere")}
-                        onClick={() => openNameModal("new-folder", n.path)}
-                      >
-                        <Icon name="folder-plus" size={13} />
-                      </button>
+                      <Tooltip label={t("notes.row.newNoteHere")}>
+                        <button
+                          aria-label={t("notes.row.newNoteHere")}
+                          className="icon-btn sm"
+                          onClick={() => openNameModal("new-note", n.path)}
+                        >
+                          <Icon name="file-plus" size={13} />
+                        </button>
+                      </Tooltip>
+                      <Tooltip label={t("notes.row.newFolderHere")}>
+                        <button
+                          aria-label={t("notes.row.newFolderHere")}
+                          className="icon-btn sm"
+                          onClick={() => openNameModal("new-folder", n.path)}
+                        >
+                          <Icon name="folder-plus" size={13} />
+                        </button>
+                      </Tooltip>
                     </>
                   )}
-                  <button
-                    className="icon-btn sm"
-                    title={t("notes.rename")}
-                    onClick={() => openRenameModal(n)}
-                  >
-                    <Icon name="pencil" size={13} />
-                  </button>
-                  <button
-                    className="icon-btn sm danger"
-                    title={t("common.delete")}
-                    onClick={() =>
-                      setConfirmDelete({
-                        name: n.name,
-                        path: n.path,
-                        isDir: n.isDir,
-                      })
-                    }
-                  >
-                    <Icon name="trash" size={13} />
-                  </button>
+                  <Tooltip label={t("notes.rename")}>
+                    <button
+                      aria-label={t("notes.rename")}
+                      className="icon-btn sm"
+                      onClick={() => openRenameModal(n)}
+                    >
+                      <Icon name="pencil" size={13} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip label={t("common.delete")}>
+                    <button
+                      aria-label={t("common.delete")}
+                      className="icon-btn sm danger"
+                      onClick={() =>
+                        setConfirmDelete({
+                          name: n.name,
+                          path: n.path,
+                          isDir: n.isDir,
+                        })
+                      }
+                    >
+                      <Icon name="trash" size={13} />
+                    </button>
+                  </Tooltip>
                 </span>
               </div>
               {n.isDir && n.children && n.children.length > 0 && (

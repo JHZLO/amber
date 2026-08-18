@@ -12,7 +12,14 @@ import type {
   ConceptWithTags,
 } from "./types";
 import { allTags, listConcepts, statusCounts } from "./lib/db";
-import { ConfidenceDots, Select, StatusBadge, TagChip, UnsavedModal } from "./ui";
+import {
+  ConfidenceDots,
+  Select,
+  StatusBadge,
+  TagChip,
+  Tooltip,
+  UnsavedModal,
+} from "./ui";
 import { AmberMark, Icon } from "./icons";
 import { ConceptDetail } from "./components/ConceptDetail";
 import { AddConceptModal } from "./components/AddConceptModal";
@@ -353,13 +360,15 @@ function App() {
             {t("app.add")}
           </button>
         )}
-        <button
-          className="icon-btn"
-          onClick={toggleTheme}
-          title={isDark ? t("app.theme.toLight") : t("app.theme.toDark")}
-        >
-          <Icon name={isDark ? "sun" : "moon"} size={17} />
-        </button>
+        <Tooltip label={isDark ? t("app.theme.toLight") : t("app.theme.toDark")}>
+          <button
+            aria-label={isDark ? t("app.theme.toLight") : t("app.theme.toDark")}
+            className="icon-btn"
+            onClick={toggleTheme}
+          >
+            <Icon name={isDark ? "sun" : "moon"} size={17} />
+          </button>
+        </Tooltip>
         <button className="btn" onClick={showWidget} title={t("app.widget.open")}>
           <Icon name="panel" size={15} />
           {t("app.widget.label")}

@@ -43,6 +43,8 @@ export interface ConceptFilter {
   search?: string; // 제목/요약/태그 substring
   tags?: string[]; // AND 교집합
   sort?: ConceptSort;
+  /** 최대 행 수. ⌘K 처럼 앞의 몇 개만 그리는 화면이 전체 아카이브를 끌어오지 않게 */
+  limit?: number;
 }
 
 export type ConceptSort =

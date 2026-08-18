@@ -159,27 +159,33 @@ export function DailyReportPanel({
         <span className="spacer" />
         {phase === "done" ? (
           <span className="report-actions">
-            <button
-              className="icon-btn sm"
-              title={t("report.regen")}
-              onClick={() => setConfirmRegen(true)}
-            >
-              <Icon name="refresh" size={13} />
-            </button>
-            <button
-              className="icon-btn sm"
-              title={t("report.copy")}
-              onClick={() => void copy()}
-            >
-              <Icon name={copied ? "check" : "copy"} size={13} />
-            </button>
-            <button
-              className="icon-btn sm danger"
-              title={t("common.delete")}
-              onClick={() => setConfirmDelete(true)}
-            >
-              <Icon name="trash" size={13} />
-            </button>
+            <Tooltip label={t("report.regen")}>
+              <button
+                aria-label={t("report.regen")}
+                className="icon-btn sm"
+                onClick={() => setConfirmRegen(true)}
+              >
+                <Icon name="refresh" size={13} />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("report.copy")}>
+              <button
+                aria-label={t("report.copy")}
+                className="icon-btn sm"
+                onClick={() => void copy()}
+              >
+                <Icon name={copied ? "check" : "copy"} size={13} />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("common.delete")}>
+              <button
+                aria-label={t("common.delete")}
+                className="icon-btn sm danger"
+                onClick={() => setConfirmDelete(true)}
+              >
+                <Icon name="trash" size={13} />
+              </button>
+            </Tooltip>
           </span>
         ) : phase === "idle" || phase === "empty" || phase === "error" ? (
           <button

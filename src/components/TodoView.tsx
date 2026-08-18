@@ -62,7 +62,7 @@ import {
 } from "../lib/date";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
-import { Checkbox, Modal, Select } from "../ui";
+import { Checkbox, Modal, Select, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { MiniCalendar } from "./MiniCalendar";
 import { DayTimetable, type TtView } from "./DayTimetable";
@@ -680,13 +680,15 @@ export function TodoView({
             >
               {t("todos.overdue.moveOne")}
             </button>
-            <button
-              className="icon-btn sm danger"
-              title={t("common.delete")}
-              onClick={() => askRemove(todo, true)}
-            >
-              <Icon name="trash" size={13} />
-            </button>
+            <Tooltip label={t("common.delete")}>
+              <button
+                aria-label={t("common.delete")}
+                className="icon-btn sm danger"
+                onClick={() => askRemove(todo, true)}
+              >
+                <Icon name="trash" size={13} />
+              </button>
+            </Tooltip>
           </span>
         ) : isGone ? (
           // 지워진 고스트: 갈 곳이 없으니 '→ 날짜' 대신 지워졌다는 사실만. 어제 목록은
@@ -703,17 +705,19 @@ export function TodoView({
           // 기억나면 여기서 추가·체크해 원래 날짜에 남긴다(새 자식의 due_date 는 보는 날짜).
           <>
             <span className="row-actions" onClick={(e) => e.stopPropagation()}>
-              <button
-                className="icon-btn sm"
-                title={t("todos.row.addChild")}
-                onClick={() => {
-                  childDone.current = false;
-                  setAddingChildFor(todo.id);
-                  setChildInput("");
-                }}
-              >
-                <Icon name="plus" size={13} />
-              </button>
+              <Tooltip label={t("todos.row.addChild")}>
+                <button
+                  aria-label={t("todos.row.addChild")}
+                  className="icon-btn sm"
+                  onClick={() => {
+                    childDone.current = false;
+                    setAddingChildFor(todo.id);
+                    setChildInput("");
+                  }}
+                >
+                  <Icon name="plus" size={13} />
+                </button>
+              </Tooltip>
             </span>
             <span
               className="todo-row-date todo-carried-to"
@@ -728,38 +732,46 @@ export function TodoView({
         ) : (
           // 메인 목록: 하위추가/편집/삭제는 hover 오버레이(레이아웃을 밀지 않음)
           <span className="row-actions" onClick={(e) => e.stopPropagation()}>
-            <button
-              className="icon-btn sm"
-              title={t("todos.row.addChild")}
-              onClick={() => {
-                childDone.current = false;
-                setAddingChildFor(todo.id);
-                setChildInput("");
-              }}
-            >
-              <Icon name="plus" size={13} />
-            </button>
-            <button
-              className="icon-btn sm"
-              title={t("todos.row.schedule")}
-              onClick={() => void scheduleTodo(todo)}
-            >
-              <Icon name="clock" size={13} />
-            </button>
-            <button
-              className="icon-btn sm"
-              title={t("todos.row.rename")}
-              onClick={() => startEdit(todo)}
-            >
-              <Icon name="pencil" size={13} />
-            </button>
-            <button
-              className="icon-btn sm danger"
-              title={t("common.delete")}
-              onClick={() => askRemove(todo, false)}
-            >
-              <Icon name="trash" size={13} />
-            </button>
+            <Tooltip label={t("todos.row.addChild")}>
+              <button
+                aria-label={t("todos.row.addChild")}
+                className="icon-btn sm"
+                onClick={() => {
+                  childDone.current = false;
+                  setAddingChildFor(todo.id);
+                  setChildInput("");
+                }}
+              >
+                <Icon name="plus" size={13} />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("todos.row.schedule")}>
+              <button
+                aria-label={t("todos.row.schedule")}
+                className="icon-btn sm"
+                onClick={() => void scheduleTodo(todo)}
+              >
+                <Icon name="clock" size={13} />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("todos.row.rename")}>
+              <button
+                aria-label={t("todos.row.rename")}
+                className="icon-btn sm"
+                onClick={() => startEdit(todo)}
+              >
+                <Icon name="pencil" size={13} />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("common.delete")}>
+              <button
+                aria-label={t("common.delete")}
+                className="icon-btn sm danger"
+                onClick={() => askRemove(todo, false)}
+              >
+                <Icon name="trash" size={13} />
+              </button>
+            </Tooltip>
           </span>
         )}
       </div>
@@ -890,20 +902,24 @@ export function TodoView({
             >
               {t("todos.today")}
             </button>
-            <button
-              className="icon-btn ghost"
-              title={t("todos.nav.prevDay")}
-              onClick={() => goDate(shiftDay(selected, -1))}
-            >
-              <Icon name="chevron-left" size={16} />
-            </button>
-            <button
-              className="icon-btn ghost"
-              title={t("todos.nav.nextDay")}
-              onClick={() => goDate(shiftDay(selected, 1))}
-            >
-              <Icon name="chevron-right" size={16} />
-            </button>
+            <Tooltip label={t("todos.nav.prevDay")}>
+              <button
+                aria-label={t("todos.nav.prevDay")}
+                className="icon-btn ghost"
+                onClick={() => goDate(shiftDay(selected, -1))}
+              >
+                <Icon name="chevron-left" size={16} />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("todos.nav.nextDay")}>
+              <button
+                aria-label={t("todos.nav.nextDay")}
+                className="icon-btn ghost"
+                onClick={() => goDate(shiftDay(selected, 1))}
+              >
+                <Icon name="chevron-right" size={16} />
+              </button>
+            </Tooltip>
           </div>
         </div>
 

@@ -610,13 +610,15 @@ export function DiagramCanvas({
               )}
             </div>
           </div>
-          <button
-            className="icon-btn ghost sm"
-            title={t("diagrams.node.deselect")}
-            onClick={deselectNode}
-          >
-            <Icon name="x" size={14} />
-          </button>
+          <Tooltip label={t("diagrams.node.deselect")}>
+            <button
+              aria-label={t("diagrams.node.deselect")}
+              className="icon-btn ghost sm"
+              onClick={deselectNode}
+            >
+              <Icon name="x" size={14} />
+            </button>
+          </Tooltip>
         </div>
       )}
 

@@ -64,6 +64,12 @@ export type MsgKey = keyof typeof KO;
 // 페이지 로드 시 고정 — 이후 setLang 은 다음 로드에 반영된다
 const LANG: Lang = getLang();
 
+// index.html 의 lang="en" 은 스캐폴드 기본값이다. 여기서 해석된 언어로 덮어써야
+// 웹뷰의 하이픈 처리·스크린리더 발음이 실제 콘텐츠 언어를 따른다.
+// 언어 변경은 창을 리로드하므로(SettingsModal) 반응형으로 만들 필요는 없다.
+// i18n 은 순수 lib(date·vaultTree 등)도 import 하고 그쪽 테스트는 node 환경에서 돌아 DOM 이 없다.
+if (typeof document !== "undefined") document.documentElement.lang = LANG;
+
 /** 현재 언어의 문자열. vars 는 "{name}" 자리 치환 */
 export function t(key: MsgKey, vars?: Record<string, string | number>): string {
   let s: string = (LANG === "en" ? EN[key] : KO[key]) ?? key;

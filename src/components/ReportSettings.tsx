@@ -17,7 +17,7 @@ import {
   type ReportConfig,
   type ReportTools,
 } from "../lib/report";
-import { Checkbox, Select, Spinner } from "../ui";
+import { Checkbox, Select, Spinner, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 
@@ -278,13 +278,15 @@ export function ReportSettings() {
                   <span className="rep-src-sub">{SUB[s.id]}</span>
                 </div>
                 <span className={`rep-status ${st.ok ? "ok" : ""}`}>{st.label}</span>
-                <button
-                  className="icon-btn ghost sm"
-                  title={isOpen ? t("report.set.collapse") : t("report.set.expand")}
-                  onClick={() => setExpanded(isOpen ? null : s.id)}
-                >
-                  <Icon name={isOpen ? "chevron-down" : "chevron-right"} size={15} />
-                </button>
+                <Tooltip label={isOpen ? t("report.set.collapse") : t("report.set.expand")}>
+                  <button
+                    aria-label={isOpen ? t("report.set.collapse") : t("report.set.expand")}
+                    className="icon-btn ghost sm"
+                    onClick={() => setExpanded(isOpen ? null : s.id)}
+                  >
+                    <Icon name={isOpen ? "chevron-down" : "chevron-right"} size={15} />
+                  </button>
+                </Tooltip>
               </div>
 
               {isOpen && (
