@@ -3533,15 +3533,6 @@ body.resizing-tt * {
   gap: 5px;
   min-width: 0;
 }
-/* 공휴일/휴가 칸은 Tooltip(tip-wrap)에 감싸여 래퍼가 그리드 아이템이 된다 —
-   래퍼는 줄어들 수 있게, 안의 칸은 래퍼를 꽉 채우게 (맨칸과 같은 판이 되도록) */
-.cal-grid .tip-wrap {
-  min-width: 0;
-}
-.cal-grid .tip-wrap .cal-cell {
-  flex: 1;
-  min-width: 0;
-}
 .cal-cell:focus-visible {
   outline: none;
   border-radius: 10px;

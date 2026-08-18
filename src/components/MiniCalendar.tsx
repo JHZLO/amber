@@ -172,27 +172,23 @@ export function MiniCalendar({
               const tip = [label, gen ? t("todos.cal.generating") : null]
                 .filter(Boolean)
                 .join(" · ");
-              const cell = (
+              // 공휴일/휴가 이름은 hover 로만 — 네이티브 title 은 WKWebView 에서 엉뚱한
+              // 자리에 뜨거나 안 떠서(ui.tsx Tooltip 도입 사유) 공용 Tooltip 으로 감싼다.
+              // 감싸는 건 칸이 아니라 **날짜 원** — 칸(56px) 기준으로 띄우면 원에서 한참
+              // 떨어져 다음 행 높이에 떠서 아랫줄 날짜의 라벨처럼 읽힌다.
+              const num = <span className="cal-num">{d.getDate()}</span>;
+              return (
                 <button
                   key={date}
                   className={`cal-cell ${cls}${tone}`}
                   onClick={() => onSelect(date)}
                 >
-                  <span className="cal-num">{d.getDate()}</span>
+                  {tip ? <Tooltip label={tip}>{num}</Tooltip> : num}
                   <span
                     className={`cal-dot ${!c ? "none" : hasOpen ? "" : "on"}${gen ? " gen" : ""}`}
                     aria-hidden="true"
                   />
                 </button>
-              );
-              // 공휴일/휴가 이름은 hover 로만 — 네이티브 title 은 WKWebView 에서 엉뚱한
-              // 자리에 뜨거나 안 떠서(ui.tsx Tooltip 도입 사유) 공용 Tooltip 으로 감싼다.
-              return tip ? (
-                <Tooltip key={date} label={tip}>
-                  {cell}
-                </Tooltip>
-              ) : (
-                cell
               );
             })}
           </div>
