@@ -30,7 +30,9 @@ export default defineConfig(async () => ({
     },
   },
 
-  // 테스트 대상은 src/lib 의 순수 함수뿐이라 DOM 환경(jsdom)이 필요 없다
+  // 테스트 대상은 src/lib 의 순수 함수뿐이라 DOM 환경(jsdom)이 필요 없다.
+  // .tsx 를 include 에 넣지 않는 것은 의도다 — 컴포넌트 테스트를 넣으려면 jsdom 부터 붙여야 한다.
+  // (여기 빠뜨리면 첫 .tsx 테스트가 "통과"가 아니라 아예 안 도는 채로 조용히 지나간다)
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
