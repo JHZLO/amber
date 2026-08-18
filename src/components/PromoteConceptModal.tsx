@@ -8,9 +8,10 @@ import { Markdown } from "./Markdown";
 import type { AppConfig } from "../lib/config";
 import type { Confidence } from "../types";
 import { aiGenerate, friendlyError } from "../lib/ai";
-import { createConcept } from "../lib/db";
+import { createConcept, deleteConcept } from "../lib/db";
 import { detailPathFor, writeNote } from "../lib/vault";
 import { addNoteConcept } from "../lib/noteConcepts";
+import { getRoot } from "../lib/workspace";
 import { AiThinking, Modal } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
@@ -123,7 +124,8 @@ export function PromoteConceptModal({
     setSaving(true);
     try {
       const id = genUlid();
-      await writeNote(id, bodyMd);
+      // DB 행을 먼저 만든다 — 파일부터 쓰면 DB 실패 시 어느 화면에도 안 보이는 고아 index.md 가 남는다.
+      // 반대 순서의 부분 실패는 '본문 없는 개념'이라 ConceptDetail 이 복구 안내를 띄운다.
       const conceptId = await createConcept({
         ulid: id,
         title: title.trim(),
@@ -131,10 +133,21 @@ export function PromoteConceptModal({
         detailPath: detailPathFor(id),
         tags: parseTags(tags),
         confidence,
-        // 출처 = 노트경로 + 앵커(선택 텍스트). 개념→노트 이동에 사용
-        source: JSON.stringify({ noteRel: target.noteRel, anchor: target.selection }),
+        // 출처 = 루트 + 노트경로 + 앵커(선택 텍스트). 개념→노트 이동에 사용.
+        // root 를 같이 남겨야 폴더를 바꾼 뒤 같은 이름의 다른 노트를 조용히 여는 일이 없다.
+        source: JSON.stringify({
+          root: getRoot("notes"),
+          noteRel: target.noteRel,
+          anchor: target.selection,
+        }),
         sourceKind: "file",
       });
+      try {
+        await writeNote(id, bodyMd);
+      } catch (e) {
+        await deleteConcept(conceptId).catch(() => {});
+        throw e;
+      }
       // 노트 쪽 역참조 기록 (노트→개념)
       await addNoteConcept(target.noteRel, {
         conceptId,

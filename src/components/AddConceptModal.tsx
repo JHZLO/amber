@@ -4,7 +4,7 @@ import { ulid as genUlid } from "ulid";
 import type { AppConfig } from "../lib/config";
 import type { Confidence } from "../types";
 import { aiGenerate, friendlyError } from "../lib/ai";
-import { createConcept, getSetting, setSetting } from "../lib/db";
+import { createConcept, deleteConcept, getSetting, setSetting } from "../lib/db";
 import { detailPathFor, writeNote } from "../lib/vault";
 import { AiThinking, Modal } from "../ui";
 import { Icon } from "../icons";
@@ -107,8 +107,8 @@ export function AddConceptModal({
     setSaving(true);
     try {
       const id = genUlid();
-      await writeNote(id, bodyMd);
-      await createConcept({
+      // DB 행을 먼저 — 파일부터 쓰면 DB 실패 시 어느 화면에도 안 보이는 고아 index.md 가 남는다
+      const conceptId = await createConcept({
         ulid: id,
         title: title.trim(),
         summary: summary.trim(),
@@ -118,6 +118,12 @@ export function AddConceptModal({
         source: transcript || null,
         sourceKind: "paste",
       });
+      try {
+        await writeNote(id, bodyMd);
+      } catch (e) {
+        await deleteConcept(conceptId).catch(() => {});
+        throw e;
+      }
       onCreated();
       close();
     } catch (e) {

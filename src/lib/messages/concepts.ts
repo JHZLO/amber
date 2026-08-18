@@ -23,7 +23,10 @@ const ko = {
   "concepts.action.augment": "AI 보강",
   "concepts.action.augmentTitle": "현재 노트를 프롬프트로 AI가 보강",
   "concepts.readError": "본문을 읽을 수 없어요 — {err}",
+  "concepts.writeError": "저장하지 못했어요 — {err}",
+  "concepts.missingFile": "상세 노트 파일이 없어요. 편집해서 저장하면 다시 만들어져요.",
   "concepts.sourceNote.open": "출처 노트 열기",
+  "concepts.sourceNote.otherRoot": "다른 폴더의 노트예요 — 그 폴더로 바꾸면 열 수 있어요",
   "concepts.meta": "추가 {created} · 수정 {updated} · 위젯 노출 {seen}회",
 
   // 삭제 확인 — confirm 의 {title} 자리는 렌더 시 <b>로 감싸므로 반드시 남겨 둔다
@@ -97,7 +100,10 @@ const en: Record<keyof typeof ko, string> = {
   "concepts.action.augment": "AI augment",
   "concepts.action.augmentTitle": "Let AI expand this note, using it as the prompt",
   "concepts.readError": "Couldn't read the note — {err}",
+  "concepts.writeError": "Couldn't save — {err}",
+  "concepts.missingFile": "The detail note file is missing. Edit and save to recreate it.",
   "concepts.sourceNote.open": "Open source note",
+  "concepts.sourceNote.otherRoot": "This note lives in another folder — switch to it to open",
   "concepts.meta": "Added {created} · Edited {updated} · Shown in widget {seen}×",
 
   "concepts.delete.title": "Delete Concept",

@@ -8,7 +8,7 @@
   --surface-3: #e9e9ec;
   --text: #18181b;
   --text-2: #52525b;
-  --text-3: #a1a1aa;
+  --text-3: #71717a;
   --border: #ececee;
   --border-strong: #dcdce0;
 
@@ -52,6 +52,9 @@
   --diff-del-gutter-bg: #fadcdc;
   --diff-del-fg: #cf222e;
 
+  /* 포커스 링 — 컴포넌트마다 리터럴로 쓰면 다크에서 배경과 같은 색이 돼 안 보인다(DESIGN.md §2) */
+  --focus-ring: 0 0 0 3px rgba(24, 24, 27, 0.12);
+
   --radius-lg: 12px;
   --shadow-sm: 0 1px 2px rgba(24, 24, 27, 0.06);
   --shadow: 0 10px 30px -8px rgba(24, 24, 27, 0.12),
@@ -72,13 +75,14 @@
 
 /* ---- 다크 테마 (theme.ts 가 <html data-theme="dark"> 지정) ---- */
 :root[data-theme="dark"] {
+  --focus-ring: 0 0 0 3px rgba(244, 244, 245, 0.22);
   --bg: #0e0e10;
   --surface: #161618;
   --surface-2: #1f1f23;
   --surface-3: #2a2a2f;
   --text: #f4f4f5;
   --text-2: #a1a1aa;
-  --text-3: #6b6b74;
+  --text-3: #8b8b95;
   --border: #26262a;
   --border-strong: #3a3a40;
   --accent: #f4f4f5;
@@ -209,7 +213,7 @@ select {
 }
 .rail-item:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.12);
+  box-shadow: var(--focus-ring);
 }
 /* 리포트 백그라운드 생성 중 표시 — 할 일 아이콘 우상단 맥동 점 (어느 탭에서든 보임) */
 .rail-busy {
@@ -366,7 +370,7 @@ select {
 .tab:focus-visible,
 .select-trigger:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.12);
+  box-shadow: var(--focus-ring);
 }
 .tagbar {
   display: flex;
@@ -1063,6 +1067,41 @@ body.resizing-col .pane-resizer::after {
   font-size: 12px;
 }
 
+/* 렌더 크래시 화면 (main.tsx ErrorBoundary) — 창 전체를 차지하는 마지막 방어선 */
+.crash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100vh;
+  padding: 24px;
+  text-align: center;
+}
+.crash-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.crash-hint {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.crash-detail {
+  max-width: 560px;
+  max-height: 160px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 12px;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
 /* ---- 마크다운 렌더 ---- */
 .markdown {
   line-height: 1.7;
@@ -1349,7 +1388,8 @@ html.widget-root #root {
   border-radius: 6px;
   cursor: pointer;
 }
-.select-item:hover {
+.select-item:hover,
+.select-item.kbd-active {
   background: var(--surface-2);
   color: var(--text);
 }
@@ -1528,7 +1568,9 @@ html.widget-root #root {
   /* 긴 라벨 위에 뜰 때 글자가 비치지 않게, 행 hover 배경색으로 자연스럽게 덮음 */
   background: linear-gradient(to right, transparent, var(--surface-2) 16px);
 }
-.tree-row:hover .row-actions {
+.tree-row:hover .row-actions,
+/* pointer-events:none 은 마우스만 막는다 — 포커스가 들어오면 보여야 안 보이는 버튼을 누르지 않는다 */
+.tree-row:focus-within .row-actions {
   opacity: 1;
   pointer-events: auto;
 }
@@ -2156,7 +2198,7 @@ html.widget-root #root {
 }
 .dgm-float-btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.12);
+  box-shadow: var(--focus-ring);
 }
 /* 배율 표시 겸 100% 복귀 — 숫자가 바뀌어도 폭이 흔들리지 않게 */
 .dgm-float-pct {
@@ -2361,7 +2403,7 @@ html.widget-root #root {
 }
 .dgm-node-info-name:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.12);
+  box-shadow: var(--focus-ring);
 }
 .dgm-node-info-text {
   min-width: 0;
@@ -3057,7 +3099,7 @@ html.widget-root #root {
 }
 .checkbox:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.12);
+  box-shadow: var(--focus-ring);
 }
 
 /* ==== 할 일 탭 ==== */
@@ -3487,7 +3529,7 @@ body.resizing-tt * {
 }
 .cal-title:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.12);
+  box-shadow: var(--focus-ring);
 }
 /* 요일 헤더 + 그리드: minmax(0,1fr) 로 7열이 폭 안에서 항상 균등 분할(좁아도 안 넘침) */
 .cal-dow {
@@ -3536,7 +3578,7 @@ body.resizing-tt * {
 .cal-cell:focus-visible {
   outline: none;
   border-radius: 10px;
-  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.12);
+  box-shadow: var(--focus-ring);
 }
 .cal-num {
   width: 32px;
@@ -3974,7 +4016,8 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   pointer-events: none;
   transition: opacity 0.12s;
 }
-.todo-row:hover .row-actions {
+.todo-row:hover .row-actions,
+.todo-row:focus-within .row-actions {
   opacity: 1;
   pointer-events: auto;
 }

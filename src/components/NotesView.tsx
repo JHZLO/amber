@@ -22,7 +22,15 @@ import {
 } from "../lib/notes";
 import { useTreeDnd } from "../lib/useTreeDnd";
 import { usePaneResize } from "../lib/usePaneResize";
-import { Modal, Select, Spinner, Tooltip, TreeDragOverlay, timeAgo } from "../ui";
+import {
+  Modal,
+  Select,
+  Spinner,
+  Tooltip,
+  TreeDragOverlay,
+  UnsavedModal,
+  timeAgo,
+} from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
@@ -112,6 +120,7 @@ export function NotesView({
   const [modalError, setModalError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<DeleteTarget | null>(null);
   const [pendingOpen, setPendingOpen] = useState<string | null>(null);
+  const [pendingRoot, setPendingRoot] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [promote, setPromote] = useState<PromoteTarget | null>(null);
   const [madeConcepts, setMadeConcepts] = useState<NoteConceptLink[]>([]);
@@ -126,6 +135,9 @@ export function NotesView({
   const [activeHeading, setActiveHeading] = useState("");
 
   const dirty = editing && draft !== body;
+  // WORKSPACE_EVENT 리스너가 [] 성격으로 붙으므로 ref 로 최신 dirty 를 본다
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
 
   // 본문 렌더 후 DOM 에서 헤딩 수집 — 소스 정규식과 달리 코드블록 안 '#' 오탐이 없다.
   // id 는 인덱스 기반이라 같은 제목이 중복돼도 안전.
@@ -210,20 +222,27 @@ export function NotesView({
     if (active) void reload();
   }, [active, reload]);
 
-  // 워크스페이스 루트("폴더 열기") 변경 → 선택/트리 상태 초기화 후 새 루트 로드
+  // 워크스페이스 루트("폴더 열기") 변경 → 선택/트리 상태 초기화 후 새 루트 로드.
+  // 같은 트리의 다른 노트를 여는 것도 확인을 받는 마당에, 더 많이 잃는 이 전환이 무경고면 안 된다.
+  const applyRootChange = useCallback(() => {
+    setSelected(null);
+    setEditing(false);
+    setExpanded(new Set());
+    setActiveDir("");
+    setOpError(null);
+    void reload();
+  }, [reload]);
+
   useEffect(() => {
     const h = (e: Event) => {
       if ((e as CustomEvent).detail !== "notes") return;
-      setSelected(null);
-      setEditing(false);
-      setExpanded(new Set());
-      setActiveDir("");
-      setOpError(null);
-      void reload();
+      // 이벤트는 섹션 이름만 싣고 오므로, 진행 시점에 getRoot 로 새 루트를 읽는다
+      if (dirtyRef.current) setPendingRoot(true);
+      else applyRootChange();
     };
     window.addEventListener(WORKSPACE_EVENT, h);
     return () => window.removeEventListener(WORKSPACE_EVENT, h);
-  }, [reload]);
+  }, [applyRootChange]);
 
   // 편집 중 타이핑 → 350ms 디바운스로 프리뷰 갱신 (mermaid 펜스 안에서 글자마다 재렌더 방지)
   useEffect(() => {
@@ -1059,34 +1078,25 @@ export function NotesView({
       />
 
       {/* 저장 안 된 변경 → 다른 노트로 이동 */}
-      <Modal
+      <UnsavedModal
         open={!!pendingOpen}
-        title={t("notes.unsaved.title")}
-        narrow
-        onClose={() => setPendingOpen(null)}
-        footer={
-          <>
-            <button
-              className="btn btn-sm"
-              onClick={() => setPendingOpen(null)}
-            >
-              {t("notes.keepEditing")}
-            </button>
-            <button
-              className="btn btn-sm btn-danger-ghost"
-              onClick={() => {
-                const p = pendingOpen;
-                setPendingOpen(null);
-                if (p) void doOpen(p);
-              }}
-            >
-              {t("notes.unsaved.discard")}
-            </button>
-          </>
-        }
-      >
-        <p style={{ margin: 0 }}>{t("notes.unsaved.body")}</p>
-      </Modal>
+        onKeep={() => setPendingOpen(null)}
+        onDiscard={() => {
+          const p = pendingOpen;
+          setPendingOpen(null);
+          if (p) void doOpen(p);
+        }}
+      />
+
+      {/* 저장 안 된 변경 → 작업 폴더 전환 */}
+      <UnsavedModal
+        open={pendingRoot}
+        onKeep={() => setPendingRoot(false)}
+        onDiscard={() => {
+          setPendingRoot(false);
+          applyRootChange();
+        }}
+      />
 
       {/* 외부에서 먼저 수정됨 → 덮어쓰기/다시 읽기 선택 */}
       <Modal

@@ -23,7 +23,15 @@ import { useTreeDnd } from "../lib/useTreeDnd";
 import { usePaneResize } from "../lib/usePaneResize";
 import { DiagramCanvas } from "./DiagramCanvas";
 import { DiagramAiModal } from "./DiagramAiModal";
-import { Modal, Select, Spinner, Tooltip, TreeDragOverlay, timeAgo } from "../ui";
+import {
+  Modal,
+  Select,
+  Spinner,
+  Tooltip,
+  TreeDragOverlay,
+  UnsavedModal,
+  timeAgo,
+} from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
@@ -77,10 +85,14 @@ export function DiagramsView({
   const [modalError, setModalError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<DeleteTarget | null>(null);
   const [pendingOpen, setPendingOpen] = useState<string | null>(null);
+  const [pendingRoot, setPendingRoot] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
 
   const dirty = editing && draft !== body;
+  // WORKSPACE_EVENT 리스너가 최신 dirty 를 보게 하는 ref
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
 
   /** 노드 정보 카드의 "라인 N" — 에디터로 점프 (읽기 모드였다면 편집 모드로 진입) */
   function jumpToLine(line: number) {
@@ -121,20 +133,26 @@ export function DiagramsView({
     if (active) void reload();
   }, [active, reload]);
 
-  // 워크스페이스 루트("폴더 열기") 변경 → 선택/트리 상태 초기화 후 새 루트 로드
+  // 워크스페이스 루트("폴더 열기") 변경 → 선택/트리 상태 초기화 후 새 루트 로드.
+  // 같은 트리의 다른 파일을 여는 것도 확인을 받으므로, 더 많이 잃는 이 전환도 초안을 지킨다.
+  const applyRootChange = useCallback(() => {
+    setSelected(null);
+    setEditing(false);
+    setExpanded(new Set());
+    setActiveDir("");
+    setOpError(null);
+    void reload();
+  }, [reload]);
+
   useEffect(() => {
     const h = (e: Event) => {
       if ((e as CustomEvent).detail !== "diagrams") return;
-      setSelected(null);
-      setEditing(false);
-      setExpanded(new Set());
-      setActiveDir("");
-      setOpError(null);
-      void reload();
+      if (dirtyRef.current) setPendingRoot(true);
+      else applyRootChange();
     };
     window.addEventListener(WORKSPACE_EVENT, h);
     return () => window.removeEventListener(WORKSPACE_EVENT, h);
-  }, [reload]);
+  }, [applyRootChange]);
 
   // 편집 중 타이핑 → 350ms 디바운스로 프리뷰 갱신 (mermaid 재렌더 비용 절약)
   useEffect(() => {
@@ -855,31 +873,25 @@ export function DiagramsView({
       </Modal>
 
       {/* 저장 안 된 변경 → 다른 파일로 이동 */}
-      <Modal
+      <UnsavedModal
         open={!!pendingOpen}
-        title={t("diagrams.unsaved.title")}
-        narrow
-        onClose={() => setPendingOpen(null)}
-        footer={
-          <>
-            <button className="btn btn-sm" onClick={() => setPendingOpen(null)}>
-              {t("diagrams.unsaved.keep")}
-            </button>
-            <button
-              className="btn btn-sm btn-danger-ghost"
-              onClick={() => {
-                const p = pendingOpen;
-                setPendingOpen(null);
-                if (p) void doOpen(p);
-              }}
-            >
-              {t("diagrams.unsaved.discard")}
-            </button>
-          </>
-        }
-      >
-        <p style={{ margin: 0 }}>{t("diagrams.unsaved.body")}</p>
-      </Modal>
+        onKeep={() => setPendingOpen(null)}
+        onDiscard={() => {
+          const p = pendingOpen;
+          setPendingOpen(null);
+          if (p) void doOpen(p);
+        }}
+      />
+
+      {/* 저장 안 된 변경 → 작업 폴더 전환 */}
+      <UnsavedModal
+        open={pendingRoot}
+        onKeep={() => setPendingRoot(false)}
+        onDiscard={() => {
+          setPendingRoot(false);
+          applyRootChange();
+        }}
+      />
 
       {/* 외부에서 먼저 수정됨 → 덮어쓰기/다시 읽기 선택 */}
       <Modal
@@ -890,7 +902,7 @@ export function DiagramsView({
         footer={
           <>
             <button className="btn btn-sm" onClick={() => setConflict(null)}>
-              {t("diagrams.unsaved.keep")}
+              {t("common.unsaved.keep")}
             </button>
             <button
               className="btn btn-sm"

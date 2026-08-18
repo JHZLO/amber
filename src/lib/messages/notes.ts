@@ -62,9 +62,6 @@ const ko = {
   "notes.deleting": "삭제 중…",
 
   // 저장 안 된 변경 모달
-  "notes.unsaved.title": "저장하지 않은 변경",
-  "notes.unsaved.body": "지금 노트에 저장하지 않은 변경이 있어요. 버리고 이동할까요?",
-  "notes.unsaved.discard": "버리고 이동",
   "notes.keepEditing": "계속 편집",
 
   // 외부 수정(mtime) 충돌 모달
@@ -173,9 +170,6 @@ const en: Record<keyof typeof ko, string> = {
   "notes.delete.trashHint": "It moves to the Trash — you can restore it in Finder.",
   "notes.deleting": "Deleting…",
 
-  "notes.unsaved.title": "Unsaved changes",
-  "notes.unsaved.body": "This note has unsaved changes. Discard them and switch?",
-  "notes.unsaved.discard": "Discard and switch",
   "notes.keepEditing": "Keep editing",
 
   "notes.conflict.title": "File changed on disk",

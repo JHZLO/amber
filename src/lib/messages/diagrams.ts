@@ -48,10 +48,6 @@ const ko = {
   "diagrams.delete.trashNote": "휴지통으로 옮겨져요 — Finder 에서 되돌릴 수 있어요.",
 
   // 저장 안 된 변경 모달
-  "diagrams.unsaved.title": "저장하지 않은 변경",
-  "diagrams.unsaved.body": "지금 다이어그램에 저장하지 않은 변경이 있어요. 버리고 이동할까요?",
-  "diagrams.unsaved.keep": "계속 편집",
-  "diagrams.unsaved.discard": "버리고 이동",
 
   // 외부 변경 충돌 모달
   "diagrams.conflict.title": "파일이 밖에서 바뀌었어요",
@@ -173,10 +169,6 @@ const en: Record<keyof typeof ko, string> = {
   "diagrams.delete.bodyDir": "— delete this folder and all diagrams inside?",
   "diagrams.delete.trashNote": "It moves to the Trash — you can restore it from Finder.",
 
-  "diagrams.unsaved.title": "Unsaved changes",
-  "diagrams.unsaved.body": "This diagram has unsaved changes. Discard them and switch?",
-  "diagrams.unsaved.keep": "Keep editing",
-  "diagrams.unsaved.discard": "Discard & switch",
 
   "diagrams.conflict.title": "File changed outside the app",
   "diagrams.conflict.body1":

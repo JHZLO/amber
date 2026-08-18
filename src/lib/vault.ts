@@ -59,6 +59,15 @@ export async function readNote(detailPath: string): Promise<string> {
   return stripFrontmatter(raw);
 }
 
+/** 상세 노트 파일이 실제로 있는지 — 읽기 실패가 '파일 없음'인지 '읽을 수 없음'인지 가른다 */
+export async function noteExists(detailPath: string): Promise<boolean> {
+  try {
+    return await exists(fullPath(detailPath), { baseDir: BASE });
+  } catch {
+    return false;
+  }
+}
+
 /** 개념 디렉터리 통째로 삭제 (assets 포함). 영구 삭제 대신 macOS 휴지통으로 이동 → 복구 가능 */
 export async function deleteConceptDir(ulid: string): Promise<void> {
   const dir = conceptDir(ulid);

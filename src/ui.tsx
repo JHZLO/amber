@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -187,11 +188,17 @@ export function Tooltip({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
 
+  const place = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (r) setPos({ left: r.left + r.width / 2, top: r.bottom + 6 });
+  };
   const show = () => {
-    timer.current = setTimeout(() => {
-      const r = ref.current?.getBoundingClientRect();
-      if (r) setPos({ left: r.left + r.width / 2, top: r.bottom + 6 });
-    }, 350);
+    timer.current = setTimeout(place, 350);
+  };
+  // 키보드 포커스는 dwell 없이 즉시 — 머무름은 마우스에만 있는 개념이다
+  const showNow = () => {
+    if (timer.current) clearTimeout(timer.current);
+    place();
   };
   const hide = () => {
     if (timer.current) clearTimeout(timer.current);
@@ -211,6 +218,8 @@ export function Tooltip({
       onMouseEnter={show}
       onMouseLeave={hide}
       onMouseDown={hide}
+      onFocus={showNow}
+      onBlur={hide}
     >
       {children}
       {pos &&
@@ -228,6 +237,10 @@ export function Tooltip({
  *  — 거기에 포커스가 가면 Enter 가 '승인'이 아니라 '닫기'가 돼버린다. */
 const MODAL_FOCUSABLE =
   'button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])';
+
+/** Tab 순환 대상. 초기 포커스와 달리 입력·헤더 닫기 버튼까지 포함한다 */
+const MODAL_TRAPPABLE =
+  'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
 export function Modal({
   open,
@@ -250,29 +263,58 @@ export function Modal({
   fixedHeight?: boolean;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
 
   // 열릴 때 초기 포커스 — 확인 모달이 Esc 로 취소만 되고 Enter 로 승인이 안 되던 문제.
   // 입력이 있는 모달은 손대지 않는다: 이미 autoFocus 로 입력을 잡거나(이름 변경·설정),
   // 사용자가 먼저 타이핑할 자리라 버튼이 포커스를 뺏으면 안 된다.
+  // 닫힐 때는 열기 전 포커스로 되돌린다 — 안 그러면 포커스가 <body> 로 떨어져 Tab 이 문서 처음부터 시작한다.
   useEffect(() => {
     if (!open) return;
+    const prev = document.activeElement as HTMLElement | null;
     const box = boxRef.current;
-    if (!box || box.querySelector("input, textarea")) return;
-    const foot = box.querySelector(".modal-foot");
-    // 주 액션 = 푸터의 primary, 파괴적 확인이면 danger-ghost (DESIGN.md §8)
-    const target =
-      foot?.querySelector<HTMLElement>(
-        ".btn-primary:not(:disabled), .btn-danger-ghost:not(:disabled)",
-      ) ??
-      foot?.querySelector<HTMLElement>(MODAL_FOCUSABLE) ??
-      box.querySelector(".modal-body")?.querySelector<HTMLElement>(MODAL_FOCUSABLE) ??
-      box;
-    target.focus();
+    if (box && !box.querySelector("input, textarea")) {
+      const foot = box.querySelector(".modal-foot");
+      // 파괴적 확인은 취소에 포커스를 둔다 — Enter 두 번(근육 기억)으로 지워지지 않게.
+      // 그 외에는 주 액션(primary)에 둬서 Enter=승인을 유지한다. (macOS 관례)
+      const destructive = foot?.querySelector<HTMLElement>(
+        ".btn-danger-ghost:not(:disabled)",
+      );
+      const target =
+        (destructive
+          ? foot?.querySelector<HTMLElement>(MODAL_FOCUSABLE)
+          : foot?.querySelector<HTMLElement>(".btn-primary:not(:disabled)")) ??
+        foot?.querySelector<HTMLElement>(MODAL_FOCUSABLE) ??
+        box.querySelector(".modal-body")?.querySelector<HTMLElement>(MODAL_FOCUSABLE) ??
+        box;
+      target.focus();
+    }
+    return () => prev?.focus?.();
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const h = (e: KeyboardEvent) => {
+      // 포커스가 모달 밖으로 새지 않게 가둔다 — 뒤에 있는 화면의 버튼이 Tab 으로 잡히면 안 된다
+      if (e.key === "Tab") {
+        const box = boxRef.current;
+        if (!box) return;
+        const items = Array.from(
+          box.querySelectorAll<HTMLElement>(MODAL_TRAPPABLE),
+        ).filter((el) => el.offsetParent !== null || el === document.activeElement);
+        if (items.length === 0) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+        if (e.shiftKey && (active === first || !box.contains(active))) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+        return;
+      }
       if (e.key !== "Escape") return;
       // 커스텀 Select 드롭다운이 열려 있으면 그쪽이 먼저 닫히도록 모달은 유지
       if (document.querySelector(".select-menu")) return;
@@ -295,12 +337,15 @@ export function Modal({
       <div
         ref={boxRef}
         tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className={`modal ${wide ? "wide" : ""} ${narrow ? "narrow" : ""} ${
           fixedHeight ? "fixed-h" : ""
         }`}
       >
         <div className="modal-head">
-          <h2>{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           <button className="icon-btn" onClick={onClose} aria-label={t("common.close")}>
             <Icon name="x" />
           </button>
@@ -309,6 +354,39 @@ export function Modal({
         {footer && <div className="modal-foot">{footer}</div>}
       </div>
     </div>
+  );
+}
+
+/** 미저장 초안이 있는데 다른 곳으로 이동하려 할 때의 확인.
+ *  노트·다이어그램·개념·작업폴더 전환이 전부 같은 문장을 쓰므로 한 곳에 둔다. */
+export function UnsavedModal({
+  open,
+  onKeep,
+  onDiscard,
+}: {
+  open: boolean;
+  onKeep: () => void;
+  onDiscard: () => void;
+}) {
+  return (
+    <Modal
+      open={open}
+      title={t("common.unsaved.title")}
+      narrow
+      onClose={onKeep}
+      footer={
+        <>
+          <button className="btn btn-sm" onClick={onKeep}>
+            {t("common.unsaved.keep")}
+          </button>
+          <button className="btn btn-sm btn-danger-ghost" onClick={onDiscard}>
+            {t("common.unsaved.discard")}
+          </button>
+        </>
+      }
+    >
+      <p style={{ margin: 0 }}>{t("common.unsaved.body")}</p>
+    </Modal>
   );
 }
 
@@ -348,6 +426,8 @@ export function Select<T extends string>({
   block?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // 키보드 이동용 활성 인덱스 — 열릴 때 현재 값에서 시작한다
+  const [active, setActive] = useState(0);
   const [pos, setPos] = useState<{
     top?: number;
     bottom?: number;
@@ -359,6 +439,7 @@ export function Select<T extends string>({
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const listId = useId();
 
   const place = useCallback(() => {
     const el = triggerRef.current;
@@ -404,7 +485,31 @@ export function Select<T extends string>({
       setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape" || e.key === "Tab") {
+        setOpen(false);
+        if (e.key === "Escape") triggerRef.current?.focus();
+        return;
+      }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        setActive((i) => {
+          const n = options.length;
+          return n === 0 ? 0 : (i + (e.key === "ArrowDown" ? 1 : n - 1)) % n;
+        });
+        return;
+      }
+      if (e.key === "Home" || e.key === "End") {
+        e.preventDefault();
+        setActive(e.key === "Home" ? 0 : options.length - 1);
+        return;
+      }
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        const o = options[active];
+        if (o) onChange(o.value);
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     };
     const onReflow = () => setOpen(false);
     // 드롭다운 '내부' 스크롤(긴 목록)은 닫지 않는다 — 바깥(모달 본문 등) 스크롤에만 닫아 앵커 이탈 방지
@@ -422,16 +527,39 @@ export function Select<T extends string>({
       window.removeEventListener("resize", onReflow);
       window.removeEventListener("scroll", onScroll, true);
     };
-  }, [open]);
+  }, [open, options, active, onChange]);
 
   const cur = options.find((o) => o.value === value);
+
+  // 활성 항목이 보이게 스크롤 — 목록이 길면 화살표로 내려가다 시야를 벗어난다
+  useEffect(() => {
+    if (!open) return;
+    menuRef.current
+      ?.querySelectorAll<HTMLElement>(".select-item")
+      [active]?.scrollIntoView({ block: "nearest" });
+  }, [open, active]);
+
+  const openMenu = () => {
+    setActive(Math.max(0, options.findIndex((o) => o.value === value)));
+    setOpen(true);
+  };
 
   return (
     <div className={`select ${block ? "block" : ""}`} ref={rootRef}>
       <button
         ref={triggerRef}
         className="select-trigger"
-        onClick={() => setOpen((v) => !v)}
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        onClick={() => (open ? setOpen(false) : openMenu())}
+        onKeyDown={(e) => {
+          if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+            e.preventDefault();
+            openMenu();
+          }
+        }}
       >
         <span>{cur?.label}</span>
         <svg className="select-caret" width="10" height="6" viewBox="0 0 10 6">
@@ -450,6 +578,8 @@ export function Select<T extends string>({
           // pos 계산(useLayoutEffect) 전 한 프레임은 숨긴다 — 측정용으로 마운트만 해둔 상태
           <div
             ref={menuRef}
+            id={listId}
+            role="listbox"
             className="select-menu"
             style={{
               top: pos?.top,
@@ -461,17 +591,23 @@ export function Select<T extends string>({
               visibility: pos ? undefined : "hidden",
             }}
           >
-            {options.map((o) => (
+            {options.map((o, i) => (
               <button
                 key={o.value}
-                className={`select-item ${o.value === value ? "active" : ""}`}
+                role="option"
+                aria-selected={o.value === value}
+                className={`select-item ${o.value === value ? "active" : ""} ${
+                  i === active ? "kbd-active" : ""
+                }`}
+                onMouseEnter={() => setActive(i)}
                 onClick={() => {
                   onChange(o.value);
                   setOpen(false);
+                  triggerRef.current?.focus();
                 }}
               >
                 <span className="select-check">
-                  {o.value === value ? "✓" : ""}
+                  {o.value === value && <Icon name="check" size={12} />}
                 </span>
                 {o.label}
               </button>

@@ -12,7 +12,7 @@ import type {
   ConceptWithTags,
 } from "./types";
 import { allTags, listConcepts, statusCounts } from "./lib/db";
-import { ConfidenceDots, Select, StatusBadge, TagChip } from "./ui";
+import { ConfidenceDots, Select, StatusBadge, TagChip, UnsavedModal } from "./ui";
 import { AmberMark, Icon } from "./icons";
 import { ConceptDetail } from "./components/ConceptDetail";
 import { AddConceptModal } from "./components/AddConceptModal";
@@ -116,29 +116,49 @@ function App() {
     loadConfig().then(setConfig).catch((e) => setLoadError(String(e)));
   }, []);
 
+  // 개념 상세에 미저장 초안이 있는지 — 필터/선택 변경이 ConceptDetail 을 언마운트해
+  // 초안을 날리는 걸 막는다 (NotesView 의 pendingOpen 과 같은 패턴)
+  const [detailDirty, setDetailDirty] = useState(false);
+  const [pendingNav, setPendingNav] = useState<{ run: () => void } | null>(null);
+  /** 초안이 있으면 확인 모달로 미루고, 없으면 그대로 실행 */
+  const guard = (run: () => void) => {
+    if (detailDirty) setPendingNav({ run });
+    else run();
+  };
+
   useEffect(() => {
+    // 편집 중에는 필터 확정을 미룬다 — 매 글자마다 확인 모달을 띄우는 대신
+    // 목록 재필터만 늦춘다. 저장/취소로 초안이 사라지면 바로 반영된다.
+    if (detailDirty) return;
     const t = setTimeout(() => setSearch(searchInput), 200);
     return () => clearTimeout(t);
-  }, [searchInput]);
+  }, [searchInput, detailDirty]);
 
   const filter: ConceptFilter = useMemo(
     () => ({ status, search, tags: activeTags, sort }),
     [status, search, activeTags, sort],
   );
 
+  // 세대 번호 — 디바운스 검색이 겹치면 reload 가 큐잉되고, 늦게 도착한 옛 응답이
+  // 최신 목록을 덮어쓸 수 있다. selected 가 이 목록에서 파생되므로 상세 판까지 흔들린다.
+  const reloadSeq = useRef(0);
+
   async function reload() {
+    const seq = ++reloadSeq.current;
     try {
       const [list, cnt, tg] = await Promise.all([
         listConcepts(filter),
         statusCounts(),
         allTags(),
       ]);
+      if (seq !== reloadSeq.current) return; // 밀려난 응답은 버린다
       setConcepts(list);
       setCounts(cnt);
       setTags(tg);
       setReady(true);
       setLoadError(null);
     } catch (e) {
+      if (seq !== reloadSeq.current) return;
       setLoadError(String(e));
     }
   }
@@ -153,20 +173,27 @@ function App() {
   reloadRef.current = reload;
 
   // 개념 선택 이동 공통 로직 (필터에 가려 안 보이는 일 없게 전체 탭 + 필터 초기화)
-  const goToConcept = (id: number) => {
-    setSection("til");
-    setStatus("all");
-    setActiveTags([]);
-    setSearchInput("");
-    setSearch("");
-    setSelectedId(id);
-  };
+  const goToConcept = (id: number) =>
+    guard(() => {
+      setSection("til");
+      setStatus("all");
+      setActiveTags([]);
+      setSearchInput("");
+      setSearch("");
+      setSelectedId(id);
+    });
+
+  // 리스너가 [] deps 로 한 번만 붙으므로 ref 로 최신 구현을 본다 (초안 가드가 stale 이 되지 않게)
+  const goToConceptRef = useRef(goToConcept);
+  goToConceptRef.current = goToConcept;
 
   // 위젯 등 다른 창에서의 변경/열기 요청 수신
   useEffect(() => {
     const uns = [
       listen("concept-changed", () => reloadRef.current()),
-      listen<{ id: number }>("open-concept", (e) => goToConcept(e.payload.id)),
+      listen<{ id: number }>("open-concept", (e) =>
+        goToConceptRef.current(e.payload.id),
+      ),
     ];
     return () => uns.forEach((u) => u.then((f) => f()));
   }, []);
@@ -174,7 +201,7 @@ function App() {
   // 앱 내 노트↔개념 상호 이동 (같은 창, window CustomEvent)
   useEffect(() => {
     const onConcept = (e: Event) =>
-      goToConcept((e as CustomEvent<{ id: number }>).detail.id);
+      goToConceptRef.current((e as CustomEvent<{ id: number }>).detail.id);
     const onNote = () => setSection("notes"); // NotesView 가 실제 파일 열기 처리
     window.addEventListener(OPEN_CONCEPT, onConcept);
     window.addEventListener(OPEN_NOTE, onNote);
@@ -205,9 +232,21 @@ function App() {
     const h = (e: KeyboardEvent) => {
       if (shieldedRef.current) return;
       if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
-      if (e.key.toLowerCase() === "k") {
+      const k = e.key.toLowerCase();
+      if (k === "k") {
         e.preventDefault();
         setSearchOpen(true);
+        return;
+      }
+      // ⌘F = 보관함 검색(⌘K 와 같은 창), ⌘, = 설정 — PRD MVP 단축키 명세
+      if (k === "f") {
+        e.preventDefault();
+        setSearchOpen(true);
+        return;
+      }
+      if (e.key === ",") {
+        e.preventDefault();
+        setSettingsOpen(true);
         return;
       }
       const i = Number(e.key) - 1;
@@ -223,8 +262,10 @@ function App() {
   const selected = concepts.find((c) => c.id === selectedId) ?? null;
 
   function toggleTag(name: string) {
-    setActiveTags((prev) =>
-      prev.includes(name) ? prev.filter((t) => t !== name) : [...prev, name],
+    guard(() =>
+      setActiveTags((prev) =>
+        prev.includes(name) ? prev.filter((t) => t !== name) : [...prev, name],
+      ),
     );
   }
 
@@ -307,7 +348,6 @@ function App() {
           <button
             className="btn btn-primary"
             onClick={() => setAddOpen(true)}
-            disabled={!config?.provider}
           >
             <Icon name="plus" size={15} />
             {t("app.add")}
@@ -334,7 +374,7 @@ function App() {
             <button
               key={t.id}
               className={`tab ${status === t.id ? "active" : ""}`}
-              onClick={() => setStatus(t.id)}
+              onClick={() => guard(() => setStatus(t.id))}
             >
               {t.label}
               <span className="count">{countOf(t.id)}</span>
@@ -361,7 +401,7 @@ function App() {
             />
           ))}
           {activeTags.length > 0 && (
-            <span className="chip btn-like" onClick={() => setActiveTags([])}>
+            <span className="chip btn-like" onClick={() => guard(() => setActiveTags([]))}>
               {t("app.filter.clear")}
             </span>
           )}
@@ -388,7 +428,7 @@ function App() {
             <div
               key={c.id}
               className={`row ${selectedId === c.id ? "selected" : ""}`}
-              onClick={() => setSelectedId(c.id)}
+              onClick={() => guard(() => setSelectedId(c.id))}
             >
               <div className="row-top">
                 <span className="row-title">{c.title}</span>
@@ -415,6 +455,7 @@ function App() {
               key={selected.id}
               concept={selected}
               config={config}
+              onDirtyChange={setDetailDirty}
               onChanged={(opts) => {
                 if (opts?.deleted) setSelectedId(null);
                 reload();
@@ -473,6 +514,17 @@ function App() {
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
         onOpenHit={openHit}
+      />
+      {/* 개념 편집 초안이 있는데 필터/선택을 바꾸려 할 때 */}
+      <UnsavedModal
+        open={!!pendingNav}
+        onKeep={() => setPendingNav(null)}
+        onDiscard={() => {
+          const p = pendingNav;
+          setPendingNav(null);
+          setDetailDirty(false);
+          p?.run();
+        }}
       />
     </div>
   );

@@ -8,6 +8,17 @@ const ko = {
   "common.delete": "삭제",
   "common.resizePane": "드래그해서 좌측 너비 조절",
 
+  // 미저장 초안 확인 (ui.tsx UnsavedModal) — 노트·다이어그램·개념·작업폴더 전환 공용
+  "common.unsaved.title": "저장하지 않은 변경",
+  "common.unsaved.body": "저장하지 않은 변경이 있어요. 버리고 이동할까요?",
+  "common.unsaved.keep": "계속 편집",
+  "common.unsaved.discard": "버리고 이동",
+
+  // 렌더 중 예외 — ErrorBoundary(main.tsx). 창이 백지가 되는 대신 이 화면이 뜬다
+  "common.crash.title": "화면을 그리다 문제가 생겼어요",
+  "common.crash.hint": "저장된 노트·다이어그램 파일은 그대로예요. 새로고침하면 대부분 복구돼요.",
+  "common.crash.reload": "새로고침",
+
   "common.status.learning": "학습중",
   "common.status.learned": "학습완료",
   "common.confidence": "자신감 {n}/3",
@@ -69,6 +80,16 @@ const en: Record<keyof typeof ko, string> = {
   "common.save": "Save",
   "common.delete": "Delete",
   "common.resizePane": "Drag to resize the left pane",
+
+  "common.unsaved.title": "Unsaved changes",
+  "common.unsaved.body": "There are unsaved changes. Discard them and switch?",
+  "common.unsaved.keep": "Keep editing",
+  "common.unsaved.discard": "Discard & switch",
+
+  "common.crash.title": "Something broke while rendering",
+  "common.crash.hint":
+    "Your notes and diagrams on disk are untouched. Reloading usually fixes it.",
+  "common.crash.reload": "Reload",
 
   "common.status.learning": "Learning",
   "common.status.learned": "Learned",
