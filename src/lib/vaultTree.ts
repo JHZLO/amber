@@ -135,20 +135,43 @@ export async function searchFiles(
   };
   walk(await src.listTree());
 
+  // 1) 이름 매칭 먼저 — 읽기가 전혀 필요 없다. 이걸로 limit 이 차면 본문은 한 번도 안 읽는다.
+  const nameHits = files.filter((f) => f.name.toLowerCase().includes(q));
+
+  // 이름 히트에도 스니펫은 붙여 준다(결과 줄의 부제) — 다만 상한만큼만 읽는다
   const byName: VaultMatch[] = [];
+  for (const f of nameHits.slice(0, limit)) {
+    byName.push({ name: f.name, path: f.path, snippet: await snippetOf(src, f, q) });
+  }
+  if (byName.length >= limit) return byName.slice(0, limit);
+
+  // 2) 남은 자리만큼 본문 검색. 전부 읽고 나서 자르지 않고, 채워지는 대로 끊는다.
+  //    한 번에 CHUNK 개씩 병렬로 읽어 왕복 지연을 줄이되 파일 전체를 동시에 열지는 않는다.
+  const rest = files.filter((f) => !f.name.toLowerCase().includes(q));
   const byBody: VaultMatch[] = [];
-  for (const f of files) {
-    let snippet: string | null = null;
-    try {
-      snippet = firstHitLine(await src.readFile(f.path), q);
-    } catch {
-      // 읽기 실패(삭제 직후·권한)는 결과에서 조용히 빼되 이름 일치는 살린다
-    }
-    if (f.name.toLowerCase().includes(q))
-      byName.push({ name: f.name, path: f.path, snippet });
-    else if (snippet) byBody.push({ name: f.name, path: f.path, snippet });
+  const CHUNK = 8;
+  for (let i = 0; i < rest.length && byName.length + byBody.length < limit; i += CHUNK) {
+    const batch = rest.slice(i, i + CHUNK);
+    const snippets = await Promise.all(batch.map((f) => snippetOf(src, f, q)));
+    batch.forEach((f, k) => {
+      const snippet = snippets[k];
+      if (snippet) byBody.push({ name: f.name, path: f.path, snippet });
+    });
   }
   return [...byName, ...byBody].slice(0, limit);
+}
+
+/** 파일 본문에서 질의가 처음 걸린 줄. 읽기 실패(삭제 직후·권한)는 조용히 null */
+async function snippetOf(
+  src: { readFile: (relPath: string) => Promise<string> },
+  f: VaultNode,
+  q: string,
+): Promise<string | null> {
+  try {
+    return firstHitLine(await src.readFile(f.path), q);
+  } catch {
+    return null;
+  }
 }
 
 /** 소문자 질의가 처음 걸린 줄. 길면 매칭 지점이 잘리지 않게 그 앞에서 자른다 */

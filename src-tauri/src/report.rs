@@ -350,7 +350,16 @@ async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDi
     let repo_filter: Vec<String> = cfg.repos.iter().map(|r| r.trim().to_lowercase()).filter(|r| !r.is_empty()).collect();
     let mut lines: Vec<String> = Vec::new();
     let mut commit_fetches = 0usize;
-    for ev in arr {
+    // (repo, PR번호) → lines 인덱스. 같은 PR 의 리뷰/리뷰코멘트는 한 줄로 합치고 횟수만 센다 —
+    // 안 그러면 리뷰 코멘트 수십 건이 MAX_EVENTS 를 채워 그날의 다른 작업을 밀어낸다.
+    let mut review_at: std::collections::HashMap<(String, u64), usize> = std::collections::HashMap::new();
+    let mut review_n: std::collections::HashMap<(String, u64), u32> = std::collections::HashMap::new();
+    // 피드는 최신순이다 — 오래된 것부터 훑어야 상한에 걸려 잘리는 게 '그날 마지막'이 된다
+    let mut ordered: Vec<&serde_json::Value> = arr.iter().collect();
+    ordered.sort_by_key(|ev| {
+        ev.get("created_at").and_then(|v| v.as_str()).and_then(parse_iso_ms).unwrap_or(0)
+    });
+    for ev in ordered {
         let created = ev.get("created_at").and_then(|v| v.as_str()).and_then(parse_iso_ms);
         let Some(ts) = created else { continue };
         if ts < start_ms || ts >= end_ms {
@@ -386,6 +395,20 @@ async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDi
                 Some(m) => format!("- {m} {loc}"),
                 None => format!("- 커밋 push {loc}"),
             });
+        } else if let Some(n) = review_pr_number(ev) {
+            // 같은 PR 의 두 번째 리뷰부터는 새 줄 대신 기존 줄의 횟수를 올린다
+            let key = (repo.to_string(), n);
+            if let Some(&i) = review_at.get(&key) {
+                let c = review_n.entry(key).or_insert(1);
+                *c += 1;
+                lines[i] = format!(
+                    "- PR 리뷰 [#{n}](https://github.com/{repo}/pull/{n}) · {c}회 — {repo}"
+                );
+            } else if let Some(line) = format_gh_event(ev, repo) {
+                review_at.insert(key.clone(), lines.len());
+                review_n.insert(key, 1);
+                lines.push(line);
+            }
         } else if let Some(line) = format_gh_event(ev, repo) {
             lines.push(line);
         }
@@ -424,6 +447,18 @@ async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDi
         items: lines.len() as u32,
         digest_md: clamp_lines(digest, budget_for(cfg.rank)),
         error: None,
+    }
+}
+
+/// 리뷰/리뷰코멘트 이벤트면 그 PR 번호. 아니면 None (묶기 대상 판별용)
+fn review_pr_number(ev: &serde_json::Value) -> Option<u64> {
+    match ev.get("type").and_then(|t| t.as_str())? {
+        "PullRequestReviewEvent" | "PullRequestReviewCommentEvent" => ev
+            .get("payload")?
+            .get("pull_request")?
+            .get("number")?
+            .as_u64(),
+        _ => None,
     }
 }
 

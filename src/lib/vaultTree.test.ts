@@ -126,6 +126,45 @@ describe("searchFiles", () => {
     expect(await searchFiles(src, "tcp", 1)).toHaveLength(1);
   });
 
+  it("이름 매칭만으로 limit 이 차면 나머지 파일은 읽지 않는다", async () => {
+    // ⌘K 는 키 입력이 멈출 때마다 호출된다 — 8줄 그리자고 보관함 전체를 읽으면 안 된다
+    const read: string[] = [];
+    const many = {
+      listTree: async () =>
+        Array.from({ length: 50 }, (_, i) => ({
+          name: `노트${i}`,
+          path: `n${i}.md`,
+          isDir: false,
+        })),
+      readFile: async (p: string) => {
+        read.push(p);
+        return "본문";
+      },
+    };
+    const hits = await searchFiles(many, "노트", 3);
+    expect(hits).toHaveLength(3);
+    expect(read).toHaveLength(3); // 50개가 아니라 결과로 낸 3개만
+  });
+
+  it("본문 매칭도 limit 이 차면 남은 파일을 읽지 않는다", async () => {
+    const read: string[] = [];
+    const many = {
+      listTree: async () =>
+        Array.from({ length: 100 }, (_, i) => ({
+          name: `f${i}`,
+          path: `f${i}.md`,
+          isDir: false,
+        })),
+      readFile: async (p: string) => {
+        read.push(p);
+        return "바늘";
+      },
+    };
+    await searchFiles(many, "바늘", 2);
+    // 8개 묶음 단위로 읽으므로 첫 묶음에서 멈춘다 — 100개 전부는 아니다
+    expect(read.length).toBeLessThanOrEqual(8);
+  });
+
   it("긴 줄은 매칭 지점을 살려 자른다", async () => {
     const long = {
       listTree: async () => [{ name: "긴줄", path: "long.md", isDir: false }],

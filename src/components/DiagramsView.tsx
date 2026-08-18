@@ -65,6 +65,8 @@ export function DiagramsView({
   const [tree, setTree] = useState<DiagramNode[] | null>(null);
   const [treeError, setTreeError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // 한 번이라도 펼친 적 있는 폴더 — 접어도 유지한다(다시 펼칠 때 깜빡이지 않게)
+  const [mountedDirs, setMountedDirs] = useState<Set<string>>(new Set());
   const [activeDir, setActiveDir] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -139,6 +141,7 @@ export function DiagramsView({
     setSelected(null);
     setEditing(false);
     setExpanded(new Set());
+    setMountedDirs(new Set());
     setActiveDir("");
     setOpError(null);
     void reload();
@@ -169,6 +172,7 @@ export function DiagramsView({
     for (let i = 0; i < parts.length; i++)
       paths.push(parts.slice(0, i + 1).join("/"));
     setExpanded((prev) => new Set([...prev, ...paths]));
+    setMountedDirs((prev) => new Set([...prev, ...paths]));
   }
 
   /** 폴더 이름 변경 시 selected/activeDir/expanded 경로 프리픽스 재매핑 */
@@ -180,6 +184,7 @@ export function DiagramsView({
           ? newP + s.slice(oldP.length)
           : s;
     setExpanded((prev) => new Set([...prev].map(map)));
+    setMountedDirs((prev) => new Set([...prev].map(map)));
     setSelected((prev) => (prev ? map(prev) : prev));
     setActiveDir((prev) => map(prev));
   }
@@ -242,6 +247,8 @@ export function DiagramsView({
       else next.add(n.path);
       return next;
     });
+    // 마운트는 펼침보다 먼저 일어나야 0fr→1fr 트랜지션이 첫 프레임부터 돈다
+    setMountedDirs((prev) => (prev.has(n.path) ? prev : new Set(prev).add(n.path)));
     setActiveDir(n.path);
   }
 
@@ -506,7 +513,11 @@ export function DiagramsView({
                   </Tooltip>
                 </span>
               </div>
-              {n.isDir && n.children && n.children.length > 0 && (
+              {/* 한 번이라도 펼친 폴더만 자식을 마운트한다 — 접힌 채로도 전부 렌더하면
+                  1,000개 규모에서 수천 개 엘리먼트가 살아 있고 창 포커스마다 전부 재조정된다.
+                  0fr→1fr 트랜지션을 살리려면 마운트와 .open 을 같은 프레임에 주면 안 되므로
+                  mountedDirs 에 넣는 시점(펼침 클릭)과 isOpen 이 자연히 한 프레임 어긋난다. */}
+              {n.isDir && n.children && n.children.length > 0 && mountedDirs.has(n.path) && (
                 <div className={`tree-children ${isOpen ? "open" : ""}`}>
                   <div className="tree-children-inner">
                     {renderRows(n.children, depth + 1)}
