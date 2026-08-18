@@ -224,7 +224,7 @@ async fn run_gh(program: &str, args: &[&str], token: Option<&str>) -> Result<Vec
     if let Some(t) = token {
         cmd.env("GH_TOKEN", t);
     }
-    let out = timeout(Duration::from_secs(COLLECT_TIMEOUT_SECS), cmd.output())
+    let out = timeout(Duration::from_secs(COLLECT_TIMEOUT_SECS), cmd.kill_on_drop(true).output())
         .await
     .map_err(|_| AiError::new("REPORT_TIMEOUT", "gh 응답이 없습니다."))?
     .map_err(|e| {
@@ -341,6 +341,12 @@ async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDi
         None => return mk_err(AiError::new("GH_ERROR", "이벤트 형식이 배열이 아닙니다.")),
     };
 
+    // 피드에서 가장 오래된 이벤트. 이게 요청 구간보다 뒤(최신)면 창이 그 날짜에 닿지 못한 것이다.
+    let oldest_ms = arr
+        .iter()
+        .filter_map(|ev| ev.get("created_at").and_then(|v| v.as_str()).and_then(parse_iso_ms))
+        .min();
+
     let repo_filter: Vec<String> = cfg.repos.iter().map(|r| r.trim().to_lowercase()).filter(|r| !r.is_empty()).collect();
     let mut lines: Vec<String> = Vec::new();
     let mut commit_fetches = 0usize;
@@ -389,6 +395,17 @@ async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDi
     }
 
     if lines.is_empty() {
+        // 결과가 비었을 때만 잘림을 따진다 — 뭔가 잡혔다면 창이 그 날짜에 닿은 것이다.
+        // (GitHub 이벤트 피드는 페이지네이션으로도 ~90일까지만 보관하므로 그 밖은 원천적으로 못 본다.)
+        if let Some(oldest) = oldest_ms {
+            if oldest > start_ms {
+                return mk_err(AiError::detailed(
+                    "GH_WINDOW_TRUNCATED",
+                    "GitHub 활동 피드가 이 날짜까지 닿지 않습니다.",
+                    arr.len().to_string(),
+                ));
+            }
+        }
         return SourceDigest {
             id: "github".into(),
             rank: cfg.rank,
@@ -994,6 +1011,7 @@ pub async fn report_generate(
     timeout_secs: Option<u64>,
     lang: Option<String>,
     on_delta: Channel<String>,
+    cancel_key: Option<String>,
 ) -> Result<ReportResult, AiError> {
     let kind = provider_kind(provider.as_deref());
     // MCP 위임은 claude 경로 전용 (codex/gemini 는 later)
@@ -1037,8 +1055,17 @@ pub async fn report_generate(
     }
 
     let (result_str, meta) = if kind == ProviderKind::Claude {
-        stream_claude_result(program, model, dur, &report_sys(lang.as_deref()), input, &extra_args, &on_delta)
-            .await?
+        stream_claude_result(
+            program,
+            model,
+            dur,
+            &report_sys(lang.as_deref()),
+            input,
+            &extra_args,
+            &on_delta,
+            cancel_key.as_deref(),
+        )
+        .await?
     } else {
         let r = run_provider_text(kind, program, model, dur, &report_sys(lang.as_deref()), input).await?;
         let _ = on_delta.send(r.0.clone());
@@ -1074,7 +1101,10 @@ async fn resolve_gh_path() -> Option<String> {
     for shell in ["/bin/zsh", "/bin/bash"] {
         if let Ok(Ok(out)) = timeout(
             Duration::from_secs(8),
-            Command::new(shell).args(["-lc", "command -v gh"]).output(),
+            Command::new(shell)
+                .args(["-lc", "command -v gh"])
+                .kill_on_drop(true)
+                .output(),
         )
         .await
         {
@@ -1095,7 +1125,7 @@ pub async fn detect_report_tools() -> ReportTools {
     let gh = if let Some(path) = resolve_gh_path().await {
         let version = timeout(
             Duration::from_secs(8),
-            Command::new(&path).arg("--version").output(),
+            Command::new(&path).arg("--version").kill_on_drop(true).output(),
         )
         .await
         .ok()
@@ -1196,7 +1226,10 @@ pub async fn report_mcp_servers(cli_path: Option<String>) -> Vec<McpServer> {
     // 조금만 느려도 빈 목록 → "등록된 서버가 없어요" 로 보인다. 넉넉히 잡는다(끝나면 즉시 반환).
     match timeout(
         Duration::from_secs(60),
-        Command::new(&program).args(["mcp", "list"]).output(),
+        Command::new(&program)
+            .args(["mcp", "list"])
+            .kill_on_drop(true)
+            .output(),
     )
     .await
     {
@@ -1250,7 +1283,10 @@ pub async fn report_gh_accounts(cli_path: Option<String>) -> Vec<GhAccount> {
         .unwrap_or_else(|| "gh".to_string());
     match timeout(
         Duration::from_secs(15),
-        Command::new(&program).args(["auth", "status"]).output(),
+        Command::new(&program)
+            .args(["auth", "status"])
+            .kill_on_drop(true)
+            .output(),
     )
     .await
     {

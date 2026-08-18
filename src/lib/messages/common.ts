@@ -42,9 +42,10 @@ const ko = {
   "common.err.ai.auth": "AI CLI 인증이 필요해요. 터미널에서 로그인 후 다시 시도하세요.",
   "common.err.ai.rateLimit": "사용량 한도에 도달했어요. 잠시 후 다시 시도하세요.",
   "common.err.ai.timeout": "{detail}초 안에 응답이 없었어요. 다시 시도해 주세요.",
-  "common.err.ai.badEnvelope": "CLI 응답을 해석하지 못했어요. CLI 버전을 확인해 보세요.",
+  "common.err.ai.badEnvelope":
+    "CLI 응답을 해석하지 못했어요. CLI 버전을 확인해 보세요. {detail}",
   "common.err.ai.badResult": "생성 결과가 비어 있어요. 다시 시도해 주세요.",
-  "common.err.ai.generic": "AI CLI 가 오류를 반환했어요.",
+  "common.err.ai.generic": "AI CLI 가 오류를 반환했어요 — {detail}",
   "common.err.ai.spawn": "AI CLI 를 실행하지 못했어요 — {detail}",
   "common.err.ai.stdin": "AI CLI 에 입력을 전달하지 못했어요 — {detail}",
   "common.err.ai.wait": "AI CLI 종료를 기다리지 못했어요 — {detail}",
@@ -57,6 +58,9 @@ const ko = {
   "common.err.gh.notFound": "gh CLI 를 찾을 수 없어요.",
   "common.err.gh.auth": "gh 인증이 필요해요. 터미널에서 `gh auth login` 후 다시 시도하세요.",
   "common.err.gh.generic": "gh 호출이 실패했어요 — {detail}",
+  // GitHub 활동 피드는 한 페이지(최근 {detail}건)까지만 온다 — 그보다 오래된 날짜는 조회 자체가 불가능
+  "common.err.gh.windowTruncated":
+    "GitHub 활동 피드가 이 날짜까지 닿지 않아요 (최근 {detail}건까지만 조회돼요).",
   "common.err.report.timeout": "수집이 시간 안에 끝나지 않았어요.",
   "common.err.report.noActivity": "이 날짜엔 정리할 활동이 없어요.",
   "common.err.backup.noDest": "백업할 폴더를 찾을 수 없어요.",
@@ -113,9 +117,10 @@ const en: Record<keyof typeof ko, string> = {
   "common.err.ai.auth": "The AI CLI needs authentication. Log in from a terminal, then retry.",
   "common.err.ai.rateLimit": "You've hit the usage limit. Try again in a bit.",
   "common.err.ai.timeout": "No response within {detail}s. Please try again.",
-  "common.err.ai.badEnvelope": "Couldn't parse the CLI response. Check your CLI version.",
+  "common.err.ai.badEnvelope":
+    "Couldn't parse the CLI response. Check your CLI version. {detail}",
   "common.err.ai.badResult": "The generated result was empty. Please try again.",
-  "common.err.ai.generic": "The AI CLI returned an error.",
+  "common.err.ai.generic": "The AI CLI returned an error — {detail}",
   "common.err.ai.spawn": "Couldn't start the AI CLI — {detail}",
   "common.err.ai.stdin": "Couldn't send input to the AI CLI — {detail}",
   "common.err.ai.wait": "Couldn't wait for the AI CLI to exit — {detail}",
@@ -128,6 +133,8 @@ const en: Record<keyof typeof ko, string> = {
   "common.err.gh.notFound": "Couldn't find the gh CLI.",
   "common.err.gh.auth": "gh needs authentication. Run `gh auth login` in a terminal, then retry.",
   "common.err.gh.generic": "The gh call failed — {detail}",
+  "common.err.gh.windowTruncated":
+    "GitHub's activity feed doesn't reach back to this date (only the latest {detail} events are available).",
   "common.err.report.timeout": "Collection didn't finish in time.",
   "common.err.report.noActivity": "There's no activity to summarize for this date.",
   "common.err.backup.noDest": "Couldn't find the destination folder.",

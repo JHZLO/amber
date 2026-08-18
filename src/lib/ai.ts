@@ -2,6 +2,7 @@
 // Tauri v2 는 JS camelCase 인자를 Rust snake_case 로 자동 변환한다 (claudePath → claude_path).
 
 import { invoke, Channel } from "@tauri-apps/api/core";
+import { ulid } from "ulid";
 import type { Confidence } from "../types";
 import { getLang } from "./i18n";
 import { errText } from "./errors";
@@ -121,6 +122,8 @@ export async function aiNoteComposeStream(
     cliPath?: string | null;
     provider?: string | null;
     timeoutSecs?: number | null;
+    /** 중단 버튼이 aiCancel 에 넘길 키. 생략하면 취소 불가 */
+    cancelKey?: string | null;
   },
   onDelta: (text: string) => void,
 ): Promise<NoteComposeResult> {
@@ -187,6 +190,7 @@ export async function aiErdGenerateStream(
     cliPath?: string | null;
     provider?: string | null;
     timeoutSecs?: number | null;
+    cancelKey?: string | null;
   },
   onDelta: (text: string) => void,
 ): Promise<ErdResult> {
@@ -202,7 +206,18 @@ export async function aiErdGenerateStream(
     timeoutSecs: params.timeoutSecs ?? null,
     lang: getLang(),
     onDelta: channel,
+    cancelKey: params.cancelKey ?? null,
   });
+}
+
+/** 실행마다 새로 만드는 취소 키 — 다른 창에서 도는 리포트 생성까지 같이 죽이지 않게 실행 단위로 격리한다 */
+export function newCancelKey(): string {
+  return ulid();
+}
+
+/** 진행 중인 AI 실행 중단. 이미 끝난 키는 무시되므로 완료와 겹쳐도 안전하다 */
+export async function aiCancel(cancelKey: string): Promise<void> {
+  await invoke("ai_cancel", { cancelKey });
 }
 
 export async function aiHealth(cliPath?: string | null): Promise<string> {

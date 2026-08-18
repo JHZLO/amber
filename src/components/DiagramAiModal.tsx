@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Mermaid } from "./Mermaid";
 import { DiffView } from "./DiffView";
 import type { AppConfig } from "../lib/config";
-import { aiErdGenerateStream, friendlyError } from "../lib/ai";
+import { aiCancel, aiErdGenerateStream, friendlyError, newCancelKey } from "../lib/ai";
 import { AiThinking, Modal } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
@@ -44,6 +44,8 @@ export function DiagramAiModal({
   const [streamText, setStreamText] = useState(""); // 생성 중 실시간 누적 텍스트
   const [viewMode, setViewMode] = useState<ViewMode>("preview");
   const streamRef = useRef<HTMLPreElement>(null);
+  // 진행 중인 실행의 취소 키 — 중단 버튼이 이걸로 CLI 를 끝낸다
+  const cancelKey = useRef<string | null>(null);
 
   // 빈 다이어그램이면 비교할 대상이 없으니 diff 탭을 숨긴다
   const hasExisting = currentSource.trim().length > 0;
@@ -76,6 +78,8 @@ export function DiagramAiModal({
     setError(null);
     setStreamText("");
     setStep("loading");
+    const key = newCancelKey();
+    cancelKey.current = key;
     try {
       const { mermaid } = await aiErdGenerateStream(
         {
@@ -85,6 +89,7 @@ export function DiagramAiModal({
           model: config.model,
           cliPath: config.cliPath,
           provider: config.provider,
+          cancelKey: key,
         },
         (delta) => setStreamText((prev) => prev + delta),
       );
@@ -94,6 +99,8 @@ export function DiagramAiModal({
     } catch (e) {
       setError(friendlyError(e));
       setStep("prompt");
+    } finally {
+      cancelKey.current = null;
     }
   }
 
@@ -116,6 +123,19 @@ export function DiagramAiModal({
           {t("diagrams.ai.convert")}
         </button>
       </>
+    );
+  } else if (step === "loading") {
+    footer = (
+      <button
+        className="btn btn-sm"
+        onClick={() => {
+          const k = cancelKey.current;
+          if (k) void aiCancel(k);
+        }}
+      >
+        <Icon name="x" size={14} />
+        {t("diagrams.ai.stop")}
+      </button>
     );
   } else if (step === "preview") {
     footer = (

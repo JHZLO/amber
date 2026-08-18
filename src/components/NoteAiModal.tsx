@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Markdown } from "./Markdown";
 import { DiffView } from "./DiffView";
 import type { AppConfig } from "../lib/config";
-import { aiNoteComposeStream, friendlyError } from "../lib/ai";
+import { aiCancel, aiNoteComposeStream, friendlyError, newCancelKey } from "../lib/ai";
 import { loadPrompts, type SavedPrompt } from "../lib/prompts";
 import { AiThinking, Modal } from "../ui";
 import { Icon } from "../icons";
@@ -47,6 +47,8 @@ export function NoteAiModal({
   const [viewMode, setViewMode] = useState<ViewMode>("preview");
   const [saved, setSaved] = useState<SavedPrompt[]>([]);
   const streamRef = useRef<HTMLPreElement>(null);
+  // 진행 중인 실행의 취소 키 — 중단 버튼이 이걸로 CLI 를 끝낸다
+  const cancelKey = useRef<string | null>(null);
 
   // 편집(기존 내용 있음) vs 새로 작성 구분 — diff 는 기존 내용이 있을 때만 의미
   const hasExisting = currentBody.trim().length > 0;
@@ -79,6 +81,8 @@ export function NoteAiModal({
     setError(null);
     setStreamText("");
     setStep("loading");
+    const key = newCancelKey();
+    cancelKey.current = key;
     try {
       const { markdown } = await aiNoteComposeStream(
         {
@@ -87,7 +91,8 @@ export function NoteAiModal({
           instruction,
           model: config.model,
           cliPath: config.cliPath,
-        provider: config.provider,
+          provider: config.provider,
+          cancelKey: key,
         },
         (delta) => setStreamText((prev) => prev + delta),
       );
@@ -98,6 +103,8 @@ export function NoteAiModal({
     } catch (e) {
       setError(friendlyError(e));
       setStep("prompt");
+    } finally {
+      cancelKey.current = null;
     }
   }
 
@@ -126,6 +133,20 @@ export function NoteAiModal({
           {t("notes.ai.run")}
         </button>
       </>
+    );
+  } else if (step === "loading") {
+    // 5분짜리 실행에 탈출구가 없으면 앱을 끄는 것 말고 방법이 없다
+    footer = (
+      <button
+        className="btn btn-sm"
+        onClick={() => {
+          const k = cancelKey.current;
+          if (k) void aiCancel(k);
+        }}
+      >
+        <Icon name="x" size={14} />
+        {t("notes.ai.stop")}
+      </button>
     );
   } else if (step === "preview") {
     footer = (

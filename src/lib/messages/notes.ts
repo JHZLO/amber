@@ -92,6 +92,7 @@ const ko = {
   // AI 작성 모달
   "notes.ai.title": "AI로 노트 작성",
   "notes.ai.run": "AI로 작성",
+  "notes.ai.stop": "중단",
   "notes.ai.configLoading": "설정을 불러오는 중이에요",
   "notes.ai.back": "다시 지시",
   "notes.ai.applyDiff": "변경 적용",
@@ -200,6 +201,7 @@ const en: Record<keyof typeof ko, string> = {
 
   "notes.ai.title": "Write note with AI",
   "notes.ai.run": "Write with AI",
+  "notes.ai.stop": "Stop",
   "notes.ai.configLoading": "Loading settings…",
   "notes.ai.back": "Revise instructions",
   "notes.ai.applyDiff": "Apply changes",

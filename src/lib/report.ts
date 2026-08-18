@@ -157,6 +157,7 @@ export function reportGenerate(
     cliPath?: string | null;
     provider?: string | null;
     timeoutSecs?: number | null;
+    cancelKey?: string | null;
   },
   onDelta: (text: string) => void,
 ): Promise<ReportGenResult> {
@@ -173,6 +174,7 @@ export function reportGenerate(
     timeoutSecs: params.timeoutSecs ?? null,
     lang: getLang(),
     onDelta: channel,
+    cancelKey: params.cancelKey ?? null,
   });
 }
 

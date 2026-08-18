@@ -4,12 +4,92 @@
 // stdin 으로 원문을 넘기고 EOF 를 확실히 닫기 위해 tokio::process 를 직접 사용한다.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::process::Stdio;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::ipc::Channel;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::time::timeout;
+
+/// 살아 있는 CLI 자식 프로세스: cancel_key → pid.
+///
+/// 두 가지를 위해 필요하다.
+/// 1) **취소** — 5분짜리 리포트/노트 생성을 시작한 뒤 마음이 바뀌면 앱을 끄는 것 말고 탈출구가 없었다.
+/// 2) **종료 시 정리** — 트레이 "종료"는 `std::process::exit` 라 Drop 이 안 돌고, 따라서
+///    `kill_on_drop(true)` 가 발화하지 않는다. 앱은 사라졌는데 `claude -p` 와 그것이 띄운 MCP
+///    서버들이 남아 토큰을 태우고 Slack/Notion 세션을 쥔 채로 돈다.
+static LIVE: OnceLock<Mutex<HashMap<String, Vec<u32>>>> = OnceLock::new();
+
+fn live() -> &'static Mutex<HashMap<String, Vec<u32>>> {
+    LIVE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn register(key: &str, pid: u32) {
+    if let Ok(mut m) = live().lock() {
+        m.entry(key.to_string()).or_default().push(pid);
+    }
+}
+
+fn unregister(key: &str, pid: u32) {
+    if let Ok(mut m) = live().lock() {
+        if let Some(v) = m.get_mut(key) {
+            v.retain(|&p| p != pid);
+            if v.is_empty() {
+                m.remove(key);
+            }
+        }
+    }
+}
+
+/// SIGKILL 로 즉시 끝낸다 — SIGTERM 을 무시하는 CLI 가 있고, 사용자는 이미 그만두기로 했다.
+fn kill_pid(pid: u32) {
+    // Safety: kill(2) 는 pid 만 받는다. 이미 죽은 pid 면 ESRCH 로 무해하게 실패한다.
+    unsafe {
+        libc::kill(pid as libc::pid_t, libc::SIGKILL);
+    }
+}
+
+/// 진행 중인 실행 하나를 취소한다. 없는 키는 조용히 무시(이미 끝났다는 뜻).
+pub fn cancel(key: &str) {
+    let pids = live().lock().ok().and_then(|mut m| m.remove(key)).unwrap_or_default();
+    for pid in pids {
+        kill_pid(pid);
+    }
+}
+
+/// 앱 종료 직전 남은 자식을 전부 정리한다. 손자(MCP 서버)까지는 못 잡지만,
+/// 부모가 죽으면 stdio 파이프가 닫혀 대부분 스스로 종료한다.
+pub fn kill_all() {
+    let all: Vec<u32> = live()
+        .lock()
+        .map(|mut m| m.drain().flat_map(|(_, v)| v).collect())
+        .unwrap_or_default();
+    for pid in all {
+        kill_pid(pid);
+    }
+}
+
+/// 등록/해제를 스코프에 묶는다 — 정상 종료·에러·타임아웃 어느 경로로 빠져나가도 목록이 샌다.
+struct LiveGuard {
+    key: String,
+    pid: u32,
+}
+
+impl Drop for LiveGuard {
+    fn drop(&mut self) {
+        unregister(&self.key, self.pid);
+    }
+}
+
+impl LiveGuard {
+    fn new(key: Option<&str>, pid: Option<u32>) -> Option<Self> {
+        let (key, pid) = (key?, pid?);
+        register(key, pid);
+        Some(Self { key: key.to_string(), pid })
+    }
+}
 
 const DEFAULT_MODEL: &str = "claude-opus-4-8";
 // 상세 노트 생성(특히 sonnet 다중 턴 + mermaid)이 오래 걸려 넉넉하게 5분.
@@ -208,8 +288,10 @@ async fn spawn_simple_cli_result(
         } else {
             ("AI_ERROR", "AI CLI 실행이 실패했습니다.")
         };
+        // stderr 는 detail 로 — message 에 섞으면 errors.ts 가 매핑된 코드에서 문구를 갈아끼우며
+        // 통째로 버린다(AI_ERROR/AI_AUTH/AI_RATE_LIMIT 는 전부 매핑돼 있다).
         let detail = String::from_utf8_lossy(&output.stderr);
-        return Err(AiError::new(code, format!("{msg}\n{}", detail.trim())));
+        return Err(AiError::detailed(code, msg, detail.trim()));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -511,6 +593,7 @@ pub async fn ai_note_compose_stream(
     timeout_secs: Option<u64>,
     lang: Option<String>,
     on_delta: Channel<String>,
+    cancel_key: Option<String>,
 ) -> Result<NoteComposeResult, AiError> {
     let instr = instruction.trim();
     if instr.is_empty() {
@@ -530,7 +613,7 @@ pub async fn ai_note_compose_stream(
     );
 
     let (result_str, meta) = if kind == ProviderKind::Claude {
-        stream_claude_result(program, model, dur, &sys(NOTE_SYSTEM_PROMPT, lang.as_deref()), input, &[], &on_delta)
+        stream_claude_result(program, model, dur, &sys(NOTE_SYSTEM_PROMPT, lang.as_deref()), input, &[], &on_delta, cancel_key.as_deref())
             .await?
     } else {
         // codex/gemini 는 스트리밍 미지원 경로 — 완료 후 전체 텍스트를 한 번에 전송
@@ -629,6 +712,7 @@ pub async fn ai_erd_generate_stream(
     timeout_secs: Option<u64>,
     lang: Option<String>,
     on_delta: Channel<String>,
+    cancel_key: Option<String>,
 ) -> Result<ErdResult, AiError> {
     if ddl.trim().chars().count() < MIN_INPUT_CHARS {
         return Err(AiError::new(
@@ -653,7 +737,7 @@ pub async fn ai_erd_generate_stream(
     input.push_str(&format!("[스키마 DDL]\n{}", ddl.trim()));
 
     let (result_str, meta) = if kind == ProviderKind::Claude {
-        stream_claude_result(program, model, dur, &sys(ERD_SYSTEM_PROMPT, lang.as_deref()), input, &[], &on_delta)
+        stream_claude_result(program, model, dur, &sys(ERD_SYSTEM_PROMPT, lang.as_deref()), input, &[], &on_delta, cancel_key.as_deref())
             .await?
     } else {
         // codex/gemini 는 스트리밍 미지원 경로 — 완료 후 전체 텍스트를 한 번에 전송
@@ -686,6 +770,8 @@ pub(crate) async fn stream_claude_result(
     // 추가 CLI 인자(예: MCP --allowedTools/--mcp-config). 노트 경로는 빈 슬라이스를 넘긴다.
     extra_args: &[String],
     on_delta: &Channel<String>,
+    // 취소 키 — 프론트가 실행마다 새로 만들어 넘기고, 중단 버튼이 같은 키로 ai_cancel 을 부른다.
+    cancel_key: Option<&str>,
 ) -> Result<(String, MetaOut), AiError> {
     let mut child = Command::new(&program)
         .arg("-p")
@@ -711,6 +797,9 @@ pub(crate) async fn stream_claude_result(
                 AiError::detailed("SPAWN_ERROR", e.to_string(), e.to_string())
             }
         })?;
+
+    // 이 스코프를 어떤 경로로 벗어나든(성공·에러·타임아웃) Drop 이 등록을 지운다
+    let _live = LiveGuard::new(cancel_key, child.id());
 
     {
         let mut stdin = child.stdin.take().expect("stdin piped");
@@ -838,7 +927,7 @@ pub(crate) async fn stream_claude_result(
             } else {
                 ("AI_BAD_ENVELOPE", "스트림에서 결과를 받지 못했습니다.")
             };
-            return Err(AiError::new(code, format!("{msg}\n{}", errbuf.trim())));
+            return Err(AiError::detailed(code, msg, errbuf.trim()));
         }
     };
 
@@ -951,8 +1040,10 @@ async fn spawn_claude_result(
         } else {
             ("AI_ERROR", "claude 실행이 실패했습니다.")
         };
+        // stderr 는 detail 로 — message 에 섞으면 errors.ts 가 매핑된 코드에서 문구를 갈아끼우며
+        // 통째로 버린다(AI_ERROR/AI_AUTH/AI_RATE_LIMIT 는 전부 매핑돼 있다).
         let detail = String::from_utf8_lossy(&output.stderr);
-        return Err(AiError::new(code, format!("{msg}\n{}", detail.trim())));
+        return Err(AiError::detailed(code, msg, detail.trim()));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1103,4 +1194,11 @@ mod tests {
             );
         }
     }
+}
+
+/// 진행 중인 AI 실행을 중단한다. 프론트가 실행 시작 때 만든 cancel_key 를 그대로 넘긴다.
+/// 이미 끝난 키는 조용히 무시된다 — 중단 버튼과 완료가 겹쳐도 에러를 띄우지 않게.
+#[tauri::command]
+pub fn ai_cancel(cancel_key: String) {
+    cancel(&cancel_key);
 }

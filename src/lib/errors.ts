@@ -42,6 +42,7 @@ export const CODE_KEY: Record<string, MsgKey> = {
   GH_NOT_FOUND: "common.err.gh.notFound",
   GH_AUTH: "common.err.gh.auth",
   GH_ERROR: "common.err.gh.generic",
+  GH_WINDOW_TRUNCATED: "common.err.gh.windowTruncated",
   REPORT_TIMEOUT: "common.err.report.timeout",
   REPORT_NO_ACTIVITY: "common.err.report.noActivity",
   // 백업 · 휴지통
@@ -60,7 +61,10 @@ export function errText(e: unknown): string {
     const key = CODE_KEY[e.code];
     // 미등록 코드는 Rust 의 폴백 문구를 그대로 — 비어 있으면 코드라도 보여 준다
     if (!key) return e.message || e.code;
-    return t(key, { detail: e.detail ?? "" });
+    const text = t(key, { detail: e.detail ?? "" });
+    // detail 이 없는데 문구가 "… — " 로 끝나면 매달린 대시를 떼어 낸다.
+    // (CLI 가 stderr 를 안 남기고 죽는 경우가 있다)
+    return text.replace(/\s*[—-]\s*$/, "");
   }
   if (e instanceof Error) return e.message;
   return String(e);

@@ -6,7 +6,7 @@
 import { useSyncExternalStore } from "react";
 import type { AppConfig } from "./config";
 import type { CollectProgress, DailyReport, SourceDigest } from "../types";
-import { friendlyError } from "./ai";
+import { aiCancel, friendlyError, newCancelKey } from "./ai";
 import { dayRangeMs } from "./date";
 import {
   buildTodosDigest,
@@ -25,9 +25,14 @@ export interface RunChip {
   id: string;
   status: "ok" | "pending" | "error" | "mcp";
   items: number;
+  /** 실패 사유 — 백엔드가 유일하게 실행 가능한 안내("gh auth login 하세요")를 여기 담는다.
+   *  버리면 칩이 빨개지기만 하고 왜 실패했는지 알 방법이 없다. */
+  error?: string | null;
 }
 export interface RunState {
   phase: RunPhase;
+  /** 진행 중인 실행의 취소 키 — 중단 버튼이 이걸로 ai_cancel 을 부른다. 끝나면 null */
+  cancelKey: string | null;
   stream: string;
   chips: RunChip[];
   error: string | null;
@@ -60,6 +65,7 @@ function patch(date: string, p: Partial<RunState>) {
     runs.get(date) ??
     ({
       phase: "collecting",
+      cancelKey: null,
       stream: "",
       chips: [],
       error: null,
@@ -115,6 +121,7 @@ export async function startReport(date: string, config: AppConfig): Promise<void
   if (isRunning(date)) return;
   patch(date, {
     phase: "collecting",
+    cancelKey: null,
     stream: "",
     chips: [],
     error: null,
@@ -161,7 +168,12 @@ export async function startReport(date: string, config: AppConfig): Promise<void
         patch(date, {
           chips: cur.chips.map((c) =>
             c.id === p.id
-              ? { id: c.id, status: p.ok ? "ok" : "error", items: p.items }
+              ? {
+                  id: c.id,
+                  status: p.ok ? "ok" : "error",
+                  items: p.items,
+                  error: p.error,
+                }
               : c,
           ),
         });
@@ -175,7 +187,8 @@ export async function startReport(date: string, config: AppConfig): Promise<void
       return;
     }
 
-    patch(date, { phase: "streaming" });
+    const cancelKey = newCancelKey();
+    patch(date, { phase: "streaming", cancelKey });
     const { markdown, meta } = await reportGenerate(
       {
         date,
@@ -185,6 +198,7 @@ export async function startReport(date: string, config: AppConfig): Promise<void
         model: config.model,
         cliPath: config.cliPath,
         provider: config.provider,
+        cancelKey,
       },
       (t: string) => {
         const cur = runs.get(date);
@@ -219,8 +233,15 @@ export async function startReport(date: string, config: AppConfig): Promise<void
       durationMs: meta.duration_ms,
     });
     const report = await getReport(date);
-    patch(date, { phase: "done", body: markdown, report });
+    patch(date, { phase: "done", body: markdown, report, cancelKey: null });
   } catch (e) {
-    patch(date, { phase: "error", error: friendlyError(e) });
+    patch(date, { phase: "error", error: friendlyError(e), cancelKey: null });
   }
+}
+
+/** 진행 중인 리포트 생성을 중단한다. CLI 를 죽이면 reportGenerate 가 에러로 빠져
+ *  위 catch 가 phase='error' 로 마감한다 — 별도 상태 전환이 필요 없다. */
+export async function cancelReport(date: string): Promise<void> {
+  const key = runs.get(date)?.cancelKey;
+  if (key) await aiCancel(key);
 }

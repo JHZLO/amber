@@ -22,35 +22,43 @@ fn greet(name: &str) -> String {
 
 /// appDataDir 기준 상대경로를 macOS 휴지통으로 이동(영구 삭제 대신 복구 가능).
 /// vault 밖 경로는 거부한다. 대상이 없으면 멱등 성공.
+/// `async` + `spawn_blocking` 이어야 한다 — Tauri v2 는 non-async 커맨드를 메인(이벤트 루프)
+/// 스레드에서 돌리고, `trash` 의 macOS 기본 경로는 Finder 에 AppleEvent 를 보내 응답까지
+/// 블로킹한다. 동기로 두면 노트 하나 지울 때마다 메인 창과 위젯이 함께 얼어붙는다
+/// (첫 호출 때 뜨는 자동화 권한 다이얼로그 동안 특히 길다).
 #[tauri::command]
-fn move_to_trash(app: tauri::AppHandle, rel_path: String) -> Result<(), AiError> {
+async fn move_to_trash(app: tauri::AppHandle, rel_path: String) -> Result<(), AiError> {
     // rel_path 는 appdata 상대경로(기본 보관함) 또는 절대경로("폴더 열기"로 연 워크스페이스).
     let base = app
         .path()
         .app_data_dir()
         .map_err(|e| AiError::detailed("TRASH_FAILED", e.to_string(), e.to_string()))?;
-    let p = std::path::PathBuf::from(&rel_path);
-    let target = if p.is_absolute() { p } else { base.join(&p) };
-    if !target.exists() {
-        return Ok(());
-    }
-    let io = |e: std::io::Error| AiError::detailed("TRASH_FAILED", e.to_string(), e.to_string());
-    let canon_target = target.canonicalize().map_err(io)?;
-    let canon_base = base.canonicalize().map_err(io)?;
     let home = app
         .path()
         .home_dir()
         .map_err(|e| AiError::detailed("TRASH_FAILED", e.to_string(), e.to_string()))?;
-    let canon_home = home.canonicalize().map_err(io)?;
-    // 허용: appdata 하위, 또는 홈 하위(홈 자체는 금지) — 시스템 경로 오삭제 방지
-    let allowed = canon_target.starts_with(&canon_base)
-        || (canon_target.starts_with(&canon_home) && canon_target != canon_home);
-    if !allowed {
-        return Err(AiError::new("TRASH_FORBIDDEN", "허용되지 않은 경로입니다."));
-    }
-    trash::delete(&canon_target)
-        .map_err(|e| AiError::detailed("TRASH_FAILED", e.to_string(), e.to_string()))?;
-    Ok(())
+
+    tokio::task::spawn_blocking(move || {
+        let p = std::path::PathBuf::from(&rel_path);
+        let target = if p.is_absolute() { p } else { base.join(&p) };
+        if !target.exists() {
+            return Ok(());
+        }
+        let io = |e: std::io::Error| AiError::detailed("TRASH_FAILED", e.to_string(), e.to_string());
+        let canon_target = target.canonicalize().map_err(io)?;
+        let canon_base = base.canonicalize().map_err(io)?;
+        let canon_home = home.canonicalize().map_err(io)?;
+        // 허용: appdata 하위, 또는 홈 하위(홈 자체는 금지) — 시스템 경로 오삭제 방지
+        let allowed = canon_target.starts_with(&canon_base)
+            || (canon_target.starts_with(&canon_home) && canon_target != canon_home);
+        if !allowed {
+            return Err(AiError::new("TRASH_FORBIDDEN", "허용되지 않은 경로입니다."));
+        }
+        trash::delete(&canon_target)
+            .map_err(|e| AiError::detailed("TRASH_FAILED", e.to_string(), e.to_string()))
+    })
+    .await
+    .map_err(|e| AiError::detailed("TRASH_FAILED", e.to_string(), e.to_string()))?
 }
 
 /// 백업: 사용자가 고른 폴더 아래 `amber-backup-<로컬 타임스탬프>/` 를 만들고
@@ -61,6 +69,9 @@ async fn create_backup(
     app: tauri::AppHandle,
     dest_dir: String,
     tz_offset_min: i32,
+    // "폴더 열기"로 바꾼 작업 폴더들(섹션명, 절대경로). 기본 보관함이면 프론트가 넘기지 않는다.
+    // 이걸 안 받으면 노트를 git 으로 관리하려고 폴더를 연 사용자가 노트 0개짜리 백업을 받는다.
+    extra_roots: Option<Vec<(String, String)>>,
 ) -> Result<String, AiError> {
     // DB 는 sql 플러그인이 app_config_dir 기준으로 열고, vault 는 프론트가 appdata 기준으로 쓴다
     // (macOS 에선 같은 폴더지만 각자의 기준을 그대로 따른다).
@@ -95,6 +106,7 @@ async fn create_backup(
     std::fs::create_dir_all(&root)
         .map_err(|e| AiError::detailed("BACKUP_MKDIR", e.to_string(), e.to_string()))?;
 
+    let roots = extra_roots.unwrap_or_default();
     let write = async {
         if db.exists() {
             vacuum_into(&db, &root.join("amber.db")).await?;
@@ -105,6 +117,36 @@ async fn create_backup(
             tokio::task::spawn_blocking(move || copy_dir(&from, &to))
                 .await
                 .map_err(|e| e.to_string())??;
+        }
+        // 커스텀 작업 폴더는 roots/<섹션>/ 아래로. 어디서 왔는지는 manifest.json 에 남긴다.
+        let mut manifest = String::from("{\n  \"version\": 1,\n  \"roots\": {");
+        for (i, (section, path)) in roots.iter().enumerate() {
+            let src = std::path::PathBuf::from(path);
+            if !src.is_dir() {
+                continue;
+            }
+            // 백업 대상 폴더가 이 루트 안이면 자기 자신을 재귀 복사하게 된다
+            if let (Ok(d), Ok(r)) = (dest.canonicalize(), src.canonicalize()) {
+                if d.starts_with(&r) {
+                    return Err(format!(
+                        "백업 위치가 '{section}' 작업 폴더 안이라 복사할 수 없습니다."
+                    ));
+                }
+            }
+            let to = root.join("roots").join(section);
+            tokio::task::spawn_blocking(move || copy_dir(&src, &to))
+                .await
+                .map_err(|e| e.to_string())??;
+            manifest.push_str(&format!(
+                "{}\n    \"{}\": \"{}\"",
+                if i == 0 { "" } else { "," },
+                section,
+                path.replace('\\', "\\\\").replace('"', "\\\"")
+            ));
+        }
+        manifest.push_str("\n  }\n}\n");
+        if !roots.is_empty() {
+            std::fs::write(root.join("manifest.json"), manifest).map_err(|e| e.to_string())?;
         }
         Ok::<(), String>(())
     };
@@ -325,7 +367,12 @@ pub fn run() {
                             let _ = w.set_focus();
                         }
                     }
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        // app.exit 는 process::exit 라 Drop 이 돌지 않는다 → kill_on_drop 도 발화 안 함.
+                        // 정리를 안 하면 `claude -p` 와 그것이 띄운 MCP 서버가 앱보다 오래 산다.
+                        ai::kill_all();
+                        app.exit(0)
+                    }
                     _ => {}
                 })
                 .build(handle)?;
@@ -343,6 +390,7 @@ pub fn run() {
             ai::ai_note_ask,
             ai::ai_erd_generate_stream,
             ai::ai_health,
+            ai::ai_cancel,
             detect::detect_ai_clis,
             report::report_collect,
             report::report_generate,
@@ -350,6 +398,12 @@ pub fn run() {
             report::report_mcp_servers,
             report::report_gh_accounts
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|_app, event| {
+            // ⌘Q·독 종료 등 트레이 메뉴를 거치지 않는 종료 경로에서도 자식 프로세스를 정리한다
+            if let tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit = event {
+                ai::kill_all();
+            }
+        });
 }

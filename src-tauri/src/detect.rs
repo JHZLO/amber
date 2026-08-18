@@ -32,7 +32,8 @@ async fn resolve_path(bin: &str) -> Option<String> {
             Duration::from_secs(8),
             Command::new(shell)
                 .args(["-lc", &format!("command -v {bin}")])
-                .output(),
+                .kill_on_drop(true)
+        .output(),
         )
         .await
         else {
@@ -52,7 +53,8 @@ async fn resolve_path(bin: &str) -> Option<String> {
 async fn probe_version(path: &str) -> Option<String> {
     let Ok(Ok(out)) = timeout(
         Duration::from_secs(8),
-        Command::new(path).arg("--version").output(),
+        Command::new(path).arg("--version").kill_on_drop(true)
+        .output(),
     )
     .await
     else {

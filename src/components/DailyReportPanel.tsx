@@ -16,6 +16,7 @@ import {
   readReportFile,
 } from "../lib/report";
 import {
+  cancelReport,
   clearRun,
   isRunning,
   startReport,
@@ -25,7 +26,7 @@ import {
 } from "../lib/reportRun";
 import { todayStr } from "../lib/date";
 import { Markdown } from "./Markdown";
-import { AiThinking, Modal, Spinner } from "../ui";
+import { AiThinking, Modal, Spinner, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { t, dateLocale } from "../lib/i18n";
 import { errText } from "../lib/errors";
@@ -204,16 +205,37 @@ export function DailyReportPanel({
       {(phase === "collecting" || phase === "streaming") && (
         <>
           <div className="report-chips">
-            {chips.map((c) => (
-              <span key={c.id} className={`report-chip ${c.status}`}>
-                {c.status === "ok" && <Icon name="check" size={12} />}
-                {c.status === "pending" && <Spinner />}
-                {c.status === "error" && <Icon name="x" size={12} />}
-                {c.status === "mcp" && <Icon name="workflow" size={12} />}
-                {SRC_LABEL[c.id] ?? c.id}
-                {c.status === "ok" && ` ${c.items}`}
-              </span>
-            ))}
+            {chips.map((c) => {
+              const chip = (
+                <span key={c.id} className={`report-chip ${c.status}`}>
+                  {c.status === "ok" && <Icon name="check" size={12} />}
+                  {c.status === "pending" && <Spinner />}
+                  {c.status === "error" && <Icon name="x" size={12} />}
+                  {c.status === "mcp" && <Icon name="workflow" size={12} />}
+                  {SRC_LABEL[c.id] ?? c.id}
+                  {c.status === "ok" && ` ${c.items}`}
+                </span>
+              );
+              // 실패 사유는 백엔드가 준 유일한 실행 가능한 안내다 — 빨간 칩만 남기지 않는다
+              return c.error ? (
+                <Tooltip key={c.id} label={c.error}>
+                  {chip}
+                </Tooltip>
+              ) : (
+                chip
+              );
+            })}
+          </div>
+          <div className="report-stop">
+            <button
+              className="btn btn-sm"
+              onClick={() => void cancelReport(date)}
+              disabled={phase === "collecting"}
+              title={t("report.stopHint")}
+            >
+              <Icon name="x" size={13} />
+              {t("report.stop")}
+            </button>
           </div>
           {phase === "collecting" ? (
             <AiThinking label={t("report.collecting")} compact />

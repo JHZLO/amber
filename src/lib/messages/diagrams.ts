@@ -64,6 +64,7 @@ const ko = {
   "diagrams.ai.tooltipNoProvider": "AI 를 연결하면 쓸 수 있어요 (설정)",
   "diagrams.ai.configLoading": "설정을 불러오는 중이에요",
   "diagrams.ai.convert": "ERD로 변환",
+  "diagrams.ai.stop": "중단",
   "diagrams.ai.back": "다시 변환",
   "diagrams.ai.apply": "에디터에 적용",
   "diagrams.ai.applyHint":
@@ -183,6 +184,7 @@ const en: Record<keyof typeof ko, string> = {
   "diagrams.ai.tooltipNoProvider": "Connect an AI provider to use this (Settings)",
   "diagrams.ai.configLoading": "Settings are still loading",
   "diagrams.ai.convert": "Convert to ERD",
+  "diagrams.ai.stop": "Stop",
   "diagrams.ai.back": "Convert again",
   "diagrams.ai.apply": "Apply to editor",
   "diagrams.ai.applyHint":
