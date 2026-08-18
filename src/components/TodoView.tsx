@@ -682,17 +682,33 @@ export function TodoView({
             {t("todos.row.deleted")}
           </span>
         ) : isCarried ? (
-          // 이월 고스트: 액션 대신 '어디로 갔는지'만. 이 날짜의 기록이지 조작 대상이 아니다 —
-          // 편집/삭제는 그 할 일이 지금 사는 도착 날짜에서 한다.
-          <span
-            className="todo-row-date todo-carried-to"
-            title={t("todos.row.carriedTo", {
-              date: formatDayLong(todo.due_date),
-            })}
-          >
-            <Icon name="chevron-right" size={12} />
-            {formatDayShort(todo.due_date)}
-          </span>
+          // 이월 고스트: 편집/삭제는 그 할 일이 지금 사는 도착 날짜에서 한다. 단 **하위 추가는
+          // 된다** — 체크처럼 '그 날의 기록'을 채우는 행위라서다: 그 날 실제로 한 일이 뒤늦게
+          // 기억나면 여기서 추가·체크해 원래 날짜에 남긴다(새 자식의 due_date 는 보는 날짜).
+          <>
+            <span className="row-actions" onClick={(e) => e.stopPropagation()}>
+              <button
+                className="icon-btn sm"
+                title={t("todos.row.addChild")}
+                onClick={() => {
+                  childDone.current = false;
+                  setAddingChildFor(todo.id);
+                  setChildInput("");
+                }}
+              >
+                <Icon name="plus" size={13} />
+              </button>
+            </span>
+            <span
+              className="todo-row-date todo-carried-to"
+              title={t("todos.row.carriedTo", {
+                date: formatDayLong(todo.due_date),
+              })}
+            >
+              <Icon name="chevron-right" size={12} />
+              {formatDayShort(todo.due_date)}
+            </span>
+          </>
         ) : (
           // 메인 목록: 하위추가/편집/삭제는 hover 오버레이(레이아웃을 밀지 않음)
           <span className="row-actions" onClick={(e) => e.stopPropagation()}>
