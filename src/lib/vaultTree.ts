@@ -8,6 +8,7 @@ import {
   mkdir,
   readDir,
   readTextFile,
+  remove,
   rename,
   stat,
   writeTextFile,
@@ -16,6 +17,27 @@ import { invoke } from "@tauri-apps/api/core";
 import { t } from "./i18n";
 
 const BASE = BaseDirectory.AppData;
+
+/** 임시 파일에 쓰고 rename 으로 덮는다 — "파일이 정본"인 앱에서 저장이 파일을 잃는 유일한 지점을 막는다.
+ *  writeTextFile 은 truncate 후 write 라, 그 사이에 전원이 끊기거나 디스크가 차면 0바이트/반쪽 파일이
+ *  남고 이전 버전은 어디에도 없다(이 경로는 휴지통도 .bak 도 안 쓴다).
+ *  같은 볼륨의 APFS rename 은 원자적이라 크래시 시 옛 파일 아니면 새 파일 중 하나가 온전히 남는다.
+ *  fsync 는 넣지 않는다 — 이 보장에 필요 없고 저장마다 비용만 든다. */
+export async function writeAtomic(path: string, content: string): Promise<void> {
+  const tmp = `${path}.amber-tmp`;
+  try {
+    await writeTextFile(tmp, content, { baseDir: BASE });
+    await rename(tmp, path, { oldPathBaseDir: BASE, newPathBaseDir: BASE });
+  } catch (e) {
+    // 실패한 임시 파일이 트리에 보이면 안 된다. 정리 실패는 원래 오류를 가리지 않게 삼킨다.
+    try {
+      if (await exists(tmp, { baseDir: BASE })) await remove(tmp, { baseDir: BASE });
+    } catch {
+      /* 원래 오류가 더 중요하다 */
+    }
+    throw e;
+  }
+}
 
 export interface VaultNode {
   /** 표시명 (파일은 확장자 제거) */
@@ -216,7 +238,7 @@ export function createVaultTree(cfg: VaultTreeConfig) {
   }
 
   async function writeFile(relPath: string, content: string): Promise<void> {
-    await writeTextFile(full(relPath), content, { baseDir: BASE });
+    await writeAtomic(full(relPath), content);
   }
 
   /** 파일 수정 시각 (UTC ms). 못 읽으면 null */

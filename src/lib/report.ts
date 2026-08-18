@@ -8,10 +8,10 @@ import { invoke, Channel } from "@tauri-apps/api/core";
 import {
   BaseDirectory,
   mkdir,
-  writeTextFile,
   readTextFile,
   exists,
 } from "@tauri-apps/plugin-fs";
+import { writeAtomic } from "./vaultTree";
 import { getDb, getSetting, setSetting } from "./db";
 import { getLang } from "./i18n";
 import { listTodos, listOverdueOpen } from "./todos";
@@ -347,7 +347,7 @@ export function reportPathFor(date: string): string {
 export async function writeReportFile(date: string, md: string): Promise<string> {
   await mkdir(`${VAULT}/reports`, { baseDir: BASE, recursive: true });
   const rel = reportPathFor(date);
-  await writeTextFile(`${VAULT}/${rel}`, md, { baseDir: BASE });
+  await writeAtomic(`${VAULT}/${rel}`, md);
   return rel;
 }
 

@@ -121,6 +121,38 @@ export async function conceptsLearnedOn(
   );
 }
 
+/** 노트가 이름변경·이동됐을 때 개념의 출처 경로(source JSON 의 noteRel)를 따라 옮긴다.
+ *  파일 하나면 정확히 일치하는 행만, 폴더면 그 접두사로 시작하는 모든 행을 재매핑한다
+ *  — 폴더 rename 은 사이드카가 폴더째 따라가서 파일 단위 훅이 아예 안 돌기 때문에 여기서만 잡힌다.
+ *  실패해도 파일 작업은 이미 끝났으므로 호출부가 삼킨다(링크가 깨질 뿐, 노트는 멀쩡). */
+export async function repointConceptSource(
+  oldRel: string,
+  newRel: string,
+  isDir: boolean,
+): Promise<void> {
+  const db = await getDb();
+  if (isDir) {
+    await db.execute(
+      `UPDATE concepts
+          SET source = json_set(source, '$.noteRel',
+                $2 || substr(json_extract(source, '$.noteRel'), length($1) + 1))
+        WHERE source_kind = 'file'
+          AND json_valid(source)
+          AND json_extract(source, '$.noteRel') LIKE $1 || '/%'`,
+      [oldRel, newRel],
+    );
+    return;
+  }
+  await db.execute(
+    `UPDATE concepts
+        SET source = json_set(source, '$.noteRel', $2)
+      WHERE source_kind = 'file'
+        AND json_valid(source)
+        AND json_extract(source, '$.noteRel') = $1`,
+    [oldRel, newRel],
+  );
+}
+
 export interface CreateConceptInput {
   ulid: string;
   title: string;

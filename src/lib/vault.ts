@@ -7,11 +7,11 @@
 import {
   BaseDirectory,
   mkdir,
-  writeTextFile,
   readTextFile,
   exists,
 } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
+import { writeAtomic } from "./vaultTree";
 
 const BASE = BaseDirectory.AppData;
 const VAULT = "vault";
@@ -47,9 +47,7 @@ function stripFrontmatter(raw: string): string {
 export async function writeNote(ulid: string, body: string): Promise<string> {
   await mkdir(conceptDir(ulid), { baseDir: BASE, recursive: true });
   const detailPath = detailPathFor(ulid);
-  await writeTextFile(fullPath(detailPath), buildFrontmatter(ulid, body), {
-    baseDir: BASE,
-  });
+  await writeAtomic(fullPath(detailPath), buildFrontmatter(ulid, body));
   return detailPath;
 }
 

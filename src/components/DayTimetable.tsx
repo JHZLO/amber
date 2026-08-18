@@ -104,6 +104,9 @@ export function DayTimetable({
   const gridRef = useRef<HTMLDivElement>(null);
   const [ghost, setGhost] = useState<Ghost | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
+  // 제목 입력은 blur 에도 저장한다(Esc 만 취소). Enter·Esc 로 이미 끝난 세션에서 unmount blur 가
+  // 한 번 더 와도 중복 저장되지 않도록 '이미 정리됨'을 ref 로 기억한다 (TodoView 와 동일 패턴).
+  const ttEditDone = useRef(false);
   const [editText, setEditText] = useState("");
 
   // 놓은 뒤 ghost 를 곧바로 지우면 커밋 **전** 좌표로 한 번 되돌아갔다가 새 blocks 가 와서
@@ -272,6 +275,7 @@ export function DayTimetable({
         try {
           const id = await createBlock(days[press.day], start, end, "");
           onChanged();
+          ttEditDone.current = false;
           setEditingId(id); // 생성 직후 제목 인라인 입력
           setEditText("");
         } catch (err) {
@@ -333,6 +337,7 @@ export function DayTimetable({
         setGhost(null);
         // 클릭 = 이름 편집 (연동 블록 제목은 할 일 내용을 미러하므로 편집 없음)
         if (b.todo_id == null) {
+          ttEditDone.current = false;
           setEditingId(b.id);
           setEditText(b.title);
         }
@@ -399,6 +404,8 @@ export function DayTimetable({
   }
 
   async function commitEdit(b: TimeBlock) {
+    if (ttEditDone.current) return; // Enter/Esc 로 이미 끝난 세션 (unmount blur 중복 방지)
+    ttEditDone.current = true;
     const title = editText.trim();
     setEditingId(null);
     if (title === b.title) return;
@@ -408,6 +415,12 @@ export function DayTimetable({
     } catch (err) {
       onError(errMsg(err));
     }
+  }
+
+  /** 제목 편집 취소(Esc) — 저장하지 않고 닫는다. onBlur 가 뒤따라와도 commitEdit 이 걸러진다 */
+  function cancelTitleEdit() {
+    ttEditDone.current = true;
+    setEditingId(null);
   }
 
   function removeBlock(b: TimeBlock) {
@@ -599,7 +612,7 @@ export function DayTimetable({
                         onKeyDown={(e) => {
                           if (e.nativeEvent.isComposing) return;
                           if (e.key === "Enter") void commitEdit(b);
-                          if (e.key === "Escape") setEditingId(null);
+                          if (e.key === "Escape") cancelTitleEdit();
                         }}
                         onBlur={() => void commitEdit(b)}
                       />

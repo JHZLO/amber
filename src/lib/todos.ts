@@ -106,7 +106,9 @@ export async function setSubtreeDone(id: number, done: 0 | 1): Promise<void> {
   await db.execute(
     `WITH RECURSIVE sub(id) AS (
        SELECT $2
-       UNION ALL
+       -- UNION (ALL 아님): parent_id 순환이 생겨도 방문한 id 를 다시 넣지 않아 종료된다.
+       -- flattenRows 는 이미 seen set 으로 같은 방어를 한다(todoTree.ts) — SQL 만 빠져 있었다.
+       UNION
        SELECT t.id FROM todos t JOIN sub ON t.parent_id = sub.id
      )
      UPDATE todos SET done = $1
@@ -230,7 +232,7 @@ export async function deleteTodo(id: number): Promise<void> {
   const db = await getDb();
   const sub = `WITH RECURSIVE sub(id) AS (
        SELECT $1
-       UNION ALL
+       UNION -- ALL 아님: parent_id 순환에서 무한 재귀가 되지 않게 (setSubtreeDone 과 동일)
        SELECT t.id FROM todos t JOIN sub ON t.parent_id = sub.id
      )`;
   const carried = await db.select<{ n: number }[]>(
@@ -245,6 +247,17 @@ export async function deleteTodo(id: number): Promise<void> {
        UPDATE todos SET deleted_at = $2, updated_at = $2
         WHERE deleted_at IS NULL AND id IN (SELECT id FROM sub)`,
       [id, now()],
+    );
+    // 소프트 삭제는 행을 남기므로 CASCADE 가 안 돈다 — 타임테이블에 유령 블록이 남는다.
+    // 단 '떠나온 날짜'(todo_carries)의 블록은 그 날 뭘 했는지의 기록이라 보존한다(0009 의 취지).
+    await db.execute(
+      `${sub}
+       DELETE FROM time_blocks
+        WHERE todo_id IN (SELECT id FROM sub)
+          AND date NOT IN (
+            SELECT date FROM todo_carries WHERE todo_id IN (SELECT id FROM sub)
+          )`,
+      [id],
     );
     return;
   }

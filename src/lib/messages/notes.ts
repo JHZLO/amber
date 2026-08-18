@@ -84,6 +84,10 @@ const ko = {
   "notes.cmt.followUpPh": "이어서 질문하기…",
   "notes.cmt.followUpSend": "후속 질문 보내기",
   "notes.cmt.deleteThread": "질문 스레드 삭제",
+  // 앵커 문장이 수정돼 본문에서 못 찾은 스레드 — 하이라이트가 없어 클릭으로 열 수 없다
+  "notes.cmt.orphans": "연결이 끊긴 질문 {n}개",
+  "notes.cmt.orphansHint":
+    "질문을 단 문장이 수정돼 본문에서 못 찾았어요. 여기서 읽거나 지울 수 있어요.",
 
   // AI 작성 모달
   "notes.ai.title": "AI로 노트 작성",
@@ -190,6 +194,9 @@ const en: Record<keyof typeof ko, string> = {
   "notes.cmt.followUpPh": "Ask a follow-up…",
   "notes.cmt.followUpSend": "Send follow-up",
   "notes.cmt.deleteThread": "Delete this thread",
+  "notes.cmt.orphans": "{n} unlinked question(s)",
+  "notes.cmt.orphansHint":
+    "The sentence these were attached to has changed, so they no longer appear in the text. Read or delete them here.",
 
   "notes.ai.title": "Write note with AI",
   "notes.ai.run": "Write with AI",

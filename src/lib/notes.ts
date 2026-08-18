@@ -9,6 +9,7 @@ import { createVaultTree } from "./vaultTree";
 import { commentsPathFor } from "./comments";
 import { conceptsPathFor } from "./noteConcepts";
 import { getRoot } from "./workspace";
+import { repointConceptSource } from "./db";
 
 export {
   parentOf,
@@ -48,6 +49,9 @@ export async function renameEntry(
   isDir: boolean,
 ): Promise<string> {
   const newRel = await tree.renameEntry(relPath, newName, isDir);
+  // 개념 → 노트 역참조(source.noteRel)는 DB 에 있어 파일 이동만으로는 따라오지 않는다.
+  // 놔두면 "출처 노트 열기"가 죽은 경로를 연다.
+  await repointConceptSource(relPath, newRel, isDir).catch(() => {});
   if (!isDir) {
     for (const sc of sidecarsFor(relPath)) {
       const oldSc = full(sc);
@@ -76,6 +80,7 @@ export async function moveEntry(
   targetDir: string,
 ): Promise<string> {
   const newRel = await tree.moveEntry(relPath, targetDir);
+  await repointConceptSource(relPath, newRel, !/\.md$/i.test(relPath)).catch(() => {});
   if (/\.md$/i.test(relPath)) {
     for (const sc of sidecarsFor(relPath)) {
       const oldSc = full(sc);

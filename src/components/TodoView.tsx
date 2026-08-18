@@ -4,6 +4,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
@@ -165,6 +166,9 @@ export function TodoView({
   const childInputRef = useRef<HTMLInputElement>(null);
   // 입력창은 blur 에도 저장한다(§ Esc 만 취소). Enter·Esc 로 이미 끝난 세션에서 unmount 시
   // blur 가 한 번 더 와도 중복 저장/되살아나지 않도록 '이미 정리됨'을 ref 로 기억한다.
+  // reloadDay/reloadCounts 세대 번호 — 날짜·달을 빠르게 넘기면 옛 응답이 최신 화면을 덮는다
+  const daySeq = useRef(0);
+  const countsSeq = useRef(0);
   const editDone = useRef(false);
   const childDone = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
@@ -345,32 +349,43 @@ export function TodoView({
 
   // 선택 날짜의 목록 + 밀린 할 일 + 이날 학습완료 개념
   const reloadDay = useCallback(async () => {
+    const seq = ++daySeq.current;
     try {
       const today = todayStr();
       const rows = await listTodos(selected);
+      if (seq !== daySeq.current) return; // 그 사이 다른 날짜를 골랐다 — 밀려난 응답은 버린다
       setTodos(rows);
       const [ttFrom, ttTo] = ttRange(ttView, selected);
-      setBlocks(await listBlocks(ttFrom, ttTo));
-      setOverdue(selected === today ? await listOverdueOpen(today) : []);
+      const bl = await listBlocks(ttFrom, ttTo);
+      const ov = selected === today ? await listOverdueOpen(today) : [];
       const [start, end] = dayRangeMs(selected);
-      setLearned(await conceptsLearnedOn(start, end));
+      const lr = await conceptsLearnedOn(start, end);
+      if (seq !== daySeq.current) return;
+      setBlocks(bl);
+      setOverdue(ov);
+      setLearned(lr);
       setError(null);
     } catch (e) {
+      if (seq !== daySeq.current) return;
       setError(errMsg(e));
     }
   }, [selected, ttView]);
 
   // 표시 중인 달 그리드 범위의 날짜별 개수 + 휴가 (캘린더 점·월 요약)
   const reloadCounts = useCallback(async () => {
+    const seq = ++countsSeq.current;
     try {
       const dates = monthGridDates(cursor.year, cursor.month);
       const [from, to] = [dates[0], dates[dates.length - 1]];
       const rows = await listMonthCounts(from, to);
+      const vac = await listVacations(from, to);
+      if (seq !== countsSeq.current) return; // 달을 연달아 넘겼다 — 옛 응답은 버린다
       const map: Record<string, DayTodoCount> = {};
       for (const r of rows) map[r.due_date] = r;
       setCounts(map);
-      setVacations(await listVacations(from, to));
+      setVacations(vac);
     } catch (e) {
+      if (seq !== countsSeq.current) return;
       setError(errMsg(e));
     }
   }, [cursor]);
@@ -584,7 +599,8 @@ export function TodoView({
   const ownTop = topLevel.filter((t) => t.carried !== 1);
   const doneTop = ownTop.filter((t) => t.done === 1).length;
   // 밀린 목록도 본문처럼 계층으로 — 부모가 빠질 수 있는 부분 집합이라 flattenSubset
-  const overdueRows = flattenSubset(overdue);
+  // 렌더 본문에서 계산하면 빠른 추가 입력의 키 입력마다 재계산된다 (overdue 는 안 바뀌는데도)
+  const overdueRows = useMemo(() => flattenSubset(overdue), [overdue]);
   const overdueById = new Map(overdue.map((o) => [o.id, o]));
 
   // 파라미터를 todo 로 둔다 — t 로 줄이면 i18n 의 t() 를 가려서(shadowing) 번역 호출이 깨진다

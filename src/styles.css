@@ -2660,6 +2660,55 @@ html.widget-root #root {
     transform: none;
   }
 }
+/* 앵커가 끊긴 질문 스레드 목록 — 하이라이트로 못 여는 것들의 유일한 통로 (cmt-pop 과 같은 자리) */
+.cmt-orphans {
+  position: fixed;
+  z-index: 94;
+  top: 76px;
+  right: 16px;
+  width: 380px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 100px);
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-sm);
+  padding: 8px 10px;
+}
+.cmt-orphans-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.cmt-orphans-head:hover {
+  color: var(--text);
+}
+.cmt-orphan-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 3px 0;
+}
+.cmt-orphan-row .cmt-anchor {
+  border: none;
+  background: transparent;
+  border-left: 2px solid var(--border-strong);
+  text-align: left;
+  cursor: pointer;
+}
+.cmt-orphan-row .cmt-anchor:hover {
+  color: var(--text);
+}
+
 .cmt-pop-head {
   display: flex;
   align-items: flex-start;

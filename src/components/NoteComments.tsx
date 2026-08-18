@@ -141,6 +141,11 @@ export function NoteCommentLayer({
   const relRef = useRef(noteRel);
   relRef.current = noteRel;
 
+  // 앵커 텍스트가 수정돼 본문에서 못 찾은 스레드 — 하이라이트가 없어 클릭으로 열 방법이 사라진다.
+  // 배지는 계속 세고 있어서 "질문 3개"인데 2개만 열리는 상태가 된다. 여기서 따로 표면화한다.
+  const [orphanIds, setOrphanIds] = useState<string[]>([]);
+  const [orphanOpen, setOrphanOpen] = useState(false);
+
   const notifyCount = useCallback(
     (list: NoteComment[]) => onCountChange?.(list.length),
     [onCountChange],
@@ -166,7 +171,11 @@ export function NoteCommentLayer({
     const c = containerRef.current;
     rangesRef.current = [];
     const registry = highlightRegistry();
-    if (!c || !registry) return;
+    // 하이라이트를 못 쓰는 환경에서는 모든 스레드가 클릭으로 도달 불가 — 전부 목록으로 돌린다
+    if (!c || !registry) {
+      setOrphanIds(comments.map((cm) => cm.id));
+      return;
+    }
     const HL = (
       window as unknown as { Highlight: new (...r: Range[]) => unknown }
     ).Highlight;
@@ -179,6 +188,8 @@ export function NoteCommentLayer({
       if (r) found.push({ id: cm.id, range: r });
     }
     rangesRef.current = found;
+    const reachable = new Set(found.map((f) => f.id));
+    setOrphanIds(comments.filter((cm) => !reachable.has(cm.id)).map((cm) => cm.id));
     if (found.length) registry.set(HIGHLIGHT_KEY, new HL(...found.map((f) => f.range)));
     else registry.delete(HIGHLIGHT_KEY);
     return () => {
@@ -516,6 +527,51 @@ export function NoteCommentLayer({
               <Icon name="layers" size={13} />
               {t("notes.cmt.promote")}
             </button>
+          )}
+        </div>
+      )}
+
+      {orphanIds.length > 0 && !pop && (
+        <div className="cmt-orphans" style={popStyle}>
+          <button
+            className="cmt-orphans-head"
+            onClick={() => setOrphanOpen((v) => !v)}
+            aria-expanded={orphanOpen}
+          >
+            <Icon name={orphanOpen ? "chevron-down" : "chevron-right"} size={12} />
+            {t("notes.cmt.orphans", { n: orphanIds.length })}
+          </button>
+          {orphanOpen && (
+            <>
+              <p className="hint" style={{ margin: "2px 0 6px" }}>
+                {t("notes.cmt.orphansHint")}
+              </p>
+              {orphanIds.map((id) => {
+                const cm = comments.find((c) => c.id === id);
+                if (!cm) return null;
+                return (
+                  <div key={id} className="cmt-orphan-row">
+                    <button
+                      className="cmt-anchor"
+                      onClick={() => {
+                        setQuestion("");
+                        setAskError(null);
+                        setPop({ kind: "view", id });
+                      }}
+                    >
+                      “{cm.anchor}”
+                    </button>
+                    <button
+                      className="icon-btn ghost sm danger"
+                      aria-label={t("notes.cmt.deleteThread")}
+                      onClick={() => void deleteComment(id)}
+                    >
+                      <Icon name="trash" size={12} />
+                    </button>
+                  </div>
+                );
+              })}
+            </>
           )}
         </div>
       )}

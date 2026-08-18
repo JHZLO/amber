@@ -9,8 +9,8 @@ import {
   exists,
   readTextFile,
   remove,
-  writeTextFile,
 } from "@tauri-apps/plugin-fs";
+import { writeAtomic } from "./vaultTree";
 import { getRoot } from "./workspace";
 
 const BASE = BaseDirectory.AppData;
@@ -52,9 +52,7 @@ async function saveLinks(noteRel: string, links: NoteConceptLink[]): Promise<voi
     if (await exists(p, { baseDir: BASE })) await remove(p, { baseDir: BASE });
     return;
   }
-  await writeTextFile(p, JSON.stringify({ version: 1, links }, null, 1), {
-    baseDir: BASE,
-  });
+  await writeAtomic(p, JSON.stringify({ version: 1, links }, null, 1));
 }
 
 /** 승격 링크 추가 (같은 conceptId 는 갱신) */

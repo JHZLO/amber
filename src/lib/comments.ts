@@ -8,8 +8,8 @@ import {
   exists,
   readTextFile,
   remove,
-  writeTextFile,
 } from "@tauri-apps/plugin-fs";
+import { writeAtomic } from "./vaultTree";
 import { getRoot } from "./workspace";
 
 const BASE = BaseDirectory.AppData;
@@ -94,7 +94,5 @@ export async function saveComments(
     if (await exists(p, { baseDir: BASE })) await remove(p, { baseDir: BASE });
     return;
   }
-  await writeTextFile(p, JSON.stringify({ version: 1, comments }, null, 1), {
-    baseDir: BASE,
-  });
+  await writeAtomic(p, JSON.stringify({ version: 1, comments }, null, 1));
 }
