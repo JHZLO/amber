@@ -3514,7 +3514,8 @@ body.resizing-tt * {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
 }
-/* 높이 56px = 날짜 원 32 + 점 4 + 공휴일 이름 11 + 사이 간격 2×2 (5px 여백은 상하 분배) */
+/* 높이 56px 고정 — 판 총높이(361px = 요일 25 + 6행×56)를 월/연 판과 맞추는 값.
+   내용(원 32 + 간격 5 + 점 4 = 41)은 가운데 정렬로 남는 세로를 흡수한다. */
 .cal-cell {
   position: relative;
   height: 56px;
@@ -3526,7 +3527,10 @@ body.resizing-tt * {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  /* 5px — 점 간격의 기준은 채워진 상태의 원 가장자리다: 오늘/선택/휴가 필이 켜지면
+     원 테두리가 곧 시각 경계가 되는데, 2px 로는 점이 원에 붙어 보였다.
+     상태별로 점을 옮기지 않고 전 상태 동일 간격 — 클릭 시 점이 튀지 않게. */
+  gap: 5px;
   min-width: 0;
 }
 .cal-cell:focus-visible {
