@@ -1,9 +1,9 @@
-// 주간 리포트 패널 — 타임테이블이 '주' 뷰일 때만 마운트된다(TodoView 가 게이트).
-// 뷰 토글이 곧 '주간을 보겠다'는 의사표시라 접힘 단계를 두지 않는다.
+// 주간 리포트 패널 — 캘린더 선택 단위가 '주'일 때만 마운트된다(TodoView 가 게이트).
+// 그 단위로 바꾼 것 자체가 '이번 주를 보겠다'는 의사표시라 접힘 단계를 두지 않는다.
 // 재료는 **그 주에 이미 만들어 둔 일간 리포트 본문**이다 (GitHub 재수집 없음):
 //   ① 커버리지(7일 중 몇 일 있는지) → ② 스트리밍 → ③ 완성 → ④ 에러/재료 없음
 // 출력 형식은 사용자의 `/Weekly Report` 스킬 규약(노션 공유용 중첩 목록)을 따른다 —
-// 그래서 마크다운 렌더 대신 원문 그대로도 복사할 수 있게 둔다(노션에 붙이는 게 주 용도).
+// 들여쓰기가 곧 계층이라 마크다운으로 렌더하지 않고 평문 그대로 그린다(§ 본문 렌더 주석).
 // 정본: 본문 = vault/reports/<주 시작일>-week.md, 메타 = weekly_reports 테이블.
 
 import { useEffect, useRef, useState } from "react";
@@ -40,8 +40,9 @@ function hhmm(ms: number): string {
   });
 }
 
-/** 주 시작이 왼쪽 타임테이블(일~토)과 다른 건 의도다 — 이 리포트는 노션 팀 공유용이라
- *  월~일 스프린트 규약을 따른다(/Weekly Report 스킬). 그래서 헤더에 범위를 항상 적어 둔다. */
+/** 주 범위는 앱 전체와 같은 기준을 쓴다(lib/date.ts WEEK_STARTS_ON) — 캘린더·주 할 일·
+ *  타임테이블 주간 뷰와 하루도 어긋나지 않는다. 그래도 헤더에 범위를 적어 두는 건,
+ *  이 본문이 앱 밖(노션)으로 복사돼 나가는 것이라 어느 주인지가 본문과 함께 가야 해서다. */
 export function WeeklyReportPanel({
   weekStart,
   config,
@@ -157,7 +158,7 @@ export function WeeklyReportPanel({
 
   async function copy() {
     try {
-      // 노션에 붙이는 게 주 용도라 렌더 결과가 아니라 마크다운 원문을 복사한다
+      // 보이는 것이 곧 붙여넣을 것 — 평문 그대로 복사한다
       await navigator.clipboard.writeText(body);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
