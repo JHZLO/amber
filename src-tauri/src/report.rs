@@ -1203,6 +1203,94 @@ pub async fn report_generate(
     Ok(ReportResult { markdown: md, meta })
 }
 
+/// 주간 공유본에서 코드 참조를 걷어낸다.
+///
+/// 프롬프트로도 금지하지만 프롬프트는 보장이 아니다 — 재료인 일간 리포트에 `[#512](url)` 같은
+/// 링크가 잔뜩 들어 있어 모델이 그대로 옮기는 일이 있다. 읽는 사람은 코드를 안 보는 사람이라
+/// 번호·URL 이 남으면 그만큼 읽을 것이 늘 뿐이므로 결과에서 결정적으로 제거한다.
+///
+/// 처리 대상은 둘 뿐이다(과하게 지우면 본문을 깎는다):
+///   `[라벨](url)` → `라벨`,  ` (#123)` · ` (#123, #124)` → 삭제
+fn strip_code_refs(md: &str) -> String {
+    let ch: Vec<char> = md.chars().collect();
+    let mut out = String::with_capacity(md.len());
+    let mut i = 0;
+    while i < ch.len() {
+        // 1) 마크다운 링크 → 라벨만 남긴다
+        if ch[i] == '[' {
+            if let Some(close) = find(&ch, i + 1, ']') {
+                if close + 1 < ch.len() && ch[close + 1] == '(' {
+                    if let Some(paren) = find(&ch, close + 2, ')') {
+                        let label: String = ch[i + 1..close].iter().collect();
+                        // 라벨이 '#512' 처럼 참조 그 자체면 통째로 버린다(남겨도 뜻이 없다)
+                        if !is_ref_only(&label) {
+                            out.push_str(&label);
+                        }
+                        i = paren + 1;
+                        continue;
+                    }
+                }
+            }
+        }
+        // 2) 괄호로 묶인 참조 `(#123)` `(#12, #13)` → 앞 공백까지 지운다
+        if ch[i] == '(' {
+            if let Some(paren) = find(&ch, i + 1, ')') {
+                let inner: String = ch[i + 1..paren].iter().collect();
+                if is_ref_only(&inner) {
+                    while out.ends_with(' ') {
+                        out.pop();
+                    }
+                    i = paren + 1;
+                    continue;
+                }
+            }
+        }
+        out.push(ch[i]);
+        i += 1;
+    }
+    // `([#512](url))` 처럼 링크가 괄호에 싸여 있으면 라벨을 걷어낸 뒤 빈 괄호가 남는다.
+    // 본문에 빈 괄호가 의미를 갖는 경우는 없으므로 앞 공백까지 함께 정리한다.
+    let mut cleaned = String::with_capacity(out.len());
+    let oc: Vec<char> = out.chars().collect();
+    let mut k = 0;
+    while k < oc.len() {
+        if oc[k] == '(' {
+            let mut e = k + 1;
+            while e < oc.len() && oc[e] == ' ' {
+                e += 1;
+            }
+            if e < oc.len() && oc[e] == ')' {
+                while cleaned.ends_with(' ') {
+                    cleaned.pop();
+                }
+                k = e + 1;
+                continue;
+            }
+        }
+        cleaned.push(oc[k]);
+        k += 1;
+    }
+    // 참조를 걷어내며 생긴 줄 끝 공백만 정리한다(줄 구조 자체는 건드리지 않는다)
+    cleaned.lines().map(str::trim_end).collect::<Vec<_>>().join("\n")
+}
+
+/// 같은 줄 안에서 다음 `target` 위치. 줄을 넘어가면 링크가 아니다.
+fn find(ch: &[char], from: usize, target: char) -> Option<usize> {
+    (from..ch.len()).take_while(|&k| ch[k] != '\n').find(|&k| ch[k] == target)
+}
+
+/// '#512' 또는 '#512, #513' 처럼 참조 번호로만 이루어졌는가
+fn is_ref_only(s: &str) -> bool {
+    let t = s.trim();
+    if t.is_empty() {
+        return false;
+    }
+    t.split(',').all(|part| {
+        let p = part.trim();
+        p.starts_with('#') && p.len() > 1 && p[1..].chars().all(|c| c.is_ascii_digit())
+    })
+}
+
 /// 주간 리포트 생성. 재료는 프론트가 이어붙인 '그 주의 일간 리포트 본문'이다 —
 /// GitHub 을 다시 수집하지 않는다(이미 일간 생성 때 걷었고, 오래된 주는 피드가 닿지도 않는다).
 /// 그래서 소스 칩·MCP 위임이 없고 스트리밍만 있다.
@@ -1268,8 +1356,9 @@ pub async fn report_generate_weekly(
         r
     };
 
-    let md = strip_outer_fence(&result_str).trim().to_string();
-    if md.is_empty() {
+    // 일간 리포트는 PR 링크가 유용하지만 주간 공유본은 아니다 — 주간에만 건다
+    let md = strip_code_refs(strip_outer_fence(&result_str).trim());
+    if md.trim().is_empty() {
         return Err(AiError::new(
             "AI_BAD_CONTRACT",
             "생성된 주간 리포트가 비어 있습니다. 다시 시도해 주세요.",
@@ -1498,6 +1587,48 @@ pub async fn report_gh_accounts(cli_path: Option<String>) -> Vec<GhAccount> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn strips_pr_links_but_keeps_the_sentence() {
+        // 재료인 일간 리포트에 링크가 섞여 들어와 모델이 그대로 옮겨도 공유본에는 남지 않는다
+        let src = "    ㄴ 주문 원장 동기화 재정비 ([#512](https://github.com/o/r/pull/512)) @08/11";
+        assert_eq!(
+            strip_code_refs(src),
+            "    ㄴ 주문 원장 동기화 재정비 @08/11"
+        );
+    }
+
+    #[test]
+    fn keeps_link_label_when_it_carries_meaning() {
+        // 라벨이 참조 번호가 아니면 문장의 일부다 — 지우면 뜻이 빠진다
+        assert_eq!(
+            strip_code_refs("ㄴ [설계 노트](https://x/y) 작성 @08/11"),
+            "ㄴ 설계 노트 작성 @08/11"
+        );
+    }
+
+    #[test]
+    fn strips_bare_and_multi_refs() {
+        assert_eq!(strip_code_refs("ㄴ 취소 가드 추가 (#768)"), "ㄴ 취소 가드 추가");
+        assert_eq!(strip_code_refs("ㄴ 정리 (#527, #524)"), "ㄴ 정리");
+    }
+
+    #[test]
+    fn leaves_ordinary_parentheses_alone() {
+        // 괄호 안이 참조 번호가 아니면 본문이다
+        let s = "ㄴ 항공권(NUUA) 발권 흐름 안정화 (계속)";
+        assert_eq!(strip_code_refs(s), s);
+    }
+
+    #[test]
+    fn preserves_indentation_which_is_the_hierarchy() {
+        // 들여쓰기가 곧 계층이라 줄 앞 공백을 건드리면 형식이 깨진다
+        let s = "• 항공권\nㄴ NUUA\n    ㄴ 동기화 (#512)\n        ㄴ 세부";
+        assert_eq!(
+            strip_code_refs(s),
+            "• 항공권\nㄴ NUUA\n    ㄴ 동기화\n        ㄴ 세부"
+        );
+    }
     use super::*;
 
     #[test]
