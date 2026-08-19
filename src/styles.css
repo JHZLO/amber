@@ -3560,16 +3560,25 @@ body.resizing-tt * {
   gap: 2px;
   min-width: 0;
 }
+/* 3분할 그리드 — 좌: 단위 토글, 중앙: 제목, 우: 이동 화살표.
+   `1fr auto 1fr` 이라 양옆 컨트롤 폭이 달라도 제목은 판 정중앙에 온다(flex 로는 한쪽으로 밀린다).
+   제목 칸이 auto 인 덕에 버튼이 글자만큼만 차지해 hover 박스도 글자를 감싼다. */
 .cal-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 4px;
   margin-bottom: 12px;
 }
+.cal-head-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  justify-self: end;
+}
 .cal-title {
-  flex: 1;
   text-align: center;
-  padding: 5px 0;
+  padding: 5px 8px;
   border: none;
   background: transparent;
   border-radius: 6px;
@@ -3761,6 +3770,22 @@ body.resizing-tt * {
   background: transparent;
 }
 .cal-dot.on {
+  background: var(--text);
+  border-color: var(--text);
+}
+/* 주 할 일 표식 — 그 주 월요일 칸 좌상단의 작은 막대. 일별 점(가운데 아래)과 자리·모양이
+   달라야 두 축이 안 섞인다. 상태 문법은 §3 그대로: 남은 게 있으면 아웃라인, 다 끝냈으면 필. */
+.cal-week-mark {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  width: 7px;
+  height: 2px;
+  border-radius: 1px;
+  border: 1px solid var(--text-3);
+  background: transparent;
+}
+.cal-week-mark.on {
   background: var(--text);
   border-color: var(--text);
 }
@@ -4250,34 +4275,33 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   gap: 2px;
 }
 /* 주간 리포트 — 일간 블록 아래에 붙는 접힘 패널. 일간보다 조용해야 해서 구분선을 얇게 둔다 */
-/* 캘린더 선택 단위 토글 (일 | 주) — 헤더 아래 한 줄, 그리드와 같은 폭 */
+/* 선택 단위 토글 (일 | 주) — 캘린더 헤더 줄 오른쪽 끝. 별도 행을 만들지 않는다:
+   행이 하나 늘면 판 높이가 밀려 아래 타임테이블까지 어긋난다. 크기는 타임테이블
+   세그먼트(.day-tt-seg)와 같은 값을 써서 두 컨트롤이 같은 무게로 읽히게 한다. */
 .cal-unit {
-  margin: 0 auto 8px;
-  width: fit-content;
+  padding: 2px;
+  justify-self: start;
 }
 .cal-unit .tab {
+  padding: 2px 8px;
   font-size: 11px;
-  padding: 3px 12px;
 }
-/* 주 모드: 고른 대상이 하루가 아니라 주다. 날짜 원 7개를 각각 칠하면 '7일을 따로 골랐다'로
-   읽히므로, 필은 원에서 걷어내고 행 전체에 띠 하나를 깐다(양끝만 둥글게). */
+
+/* 주 모드 선택 — 고른 대상이 하루가 아니라 '주'다.
+   날짜 원 7개를 각각 칠하면 '7일을 따로 골랐다'로 읽히므로, 셀 배경으로 행 하나를 깐다.
+   시그니처는 리스트 선택 행과 동일(§3): surface-2 + 좌측 바. */
 .cal-grid.by-week .cal-cell.selected {
-  background: var(--surface-3);
+  background: var(--surface-2);
 }
-.cal-grid.by-week .cal-cell.selected .cal-num {
-  background: transparent;
-}
+/* 모서리를 둥글리지 않는다 — inset 좌측 바가 반경을 따라 휘어 괄호처럼 보인다.
+   `.row.selected`(리스트 선택 행)도 각진 채로 같은 시그니처를 쓴다. */
 .cal-grid.by-week .cal-cell.selected:nth-child(7n + 1) {
-  border-top-left-radius: 10px;
-  border-bottom-left-radius: 10px;
+  box-shadow: inset 2px 0 0 var(--text);
 }
-.cal-grid.by-week .cal-cell.selected:nth-child(7n) {
-  border-top-right-radius: 10px;
-  border-bottom-right-radius: 10px;
-}
-/* 오늘 표식은 띠 위에서도 살아 있어야 한다 — 주 안에서 오늘이 어디인지가 안 보이면 안 된다 */
-.cal-grid.by-week .cal-cell.today .cal-num {
-  font-weight: 700;
+/* 띠가 선택을 말하므로 원은 비운다. 단 오늘(원)·휴가(노랑)는 띠 위에 그대로 남는다 —
+   주 안에서 오늘이 어디인지, 어느 날이 휴가인지는 주를 골라도 계속 필요한 정보다. */
+.cal-grid.by-week .cal-cell.selected:not(.today):not(.vac) .cal-num {
+  background: transparent;
 }
 
 .report-weekly {

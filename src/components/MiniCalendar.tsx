@@ -107,13 +107,24 @@ export function MiniCalendar({
   return (
     <div className="todo-cal">
       <div className="cal-head">
-        <button
-          className="icon-btn ghost sm"
-          onClick={() => step(-1)}
-          aria-label={arrowLabels[0]}
-        >
-          <Icon name="chevron-left" size={15} />
-        </button>
+        {/* 선택 단위 — 이 판이 하루를 고르는 판인지 주를 고르는 판인지 바꾼다.
+            바꾸는 대상(그리드) 바로 위 같은 줄에 둔다(DESIGN §7 그룹핑과 매핑).
+            월/연 드릴다운에서는 고를 날짜 자체가 없어 숨기되, 자리는 비워 제목이 안 흔들리게 한다. */}
+        {level === "day" ? (
+          <div className="segmented cal-unit">
+            {(["day", "week"] as TodoUnit[]).map((u) => (
+              <button
+                key={u}
+                className={`tab ${unit === u ? "active" : ""}`}
+                onClick={() => onUnitChange(u)}
+              >
+                {u === "day" ? t("todos.unit.day") : t("todos.unit.week")}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span />
+        )}
         {/* 연 단계가 천장이라 더 올라갈 곳이 없다 — 누를 수 없게 두어 헛클릭을 막는다 */}
         <button
           className="cal-title"
@@ -129,30 +140,23 @@ export function MiniCalendar({
         >
           {title}
         </button>
-        <button
-          className="icon-btn ghost sm"
-          onClick={() => step(1)}
-          aria-label={arrowLabels[1]}
-        >
-          <Icon name="chevron-right" size={15} />
-        </button>
+        <span className="cal-head-nav">
+          <button
+            className="icon-btn ghost sm"
+            onClick={() => step(-1)}
+            aria-label={arrowLabels[0]}
+          >
+            <Icon name="chevron-left" size={15} />
+          </button>
+          <button
+            className="icon-btn ghost sm"
+            onClick={() => step(1)}
+            aria-label={arrowLabels[1]}
+          >
+            <Icon name="chevron-right" size={15} />
+          </button>
+        </span>
       </div>
-
-      {/* 선택 단위 — 일이면 하루, 주면 그 날이 속한 주(월~일) 전체가 대상이 된다.
-          월/연 드릴다운 판에서는 고를 날짜 자체가 없으므로 숨긴다. */}
-      {level === "day" && (
-        <div className="cal-unit segmented">
-          {(["day", "week"] as TodoUnit[]).map((u) => (
-            <button
-              key={u}
-              className={`tab ${unit === u ? "active" : ""}`}
-              onClick={() => onUnitChange(u)}
-            >
-              {u === "day" ? t("todos.unit.day") : t("todos.unit.week")}
-            </button>
-          ))}
-        </div>
-      )}
 
       {level === "day" && (
         <>
@@ -173,30 +177,34 @@ export function MiniCalendar({
               const d = parseLocalDate(date);
               const inMonth =
                 d.getMonth() + 1 === month && d.getFullYear() === year;
-              // 주 모드의 점은 '주 할 일' 기준이고 그 주 월요일 칸에만 찍는다 —
-              // 일별 점을 그대로 두면 주를 고르는 판에서 하루 단위 정보가 섞여 읽힌다.
-              const c =
-                unit === "week"
-                  ? mondayOf(date) === date
-                    ? weekCounts[date]
-                    : undefined
-                  : counts[date];
+              // 점은 두 모드 모두 **일별** 기준을 유지한다. 주 모드에서 주 할 일 기준으로 바꿨더니
+              // 주 항목이 0건인 보관함에서 달력 점이 통째로 사라져 "데이터가 날아갔다"로 읽혔다.
+              // 그 날 할 일이 있다는 사실은 주를 고르는 중에도 참이고, 어느 주가 바쁜지 읽는 단서다.
+              const c = counts[date];
               const hasOpen = c ? c.done < c.total : false;
+              // 주 할 일은 점을 뺏지 않고 월요일 칸에 표식을 더한다(있을 때만)
+              const wc = unit === "week" && date === mondayOf(date) ? weekCounts[date] : undefined;
               // AI 가 이날의 리포트를 만드는 중이면 점이 깜빡인다. 할 일이 없어 점이 숨겨진
               // 날도 이때만은 보여준다 — 어느 날이 도는지가 안 보이면 표시의 뜻이 없다.
               const gen = generating.has(date);
               // 주 모드에서는 고른 대상이 하루가 아니라 주다 — 그 주 7칸을 함께 칠한다.
               // today 는 그대로 하루 표식으로 남긴다(오늘이 어디인지는 주 모드에서도 필요하다).
               const inSelWeek = unit === "week" && mondayOf(date) === selMonday;
+              // 주 모드에서 선택은 '행 전체 띠'(셀 배경)고 today 는 '날짜 원'이라 층이 다르다 —
+              // 둘을 배타로 두면 오늘이 낀 주에서 띠에 구멍이 뚫린다. 클래스를 겹쳐 준다.
+              // 일 모드는 기존대로 배타 — today 와 selected 를 겹치면 '오늘이자 휴가인 날'에서
+              // 휴가 링(.selected.vac, 명시도 높음)이 오늘 필을 덮어 버린다.
               const cls =
-                date === today
-                  ? "today"
-                  : unit === "week"
-                    ? inSelWeek
-                      ? "selected"
-                      : inMonth
-                        ? ""
-                        : "adjacent"
+                unit === "week"
+                  ? [
+                      date === today ? "today" : "",
+                      inSelWeek ? "selected" : "",
+                      !inMonth ? "adjacent" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")
+                  : date === today
+                    ? "today"
                     : date === selected
                       ? "selected"
                       : inMonth
@@ -238,6 +246,12 @@ export function MiniCalendar({
                     className={`cal-dot ${!c ? "none" : hasOpen ? "" : "on"}${gen ? " gen" : ""}`}
                     aria-hidden="true"
                   />
+                  {wc && wc.total > 0 && (
+                    <span
+                      className={`cal-week-mark ${wc.done < wc.total ? "" : "on"}`}
+                      aria-hidden="true"
+                    />
+                  )}
                 </button>
               );
             })}
