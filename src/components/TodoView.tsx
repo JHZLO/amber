@@ -9,13 +9,15 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import type { DayTodoCount, TimeBlock, Todo } from "../types";
+import type { DayTodoCount, TimeBlock, Todo, TodoUnit } from "../types";
 import {
   createTodo,
   deleteTodo,
   listMonthCounts,
   listOverdueOpen,
   listTodos,
+  listWeekCounts,
+  listWeekTodos,
   moveTodos,
   recomputeChainFrom,
   reorderTodos,
@@ -94,6 +96,7 @@ const INDENT = 24;
 
 // 타임테이블 뷰 모드 (일/주/월, localStorage 영속)
 const TT_VIEW_KEY = "amber.todo.tt-view";
+const UNIT_KEY = "amber.todo.unit";
 
 /** 뷰별 블록 로드 범위 [from, to] — 일=선택일, 주=일~토, 월=그 달 1일~말일 */
 function ttRange(view: TtView, selected: string): [string, string] {
@@ -129,6 +132,17 @@ export function TodoView({
 }) {
   const [selected, setSelected] = useState(() => todayStr());
   const [cursor, setCursor] = useState(() => monthOf(todayStr()));
+  // 선택 단위 — 'week' 면 캘린더가 주(월~일)를 고르는 판이 되고, 오른쪽은 주 할 일을 다룬다
+  const [unit, setUnit] = useState<TodoUnit>(() =>
+    localStorage.getItem(UNIT_KEY) === "week" ? "week" : "day",
+  );
+  useEffect(() => {
+    localStorage.setItem(UNIT_KEY, unit);
+  }, [unit]);
+  const weekMonday = mondayOf(selected);
+  const weekEnd = shiftDay(weekMonday, 6);
+  const [weekTodos, setWeekTodos] = useState<Todo[]>([]);
+  const [weekCounts, setWeekCounts] = useState<Record<string, DayTodoCount>>({});
 
   const [todos, setTodos] = useState<Todo[]>([]);
   const [blocks, setBlocks] = useState<TimeBlock[]>([]);
@@ -171,6 +185,7 @@ export function TodoView({
   // reloadDay/reloadCounts 세대 번호 — 날짜·달을 빠르게 넘기면 옛 응답이 최신 화면을 덮는다
   const daySeq = useRef(0);
   const countsSeq = useRef(0);
+  const weekSeq = useRef(0);
   const editDone = useRef(false);
   const childDone = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
@@ -339,6 +354,7 @@ export function TodoView({
           await recomputeChainFrom(oldParent);
           if (newParent !== oldParent) await recomputeChainFrom(newParent);
           await reloadDay();
+          await reloadWeek();
           void reloadCounts();
         } catch (err) {
           setError(errMsg(err));
@@ -373,6 +389,20 @@ export function TodoView({
     }
   }, [selected, ttView]);
 
+  // 선택한 주의 '주 할 일'. 이월·고스트 개념이 없어 일별 로직보다 단순하다.
+  const reloadWeek = useCallback(async () => {
+    const seq = ++weekSeq.current;
+    try {
+      const rows = await listWeekTodos(weekMonday);
+      if (seq !== weekSeq.current) return;
+      setWeekTodos(rows);
+      setError(null);
+    } catch (e) {
+      if (seq !== weekSeq.current) return;
+      setError(errMsg(e));
+    }
+  }, [weekMonday]);
+
   // 표시 중인 달 그리드 범위의 날짜별 개수 + 휴가 (캘린더 점·월 요약)
   const reloadCounts = useCallback(async () => {
     const seq = ++countsSeq.current;
@@ -386,6 +416,12 @@ export function TodoView({
       for (const r of rows) map[r.due_date] = r;
       setCounts(map);
       setVacations(vac);
+      // 주 모드 점은 그 주 월요일 칸에만 찍으므로 월요일 키로 따로 센다
+      const wk = await listWeekCounts(mondayOf(from), mondayOf(to));
+      if (seq !== countsSeq.current) return;
+      const wmap: Record<string, DayTodoCount> = {};
+      for (const r of wk) wmap[r.due_date] = r;
+      setWeekCounts(wmap);
     } catch (e) {
       if (seq !== countsSeq.current) return;
       setError(errMsg(e));
@@ -398,6 +434,9 @@ export function TodoView({
   useEffect(() => {
     if (active) void reloadCounts();
   }, [active, reloadCounts]);
+  useEffect(() => {
+    if (active) void reloadWeek();
+  }, [active, reloadWeek]);
 
   // 탭 진입 시 빠른 추가 입력에 포커스 (마찰 0)
   useEffect(() => {
@@ -411,11 +450,14 @@ export function TodoView({
   reloadDayRef.current = reloadDay;
   const reloadCountsRef = useRef(reloadCounts);
   reloadCountsRef.current = reloadCounts;
+  const reloadWeekRef = useRef(reloadWeek);
+  reloadWeekRef.current = reloadWeek;
   useEffect(() => {
     const onFocus = () => {
       if (!activeRef.current) return;
       void reloadDayRef.current();
       void reloadCountsRef.current();
+      void reloadWeekRef.current();
     };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
@@ -424,7 +466,13 @@ export function TodoView({
   const refreshAll = () => {
     void reloadDay();
     void reloadCounts();
+    void reloadWeek();
   };
+
+  /** 지금 화면에 그려진 목록만 다시 읽는다 — 체크·이름변경처럼 그 목록 안에서 끝나는 변경용.
+   *  주 모드에서 reloadDay 만 부르면 방금 누른 항목이 그대로 남아 안 먹힌 것처럼 보인다. */
+  const reloadCurrent = () =>
+    unit === "week" ? reloadWeek() : reloadDay();
 
   const goDate = (date: string) => {
     setSelected(date);
@@ -451,7 +499,9 @@ export function TodoView({
     if (!content || busy) return;
     setBusy(true);
     try {
-      await createTodo(content, selected);
+      // 주 모드에서 적은 건 요일이 없는 '이번 주' 항목 — due_date 는 그 주 월요일이 된다
+      if (unit === "week") await createTodo(content, weekMonday, null, "week");
+      else await createTodo(content, selected);
       setQuick("");
       refreshAll();
     } catch (e) {
@@ -470,7 +520,7 @@ export function TodoView({
     try {
       await setSubtreeDone(t.id, next);
       await recomputeChainFrom(t.parent_id);
-      await reloadDay();
+      await reloadCurrent();
       void reloadCounts();
     } catch (e) {
       setError(errMsg(e));
@@ -510,7 +560,7 @@ export function TodoView({
     if (!content || content === t.content) return; // 빈 값·무변경은 취소로 처리
     try {
       await updateTodoContent(t.id, content);
-      void reloadDay();
+      void reloadCurrent();
     } catch (e) {
       setError(errMsg(e));
     }
@@ -577,10 +627,17 @@ export function TodoView({
     if (!content || busy) return;
     setBusy(true);
     try {
-      await createTodo(content, selected, parentId);
+      // 자식은 부모와 같은 좌표를 써야 한다 — 주 항목 아래에 scope='day' 자식을 만들면
+      // 그 자식은 주 목록에도, 그 날짜 목록에도 안 보이는 유령이 된다
+      if (unit === "week") {
+        await createTodo(content, weekMonday, parentId, "week");
+      } else {
+        await createTodo(content, selected, parentId);
+      }
       await recomputeChainFrom(parentId);
       setChildInput("");
-      await reloadDay();
+      if (unit === "week") await reloadWeek();
+      else await reloadDay();
       void reloadCounts();
     } catch (e) {
       setError(errMsg(e));
@@ -595,7 +652,11 @@ export function TodoView({
   // 부모가 이 날에 없는 항목(이월로 부모만 다른 날에 있는 자식)도 루트로 그린다 —
   // childrenIn(todos, null) 로만 고르면 그런 행이 어느 날에도 안 보인다
   const topLevel = visibleRoots(todos);
-  const childrenOf = (pid: number) => childrenIn(todos, pid);
+  // 주 목록도 같은 트리 렌더를 탄다 — 하위 항목·드래그·완료 전파가 전부 같은 모델이다.
+  // renderUnit 안에서 childrenOf 를 쓰므로, 그 소스도 단위에 맞춰 갈아준다.
+  const weekTop = visibleRoots(weekTodos);
+  const rows = unit === "week" ? weekTodos : todos;
+  const childrenOf = (pid: number) => childrenIn(rows, pid);
   // 하단 진행률은 **이 날짜가 맡은 일**만 센다 — 고스트는 다른 날로 넘긴 기록이라 제외한다.
   // (캘린더 점·월 요약도 due_date 기준이라 listMonthCounts 와 같은 기준이 된다)
   const ownTop = topLevel.filter((t) => t.carried !== 1);
@@ -837,6 +898,9 @@ export function TodoView({
           counts={counts}
           vacations={vacations}
           generating={generatingDates}
+          unit={unit}
+          onUnitChange={setUnit}
+          weekCounts={weekCounts}
           onSelect={goDate}
           onCursor={(y, m) => setCursor({ year: y, month: m })}
         />
@@ -866,12 +930,19 @@ export function TodoView({
 
       <section className="detail">
         <div className="detail-head todo-head">
-          <h1 className="detail-title">{formatDayLong(selected)}</h1>
+          <h1 className="detail-title">
+            {unit === "week"
+              ? t("todos.week.title", {
+                  range: `${formatDayShort(weekMonday)} – ${formatDayShort(weekEnd)}`,
+                })
+              : formatDayLong(selected)}
+          </h1>
           <span className="spacer" />
           {/* 휴가 — 안 잡힌 날엔 조용한 버튼 하나(한 번 누르면 연차), 잡힌 날엔 노랑 칩이 되어
               종류 변경·해제를 연다. 매일 보는 헤더라 평소엔 가볍게 두고 켜졌을 때만 무게를 준다.
               쓰는 빈도(1년에 몇 번)와 보는 빈도(매일)가 다를 땐 후자에 맞춘다(DESIGN §1). */}
-          {selectedVac ? (
+          {/* 휴가는 하루에 거는 표식이라 주 모드에서는 숨긴다 */}
+          {unit === "week" ? null : selectedVac ? (
             <div className="todo-vac on">
               <Select<VacationKind | "">
                 value={selectedVac}
@@ -908,7 +979,7 @@ export function TodoView({
               <button
                 aria-label={t("todos.nav.prevDay")}
                 className="icon-btn ghost"
-                onClick={() => goDate(shiftDay(selected, -1))}
+                onClick={() => goDate(shiftDay(selected, unit === "week" ? -7 : -1))}
               >
                 <Icon name="chevron-left" size={16} />
               </button>
@@ -917,7 +988,7 @@ export function TodoView({
               <button
                 aria-label={t("todos.nav.nextDay")}
                 className="icon-btn ghost"
-                onClick={() => goDate(shiftDay(selected, 1))}
+                onClick={() => goDate(shiftDay(selected, unit === "week" ? 7 : 1))}
               >
                 <Icon name="chevron-right" size={16} />
               </button>
@@ -929,7 +1000,7 @@ export function TodoView({
 
         {/* 밀린 할 일은 '오늘 계획의 재료'라 날짜 바로 아래. 입력창과 그 입력이 들어갈 목록
             사이에 끼우면 타이핑한 것이 무관한 블록 아래에 나타나 매핑이 깨진다(DESIGN §7) */}
-        {isToday && overdue.length > 0 && (
+        {unit === "day" && isToday && overdue.length > 0 && (
           <div className={`todo-overdue ${overdueOpen ? "open" : ""}`}>
             <div
               className="todo-overdue-head"
@@ -980,7 +1051,9 @@ export function TodoView({
           <input
             ref={quickRef}
             className="input todo-quick-input"
-            placeholder={t("todos.quick.placeholder")}
+            placeholder={
+              unit === "week" ? t("todos.week.add") : t("todos.quick.placeholder")
+            }
             value={quick}
             onChange={(e) => setQuick(e.target.value)}
             onKeyDown={(e) => {
@@ -994,36 +1067,54 @@ export function TodoView({
         </div>
 
         <div className="todo-listing" ref={listRef}>
-          {todos.length === 0 ? (
+          {unit === "week" ? (
+            weekTodos.length === 0 ? (
+              <div className="hint todo-day-empty">{t("todos.week.empty")}</div>
+            ) : (
+              weekTop.map((p) => renderUnit(p, 0))
+            )
+          ) : todos.length === 0 ? (
             <div className="hint todo-day-empty">{t("todos.empty.day")}</div>
           ) : (
             topLevel.map((p) => renderUnit(p, 0))
           )}
         </div>
 
-        {ownTop.length > 0 && (
+        {unit === "week" ? (
           <div className="detail-meta">
-            {t("todos.meta.done", { total: ownTop.length, done: doneTop })}
+            {weekTodos.length > 0 &&
+              `${t("todos.week.done", {
+                total: weekTodos.length,
+                done: weekTodos.filter((w) => w.done === 1).length,
+              })} · `}
+            {t("todos.week.hint")}
           </div>
+        ) : (
+          ownTop.length > 0 && (
+            <div className="detail-meta">
+              {t("todos.meta.done", { total: ownTop.length, done: doneTop })}
+            </div>
+          )
         )}
 
         {/* key={selected} — 날짜별로 패널을 격리. 생성 중 다른 날짜로 넘어가도 로딩/스트리밍 상태가
             새 날짜로 새지 않는다(진행 중 생성은 백그라운드에서 계속 저장됨) */}
-        <DailyReportPanel
-          key={selected}
-          date={selected}
-          config={config}
-          active={active}
-          onOpenSettings={onOpenSettings}
-        />
+        {unit === "day" && (
+          <DailyReportPanel
+            key={selected}
+            date={selected}
+            config={config}
+            active={active}
+            onOpenSettings={onOpenSettings}
+          />
+        )}
 
-        {/* 주간 리포트 — 타임테이블이 '주' 뷰일 때만. 일 단위로 보는 중에 주간 블록이 끼면
-            하루 흐름을 방해한다. 뷰 토글이 곧 '주간을 보겠다'는 의사표시라 접힘 없이 바로 펼친다.
-            key 는 월요일이라 같은 주 안에서 날짜를 옮겨도 패널 상태가 유지된다 */}
-        {ttView === "week" && (
+        {/* 주간 리포트 — 캘린더가 '주' 단위일 때만. 그 모드가 곧 '이번 주를 보겠다'는 뜻이라
+            접힘 단계를 두지 않는다. key 는 월요일이라 주 안에서 날짜를 옮겨도 상태가 유지된다 */}
+        {unit === "week" && (
           <WeeklyReportPanel
-            key={mondayOf(selected)}
-            weekStart={mondayOf(selected)}
+            key={weekMonday}
+            weekStart={weekMonday}
             config={config}
             active={active}
             onOpenSettings={onOpenSettings}

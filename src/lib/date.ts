@@ -11,8 +11,10 @@ export const WEEKDAYS_KO = ["일", "월", "화", "수", "목", "금", "토"] as 
 const WEEKDAYS_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
 /** 요일 짧은 표기(일~토) — 캘린더 헤더 등. 언어 설정을 따른다 */
-export function weekdaysShort(): readonly string[] {
-  return getLang() === "ko" ? WEEKDAYS_KO : WEEKDAYS_EN;
+export function weekdaysShort(startsOn: 0 | 1 = 0): readonly string[] {
+  const base = getLang() === "ko" ? WEEKDAYS_KO : WEEKDAYS_EN;
+  // 월요일 시작이면 일요일을 뒤로 보낸다 — 그리드 컬럼과 어긋나면 요일 색(일=빨강)이 틀어진다
+  return startsOn === 0 ? base : [...base.slice(1), base[0]];
 }
 
 const pad2 = (n: number) => (n < 10 ? `0${n}` : `${n}`);
@@ -91,14 +93,24 @@ export function dayRangeMs(s: string): [number, number] {
 }
 
 /**
- * 월(1-12) 캘린더 그리드의 날짜 문자열 배열. 일요일 시작, 필요한 주(4~6주)만.
+ * 월(1-12) 캘린더 그리드의 날짜 문자열 배열. 필요한 주(4~6주)만.
  * 앞뒤로 인접 월 날짜가 포함될 수 있다(호출부에서 monthOf 로 판별).
+ *
+ * `startsOn` 은 한 행의 첫 요일이다(0=일 기본, 1=월). 주 단위 선택 모드에서만 월요일 시작을
+ * 쓴다 — 주가 월~일이라 일요일 시작 그리드에서는 한 주가 두 행에 걸쳐 잘리기 때문이다.
  */
-export function monthGridDates(year: number, month: number): string[] {
+export function monthGridDates(
+  year: number,
+  month: number,
+  startsOn: 0 | 1 = 0,
+): string[] {
   const first = new Date(year, month - 1, 1);
-  const start = new Date(year, month - 1, 1 - first.getDay()); // 그 주 일요일
+  // 그 주의 첫 칸까지 거슬러 올라간다 (일 시작이면 일요일, 월 시작이면 월요일)
+  const back = (first.getDay() - startsOn + 7) % 7;
+  const start = new Date(year, month - 1, 1 - back);
   const last = new Date(year, month, 0); // 이 달 마지막 날
-  const end = new Date(year, month - 1, last.getDate() + (6 - last.getDay())); // 마지막 날이 속한 주 토요일
+  const fwd = (startsOn + 6 - last.getDay() + 7) % 7; // 마지막 날이 속한 주의 끝 칸까지
+  const end = new Date(year, month - 1, last.getDate() + fwd);
   const out: string[] = [];
   const cur = new Date(start);
   while (cur <= end) {

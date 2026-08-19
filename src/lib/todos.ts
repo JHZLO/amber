@@ -3,7 +3,7 @@
 // 스키마·트리거는 Rust 마이그레이션(0002_todos.sql)이 정본. 완료 시각(completed_at)은 트리거가 관리.
 
 import { getDb } from "./db";
-import type { DayTodoCount, Todo } from "../types";
+import type { DayTodoCount, Todo, TodoScope } from "../types";
 
 const now = () => Date.now();
 
@@ -21,12 +21,14 @@ const now = () => Date.now();
 export async function listTodos(date: string): Promise<Todo[]> {
   const db = await getDb();
   return db.select<Todo[]>(
+    // scope='day' 필수 — 주 항목의 due_date 는 실재하는 월요일이라,
+    // 안 걸면 매주 월요일 목록에 '이번 주 할 일'이 통째로 섞인다(migrations/0012)
     `SELECT t.*, 0 AS carried FROM todos t
-      WHERE t.due_date = $1 AND t.deleted_at IS NULL
+      WHERE t.due_date = $1 AND t.scope = 'day' AND t.deleted_at IS NULL
      UNION ALL
      SELECT t.*, 1 AS carried FROM todos t
        JOIN todo_carries c ON c.todo_id = t.id
-      WHERE c.date = $2 AND t.due_date <> $3
+      WHERE c.date = $2 AND t.due_date <> $3 AND t.scope = 'day'
      ORDER BY carried, sort_order, id`,
     [date, date, date],
   );
@@ -40,7 +42,8 @@ export async function listMonthCounts(
   const db = await getDb();
   return db.select<DayTodoCount[]>(
     `SELECT due_date, COUNT(*) AS total, COALESCE(SUM(done), 0) AS done
-       FROM todos WHERE due_date BETWEEN $1 AND $2 AND deleted_at IS NULL
+       FROM todos
+      WHERE due_date BETWEEN $1 AND $2 AND scope = 'day' AND deleted_at IS NULL
       GROUP BY due_date`,
     [from, to],
   );
@@ -52,7 +55,7 @@ export async function listOverdueOpen(before: string): Promise<Todo[]> {
   const db = await getDb();
   return db.select<Todo[]>(
     `SELECT * FROM todos
-      WHERE done = 0 AND due_date < $1 AND deleted_at IS NULL
+      WHERE done = 0 AND due_date < $1 AND scope = 'day' AND deleted_at IS NULL
       ORDER BY due_date, sort_order, id`,
     [before],
   );
@@ -63,15 +66,46 @@ export async function createTodo(
   content: string,
   dueDate: string,
   parentId: number | null = null,
+  scope: TodoScope = "day",
 ): Promise<number> {
   const db = await getDb();
   const res = await db.execute(
-    `INSERT INTO todos (content, due_date, parent_id, sort_order)
+    // sort_order 는 (scope, due_date, parent) 그룹 안에서 매긴다 — 주 목록과 그 날 목록이
+    // 같은 due_date 를 쓸 수 있으므로 scope 를 안 넣으면 순서가 서로 밀린다
+    `INSERT INTO todos (content, due_date, parent_id, sort_order, scope)
      VALUES ($1, $2, $3,
-       (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM todos WHERE due_date = $4 AND parent_id IS $5))`,
-    [content, dueDate, parentId, dueDate, parentId],
+       (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM todos
+         WHERE due_date = $4 AND parent_id IS $5 AND scope = $6), $6)`,
+    [content, dueDate, parentId, dueDate, parentId, scope],
   );
   return res.lastInsertId as number;
+}
+
+/** 주(월~일) 할 일 목록. due_date 는 그 주 월요일이고 이월·고스트 개념이 없다 —
+ *  주는 '오늘'처럼 지나가는 좌표가 아니라 사용자가 직접 고르는 구간이다. */
+export async function listWeekTodos(monday: string): Promise<Todo[]> {
+  const db = await getDb();
+  return db.select<Todo[]>(
+    `SELECT *, 0 AS carried FROM todos
+      WHERE due_date = $1 AND scope = 'week' AND deleted_at IS NULL
+      ORDER BY sort_order, id`,
+    [monday],
+  );
+}
+
+/** 주 범위의 '주 할 일' 개수 — 캘린더 주 행 표식용 (일별 점과 섞지 않는다) */
+export async function listWeekCounts(
+  fromMonday: string,
+  toMonday: string,
+): Promise<DayTodoCount[]> {
+  const db = await getDb();
+  return db.select<DayTodoCount[]>(
+    `SELECT due_date, COUNT(*) AS total, COALESCE(SUM(done), 0) AS done
+       FROM todos
+      WHERE due_date BETWEEN $1 AND $2 AND scope = 'week' AND deleted_at IS NULL
+      GROUP BY due_date`,
+    [fromMonday, toMonday],
+  );
 }
 
 /** 드래그 트리 이동: 부모 변경 (하위로 넣기·상위로 꺼내기·다른 부모로).

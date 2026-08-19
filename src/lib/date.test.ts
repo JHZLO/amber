@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   addMonths,
   mondayOf,
+  weekdaysShort,
   monthGridDates,
   monthOf,
   weekDays,
@@ -139,5 +140,52 @@ describe("weekDays", () => {
 
   it("모든 날이 같은 월요일로 되돌아온다 (mondayOf 와 왕복)", () => {
     for (const d of weekDays("2026-08-17")) expect(mondayOf(d)).toBe("2026-08-17");
+  });
+});
+
+describe("monthGridDates(startsOn=1)", () => {
+  // 주 단위 선택 모드는 한 행 = 한 주여야 한다. 일요일 시작 그리드에서는 월~일 주가
+  // 두 행으로 잘려 '주를 골랐다'가 화면에서 성립하지 않는다.
+  it("모든 행이 월요일에서 시작한다", () => {
+    for (const [y, m] of [
+      [2026, 1],
+      [2026, 8],
+      [2026, 11],
+      [2015, 2],
+    ] as const) {
+      const g = monthGridDates(y, m, 1);
+      expect(g.length % 7).toBe(0);
+      for (let i = 0; i < g.length; i += 7) {
+        expect(mondayOf(g[i])).toBe(g[i]); // 각 행의 첫 칸이 곧 그 주 월요일
+      }
+    }
+  });
+
+  it("한 행의 7칸이 같은 주에 속한다", () => {
+    const g = monthGridDates(2026, 8, 1);
+    for (let i = 0; i < g.length; i += 7) {
+      const monday = g[i];
+      for (let k = 0; k < 7; k++) expect(mondayOf(g[i + k])).toBe(monday);
+    }
+  });
+
+  it("그 달의 1일과 말일을 모두 덮는다", () => {
+    const g = monthGridDates(2026, 8, 1);
+    expect(g).toContain("2026-08-01");
+    expect(g).toContain("2026-08-31");
+  });
+
+  it("기본값(일요일 시작)은 기존 동작 그대로", () => {
+    expect(monthGridDates(2026, 8)).toEqual(monthGridDates(2026, 8, 0));
+  });
+});
+
+describe("weekdaysShort", () => {
+  it("월요일 시작이면 일요일이 맨 뒤로 간다", () => {
+    const sun = weekdaysShort(0);
+    const mon = weekdaysShort(1);
+    expect(mon[0]).toBe(sun[1]);
+    expect(mon[6]).toBe(sun[0]);
+    expect(mon).toHaveLength(7);
   });
 });

@@ -309,6 +309,12 @@ pub fn run() {
             sql: include_str!("../migrations/0011_weekly_reports.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 12,
+            description: "add_todo_scope",
+            sql: include_str!("../migrations/0012_todo_scope.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

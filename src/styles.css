@@ -4250,6 +4250,36 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   gap: 2px;
 }
 /* 주간 리포트 — 일간 블록 아래에 붙는 접힘 패널. 일간보다 조용해야 해서 구분선을 얇게 둔다 */
+/* 캘린더 선택 단위 토글 (일 | 주) — 헤더 아래 한 줄, 그리드와 같은 폭 */
+.cal-unit {
+  margin: 0 auto 8px;
+  width: fit-content;
+}
+.cal-unit .tab {
+  font-size: 11px;
+  padding: 3px 12px;
+}
+/* 주 모드: 고른 대상이 하루가 아니라 주다. 날짜 원 7개를 각각 칠하면 '7일을 따로 골랐다'로
+   읽히므로, 필은 원에서 걷어내고 행 전체에 띠 하나를 깐다(양끝만 둥글게). */
+.cal-grid.by-week .cal-cell.selected {
+  background: var(--surface-3);
+}
+.cal-grid.by-week .cal-cell.selected .cal-num {
+  background: transparent;
+}
+.cal-grid.by-week .cal-cell.selected:nth-child(7n + 1) {
+  border-top-left-radius: 10px;
+  border-bottom-left-radius: 10px;
+}
+.cal-grid.by-week .cal-cell.selected:nth-child(7n) {
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+/* 오늘 표식은 띠 위에서도 살아 있어야 한다 — 주 안에서 오늘이 어디인지가 안 보이면 안 된다 */
+.cal-grid.by-week .cal-cell.today .cal-num {
+  font-weight: 700;
+}
+
 .report-weekly {
   margin-top: 14px;
   padding-top: 12px;

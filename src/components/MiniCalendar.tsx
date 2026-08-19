@@ -7,10 +7,11 @@
 // 좌우 화살표는 보고 있는 단계의 한 판씩 움직인다(일=±1달, 월=±1년, 연=±10년).
 
 import { useEffect, useState } from "react";
-import type { DayTodoCount } from "../types";
+import type { DayTodoCount, TodoUnit } from "../types";
 import {
   formatMonthTitle,
   formatYearTitle,
+  mondayOf,
   monthGridDates,
   monthsShort,
   parseLocalDate,
@@ -37,6 +38,9 @@ export function MiniCalendar({
   counts,
   vacations,
   generating,
+  unit,
+  onUnitChange,
+  weekCounts,
   onSelect,
   onCursor,
 }: {
@@ -49,6 +53,11 @@ export function MiniCalendar({
   vacations: Record<string, VacationKind>;
   /** 데일리 리포트를 생성 중인 날짜들 — 그날의 점이 깜빡인다 */
   generating: ReadonlySet<string>;
+  /** 선택 단위. 'week' 면 날짜가 아니라 그 날이 속한 주(월~일)를 고르는 판이 된다 */
+  unit: TodoUnit;
+  onUnitChange: (u: TodoUnit) => void;
+  /** 월요일 → 그 주의 '주 할 일' 개수. 주 모드에서 행 끝 표식으로만 쓴다 */
+  weekCounts: Record<string, DayTodoCount>;
   onSelect: (date: string) => void;
   /** 보고 있는 달을 옮긴다 (화살표·월/연 선택) */
   onCursor: (year: number, month: number) => void;
@@ -59,6 +68,12 @@ export function MiniCalendar({
   // 띄워둔 채로 뒤에서 날짜만 바뀌면 뭘 보고 있는지 어긋난다. 판 안에서의 이동은 selected 를
   // 건드리지 않으므로(커서만 바뀜) 이 effect 가 드릴다운을 되감지 않는다.
   useEffect(() => setLevel("day"), [selected]);
+
+  // 주 모드면 한 행이 곧 한 주가 되도록 월요일 시작 그리드를 쓴다 (주는 월~일)
+  const gridStart: 0 | 1 = unit === "week" ? 1 : 0;
+  const selMonday = mondayOf(selected);
+  const dowAll = weekdaysShort(0);
+  const [sunLabel, satLabel] = [dowAll[0], dowAll[6]];
 
   const td = parseLocalDate(today);
   const todayY = td.getFullYear();
@@ -123,35 +138,70 @@ export function MiniCalendar({
         </button>
       </div>
 
+      {/* 선택 단위 — 일이면 하루, 주면 그 날이 속한 주(월~일) 전체가 대상이 된다.
+          월/연 드릴다운 판에서는 고를 날짜 자체가 없으므로 숨긴다. */}
+      {level === "day" && (
+        <div className="cal-unit segmented">
+          {(["day", "week"] as TodoUnit[]).map((u) => (
+            <button
+              key={u}
+              className={`tab ${unit === u ? "active" : ""}`}
+              onClick={() => onUnitChange(u)}
+            >
+              {u === "day" ? t("todos.unit.day") : t("todos.unit.week")}
+            </button>
+          ))}
+        </div>
+      )}
+
       {level === "day" && (
         <>
           {/* 일=빨강, 토=파랑 (한국 달력 관례) — 헤더도 같은 색을 쓴다 */}
           <div className="cal-dow">
-            {weekdaysShort().map((d, i) => (
-              <span key={d} className={i === 0 ? "sun" : i === 6 ? "sat" : ""}>
+            {weekdaysShort(gridStart).map((d) => (
+              <span
+                key={d}
+                className={d === sunLabel ? "sun" : d === satLabel ? "sat" : ""}
+              >
                 {d}
               </span>
             ))}
           </div>
 
-          <div className="cal-grid">
-            {monthGridDates(year, month).map((date) => {
+          <div className={`cal-grid ${unit === "week" ? "by-week" : ""}`}>
+            {monthGridDates(year, month, gridStart).map((date) => {
               const d = parseLocalDate(date);
               const inMonth =
                 d.getMonth() + 1 === month && d.getFullYear() === year;
-              const c = counts[date];
+              // 주 모드의 점은 '주 할 일' 기준이고 그 주 월요일 칸에만 찍는다 —
+              // 일별 점을 그대로 두면 주를 고르는 판에서 하루 단위 정보가 섞여 읽힌다.
+              const c =
+                unit === "week"
+                  ? mondayOf(date) === date
+                    ? weekCounts[date]
+                    : undefined
+                  : counts[date];
               const hasOpen = c ? c.done < c.total : false;
               // AI 가 이날의 리포트를 만드는 중이면 점이 깜빡인다. 할 일이 없어 점이 숨겨진
               // 날도 이때만은 보여준다 — 어느 날이 도는지가 안 보이면 표시의 뜻이 없다.
               const gen = generating.has(date);
+              // 주 모드에서는 고른 대상이 하루가 아니라 주다 — 그 주 7칸을 함께 칠한다.
+              // today 는 그대로 하루 표식으로 남긴다(오늘이 어디인지는 주 모드에서도 필요하다).
+              const inSelWeek = unit === "week" && mondayOf(date) === selMonday;
               const cls =
                 date === today
                   ? "today"
-                  : date === selected
-                    ? "selected"
-                    : inMonth
-                      ? ""
-                      : "adjacent";
+                  : unit === "week"
+                    ? inSelWeek
+                      ? "selected"
+                      : inMonth
+                        ? ""
+                        : "adjacent"
+                    : date === selected
+                      ? "selected"
+                      : inMonth
+                        ? ""
+                        : "adjacent";
               // 쉬는 날은 일요일과 같은 빨강 — 공휴일이 곧 '일요일 취급'이라는 관례를 따른다.
               // 이름은 칸에 그리지 않는다(그리면 판이 복잡해 보인다) — hover tooltip 으로만.
               //

@@ -55,10 +55,22 @@ export type ConceptSort =
 
 // ---- 할 일 (todos 테이블 한 행, DB 정본) ----
 
+/** 할 일이 걸린 좌표의 단위 (migrations/0012).
+ *  'day'  = due_date 가 그 날짜
+ *  'week' = due_date 가 **그 주 월요일** — 요일을 정하지 않은 '이번 주에 할 것' */
+export type TodoScope = "day" | "week";
+
+/** 할 일 섹션의 선택 단위 — 캘린더가 하루를 고르는 판인지 주를 고르는 판인지.
+ *  값은 TodoScope 와 같지만 뜻이 다르다(이건 화면 상태, 저건 행의 성격). */
+export type TodoUnit = TodoScope;
+
 export interface Todo {
   id: number;
   content: string;
   due_date: string; // 'YYYY-MM-DD' — 사용자 로컬 달력 날짜 (UTC ms 아님, lib/date.ts 참조)
+  /** day = 그 날짜의 항목, week = 그 주(due_date=월요일)의 항목.
+   *  주 항목의 due_date 도 실재하는 날짜라, 일별 조회는 반드시 scope='day' 를 건다. */
+  scope: TodoScope;
   done: 0 | 1;
   completed_at: number | null; // UTC ms, 트리거가 관리
   parent_id: number | null; // 상위 항목 id (null=최상위). 다단계 중첩(무제한 깊이)
