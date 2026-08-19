@@ -4343,28 +4343,18 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   font-size: 11px;
   color: var(--text-3);
 }
-/* 노션에 붙일 원문 — 렌더된 목록만 보면 'ㄴ' 들여쓰기가 사라져 그대로 못 쓴다 */
-.report-week-raw {
-  margin-top: 10px;
-  font-size: 12px;
-}
-.report-week-raw summary {
-  color: var(--text-3);
-  cursor: pointer;
-}
-.report-week-raw summary:hover {
-  color: var(--text-2);
-}
-.report-week-raw pre {
-  margin: 8px 0 0;
-  padding: 10px 12px;
-  border-radius: 6px;
-  background: var(--surface-2);
-  color: var(--text-2);
-  font-size: 12px;
-  line-height: 1.6;
-  overflow-x: auto;
+/* 주간 리포트 본문 — 들여쓰기가 곧 계층이라 평문 그대로 그린다(마크다운 렌더 금지).
+   보이는 것이 노션에 붙는 것과 같아야 하므로 본문 폰트를 쓰되 줄바꿈·공백은 보존한다.
+   긴 줄은 접어서 보여준다(가로 스크롤은 읽기를 끊는다) — 접힌 줄은 계층 들여쓰기를 잇는다. */
+.report-week-body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
 }
 
 .rep-weekly-name {
