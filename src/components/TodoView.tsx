@@ -935,12 +935,10 @@ export function TodoView({
                 })
               : formatDayLong(selected)}
           </h1>
-          <span className="spacer" />
-          {/* 휴가 — 켜짐/꺼짐이 같은 컨트롤 하나다. 꺼짐은 조용한 고스트(매일 보는 헤더라
-              평소엔 무게를 주지 않는다), 켜짐은 노랑 필로 종류를 그대로 보여준다
-              (DESIGN §3 채움↔아웃라인 문법). 모양·자리가 상태에 따라 바뀌지 않아 눈이 튀지 않는다.
-              누르면 곧장 쓰이는 게 아니라 종류 목록이 열린다 — 1년에 몇 번 쓰는 표식이
-              날짜 이동(오늘 ‹ ›) 옆에서 한 번의 오클릭으로 찍히면 안 된다. */}
+          {/* 휴가 — 날짜 제목 옆(왼쪽 그룹)에 둔다. 이 날에 붙는 성질이라 날짜와 함께 읽히고,
+              오른쪽 날짜 이동(오늘 ‹ ›)과 섞이지 않는다(오클릭 방지).
+              꺼짐/켜짐이 같은 자리·같은 크기의 Select 하나다 — 꺼짐은 표준 트리거,
+              켜짐은 노랑 필(DESIGN §2·§3). 누르면 곧장 쓰이지 않고 종류 목록이 열린다. */}
           {/* 휴가는 하루에 거는 표식이라 주 모드에서는 숨긴다 */}
           {unit === "week" ? null : (
             <div className={`todo-vac ${selectedVac ? "on" : "off"}`}>
@@ -958,10 +956,10 @@ export function TodoView({
                     : []),
                 ]}
                 onChange={(v) => void changeVacation(v || null)}
-                align="right"
               />
             </div>
           )}
+          <span className="spacer" />
           {/* 캘린더 앱 표준: [오늘] ‹ › — 오늘이면 '오늘' 버튼 비활성(이미 오늘임을 표시) */}
           <div className="todo-nav">
             <button

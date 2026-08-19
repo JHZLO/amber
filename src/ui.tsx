@@ -577,7 +577,7 @@ export function Select<T extends string>({
     <div className={`select ${block ? "block" : ""}`} ref={rootRef}>
       <button
         ref={triggerRef}
-        className={`select-trigger ${cur ? "" : "empty"}`}
+        className={`select-trigger ${cur ? "" : "select-empty"}`}
         role="combobox"
         aria-haspopup="listbox"
         aria-expanded={open}

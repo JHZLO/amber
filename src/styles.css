@@ -1423,8 +1423,10 @@ html.widget-root #root {
 .select-trigger:hover {
   border-color: var(--text-3);
 }
-/* 아직 고르지 않음(placeholder) — 값이 아니라 안내문이라 한 단계 흐리게 */
-.select-trigger.empty {
+/* 아직 고르지 않음(placeholder) — 값이 아니라 안내문이라 한 단계 흐리게.
+   클래스 이름에 select- 를 붙인다: 전역 `.empty`(빈 상태 블록 — column·height:100%)와
+   같은 이름을 쓰면 트리거가 세로로 접힌다(실제로 겪었다). */
+.select-trigger.select-empty {
   color: var(--text-3);
 }
 .select-caret {
@@ -3871,27 +3873,16 @@ body.resizing-tt * {
   row-gap: 8px;
   margin-bottom: 18px;
 }
-/* 휴가 토글 — 날짜 네비 왼쪽. 꺼짐은 [오늘]과 같은 .btn-sm 이고, 켜지면 노랑 칩(Select)이
-   된다. 두 상태의 높이를 28px 로 맞춰 켤 때 헤더가 위아래로 흔들리지 않게 한다. */
-/* 휴가 컨트롤 — 꺼짐/켜짐이 같은 자리·같은 크기의 컨트롤 하나다(모양이 안 바뀌니 눈이 안 튄다).
-   날짜 이동 그룹과는 12px 로 떼어 둔다 — 붙어 있으면 '오늘' 을 노리다 휴가를 열게 된다. */
-.todo-vac {
-  margin-right: 12px;
+/* 휴가 컨트롤 — 날짜 제목 바로 옆(왼쪽 그룹). 꺼짐/켜짐이 같은 자리·같은 크기의 `Select`
+   하나다: 꺼짐 = 표준 트리거(테두리 + surface, hover 는 테두리만 진해짐), 켜짐 = 노랑 필(§2).
+   높이만 [오늘] 버튼과 같은 28px 로 낮춘다 — 모양은 공용 Select 그대로다(새 버튼 형태 금지). */
+.todo-head .detail-title {
+  /* 제목이 남는 폭을 다 먹으면 휴가 컨트롤이 오른쪽으로 밀린다 — 글자만큼만 차지하게 */
+  flex: 0 1 auto;
 }
 .todo-vac .select-trigger {
   height: 28px;
-  padding: 0 8px 0 10px;
   font-size: 12px;
-}
-/* 꺼짐: 매일 보지만 1년에 몇 번 쓰는 컨트롤 — 테두리 없이 가장 조용한 단계로 둔다 */
-.todo-vac.off .select-trigger {
-  background: transparent;
-  border-color: transparent;
-}
-.todo-vac.off .select-trigger:hover {
-  background: var(--surface-2);
-  border-color: transparent;
-  color: var(--text-2);
 }
 /* 켜짐: 노랑 필 (§2 휴가 3종 — 노랑은 글자색이 아니라 채움으로) */
 .todo-vac.on .select-trigger {
