@@ -57,7 +57,7 @@ export type ConceptSort =
 
 /** 할 일이 걸린 좌표의 단위 (migrations/0012).
  *  'day'  = due_date 가 그 날짜
- *  'week' = due_date 가 **그 주 월요일** — 요일을 정하지 않은 '이번 주에 할 것' */
+ *  'week' = due_date 가 **그 주 시작일** — 요일을 정하지 않은 '이번 주에 할 것' */
 export type TodoScope = "day" | "week";
 
 /** 할 일 섹션의 선택 단위 — 캘린더가 하루를 고르는 판인지 주를 고르는 판인지.
@@ -68,7 +68,7 @@ export interface Todo {
   id: number;
   content: string;
   due_date: string; // 'YYYY-MM-DD' — 사용자 로컬 달력 날짜 (UTC ms 아님, lib/date.ts 참조)
-  /** day = 그 날짜의 항목, week = 그 주(due_date=월요일)의 항목.
+  /** day = 그 날짜의 항목, week = 그 주(due_date=주 시작일)의 항목.
    *  주 항목의 due_date 도 실재하는 날짜라, 일별 조회는 반드시 scope='day' 를 건다. */
   scope: TodoScope;
   done: 0 | 1;
@@ -165,7 +165,7 @@ export interface DailyReport {
 /** 주간 리포트 메타 (migrations/0011). 본문은 vault/reports/<월요일>-week.md */
 export interface WeeklyReport {
   id: number;
-  week_start: string; // 'YYYY-MM-DD' — **월요일** (스프린트 규약 월~일)
+  week_start: string; // 'YYYY-MM-DD' — 그 주의 시작일 (lib/date.ts WEEK_STARTS_ON)
   file_path: string;
   /** 묶은 일간 리포트 날짜 목록 ["2026-08-17", …] — 빈 날은 담기지 않는다 */
   sources_json: string;

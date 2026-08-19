@@ -4,7 +4,6 @@
 import { describe, expect, it } from "vitest";
 import {
   addMonths,
-  mondayOf,
   weekdaysShort,
   monthGridDates,
   monthOf,
@@ -85,11 +84,13 @@ describe("weekStartOf", () => {
   });
 });
 
-describe("mondayOf", () => {
-  // 주간 리포트는 월~일 스프린트 규약을 쓴다. weekStartOf(일요일 기준)와 의도적으로 다르다.
-  it("주중 어느 날이든 그 주 월요일", () => {
-    // 2026-08-17 은 월요일
+describe("weekStartOf", () => {
+  // 주의 정의는 앱 전체에서 하나다(date.ts WEEK_STARTS_ON = 0, 일요일 시작).
+  // 캘린더 표시·주 단위 할 일·주간 리포트가 전부 이 함수를 쓴다.
+  it("주중 어느 날이든 그 주 시작(일요일)", () => {
+    // 2026-08-16 은 일요일
     for (const d of [
+      "2026-08-16",
       "2026-08-17",
       "2026-08-18",
       "2026-08-19",
@@ -97,85 +98,79 @@ describe("mondayOf", () => {
       "2026-08-21",
       "2026-08-22",
     ]) {
-      expect(mondayOf(d)).toBe("2026-08-17");
+      expect(weekStartOf(d)).toBe("2026-08-16");
     }
   });
 
-  it("일요일은 '지난 월요일'에 붙는다 — 다음 주로 넘기지 않는다", () => {
-    // 2026-08-23 은 일요일 → 8/17 주의 마지막 날
-    expect(mondayOf("2026-08-23")).toBe("2026-08-17");
-    // weekStartOf 는 같은 날을 '그 주의 시작(일요일)'으로 본다 — 둘이 다른 게 정상
-    expect(weekStartOf("2026-08-23")).toBe("2026-08-23");
-  });
-
-  it("월요일은 자기 자신", () => {
-    expect(mondayOf("2026-08-17")).toBe("2026-08-17");
+  it("토요일 다음날은 새 주로 넘어간다", () => {
+    expect(weekStartOf("2026-08-22")).toBe("2026-08-16"); // 토 → 그 주
+    expect(weekStartOf("2026-08-23")).toBe("2026-08-23"); // 일 → 자기 자신
   });
 
   it("달·해 경계를 넘어간다", () => {
-    expect(mondayOf("2026-01-01")).toBe("2025-12-29"); // 목요일 → 지난해 월요일
-    expect(mondayOf("2026-03-01")).toBe("2026-02-23"); // 일요일 → 2월 월요일
+    expect(weekStartOf("2026-01-01")).toBe("2025-12-28"); // 목요일 → 지난해 일요일
+    expect(weekStartOf("2026-03-03")).toBe("2026-03-01");
   });
 });
 
 describe("weekDays", () => {
-  it("월요일에서 7일을 월~일 순으로", () => {
-    expect(weekDays("2026-08-17")).toEqual([
+  it("주 시작에서 7일을 순서대로", () => {
+    expect(weekDays("2026-08-16")).toEqual([
+      "2026-08-16",
       "2026-08-17",
       "2026-08-18",
       "2026-08-19",
       "2026-08-20",
       "2026-08-21",
       "2026-08-22",
-      "2026-08-23",
     ]);
   });
 
   it("달 경계를 넘어도 7일", () => {
-    const d = weekDays("2026-08-31");
+    const d = weekDays("2026-08-30");
     expect(d).toHaveLength(7);
-    expect(d[0]).toBe("2026-08-31");
-    expect(d[6]).toBe("2026-09-06");
+    expect(d[0]).toBe("2026-08-30");
+    expect(d[6]).toBe("2026-09-05");
   });
 
-  it("모든 날이 같은 월요일로 되돌아온다 (mondayOf 와 왕복)", () => {
-    for (const d of weekDays("2026-08-17")) expect(mondayOf(d)).toBe("2026-08-17");
+  it("모든 날이 같은 주 시작으로 되돌아온다 (weekStartOf 와 왕복)", () => {
+    for (const d of weekDays("2026-08-16")) expect(weekStartOf(d)).toBe("2026-08-16");
   });
 });
 
-describe("monthGridDates(startsOn=1)", () => {
-  // 주 단위 선택 모드는 한 행 = 한 주여야 한다. 일요일 시작 그리드에서는 월~일 주가
-  // 두 행으로 잘려 '주를 골랐다'가 화면에서 성립하지 않는다.
-  it("모든 행이 월요일에서 시작한다", () => {
+describe("monthGridDates — 한 행 = 한 주", () => {
+  // 주 단위 선택에서 한 행 = 한 주여야 선택 띠가 두 행으로 잘리지 않는다.
+  // 그리드 기본 시작 요일과 weekStartOf 가 같은 상수를 쓰는지 지키는 테스트다.
+  it("모든 행이 주 시작 요일에서 시작한다", () => {
     for (const [y, m] of [
       [2026, 1],
       [2026, 8],
       [2026, 11],
       [2015, 2],
     ] as const) {
-      const g = monthGridDates(y, m, 1);
+      const g = monthGridDates(y, m);
       expect(g.length % 7).toBe(0);
       for (let i = 0; i < g.length; i += 7) {
-        expect(mondayOf(g[i])).toBe(g[i]); // 각 행의 첫 칸이 곧 그 주 월요일
+        expect(weekStartOf(g[i])).toBe(g[i]); // 각 행의 첫 칸이 곧 그 주 시작
       }
     }
   });
 
   it("한 행의 7칸이 같은 주에 속한다", () => {
-    const g = monthGridDates(2026, 8, 1);
+    const g = monthGridDates(2026, 8);
     for (let i = 0; i < g.length; i += 7) {
-      const monday = g[i];
-      for (let k = 0; k < 7; k++) expect(mondayOf(g[i + k])).toBe(monday);
+      const start = g[i];
+      for (let k = 0; k < 7; k++) expect(weekStartOf(g[i + k])).toBe(start);
     }
   });
 
   it("그 달의 1일과 말일을 모두 덮는다", () => {
-    const g = monthGridDates(2026, 8, 1);
+    const g = monthGridDates(2026, 8);
     expect(g).toContain("2026-08-01");
     expect(g).toContain("2026-08-31");
   });
 
-  it("기본값(일요일 시작)은 기존 동작 그대로", () => {
+  it("일요일 시작이 기본 — 기존 동작 그대로", () => {
     expect(monthGridDates(2026, 8)).toEqual(monthGridDates(2026, 8, 0));
   });
 });

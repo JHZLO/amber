@@ -21,8 +21,8 @@ const now = () => Date.now();
 export async function listTodos(date: string): Promise<Todo[]> {
   const db = await getDb();
   return db.select<Todo[]>(
-    // scope='day' 필수 — 주 항목의 due_date 는 실재하는 월요일이라,
-    // 안 걸면 매주 월요일 목록에 '이번 주 할 일'이 통째로 섞인다(migrations/0012)
+    // scope='day' 필수 — 주 항목의 due_date 는 실재하는 날짜(그 주 시작일)라,
+    // 안 걸면 매주 그 날 목록에 '이번 주 할 일'이 통째로 섞인다(migrations/0012)
     `SELECT t.*, 0 AS carried FROM todos t
       WHERE t.due_date = $1 AND t.scope = 'day' AND t.deleted_at IS NULL
      UNION ALL
@@ -81,7 +81,7 @@ export async function createTodo(
   return res.lastInsertId as number;
 }
 
-/** 주(월~일) 할 일 목록. due_date 는 그 주 월요일이고 이월·고스트 개념이 없다 —
+/** 주 할 일 목록. due_date 는 그 주 시작일이고 이월·고스트 개념이 없다 —
  *  주는 '오늘'처럼 지나가는 좌표가 아니라 사용자가 직접 고르는 구간이다. */
 export async function listWeekTodos(monday: string): Promise<Todo[]> {
   const db = await getDb();

@@ -952,6 +952,62 @@ body.resizing-col .pane-resizer::after {
   text-align: center;
   color: var(--text-2);
 }
+/* ring 변형 — 결과가 들어올 자리가 넓게 빈 곳(주간 리포트 스트리밍 등)에서 쓴다.
+   원호는 좌우 폭을 약속하지 않아 '얼마나 남았나'로 오해되지 않는다. */
+.ai-thinking.ring {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 18px 0;
+  text-align: left;
+}
+.ai-thinking.ring .ai-thinking-hint {
+  margin-left: auto;
+}
+.ai-ring {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  /* 회전은 transform 하나 — 컴포지터에서 돈다(§9.2). keyframes 인 이유는 인터럽트되지 않는
+     연속 루프이기 때문(연타되는 UI 만 transition 규칙 대상). */
+  animation: spin 0.9s linear infinite;
+}
+.ai-ring svg {
+  width: 100%;
+  height: 100%;
+}
+.ai-ring circle {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+.ai-ring-track {
+  stroke: var(--surface-3);
+}
+/* 호 길이는 고정이다 — dasharray 를 애니메이트하면 진행률처럼 읽히는데 아는 바가 없다.
+   2πr(r=9) ≈ 56.5 의 약 1/4. */
+.ai-ring-arc {
+  stroke: var(--text);
+  stroke-dasharray: 14 42.5;
+}
+/* 감소 모션: 회전(이동)은 끄고 존재감만 남긴다 — 완전히 멈추면 '멈춘 화면'으로 읽힌다 */
+@media (prefers-reduced-motion: reduce) {
+  .ai-ring {
+    animation: ai-ring-fade 1.6s ease-in-out infinite;
+  }
+}
+@keyframes ai-ring-fade {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .ai-thinking-label {
   display: inline-flex;
   align-items: center;

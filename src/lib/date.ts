@@ -11,7 +11,7 @@ export const WEEKDAYS_KO = ["일", "월", "화", "수", "목", "금", "토"] as 
 const WEEKDAYS_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
 /** 요일 짧은 표기(일~토) — 캘린더 헤더 등. 언어 설정을 따른다 */
-export function weekdaysShort(startsOn: 0 | 1 = 0): readonly string[] {
+export function weekdaysShort(startsOn: 0 | 1 = WEEK_STARTS_ON): readonly string[] {
   const base = getLang() === "ko" ? WEEKDAYS_KO : WEEKDAYS_EN;
   // 월요일 시작이면 일요일을 뒤로 보낸다 — 그리드 컬럼과 어긋나면 요일 색(일=빨강)이 틀어진다
   return startsOn === 0 ? base : [...base.slice(1), base[0]];
@@ -53,27 +53,24 @@ export function addMonths(
 }
 
 /** 'YYYY-MM-DD' 가 속한 {year, month(1-12)} */
-/** 그 날짜가 속한 주의 시작(일요일) 'YYYY-MM-DD' — 미니 캘린더(일~토)와 같은 기준 */
+/** 주가 시작하는 요일 — 0=일요일, 1=월요일. **앱 전체에서 '주'의 정의는 이 상수 하나다.**
+ *
+ *  캘린더 표시·주 단위 할 일·주간 리포트가 전부 여기서 파생된다. 예전에는 캘린더가 일요일,
+ *  주간 리포트가 월요일(스프린트 규약)로 갈려 있었는데, 한 화면에 나란히 놓이자 같은 '주'가
+ *  두 뜻을 갖게 됐다. 바꾸려면 이 값만 바꾼다(마이그레이션 0013 주석 참고). */
+export const WEEK_STARTS_ON: 0 | 1 = 0;
+
+/** 그 날짜가 속한 주의 시작 'YYYY-MM-DD' (WEEK_STARTS_ON 기준).
+ *  캘린더 선택·주 할 일·주간 리포트가 모두 이 함수 하나를 쓴다. */
 export function weekStartOf(s: string): string {
   const d = parseLocalDate(s);
-  d.setDate(d.getDate() - d.getDay());
+  d.setDate(d.getDate() - ((d.getDay() - WEEK_STARTS_ON + 7) % 7));
   return localDateStr(d);
 }
 
-/** 그 날짜가 속한 주의 월요일 'YYYY-MM-DD'.
- *  weekStartOf 는 **일요일** 기준(미니 캘린더·타임테이블 주간 뷰가 일~토)이라 따로 둔다.
- *  둘이 다른 건 의도다: 주간 리포트는 노션 팀 공유용이라 월~일 스프린트 규약을 따라야 하고,
- *  캘린더/타임테이블은 기존 표시 기준을 그대로 유지한다. 합치지 말 것. */
-export function mondayOf(s: string): string {
-  const d = parseLocalDate(s);
-  // getDay(): 0=일 … 6=토. 일요일은 '지난 월요일'(-6)로 붙인다
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return localDateStr(d);
-}
-
-/** 월요일 → 그 주 7일의 'YYYY-MM-DD' 배열 (월~일) */
-export function weekDays(monday: string): string[] {
-  const d = parseLocalDate(monday);
+/** 주 시작일 → 그 주 7일의 'YYYY-MM-DD' 배열 */
+export function weekDays(weekStart: string): string[] {
+  const d = parseLocalDate(weekStart);
   return Array.from({ length: 7 }, (_, i) => {
     const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() + i);
     return localDateStr(x);
@@ -96,13 +93,13 @@ export function dayRangeMs(s: string): [number, number] {
  * 월(1-12) 캘린더 그리드의 날짜 문자열 배열. 필요한 주(4~6주)만.
  * 앞뒤로 인접 월 날짜가 포함될 수 있다(호출부에서 monthOf 로 판별).
  *
- * `startsOn` 은 한 행의 첫 요일이다(0=일 기본, 1=월). 주 단위 선택 모드에서만 월요일 시작을
- * 쓴다 — 주가 월~일이라 일요일 시작 그리드에서는 한 주가 두 행에 걸쳐 잘리기 때문이다.
+ * `startsOn` 은 한 행의 첫 요일이다. 기본값은 WEEK_STARTS_ON — 한 행이 곧 한 주여야
+ * 주 단위 선택에서 선택 띠가 두 행으로 잘리지 않는다.
  */
 export function monthGridDates(
   year: number,
   month: number,
-  startsOn: 0 | 1 = 0,
+  startsOn: 0 | 1 = WEEK_STARTS_ON,
 ): string[] {
   const first = new Date(year, month - 1, 1);
   // 그 주의 첫 칸까지 거슬러 올라간다 (일 시작이면 일요일, 월 시작이면 월요일)

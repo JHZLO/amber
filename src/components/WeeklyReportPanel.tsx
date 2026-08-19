@@ -4,7 +4,7 @@
 //   ① 커버리지(7일 중 몇 일 있는지) → ② 스트리밍 → ③ 완성 → ④ 에러/재료 없음
 // 출력 형식은 사용자의 `/Weekly Report` 스킬 규약(노션 공유용 중첩 목록)을 따른다 —
 // 그래서 마크다운 렌더 대신 원문 그대로도 복사할 수 있게 둔다(노션에 붙이는 게 주 용도).
-// 정본: 본문 = vault/reports/<월요일>-week.md, 메타 = weekly_reports 테이블.
+// 정본: 본문 = vault/reports/<주 시작일>-week.md, 메타 = weekly_reports 테이블.
 
 import { useEffect, useRef, useState } from "react";
 import type { AppConfig } from "../lib/config";
@@ -48,7 +48,7 @@ export function WeeklyReportPanel({
   active,
   onOpenSettings,
 }: {
-  /** 월요일 'YYYY-MM-DD' (lib/date mondayOf) */
+  /** 그 주 시작일 'YYYY-MM-DD' (lib/date weekStartOf) */
   weekStart: string;
   config: AppConfig | null;
   active: boolean;
@@ -74,13 +74,16 @@ export function WeeklyReportPanel({
   useEffect(() => {
     if (!active || run) return;
     let cancelled = false;
-    void Promise.all([
-      getWeeklyReport(weekStart),
-      readWeeklyReportFile(weekStart),
-    ]).then(([r, md]) => {
-      if (cancelled) return;
-      setLoaded(r && md != null ? { report: r, body: md } : null);
-    });
+    void getWeeklyReport(weekStart)
+      .then(async (r) => {
+        // 본문은 행에 적힌 경로로 읽는다 — 키가 옮겨진 행은 파일명이 옛 키다(migrations/0013)
+        const md = await readWeeklyReportFile(weekStart, r?.file_path);
+        return { r, md };
+      })
+      .then(({ r, md }) => {
+        if (cancelled) return;
+        setLoaded(r && md != null ? { report: r, body: md } : null);
+      });
     return () => {
       cancelled = true;
     };
@@ -274,7 +277,7 @@ export function WeeklyReportPanel({
               <span className="report-caret" aria-hidden="true" />
             </pre>
           ) : (
-            <AiThinking label={t("report.weekly.summarizing")} compact />
+            <AiThinking label={t("report.weekly.summarizing")} indicator="ring" />
           )}
         </>
       )}

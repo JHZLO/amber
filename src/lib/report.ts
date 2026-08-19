@@ -410,7 +410,7 @@ export async function buildTodosDigest(date: string): Promise<{ md: string; coun
   return { md: lines.join("\n"), count: todos.length };
 }
 
-// ---- 주간 리포트 (weekly_reports 메타 + vault/reports/<월요일>-week.md) ----
+// ---- 주간 리포트 (weekly_reports 메타 + vault/reports/<주 시작일>-week.md) ----
 
 /** 주간 리포트 생성. 재료는 그 주의 일간 리포트 본문 — GitHub 을 다시 수집하지 않는다. */
 export function reportGenerateWeekly(
@@ -486,8 +486,10 @@ export async function upsertWeeklyReport(input: {
 
 export async function deleteWeeklyReport(weekStart: string): Promise<void> {
   const db = await getDb();
+  // 파일명이 키와 다를 수 있으므로(migrations/0013) 행에 적힌 경로를 먼저 읽고 지운다
+  const row = await getWeeklyReport(weekStart);
   await db.execute(`DELETE FROM weekly_reports WHERE week_start = $1`, [weekStart]);
-  const rel = `${VAULT}/${weeklyReportPathFor(weekStart)}`;
+  const rel = `${VAULT}/${row?.file_path || weeklyReportPathFor(weekStart)}`;
   if (await exists(rel, { baseDir: BASE })) {
     await invoke("move_to_trash", { relPath: rel });
   }
@@ -508,8 +510,14 @@ export async function writeWeeklyReportFile(
   return rel;
 }
 
-export async function readWeeklyReportFile(weekStart: string): Promise<string | null> {
-  const rel = `${VAULT}/${weeklyReportPathFor(weekStart)}`;
+/** 주간 리포트 본문. `filePath` 는 weekly_reports 행에 적힌 실제 경로 —
+ *  주 시작 요일이 바뀌어 키가 옮겨진 행(migrations/0013)은 파일명이 옛 키 그대로라,
+ *  키로 경로를 다시 계산하면 멀쩡한 리포트를 못 찾는다. 행이 없을 때만 키로 유추한다. */
+export async function readWeeklyReportFile(
+  weekStart: string,
+  filePath?: string | null,
+): Promise<string | null> {
+  const rel = `${VAULT}/${filePath || weeklyReportPathFor(weekStart)}`;
   if (!(await exists(rel, { baseDir: BASE }))) return null;
   return readTextFile(rel, { baseDir: BASE });
 }

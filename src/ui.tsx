@@ -82,37 +82,62 @@ export function Spinner() {
   return <span className="spinner" />;
 }
 
-/** AI 응답 대기 공통 로딩 — 생동감 있는 인디터미닛 스윕 바 + 펄스 스파클.
+/** AI 응답 대기 공통 로딩 — 생동감 있는 인디터미닛 표시 + 펄스 스파클.
  *  모든 AI 기능(질문·작성·개념 생성/보강)에서 이 컴포넌트로 통일한다.
- *  compact: 스레드 말풍선 등 인라인 자리(중앙정렬·큰 여백 없이 좌측·꽉 찬 바). */
+ *  compact: 스레드 말풍선 등 인라인 자리(중앙정렬·큰 여백 없이 좌측·꽉 찬 바).
+ *
+ *  indicator:
+ *   - "bar"(기본) 트랙을 훑는 스윕 바. 폭이 정해진 자리(모달·좁은 패널)에서 자연스럽다.
+ *   - "ring"  도는 원호. **결과가 들어올 자리가 넓게 비어 있는 곳**에 쓴다 — 빈 화면 위의
+ *             가로 막대는 진행률처럼 읽혀 '얼마나 남았나'를 잘못 약속한다. */
 export function AiThinking({
   label,
   hint,
   compact,
+  indicator = "bar",
 }: {
   label: string;
   hint?: string;
   compact?: boolean;
+  indicator?: "bar" | "ring";
 }) {
+  const ring = indicator === "ring";
   return (
     <div
-      className={`ai-thinking ${compact ? "compact" : ""}`}
+      className={`ai-thinking ${compact ? "compact" : ""} ${ring ? "ring" : ""}`}
       role="status"
       aria-live="polite"
     >
+      {ring && <AiRing />}
       <div className="ai-thinking-label">
         <span className="ai-thinking-spark">
           <Icon name="sparkles" size={compact ? 12 : 14} />
         </span>
         <span>{label}</span>
       </div>
-      <div className="ai-progress" aria-hidden="true">
-        {/* compact 전환은 트랙 폭을 240px→전체로 바꾼다 — WKWebView 가 퍼센트 transform
-            애니메이션을 시작 시점 크기로 굳힐 수 있어, 리마운트로 새 크기에서 다시 돌린다. */}
-        <span key={compact ? "wide" : "narrow"} className="ai-progress-bar" />
-      </div>
+      {!ring && (
+        <div className="ai-progress" aria-hidden="true">
+          {/* compact 전환은 트랙 폭을 240px→전체로 바꾼다 — WKWebView 가 퍼센트 transform
+              애니메이션을 시작 시점 크기로 굳힐 수 있어, 리마운트로 새 크기에서 다시 돌린다. */}
+          <span key={compact ? "wide" : "narrow"} className="ai-progress-bar" />
+        </div>
+      )}
       {hint && <div className="hint ai-thinking-hint">{hint}</div>}
     </div>
+  );
+}
+
+/** 인디터미닛 원호 — 트랙 원 위에서 호 하나가 돈다.
+ *  회전은 transform 하나뿐이라 컴포지터에서 돌고(§9.2), 호 길이는 고정이다:
+ *  stroke-dasharray 를 애니메이트하면 진행률처럼 읽히는데 실제로는 아는 바가 없다. */
+function AiRing() {
+  return (
+    <span className="ai-ring" aria-hidden="true">
+      <svg viewBox="0 0 24 24">
+        <circle className="ai-ring-track" cx="12" cy="12" r="9" />
+        <circle className="ai-ring-arc" cx="12" cy="12" r="9" />
+      </svg>
+    </span>
   );
 }
 

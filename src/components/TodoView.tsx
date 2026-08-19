@@ -55,7 +55,6 @@ import {
   formatDayLong,
   formatDayShort,
   localDateStr,
-  mondayOf,
   monthGridDates,
   monthOf,
   parseLocalDate,
@@ -139,8 +138,8 @@ export function TodoView({
   useEffect(() => {
     localStorage.setItem(UNIT_KEY, unit);
   }, [unit]);
-  const weekMonday = mondayOf(selected);
-  const weekEnd = shiftDay(weekMonday, 6);
+  const weekStart = weekStartOf(selected);
+  const weekEnd = shiftDay(weekStart, 6);
   const [weekTodos, setWeekTodos] = useState<Todo[]>([]);
   const [weekCounts, setWeekCounts] = useState<Record<string, DayTodoCount>>({});
 
@@ -393,7 +392,7 @@ export function TodoView({
   const reloadWeek = useCallback(async () => {
     const seq = ++weekSeq.current;
     try {
-      const rows = await listWeekTodos(weekMonday);
+      const rows = await listWeekTodos(weekStart);
       if (seq !== weekSeq.current) return;
       setWeekTodos(rows);
       setError(null);
@@ -401,7 +400,7 @@ export function TodoView({
       if (seq !== weekSeq.current) return;
       setError(errMsg(e));
     }
-  }, [weekMonday]);
+  }, [weekStart]);
 
   // 표시 중인 달 그리드 범위의 날짜별 개수 + 휴가 (캘린더 점·월 요약)
   const reloadCounts = useCallback(async () => {
@@ -416,8 +415,8 @@ export function TodoView({
       for (const r of rows) map[r.due_date] = r;
       setCounts(map);
       setVacations(vac);
-      // 주 모드 점은 그 주 월요일 칸에만 찍으므로 월요일 키로 따로 센다
-      const wk = await listWeekCounts(mondayOf(from), mondayOf(to));
+      // 주 표식은 그 주 첫 칸에만 찍으므로 주 시작일 키로 따로 센다
+      const wk = await listWeekCounts(weekStartOf(from), weekStartOf(to));
       if (seq !== countsSeq.current) return;
       const wmap: Record<string, DayTodoCount> = {};
       for (const r of wk) wmap[r.due_date] = r;
@@ -499,8 +498,8 @@ export function TodoView({
     if (!content || busy) return;
     setBusy(true);
     try {
-      // 주 모드에서 적은 건 요일이 없는 '이번 주' 항목 — due_date 는 그 주 월요일이 된다
-      if (unit === "week") await createTodo(content, weekMonday, null, "week");
+      // 주 모드에서 적은 건 요일이 없는 '이번 주' 항목 — due_date 는 그 주 시작일이 된다
+      if (unit === "week") await createTodo(content, weekStart, null, "week");
       else await createTodo(content, selected);
       setQuick("");
       refreshAll();
@@ -630,7 +629,7 @@ export function TodoView({
       // 자식은 부모와 같은 좌표를 써야 한다 — 주 항목 아래에 scope='day' 자식을 만들면
       // 그 자식은 주 목록에도, 그 날짜 목록에도 안 보이는 유령이 된다
       if (unit === "week") {
-        await createTodo(content, weekMonday, parentId, "week");
+        await createTodo(content, weekStart, parentId, "week");
       } else {
         await createTodo(content, selected, parentId);
       }
@@ -933,7 +932,7 @@ export function TodoView({
           <h1 className="detail-title">
             {unit === "week"
               ? t("todos.week.title", {
-                  range: `${formatDayShort(weekMonday)} – ${formatDayShort(weekEnd)}`,
+                  range: `${formatDayShort(weekStart)} – ${formatDayShort(weekEnd)}`,
                 })
               : formatDayLong(selected)}
           </h1>
@@ -1110,11 +1109,11 @@ export function TodoView({
         )}
 
         {/* 주간 리포트 — 캘린더가 '주' 단위일 때만. 그 모드가 곧 '이번 주를 보겠다'는 뜻이라
-            접힘 단계를 두지 않는다. key 는 월요일이라 주 안에서 날짜를 옮겨도 상태가 유지된다 */}
+            접힘 단계를 두지 않는다. key 가 주 시작일이라 주 안에서 날짜를 옮겨도 상태가 유지된다 */}
         {unit === "week" && (
           <WeeklyReportPanel
-            key={weekMonday}
-            weekStart={weekMonday}
+            key={weekStart}
+            weekStart={weekStart}
             config={config}
             active={active}
             onOpenSettings={onOpenSettings}

@@ -11,7 +11,7 @@ import type { DayTodoCount, TodoUnit } from "../types";
 import {
   formatMonthTitle,
   formatYearTitle,
-  mondayOf,
+  weekStartOf,
   monthGridDates,
   monthsShort,
   parseLocalDate,
@@ -56,7 +56,7 @@ export function MiniCalendar({
   /** 선택 단위. 'week' 면 날짜가 아니라 그 날이 속한 주(월~일)를 고르는 판이 된다 */
   unit: TodoUnit;
   onUnitChange: (u: TodoUnit) => void;
-  /** 월요일 → 그 주의 '주 할 일' 개수. 주 모드에서 행 끝 표식으로만 쓴다 */
+  /** 주 시작일 → 그 주의 '주 할 일' 개수. 주 모드에서 행 표식으로만 쓴다 */
   weekCounts: Record<string, DayTodoCount>;
   onSelect: (date: string) => void;
   /** 보고 있는 달을 옮긴다 (화살표·월/연 선택) */
@@ -69,9 +69,9 @@ export function MiniCalendar({
   // 건드리지 않으므로(커서만 바뀜) 이 effect 가 드릴다운을 되감지 않는다.
   useEffect(() => setLevel("day"), [selected]);
 
-  // 주 모드면 한 행이 곧 한 주가 되도록 월요일 시작 그리드를 쓴다 (주는 월~일)
-  const gridStart: 0 | 1 = unit === "week" ? 1 : 0;
-  const selMonday = mondayOf(selected);
+  // 그리드 시작 요일은 두 모드가 같다 — 주의 정의가 하나(date.ts WEEK_STARTS_ON)라
+  // 한 행이 곧 한 주이고, 모드를 바꿔도 판이 재배열되지 않는다.
+  const selWeekStart = weekStartOf(selected);
   const dowAll = weekdaysShort(0);
   const [sunLabel, satLabel] = [dowAll[0], dowAll[6]];
 
@@ -162,7 +162,7 @@ export function MiniCalendar({
         <>
           {/* 일=빨강, 토=파랑 (한국 달력 관례) — 헤더도 같은 색을 쓴다 */}
           <div className="cal-dow">
-            {weekdaysShort(gridStart).map((d) => (
+            {weekdaysShort().map((d) => (
               <span
                 key={d}
                 className={d === sunLabel ? "sun" : d === satLabel ? "sat" : ""}
@@ -173,7 +173,7 @@ export function MiniCalendar({
           </div>
 
           <div className={`cal-grid ${unit === "week" ? "by-week" : ""}`}>
-            {monthGridDates(year, month, gridStart).map((date) => {
+            {monthGridDates(year, month).map((date) => {
               const d = parseLocalDate(date);
               const inMonth =
                 d.getMonth() + 1 === month && d.getFullYear() === year;
@@ -182,14 +182,14 @@ export function MiniCalendar({
               // 그 날 할 일이 있다는 사실은 주를 고르는 중에도 참이고, 어느 주가 바쁜지 읽는 단서다.
               const c = counts[date];
               const hasOpen = c ? c.done < c.total : false;
-              // 주 할 일은 점을 뺏지 않고 월요일 칸에 표식을 더한다(있을 때만)
-              const wc = unit === "week" && date === mondayOf(date) ? weekCounts[date] : undefined;
+              // 주 할 일은 점을 뺏지 않고 그 주 첫 칸에 표식을 더한다(있을 때만)
+              const wc = unit === "week" && date === weekStartOf(date) ? weekCounts[date] : undefined;
               // AI 가 이날의 리포트를 만드는 중이면 점이 깜빡인다. 할 일이 없어 점이 숨겨진
               // 날도 이때만은 보여준다 — 어느 날이 도는지가 안 보이면 표시의 뜻이 없다.
               const gen = generating.has(date);
               // 주 모드에서는 고른 대상이 하루가 아니라 주다 — 그 주 7칸을 함께 칠한다.
               // today 는 그대로 하루 표식으로 남긴다(오늘이 어디인지는 주 모드에서도 필요하다).
-              const inSelWeek = unit === "week" && mondayOf(date) === selMonday;
+              const inSelWeek = unit === "week" && weekStartOf(date) === selWeekStart;
               // 주 모드에서 선택은 '행 전체 띠'(셀 배경)고 today 는 '날짜 원'이라 층이 다르다 —
               // 둘을 배타로 두면 오늘이 낀 주에서 띠에 구멍이 뚫린다. 클래스를 겹쳐 준다.
               // 일 모드는 기존대로 배타 — today 와 selected 를 겹치면 '오늘이자 휴가인 날'에서
