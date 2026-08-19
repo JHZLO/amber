@@ -41,7 +41,6 @@ import {
   nowMinute,
 } from "../lib/timeBlocks";
 import {
-  DEFAULT_KIND,
   VACATION_KINDS,
   listVacations,
   removeVacation,
@@ -937,33 +936,31 @@ export function TodoView({
               : formatDayLong(selected)}
           </h1>
           <span className="spacer" />
-          {/* 휴가 — 안 잡힌 날엔 조용한 버튼 하나(한 번 누르면 연차), 잡힌 날엔 노랑 칩이 되어
-              종류 변경·해제를 연다. 매일 보는 헤더라 평소엔 가볍게 두고 켜졌을 때만 무게를 준다.
-              쓰는 빈도(1년에 몇 번)와 보는 빈도(매일)가 다를 땐 후자에 맞춘다(DESIGN §1). */}
+          {/* 휴가 — 켜짐/꺼짐이 같은 컨트롤 하나다. 꺼짐은 조용한 고스트(매일 보는 헤더라
+              평소엔 무게를 주지 않는다), 켜짐은 노랑 필로 종류를 그대로 보여준다
+              (DESIGN §3 채움↔아웃라인 문법). 모양·자리가 상태에 따라 바뀌지 않아 눈이 튀지 않는다.
+              누르면 곧장 쓰이는 게 아니라 종류 목록이 열린다 — 1년에 몇 번 쓰는 표식이
+              날짜 이동(오늘 ‹ ›) 옆에서 한 번의 오클릭으로 찍히면 안 된다. */}
           {/* 휴가는 하루에 거는 표식이라 주 모드에서는 숨긴다 */}
-          {unit === "week" ? null : selectedVac ? (
-            <div className="todo-vac on">
+          {unit === "week" ? null : (
+            <div className={`todo-vac ${selectedVac ? "on" : "off"}`}>
               <Select<VacationKind | "">
-                value={selectedVac}
+                value={selectedVac ?? ""}
+                placeholder={t("todos.vac.set")}
                 options={[
                   ...VACATION_KINDS.map((k) => ({
                     value: k as VacationKind | "",
                     label: vacationLabel(k),
                   })),
-                  { value: "", label: t("todos.vac.clear") },
+                  // 해제는 이미 잡혀 있을 때만 — 빈 상태에서 '해제'는 고를 게 없다
+                  ...(selectedVac
+                    ? [{ value: "" as VacationKind | "", label: t("todos.vac.clear") }]
+                    : []),
                 ]}
                 onChange={(v) => void changeVacation(v || null)}
                 align="right"
               />
             </div>
-          ) : (
-            <button
-              className="btn btn-sm todo-vac"
-              title={t("todos.vac.setHint")}
-              onClick={() => void changeVacation(DEFAULT_KIND)}
-            >
-              {t("todos.vac.set")}
-            </button>
           )}
           {/* 캘린더 앱 표준: [오늘] ‹ › — 오늘이면 '오늘' 버튼 비활성(이미 오늘임을 표시) */}
           <div className="todo-nav">

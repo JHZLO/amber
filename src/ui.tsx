@@ -443,12 +443,16 @@ export function Select<T extends string>({
   onChange,
   align = "left",
   block = false,
+  placeholder,
 }: {
   value: T;
   options: { value: T; label: string }[];
   onChange: (v: T) => void;
   align?: "left" | "right";
   block?: boolean;
+  /** value 가 options 에 없을 때(=미설정) 트리거에 보일 문구.
+   *  '없음' 항목을 목록에 끼워 넣지 않고도 빈 상태를 표현한다 — 목록은 고를 값만 담는다. */
+  placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   // 키보드 이동용 활성 인덱스 — 열릴 때 현재 값에서 시작한다
@@ -573,7 +577,7 @@ export function Select<T extends string>({
     <div className={`select ${block ? "block" : ""}`} ref={rootRef}>
       <button
         ref={triggerRef}
-        className="select-trigger"
+        className={`select-trigger ${cur ? "" : "empty"}`}
         role="combobox"
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -586,7 +590,7 @@ export function Select<T extends string>({
           }
         }}
       >
-        <span>{cur?.label}</span>
+        <span>{cur?.label ?? placeholder}</span>
         <svg className="select-caret" width="10" height="6" viewBox="0 0 10 6">
           <path
             d="M1 1l4 4 4-4"
