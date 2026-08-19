@@ -58,6 +58,26 @@ export function weekStartOf(s: string): string {
   return localDateStr(d);
 }
 
+/** 그 날짜가 속한 주의 월요일 'YYYY-MM-DD'.
+ *  weekStartOf 는 **일요일** 기준(미니 캘린더·타임테이블 주간 뷰가 일~토)이라 따로 둔다.
+ *  둘이 다른 건 의도다: 주간 리포트는 노션 팀 공유용이라 월~일 스프린트 규약을 따라야 하고,
+ *  캘린더/타임테이블은 기존 표시 기준을 그대로 유지한다. 합치지 말 것. */
+export function mondayOf(s: string): string {
+  const d = parseLocalDate(s);
+  // getDay(): 0=일 … 6=토. 일요일은 '지난 월요일'(-6)로 붙인다
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return localDateStr(d);
+}
+
+/** 월요일 → 그 주 7일의 'YYYY-MM-DD' 배열 (월~일) */
+export function weekDays(monday: string): string[] {
+  const d = parseLocalDate(monday);
+  return Array.from({ length: 7 }, (_, i) => {
+    const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() + i);
+    return localDateStr(x);
+  });
+}
+
 export function monthOf(s: string): { year: number; month: number } {
   const d = parseLocalDate(s);
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
@@ -94,6 +114,13 @@ export function formatDayLong(s: string): string {
   if (getLang() === "ko")
     return `${d.getMonth() + 1}월 ${d.getDate()}일 ${WEEKDAYS_KO[d.getDay()]}요일`;
   return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+}
+
+/** "월" / "Mon" — 주간 리포트 프롬프트의 날짜 섹션 라벨 */
+export function weekdayShort(s: string): string {
+  const d = parseLocalDate(s);
+  if (getLang() === "ko") return WEEKDAYS_KO[d.getDay()];
+  return d.toLocaleDateString("en-US", { weekday: "short" });
 }
 
 /** "7/14" — 밀린 항목의 원래 날짜 등 짧은 표기 */

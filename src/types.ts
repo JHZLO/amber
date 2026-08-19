@@ -149,3 +149,17 @@ export interface DailyReport {
   created_at: number; // UTC ms
   updated_at: number; // UTC ms
 }
+
+/** 주간 리포트 메타 (migrations/0011). 본문은 vault/reports/<월요일>-week.md */
+export interface WeeklyReport {
+  id: number;
+  week_start: string; // 'YYYY-MM-DD' — **월요일** (스프린트 규약 월~일)
+  file_path: string;
+  /** 묶은 일간 리포트 날짜 목록 ["2026-08-17", …] — 빈 날은 담기지 않는다 */
+  sources_json: string;
+  provider: string | null;
+  model: string | null;
+  duration_ms: number | null;
+  created_at: number;
+  updated_at: number;
+}

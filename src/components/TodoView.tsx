@@ -53,6 +53,7 @@ import {
   formatDayLong,
   formatDayShort,
   localDateStr,
+  mondayOf,
   monthGridDates,
   monthOf,
   parseLocalDate,
@@ -67,6 +68,7 @@ import { Icon } from "../icons";
 import { MiniCalendar } from "./MiniCalendar";
 import { DayTimetable, type TtView } from "./DayTimetable";
 import { DailyReportPanel } from "./DailyReportPanel";
+import { WeeklyReportPanel } from "./WeeklyReportPanel";
 import { useReportGeneratingDates } from "../lib/reportRun";
 import { usePaneResize } from "../lib/usePaneResize";
 import { openConceptInApp } from "../lib/nav";
@@ -1014,6 +1016,19 @@ export function TodoView({
           active={active}
           onOpenSettings={onOpenSettings}
         />
+
+        {/* 주간 리포트 — 타임테이블이 '주' 뷰일 때만. 일 단위로 보는 중에 주간 블록이 끼면
+            하루 흐름을 방해한다. 뷰 토글이 곧 '주간을 보겠다'는 의사표시라 접힘 없이 바로 펼친다.
+            key 는 월요일이라 같은 주 안에서 날짜를 옮겨도 패널 상태가 유지된다 */}
+        {ttView === "week" && (
+          <WeeklyReportPanel
+            key={mondayOf(selected)}
+            weekStart={mondayOf(selected)}
+            config={config}
+            active={active}
+            onOpenSettings={onOpenSettings}
+          />
+        )}
 
         {learned.length > 0 && (
           <div className="todo-learned">

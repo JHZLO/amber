@@ -4249,6 +4249,76 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   display: inline-flex;
   gap: 2px;
 }
+/* 주간 리포트 — 일간 블록 아래에 붙는 접힘 패널. 일간보다 조용해야 해서 구분선을 얇게 둔다 */
+.report-weekly {
+  margin-top: 14px;
+  padding-top: 12px;
+}
+.report-weekly-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.report-weekly-range {
+  font-size: 11px;
+  color: var(--text-3);
+}
+/* 요일 칩 — 채움이 '재료 있음', 아웃라인이 '리포트 없는 날' (DESIGN.md §3 상태 문법) */
+.report-week-days {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.report-week-day {
+  min-width: 22px;
+  justify-content: center;
+}
+.report-week-day.has {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.report-week-day.none {
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  color: var(--text-3);
+}
+.report-week-count {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+/* 노션에 붙일 원문 — 렌더된 목록만 보면 'ㄴ' 들여쓰기가 사라져 그대로 못 쓴다 */
+.report-week-raw {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.report-week-raw summary {
+  color: var(--text-3);
+  cursor: pointer;
+}
+.report-week-raw summary:hover {
+  color: var(--text-2);
+}
+.report-week-raw pre {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.rep-weekly-name {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
 .report-hint {
   margin: 0;
   font-size: 12.5px;

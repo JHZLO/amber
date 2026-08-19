@@ -303,6 +303,12 @@ pub fn run() {
             sql: include_str!("../migrations/0010_vacations.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 11,
+            description: "add_weekly_reports",
+            sql: include_str!("../migrations/0011_weekly_reports.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -394,6 +400,7 @@ pub fn run() {
             detect::detect_ai_clis,
             report::report_collect,
             report::report_generate,
+            report::report_generate_weekly,
             report::detect_report_tools,
             report::report_mcp_servers,
             report::report_gh_accounts

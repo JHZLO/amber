@@ -397,6 +397,18 @@ export function ReportSettings() {
           );
         })}
       </div>
+
+      {/* 주간 리포트 — 노션 공유 형식의 '@이름'. 비우면 이름 없이 낸다 */}
+      <div className="field rep-weekly-name">
+        <label>{t("report.weekly.nameLabel")}</label>
+        <input
+          className="input"
+          value={cfg.displayName}
+          placeholder={t("report.weekly.namePlaceholder")}
+          onChange={(e) => update({ ...cfg, displayName: e.target.value })}
+        />
+        <div className="hint">{t("report.weekly.nameHint")}</div>
+      </div>
     </section>
   );
 }

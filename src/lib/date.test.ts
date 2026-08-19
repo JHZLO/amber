@@ -2,7 +2,14 @@
 // 화면에선 눈치채기 어렵다. 그리드 경계(4~6주)와 연/월 넘김을 고정한다.
 
 import { describe, expect, it } from "vitest";
-import { addMonths, monthGridDates, monthOf, weekStartOf } from "./date";
+import {
+  addMonths,
+  mondayOf,
+  monthGridDates,
+  monthOf,
+  weekDays,
+  weekStartOf,
+} from "./date";
 
 describe("monthGridDates", () => {
   it("일요일에 시작해 토요일에 끝나는 온전한 주 단위", () => {
@@ -74,5 +81,63 @@ describe("weekStartOf", () => {
     expect(weekStartOf("2026-08-01")).toBe("2026-07-26"); // 토요일
     expect(weekStartOf("2026-07-26")).toBe("2026-07-26"); // 이미 일요일
     expect(weekStartOf("2026-01-01")).toBe("2025-12-28");
+  });
+});
+
+describe("mondayOf", () => {
+  // 주간 리포트는 월~일 스프린트 규약을 쓴다. weekStartOf(일요일 기준)와 의도적으로 다르다.
+  it("주중 어느 날이든 그 주 월요일", () => {
+    // 2026-08-17 은 월요일
+    for (const d of [
+      "2026-08-17",
+      "2026-08-18",
+      "2026-08-19",
+      "2026-08-20",
+      "2026-08-21",
+      "2026-08-22",
+    ]) {
+      expect(mondayOf(d)).toBe("2026-08-17");
+    }
+  });
+
+  it("일요일은 '지난 월요일'에 붙는다 — 다음 주로 넘기지 않는다", () => {
+    // 2026-08-23 은 일요일 → 8/17 주의 마지막 날
+    expect(mondayOf("2026-08-23")).toBe("2026-08-17");
+    // weekStartOf 는 같은 날을 '그 주의 시작(일요일)'으로 본다 — 둘이 다른 게 정상
+    expect(weekStartOf("2026-08-23")).toBe("2026-08-23");
+  });
+
+  it("월요일은 자기 자신", () => {
+    expect(mondayOf("2026-08-17")).toBe("2026-08-17");
+  });
+
+  it("달·해 경계를 넘어간다", () => {
+    expect(mondayOf("2026-01-01")).toBe("2025-12-29"); // 목요일 → 지난해 월요일
+    expect(mondayOf("2026-03-01")).toBe("2026-02-23"); // 일요일 → 2월 월요일
+  });
+});
+
+describe("weekDays", () => {
+  it("월요일에서 7일을 월~일 순으로", () => {
+    expect(weekDays("2026-08-17")).toEqual([
+      "2026-08-17",
+      "2026-08-18",
+      "2026-08-19",
+      "2026-08-20",
+      "2026-08-21",
+      "2026-08-22",
+      "2026-08-23",
+    ]);
+  });
+
+  it("달 경계를 넘어도 7일", () => {
+    const d = weekDays("2026-08-31");
+    expect(d).toHaveLength(7);
+    expect(d[0]).toBe("2026-08-31");
+    expect(d[6]).toBe("2026-09-06");
+  });
+
+  it("모든 날이 같은 월요일로 되돌아온다 (mondayOf 와 왕복)", () => {
+    for (const d of weekDays("2026-08-17")) expect(mondayOf(d)).toBe("2026-08-17");
   });
 });

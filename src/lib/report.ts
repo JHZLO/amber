@@ -15,7 +15,7 @@ import { writeAtomic } from "./vaultTree";
 import { getDb, getSetting, setSetting } from "./db";
 import { getLang } from "./i18n";
 import { listTodos, listOverdueOpen } from "./todos";
-import { todayStr, formatDayShort } from "./date";
+import { todayStr, formatDayShort, weekDays, weekdayShort } from "./date";
 import type {
   CollectProgress,
   DailyReport,
@@ -25,6 +25,7 @@ import type {
   ReportSourcePref,
   SourceDigest,
   Todo,
+  WeeklyReport,
 } from "../types";
 
 // ---- Rust 브리지 ----
@@ -193,6 +194,8 @@ export interface ReportConfig {
   /** P2 — 선택한 등록 MCP 서버 이름 (빈 문자열 = 미선택) */
   slackServer: string;
   notionServer: string;
+  /** 주간 리포트의 '@이름' (노션 공유 형식). 비우면 이름 없이 낸다 */
+  displayName: string;
 }
 
 /** 기본 소스 순서. github·ai_sessions 기본 on, slack·notion(P2)은 기본 off */
@@ -223,7 +226,18 @@ function parseSources(raw: string | null): ReportSourcePref[] {
 }
 
 export async function loadReportConfig(): Promise<ReportConfig> {
-  const [onb, sources, ghPath, ghRepos, ghAccount, sesClaude, sesCodex, slackSrv, notionSrv] =
+  const [
+    onb,
+    sources,
+    ghPath,
+    ghRepos,
+    ghAccount,
+    sesClaude,
+    sesCodex,
+    slackSrv,
+    notionSrv,
+    dispName,
+  ] =
     await Promise.all([
       getSetting("report_onboarded"),
       getSetting("report_sources"),
@@ -234,6 +248,7 @@ export async function loadReportConfig(): Promise<ReportConfig> {
       getSetting("report_sessions_codex"),
       getSetting("report_slack_server"),
       getSetting("report_notion_server"),
+      getSetting("report_display_name"),
     ]);
   return {
     onboarded: onb === "1",
@@ -249,6 +264,7 @@ export async function loadReportConfig(): Promise<ReportConfig> {
     sessionsCodex: sesCodex !== "0",
     slackServer: slackSrv ?? "",
     notionServer: notionSrv ?? "",
+    displayName: dispName ?? "",
   };
 }
 
@@ -263,6 +279,7 @@ export async function saveReportConfig(c: ReportConfig): Promise<void> {
     setSetting("report_sessions_codex", c.sessionsCodex ? "1" : "0"),
     setSetting("report_slack_server", c.slackServer.trim()),
     setSetting("report_notion_server", c.notionServer.trim()),
+    setSetting("report_display_name", c.displayName.trim()),
   ]);
 }
 
@@ -391,4 +408,129 @@ export async function buildTodosDigest(date: string): Promise<{ md: string; coun
     }
   }
   return { md: lines.join("\n"), count: todos.length };
+}
+
+// ---- 주간 리포트 (weekly_reports 메타 + vault/reports/<월요일>-week.md) ----
+
+/** 주간 리포트 생성. 재료는 그 주의 일간 리포트 본문 — GitHub 을 다시 수집하지 않는다. */
+export function reportGenerateWeekly(
+  params: {
+    weekStart: string;
+    weekEnd: string;
+    days: { date: string; weekday: string; body: string }[];
+    displayName?: string | null;
+    model?: string | null;
+    cliPath?: string | null;
+    provider?: string | null;
+    timeoutSecs?: number | null;
+    cancelKey?: string | null;
+  },
+  onDelta: (text: string) => void,
+): Promise<ReportGenResult> {
+  const channel = new Channel<string>();
+  channel.onmessage = onDelta;
+  return invoke<ReportGenResult>("report_generate_weekly", {
+    weekStart: params.weekStart,
+    weekEnd: params.weekEnd,
+    days: params.days,
+    displayName: params.displayName ?? null,
+    model: params.model ?? null,
+    cliPath: params.cliPath ?? null,
+    provider: params.provider ?? null,
+    timeoutSecs: params.timeoutSecs ?? null,
+    lang: getLang(),
+    onDelta: channel,
+    cancelKey: params.cancelKey ?? null,
+  });
+}
+
+export async function getWeeklyReport(weekStart: string): Promise<WeeklyReport | null> {
+  const db = await getDb();
+  const rows = await db.select<WeeklyReport[]>(
+    `SELECT * FROM weekly_reports WHERE week_start = $1`,
+    [weekStart],
+  );
+  return rows.length ? rows[0] : null;
+}
+
+export async function upsertWeeklyReport(input: {
+  weekStart: string;
+  filePath: string;
+  sourcesJson: string;
+  provider: string | null;
+  model: string | null;
+  durationMs: number | null;
+}): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `INSERT INTO weekly_reports (week_start, file_path, sources_json, provider, model, duration_ms, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT(week_start) DO UPDATE SET
+       file_path = excluded.file_path,
+       sources_json = excluded.sources_json,
+       provider = excluded.provider,
+       model = excluded.model,
+       duration_ms = excluded.duration_ms,
+       updated_at = excluded.updated_at`,
+    [
+      input.weekStart,
+      input.filePath,
+      input.sourcesJson,
+      input.provider,
+      input.model,
+      input.durationMs,
+      Date.now(),
+    ],
+  );
+}
+
+export async function deleteWeeklyReport(weekStart: string): Promise<void> {
+  const db = await getDb();
+  await db.execute(`DELETE FROM weekly_reports WHERE week_start = $1`, [weekStart]);
+  const rel = `${VAULT}/${weeklyReportPathFor(weekStart)}`;
+  if (await exists(rel, { baseDir: BASE })) {
+    await invoke("move_to_trash", { relPath: rel });
+  }
+}
+
+/** 일간과 같은 reports/ 폴더에 둔다 — '-week' 접미어로 구분 (날짜 파일명과 충돌하지 않는다) */
+export function weeklyReportPathFor(weekStart: string): string {
+  return `reports/${weekStart}-week.md`;
+}
+
+export async function writeWeeklyReportFile(
+  weekStart: string,
+  md: string,
+): Promise<string> {
+  await mkdir(`${VAULT}/reports`, { baseDir: BASE, recursive: true });
+  const rel = weeklyReportPathFor(weekStart);
+  await writeAtomic(`${VAULT}/${rel}`, md);
+  return rel;
+}
+
+export async function readWeeklyReportFile(weekStart: string): Promise<string | null> {
+  const rel = `${VAULT}/${weeklyReportPathFor(weekStart)}`;
+  if (!(await exists(rel, { baseDir: BASE }))) return null;
+  return readTextFile(rel, { baseDir: BASE });
+}
+
+/** 주간 재료 한 날의 상태 — 패널이 "리포트 없는 날"을 명시하는 데 쓴다 */
+export interface WeekDaySource {
+  date: string;
+  weekday: string;
+  /** 일간 리포트 본문. 없으면 null */
+  body: string | null;
+}
+
+/** 그 주(월~일) 7일의 일간 리포트 본문을 읽어 온다. 없는 날은 body=null 로 남긴다 —
+ *  주간 요약이 조용히 빈약해지는 대신 패널이 "N일 빠짐"을 말할 수 있게. */
+export async function loadWeekSources(weekStart: string): Promise<WeekDaySource[]> {
+  const days = weekDays(weekStart);
+  return Promise.all(
+    days.map(async (date) => ({
+      date,
+      weekday: weekdayShort(date),
+      body: await readReportFile(date).catch(() => null),
+    })),
+  );
 }

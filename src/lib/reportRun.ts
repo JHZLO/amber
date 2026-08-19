@@ -5,7 +5,12 @@
 
 import { useSyncExternalStore } from "react";
 import type { AppConfig } from "./config";
-import type { CollectProgress, DailyReport, SourceDigest } from "../types";
+import type {
+  CollectProgress,
+  DailyReport,
+  SourceDigest,
+  WeeklyReport,
+} from "../types";
 import { aiCancel, friendlyError, newCancelKey } from "./ai";
 import { dayRangeMs } from "./date";
 import {
@@ -18,6 +23,11 @@ import {
   reportGenerate,
   upsertReport,
   writeReportFile,
+  loadWeekSources,
+  reportGenerateWeekly,
+  writeWeeklyReportFile,
+  upsertWeeklyReport,
+  getWeeklyReport,
 } from "./report";
 
 export type RunPhase = "collecting" | "streaming" | "done" | "empty" | "error";
@@ -29,6 +39,10 @@ export interface RunChip {
    *  버리면 칩이 빨개지기만 하고 왜 실패했는지 알 방법이 없다. */
   error?: string | null;
 }
+/** 주간 실행 키 — 같은 스토어를 쓰되 접두어로 격리한다.
+ *  캘린더 점은 일간만 봐야 하고(주간은 특정 날짜의 상태가 아니다), 레일의 생성 중 표시는 둘 다 본다. */
+export const weeklyKey = (monday: string) => `w:${monday}`;
+
 export interface RunState {
   phase: RunPhase;
   /** 진행 중인 실행의 취소 키 — 중단 버튼이 이걸로 ai_cancel 을 부른다. 끝나면 null */
@@ -36,7 +50,7 @@ export interface RunState {
   stream: string;
   chips: RunChip[];
   error: string | null;
-  report: DailyReport | null; // phase==='done' 일 때 채워짐
+  report: DailyReport | WeeklyReport | null; // phase==='done' 일 때 채워짐
   body: string;
 }
 
@@ -46,10 +60,16 @@ const listeners = new Set<() => void>();
 // 생성 중인 날짜 집합의 캐시 스냅샷. useSyncExternalStore 의 getSnapshot 은 값이 같으면
 // **같은 참조**를 돌려줘야 해서(새 Set 을 매번 만들면 무한 렌더) 구성이 바뀔 때만 새로 만든다.
 let runningDates: ReadonlySet<string> = new Set();
+let runningCount = 0;
 function refreshRunningDates() {
   const next: string[] = [];
-  for (const [date, r] of runs)
-    if (r.phase === "collecting" || r.phase === "streaming") next.push(date);
+  let total = 0;
+  for (const [key, r] of runs) {
+    if (r.phase !== "collecting" && r.phase !== "streaming") continue;
+    total += 1;
+    if (!key.startsWith("w:")) next.push(key); // 주간은 캘린더 점 대상이 아니다
+  }
+  runningCount = total;
   if (next.length === runningDates.size && next.every((d) => runningDates.has(d)))
     return;
   runningDates = new Set(next);
@@ -94,7 +114,7 @@ function subscribe(l: () => void): () => void {
 }
 
 function anyRunning(): boolean {
-  return runningDates.size > 0;
+  return runningCount > 0; // 주간 생성도 레일에 표시한다
 }
 
 /** 특정 날짜의 실행 상태 구독 (없으면 undefined) */
@@ -244,4 +264,75 @@ export async function startReport(date: string, config: AppConfig): Promise<void
 export async function cancelReport(date: string): Promise<void> {
   const key = runs.get(date)?.cancelKey;
   if (key) await aiCancel(key);
+}
+
+/** 주간 리포트 생성 시작. 재료는 그 주의 일간 리포트 본문 — 수집 단계가 없으므로
+ *  바로 streaming 으로 간다. 리포트가 하나도 없는 주는 phase='empty'. */
+export async function startWeeklyReport(
+  weekStart: string,
+  weekEnd: string,
+  config: AppConfig,
+): Promise<void> {
+  const key = weeklyKey(weekStart);
+  if (isRunning(key)) return;
+  patch(key, {
+    phase: "streaming",
+    cancelKey: null,
+    stream: "",
+    chips: [],
+    error: null,
+    report: null,
+    body: "",
+  });
+  try {
+    const sources = await loadWeekSources(weekStart);
+    const days = sources
+      .filter((d): d is typeof d & { body: string } => !!d.body?.trim())
+      .map((d) => ({ date: d.date, weekday: d.weekday, body: d.body }));
+    if (!days.length) {
+      patch(key, { phase: "empty" });
+      return;
+    }
+
+    const rc = await loadReportConfig();
+    const cancelKey = newCancelKey();
+    patch(key, { cancelKey });
+    const { markdown, meta } = await reportGenerateWeekly(
+      {
+        weekStart,
+        weekEnd,
+        days,
+        displayName: rc.displayName,
+        model: config.model,
+        cliPath: config.cliPath,
+        provider: config.provider,
+        cancelKey,
+      },
+      (t: string) => {
+        const cur = runs.get(key);
+        patch(key, { stream: (cur?.stream ?? "") + t });
+      },
+    );
+
+    const filePath = await writeWeeklyReportFile(weekStart, markdown);
+    await upsertWeeklyReport({
+      weekStart,
+      filePath,
+      // 어느 날짜를 묶었는지 — 나중에 "그때는 5일치였다"를 설명할 수 있게 남긴다
+      sourcesJson: JSON.stringify(days.map((d) => d.date)),
+      provider: config.provider,
+      model: meta.model,
+      durationMs: meta.duration_ms,
+    });
+    const report = await getWeeklyReport(weekStart);
+    patch(key, { phase: "done", body: markdown, report, cancelKey: null });
+  } catch (e) {
+    patch(key, { phase: "error", error: friendlyError(e), cancelKey: null });
+  }
+}
+
+/** 진행 중인 주간 생성 중단 */
+export async function cancelWeeklyReport(weekStart: string): Promise<void> {
+  const k = runs.get(weeklyKey(weekStart))?.cancelKey;
+  if (k) await aiCancel(k);
 }
