@@ -77,13 +77,14 @@ export interface Todo {
   sort_order: number; // 표시 순서(드래그로 조정), 형제 그룹 내 오름차순
   created_at: number; // UTC ms
   updated_at: number; // UTC ms
-  /** 지워진 시각(UTC ms) — null 이면 살아있다. 이월 이력이 있는 항목만 이렇게 남는다
-   *  (migrations/0009): 사는 날짜·밀린 목록에선 빠지고, 거쳐온 날짜엔 '삭제됨' 고스트로 남는다. */
-  deleted_at: number | null;
-  /** 이 날짜 목록에서 '이월 고스트'인가 — 조회한 날짜에 있었지만 지금은 due_date 가 다른 행.
+  /** 이 날짜 목록에서 '이월 고스트'인가 — 조회한 날짜에 있었지만 지금은 due_date 가 다른 줄.
    *  DB 컬럼이 아니라 listTodos 가 붙이는 표식이라, 다른 조회는 undefined 로 온다.
-   *  고스트도 **같은 행**이다 — 여기서 체크하면 그 할 일이 완료된다(migrations/0008 참조). */
+   *  고스트의 내용·부모는 이월 시점 스냅샷이고(migrations/0014), 라이브 행이 살아있는 한
+   *  **같은 항목**이다 — 여기서 체크하면 그 할 일이 완료된다(migrations/0008 참조). */
   carried?: 0 | 1;
+  /** 라이브 행이 사라진 이월 고스트 — '그 날 이런 게 있었다'는 기록만 남은 줄.
+   *  carried=1 일 때만 의미가 있다. 체크·편집·이동이 없고, 그 날짜에서 따로 치울 수 있다. */
+  gone?: 0 | 1;
 }
 
 /** 시간 블록(타임테이블) — 선택 날짜의 시간 계획. 시간은 자정 기준 분(로컬 벽시계) */
@@ -93,7 +94,8 @@ export interface TimeBlock {
   start_min: number; // 자정 기준 분, 0~1435
   end_min: number; // start_min < end_min <= 1440
   title: string; // 연동 블록은 '' — 표시할 땐 연결된 할 일 내용을 미러
-  todo_id: number | null; // 연결된 할 일 (삭제 시 DB가 블록도 cascade)
+  todo_id: number | null; // 연결된 할 일. 할 일이 지워지면 NULL 로 떨어진다(0014) —
+  // 기록이 남는 날짜의 블록은 그 날의 기록이라 살리고, 그 전에 title 에 이름을 찍어둔다
   created_at: number; // UTC ms
   updated_at: number; // UTC ms
 }

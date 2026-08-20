@@ -19,8 +19,10 @@ const ko = {
   "todos.row.rename": "이름 변경",
   // 이월 고스트 뱃지 — 이 날짜에 있었지만 다른 날로 가져간 항목 (여기서 체크해도 완료된다)
   "todos.row.carriedTo": "{date}로 가져간 항목 — 여기서 체크해도 완료돼요",
-  "todos.row.deleted": "삭제됨",
-  "todos.row.deletedGhost": "지워진 항목 — 이 날짜에 있었다는 기록만 남습니다",
+  // 라이브 행이 사라진 기록 — '삭제됨' 같은 표식을 달지 않는다(오늘 지운 일을 어제 화면에
+  // 스탬프로 찍지 않으려고, migrations/0014). 왜 흐린지는 툴팁으로만 말한다.
+  "todos.row.goneRecord": "이 날 있었던 항목 — 지금은 목록에 없습니다",
+  "todos.row.removeRecord": "이 날 기록에서 지우기",
 
   // 하위 항목 추가 입력
   "todos.child.placeholder": "하위 항목 — Enter 로 추가",
@@ -119,8 +121,8 @@ const en: Record<keyof typeof ko, string> = {
   "todos.row.schedule": "Add to timetable",
   "todos.row.rename": "Rename",
   "todos.row.carriedTo": "Moved to {date} — checking it here completes it too",
-  "todos.row.deleted": "Deleted",
-  "todos.row.deletedGhost": "Deleted — kept only as a record that it was here",
+  "todos.row.goneRecord": "Was on this day — no longer in the list",
+  "todos.row.removeRecord": "Remove from this day",
 
   "todos.child.placeholder": "Sub-item — press Enter to add",
 

@@ -7,29 +7,37 @@ import type { DayTodoCount, Todo, TodoScope } from "../types";
 
 const now = () => Date.now();
 
-/** 특정 날짜의 할 일 = 그 날짜가 마감인 행 + **그 날짜에서 이월해 나간 행(고스트)**.
- *  지워진 행(deleted_at)은 사는 날짜에서만 빠지고 거쳐온 날짜엔 고스트로 남는다 —
- *  오늘 지운 일이 어제의 기록을 소급해 고치면 안 되기 때문(migrations/0009).
- *  사용자가 정한 순서(sort_order) → 생성순 (idx_todos_sort 에 대응).
+/** 특정 날짜의 할 일 = 그 날짜가 마감인 행 + **그 날짜에서 이월해 나간 기록**(고스트).
  *
- *  고스트는 사본이 아니라 같은 행이다(migrations/0008) — 가져오기로 오늘 옮겨도 어제 목록에서
- *  사라지지 않게 하되, done 은 끝까지 하나라 어디서 체크하든 같은 항목이 완료된다.
- *  `carried=1` 표식으로 UI 가 읽기전용 회색 행 + '→ 옮긴 날짜' 뱃지로 그린다.
+ *  고스트는 `todo_carries` 의 **스냅샷**이다(migrations/0014) — 이월한 순간의 내용·부모를
+ *  기록이 직접 들고 있어서, 그 뒤 라이브 행을 고치거나 지워도 과거 날짜가 소급해 바뀌지 않는다.
+ *  라이브 행이 아직 살아있으면 같은 항목이므로 done/due_date 는 라이브를 쓴다 — 어제 화면에서
+ *  체크하면 그 할 일이 완료되고(0008 의 요점) '→ 옮긴 날짜' 뱃지도 붙는다. 라이브 행이 지워지면
+ *  `gone=1` 로 내려가 읽기 전용 회색 줄, 즉 '그 날 이런 게 있었다'는 기록만 남는다.
  *
- *  이월은 항상 **오늘로만** 하므로(TodoView.moveToday) 고스트는 과거 날짜에만 나타난다 —
- *  오늘 목록에는 carried 행이 없다. 정렬에서 고스트를 뒤로 미는 이유도 그래서 과거 한정이다. */
+ *  사용자가 정한 순서(sort_order) → 생성순 (idx_todos_sort 에 대응). 고스트는 뒤로 미는데,
+ *  이월은 항상 **오늘로만** 하므로(TodoView.moveToday) 고스트는 과거 날짜에만 나타난다. */
 export async function listTodos(date: string): Promise<Todo[]> {
   const db = await getDb();
   return db.select<Todo[]>(
     // scope='day' 필수 — 주 항목의 due_date 는 실재하는 날짜(그 주 시작일)라,
     // 안 걸면 매주 그 날 목록에 '이번 주 할 일'이 통째로 섞인다(migrations/0012)
-    `SELECT t.*, 0 AS carried FROM todos t
-      WHERE t.due_date = $1 AND t.scope = 'day' AND t.deleted_at IS NULL
+    `SELECT t.id, t.content, t.due_date, t.scope, t.done, t.completed_at, t.parent_id,
+            t.sort_order, t.created_at, t.updated_at, 0 AS carried, 0 AS gone
+       FROM todos t
+      WHERE t.due_date = $1 AND t.scope = 'day'
      UNION ALL
-     SELECT t.*, 1 AS carried FROM todos t
-       JOIN todo_carries c ON c.todo_id = t.id
-      WHERE c.date = $2 AND t.due_date <> $3 AND t.scope = 'day'
-     ORDER BY carried, sort_order, id`,
+     SELECT c.todo_id AS id, c.content, COALESCE(t.due_date, c.date) AS due_date,
+            'day' AS scope, COALESCE(t.done, c.done) AS done, t.completed_at,
+            c.parent_id, COALESCE(t.sort_order, 0) AS sort_order,
+            COALESCE(t.created_at, 0) AS created_at, COALESCE(t.updated_at, 0) AS updated_at,
+            1 AS carried, CASE WHEN t.id IS NULL THEN 1 ELSE 0 END AS gone
+       FROM todo_carries c
+       -- LEFT JOIN 이라야 라이브 행이 지워진 기록도 남는다. scope 를 조인 조건에 두는 것도
+       -- 같은 이유 — WHERE 로 옮기면 주 항목으로 바뀐 행의 기록이 통째로 사라진다.
+       LEFT JOIN todos t ON t.id = c.todo_id AND t.scope = 'day'
+      WHERE c.date = $2 AND (t.id IS NULL OR t.due_date <> $3)
+     ORDER BY carried, gone, sort_order, id`,
     [date, date, date],
   );
 }
@@ -43,7 +51,7 @@ export async function listMonthCounts(
   return db.select<DayTodoCount[]>(
     `SELECT due_date, COUNT(*) AS total, COALESCE(SUM(done), 0) AS done
        FROM todos
-      WHERE due_date BETWEEN $1 AND $2 AND scope = 'day' AND deleted_at IS NULL
+      WHERE due_date BETWEEN $1 AND $2 AND scope = 'day'
       GROUP BY due_date`,
     [from, to],
   );
@@ -55,7 +63,7 @@ export async function listOverdueOpen(before: string): Promise<Todo[]> {
   const db = await getDb();
   return db.select<Todo[]>(
     `SELECT * FROM todos
-      WHERE done = 0 AND due_date < $1 AND scope = 'day' AND deleted_at IS NULL
+      WHERE done = 0 AND due_date < $1 AND scope = 'day'
       ORDER BY due_date, sort_order, id`,
     [before],
   );
@@ -87,7 +95,7 @@ export async function listWeekTodos(monday: string): Promise<Todo[]> {
   const db = await getDb();
   return db.select<Todo[]>(
     `SELECT *, 0 AS carried FROM todos
-      WHERE due_date = $1 AND scope = 'week' AND deleted_at IS NULL
+      WHERE due_date = $1 AND scope = 'week'
       ORDER BY sort_order, id`,
     [monday],
   );
@@ -102,7 +110,7 @@ export async function listWeekCounts(
   return db.select<DayTodoCount[]>(
     `SELECT due_date, COUNT(*) AS total, COALESCE(SUM(done), 0) AS done
        FROM todos
-      WHERE due_date BETWEEN $1 AND $2 AND scope = 'week' AND deleted_at IS NULL
+      WHERE due_date BETWEEN $1 AND $2 AND scope = 'week'
       GROUP BY due_date`,
     [fromMonday, toMonday],
   );
@@ -146,7 +154,7 @@ export async function setSubtreeDone(id: number, done: 0 | 1): Promise<void> {
        SELECT t.id FROM todos t JOIN sub ON t.parent_id = sub.id
      )
      UPDATE todos SET done = $1
-      WHERE done <> $1 AND deleted_at IS NULL AND id IN (SELECT id FROM sub)`,
+      WHERE done <> $1 AND id IN (SELECT id FROM sub)`,
     [done, id],
   );
 }
@@ -156,7 +164,7 @@ export async function recomputeParentDone(parentId: number): Promise<void> {
   const db = await getDb();
   const rows = await db.select<{ open: number; total: number }[]>(
     `SELECT COALESCE(SUM(done = 0), 0) AS open, COUNT(*) AS total
-       FROM todos WHERE parent_id = $1 AND deleted_at IS NULL`,
+       FROM todos WHERE parent_id = $1`,
     [parentId],
   );
   const r = rows[0] ?? { open: 0, total: 0 };
@@ -222,7 +230,7 @@ export async function moveTodos(ids: number[], dueDate: string): Promise<void> {
        UNION SELECT t.id FROM todos t JOIN sub ON t.parent_id = sub.id
      )
      SELECT * FROM todos
-      WHERE id IN (SELECT id FROM sub) AND deleted_at IS NULL
+      WHERE id IN (SELECT id FROM sub)
       ORDER BY sort_order, id`,
     ids,
   );
@@ -254,8 +262,11 @@ export async function moveTodos(ids: number[], dueDate: string): Promise<void> {
   // 행마다 2회 왕복하던 것을 집합 기반 2문으로. "밀린 할 일 전부 오늘로"가 한 번에 수십 건이다.
   // 도착 날짜에는 기록을 남기지 않는다 — 남기면 그 날 목록에 실물+고스트로 두 번 나온다.
   await db.execute(
-    `INSERT OR IGNORE INTO todo_carries (todo_id, date)
-     SELECT id, due_date FROM todos WHERE id IN (${ph(targets.length, 1)})`,
+    // 내용·부모·완료를 함께 스냅샷한다(0014) — 기록이 라이브 행에 의존하지 않게. OR IGNORE 라
+    // 같은 날짜에 두 번 이월해도 처음 떠날 때의 줄이 그 날의 기록으로 남는다.
+    `INSERT OR IGNORE INTO todo_carries (todo_id, date, content, parent_id, done)
+     SELECT id, due_date, content, parent_id, done FROM todos
+      WHERE id IN (${ph(targets.length, 1)})`,
     targets,
   );
   await db.execute(
@@ -269,10 +280,13 @@ export async function moveTodos(ids: number[], dueDate: string): Promise<void> {
  *  자손이 있을 때만 호출부가 확인 모달을 띄운다(홑 항목은 값싼 대상이라 즉시 삭제, DESIGN §8).
  *  삭제 후 부모 완료 상태 재계산은 호출부(recomputeChainFrom)가 담당.
  *
- *  **이월 이력이 있으면 행을 지우지 않고 deleted_at 을 찍는다**(migrations/0009). 이월은 행을
- *  복제하지 않으므로(0008) 행을 없애면 CASCADE 로 todo_carries 까지 날아가 *떠나온 날짜의
- *  기록*까지 사라진다 — 어제 목록은 어제 뭐가 있었는지의 기록이라 오늘 지운 일이 소급해
- *  고쳐선 안 된다. 이력이 없으면 남길 게 없으니 예전처럼 행째로 지운다(행이 쌓이지 않게). */
+ *  **항상 하드 삭제다**(migrations/0014). 이월 기록(`todo_carries`)이 내용을 직접 들고 있고
+ *  FK 도 없으므로, 행을 지워도 거쳐온 날짜의 줄은 그 자리에 남는다 — 소프트 삭제로 '삭제됨'
+ *  묘비를 남기던 0009 의 우회가 필요 없어졌다. 지우기 전에 두 가지를 찍어둔다:
+ *   · 기록의 done — 마지막으로 알려진 상태여야 어제 화면의 체크가 풀린 것처럼 보이지 않는다
+ *   · 연동 블록의 제목 — 블록은 제목이 '' 이고 할 일 내용을 미러하므로, 떨어지면 이름을 잃는다
+ *  기록이 없는 날짜의 블록은 주인이 사라졌으니 함께 지운다(기록이 있는 날짜의 블록은 그 날
+ *  뭘 했는지의 기록이라 todo_id 만 떨어진 채 남는다 — FK ON DELETE SET NULL). */
 export async function deleteTodo(id: number): Promise<void> {
   const db = await getDb();
   const sub = `WITH RECURSIVE sub(id) AS (
@@ -280,33 +294,41 @@ export async function deleteTodo(id: number): Promise<void> {
        UNION -- ALL 아님: parent_id 순환에서 무한 재귀가 되지 않게 (setSubtreeDone 과 동일)
        SELECT t.id FROM todos t JOIN sub ON t.parent_id = sub.id
      )`;
-  const carried = await db.select<{ n: number }[]>(
+  await db.execute(
     `${sub}
-     SELECT COUNT(*) AS n FROM todo_carries WHERE todo_id IN (SELECT id FROM sub)`,
+     UPDATE todo_carries
+        SET done = COALESCE((SELECT done FROM todos WHERE id = todo_carries.todo_id), done)
+      WHERE todo_id IN (SELECT id FROM sub)`,
     [id],
   );
-  if ((carried[0]?.n ?? 0) > 0) {
-    // 서브트리를 통째로 소프트 삭제 — 부분만 남기면 고스트가 부모(헤딩)를 잃는다
-    await db.execute(
-      `${sub}
-       UPDATE todos SET deleted_at = $2, updated_at = $2
-        WHERE deleted_at IS NULL AND id IN (SELECT id FROM sub)`,
-      [id, now()],
-    );
-    // 소프트 삭제는 행을 남기므로 CASCADE 가 안 돈다 — 타임테이블에 유령 블록이 남는다.
-    // 단 '떠나온 날짜'(todo_carries)의 블록은 그 날 뭘 했는지의 기록이라 보존한다(0009 의 취지).
-    await db.execute(
-      `${sub}
-       DELETE FROM time_blocks
-        WHERE todo_id IN (SELECT id FROM sub)
-          AND date NOT IN (
-            SELECT date FROM todo_carries WHERE todo_id IN (SELECT id FROM sub)
-          )`,
-      [id],
-    );
-    return;
-  }
+  await db.execute(
+    `${sub}
+     UPDATE time_blocks
+        SET title = COALESCE((SELECT content FROM todos WHERE id = time_blocks.todo_id), title)
+      WHERE title = '' AND todo_id IN (SELECT id FROM sub)`,
+    [id],
+  );
+  await db.execute(
+    `${sub}
+     DELETE FROM time_blocks
+      WHERE todo_id IN (SELECT id FROM sub)
+        AND NOT EXISTS (
+          SELECT 1 FROM todo_carries c
+           WHERE c.todo_id = time_blocks.todo_id AND c.date = time_blocks.date
+        )`,
+    [id],
+  );
   await db.execute(`${sub} DELETE FROM todos WHERE id IN (SELECT id FROM sub)`, [
     id,
   ]);
+}
+
+/** 이월 기록 한 줄을 그 날짜에서 지운다 — 기록은 자립한 개체라 따로 치울 수 있다.
+ *  라이브 행은 건드리지 않는다(그 항목이 지금 사는 날짜에는 그대로 있다). */
+export async function removeCarry(todoId: number, date: string): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `DELETE FROM todo_carries WHERE todo_id = $1 AND date = $2`,
+    [todoId, date],
+  );
 }

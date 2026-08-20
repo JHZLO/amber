@@ -20,6 +20,7 @@ import {
   listWeekTodos,
   moveTodos,
   recomputeChainFrom,
+  removeCarry,
   reorderTodos,
   reparentTodo,
   setSubtreeDone,
@@ -567,7 +568,11 @@ export function TodoView({
   // 삭제는 서브트리째라 비가역이다 — 자손이 있을 때만 확인을 받는다(DESIGN §8: 확인 모달 남발 금지).
   // 홑 항목(대부분)은 예전처럼 원클릭. 자손 수는 트리 모듈이 세고, 밀린 스트립 행은 그 스트립에서 센다.
   function askRemove(t: Todo, isOverdue: boolean) {
-    const n = descendantCount(isOverdue ? overdue : todos, t.id);
+    // 기록 줄(gone)은 이미 없는 행이라 지울 자손이 아니다 — 분모에서 빼야 확인 개수가 맞다
+    const n = descendantCount(
+      isOverdue ? overdue : todos.filter((x) => x.gone !== 1),
+      t.id,
+    );
     if (n === 0) {
       void remove(t);
       return;
@@ -581,6 +586,16 @@ export function TodoView({
       await deleteTodo(t.id);
       // 서브트리를 지웠으니 부모 완료 상태 재계산(마지막 미완료 자식이 사라졌을 수 있음)
       await recomputeChainFrom(t.parent_id);
+      refreshAll();
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  }
+
+  // 이월 기록 한 줄 치우기 — 라이브 행은 이미 없으니 지울 대상은 '이 날짜의 기록'뿐이다.
+  async function dropRecord(t: Todo) {
+    try {
+      await removeCarry(t.id, selected);
       refreshAll();
     } catch (e) {
       setError(errMsg(e));
@@ -671,16 +686,20 @@ export function TodoView({
     // 화면에서 끝내면 그 할 일이 완료되고 도착 날짜에도 체크된 채로 남는다). 편집·드래그·
     // 삭제·하위추가는 막는다 — 그 할 일이 지금 사는 곳은 도착 날짜라 거기서 다루게 한다.
     const isCarried = !isOverdue && todo.carried === 1;
-    // 지워진 이월 고스트 — 이 날짜에 있었다는 기록만 남은 줄. 완료할 할 일이 더는 없으므로
-    // 체크도 막는다(살아있는 고스트와 다른 점은 이것뿐).
-    const isGone = isCarried && todo.deleted_at != null;
+    // 라이브 행이 사라진 기록 — 그 날 이런 게 있었다는 줄. 완료할 할 일이 더는 없으므로
+    // 체크도 막는다(살아있는 고스트와 다른 점은 그것과, 갈 곳이 없어 '→ 날짜' 뱃지가 없는 것).
+    const isGone = isCarried && todo.gone === 1;
     const readOnly = isOverdue || isCarried;
     const onToggle = () => {
       if (isGone) return;
       if (isOverdue) toggleOverdue(todo);
       else toggle(todo);
     };
-    const kids = isOverdue ? [] : childrenOf(todo.id);
+    // 진행 배지는 **끝낼 수 있는 하위**만 센다 — 라이브 행이 사라진 기록(gone)은 체크할
+    // 대상이 아니라 분모에만 남아 부모가 영원히 안 닫히게 만든다(0014 가 고친 것).
+    const kids = isOverdue
+      ? []
+      : childrenOf(todo.id).filter((k) => k.gone !== 1);
     const kidsDone = kids.filter((k) => k.done === 1).length;
     return (
       <div
@@ -719,6 +738,7 @@ export function TodoView({
         ) : (
           <span
             className="todo-text"
+            title={isGone ? t("todos.row.goneRecord") : undefined}
             onClick={() => (readOnly ? onToggle() : startEdit(todo))}
           >
             {todo.content}
@@ -752,13 +772,19 @@ export function TodoView({
             </Tooltip>
           </span>
         ) : isGone ? (
-          // 지워진 고스트: 갈 곳이 없으니 '→ 날짜' 대신 지워졌다는 사실만. 어제 목록은
-          // 어제의 기록이라 오늘 지운 일이 이 줄을 걷어가지 않는다(migrations/0009).
-          <span
-            className="todo-row-date todo-carried-to"
-            title={t("todos.row.deletedGhost")}
-          >
-            {t("todos.row.deleted")}
+          // 기록만 남은 줄: '→ 날짜' 뱃지도, '삭제됨' 표식도 달지 않는다 — 오늘 지운 일이
+          // 어제 화면에 스탬프로 찍히면 안 된다(migrations/0014). 대신 기록이 자립했으므로
+          // 이 날짜에서 따로 치울 수 있다(라이브 행과 달리 지울 게 이 한 줄뿐이라 즉시 삭제).
+          <span className="row-actions" onClick={(e) => e.stopPropagation()}>
+            <Tooltip label={t("todos.row.removeRecord")}>
+              <button
+                aria-label={t("todos.row.removeRecord")}
+                className="icon-btn sm danger"
+                onClick={() => void dropRecord(todo)}
+              >
+                <Icon name="trash" size={13} />
+              </button>
+            </Tooltip>
           </span>
         ) : isCarried ? (
           // 이월 고스트: 편집/삭제는 그 할 일이 지금 사는 도착 날짜에서 한다. 단 **하위 추가는

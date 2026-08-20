@@ -321,6 +321,12 @@ pub fn run() {
             sql: include_str!("../migrations/0013_week_start_sunday.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 14,
+            description: "carry_snapshot",
+            sql: include_str!("../migrations/0014_carry_snapshot.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

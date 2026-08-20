@@ -486,7 +486,10 @@ export function DayTimetable({
 
   const blockTitle = (b: TimeBlock) =>
     b.todo_id != null
-      ? (todoById.get(b.todo_id)?.content ?? t("todos.tt.deletedTodo"))
+      // 지워진 할 일의 블록은 todo_id 가 떨어지고(0014) title 에 이름이 찍혀 남는다 —
+      // 여기 걸리는 건 '이 화면 목록에 없는 할 일'뿐이라 title 이 있으면 그걸 쓴다.
+      ? (todoById.get(b.todo_id)?.content ?? b.title ?? "") ||
+        t("todos.tt.deletedTodo")
       : b.title;
   const blockDone = (b: TimeBlock) =>
     b.todo_id != null && todoById.get(b.todo_id)?.done === 1;
