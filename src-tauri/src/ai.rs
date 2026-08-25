@@ -200,6 +200,32 @@ pub(crate) async fn run_provider_text(
     }
 }
 
+/// CLI 가 남긴 실패 텍스트(stderr 또는 결과 봉투의 `.result`)를 앱 에러 코드로 분류한다.
+///
+/// 분류가 중요한 이유: 인증 만료·한도 초과는 사용자가 **직접 할 일이 있는** 실패다
+/// (터미널에서 로그인 / 잠시 후 재시도). 뭉뚱그려 AI_ERROR 로 보내면 화면엔
+/// "AI CLI 가 오류를 반환했어요" 만 남아 무엇을 해야 하는지 알 수 없다.
+fn classify_failure(text: &str) -> (&'static str, &'static str) {
+    let low = text.to_lowercase();
+    if low.contains("auth")
+        || low.contains("login")
+        || low.contains("unauthorized")
+        || low.contains("credential")
+    {
+        (
+            "AI_AUTH",
+            "AI CLI 인증이 필요합니다. 터미널에서 로그인 후 다시 시도하세요.",
+        )
+    } else if low.contains("rate") || low.contains("quota") || low.contains("limit") {
+        (
+            "AI_RATE_LIMIT",
+            "사용량 한도에 도달했습니다. 잠시 후 다시 시도하세요.",
+        )
+    } else {
+        ("AI_ERROR", "AI CLI 실행이 실패했습니다.")
+    }
+}
+
 /// codex/gemini 공용: 시스템 프롬프트를 프롬프트 상단에 합쳐(전용 플래그 없음) stdin 으로 전달.
 async fn spawn_simple_cli_result(
     kind: ProviderKind,
@@ -270,28 +296,11 @@ async fn spawn_simple_cli_result(
     };
 
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_lowercase();
-        let (code, msg) = if stderr.contains("auth")
-            || stderr.contains("login")
-            || stderr.contains("unauthorized")
-            || stderr.contains("credential")
-        {
-            (
-                "AI_AUTH",
-                "AI CLI 인증이 필요합니다. 터미널에서 로그인 후 다시 시도하세요.",
-            )
-        } else if stderr.contains("rate") || stderr.contains("quota") || stderr.contains("limit") {
-            (
-                "AI_RATE_LIMIT",
-                "사용량 한도에 도달했습니다. 잠시 후 다시 시도하세요.",
-            )
-        } else {
-            ("AI_ERROR", "AI CLI 실행이 실패했습니다.")
-        };
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let (code, msg) = classify_failure(&stderr);
         // stderr 는 detail 로 — message 에 섞으면 errors.ts 가 매핑된 코드에서 문구를 갈아끼우며
         // 통째로 버린다(AI_ERROR/AI_AUTH/AI_RATE_LIMIT 는 전부 매핑돼 있다).
-        let detail = String::from_utf8_lossy(&output.stderr);
-        return Err(AiError::detailed(code, msg, detail.trim()));
+        return Err(AiError::detailed(code, msg, stderr.trim()));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -910,29 +919,22 @@ pub(crate) async fn stream_claude_result(
     let envelope = match envelope {
         Some(e) => e,
         None => {
-            let low = errbuf.to_lowercase();
-            let (code, msg) = if low.contains("auth")
-                || low.contains("login")
-                || low.contains("unauthorized")
-            {
-                (
-                    "AI_AUTH",
-                    "claude 인증이 필요합니다. 터미널에서 `claude` 로그인 후 다시 시도하세요.",
-                )
-            } else if low.contains("rate") || low.contains("quota") || low.contains("limit") {
-                (
-                    "AI_RATE_LIMIT",
-                    "사용량 한도에 도달했습니다. 잠시 후 다시 시도하세요.",
-                )
-            } else {
-                ("AI_BAD_ENVELOPE", "스트림에서 결과를 받지 못했습니다.")
+            // 결과 봉투 자체가 안 온 경우 — 단서는 stderr 뿐이다.
+            let (code, msg) = match classify_failure(&errbuf) {
+                ("AI_ERROR", _) => ("AI_BAD_ENVELOPE", "스트림에서 결과를 받지 못했습니다."),
+                hit => hit,
             };
             return Err(AiError::detailed(code, msg, errbuf.trim()));
         }
     };
 
     if envelope.is_error || envelope.subtype.as_deref() != Some("success") {
-        return Err(AiError::new("AI_ERROR", "claude 가 오류를 반환했습니다."));
+        // 봉투가 실패를 알릴 때 이유는 `.result` 에 담겨 온다
+        // (예: "Failed to authenticate: OAuth session expired and could not be refreshed").
+        // 이걸 버리면 화면엔 "AI CLI 가 오류를 반환했어요" 만 남아 원인도 할 일도 알 수 없다.
+        let reason = envelope_reason(&envelope, &errbuf);
+        let (code, msg) = classify_failure(&reason);
+        return Err(AiError::detailed(code, msg, reason));
     }
     let result_str = envelope
         .result
@@ -968,6 +970,21 @@ fn parse_envelope(stdout: &str) -> Result<Envelope, AiError> {
         "AI_BAD_ENVELOPE",
         "CLI 응답(JSON 봉투) 해석 실패. `claude --version` 확인이 필요할 수 있습니다.",
     ))
+}
+
+/// 실패한 봉투에서 사람이 읽을 이유를 뽑는다 — `.result` → stderr → subtype 순.
+fn envelope_reason(envelope: &Envelope, stderr: &str) -> String {
+    for cand in [
+        envelope.result.as_deref().unwrap_or(""),
+        stderr,
+        envelope.subtype.as_deref().unwrap_or(""),
+    ] {
+        let t = cand.trim();
+        if !t.is_empty() {
+            return t.to_string();
+        }
+    }
+    String::new()
 }
 
 /// claude headless 공용 실행: spawn → stdin 주입 → 봉투 파싱까지.
@@ -1023,34 +1040,21 @@ async fn spawn_claude_result(
     };
 
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_lowercase();
-        let (code, msg) = if stderr.contains("auth")
-            || stderr.contains("login")
-            || stderr.contains("unauthorized")
-        {
-            (
-                "AI_AUTH",
-                "claude 인증이 필요합니다. 터미널에서 `claude` 로그인 후 다시 시도하세요.",
-            )
-        } else if stderr.contains("rate") || stderr.contains("quota") || stderr.contains("limit") {
-            (
-                "AI_RATE_LIMIT",
-                "사용량 한도에 도달했습니다. 잠시 후 다시 시도하세요.",
-            )
-        } else {
-            ("AI_ERROR", "claude 실행이 실패했습니다.")
-        };
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let (code, msg) = classify_failure(&stderr);
         // stderr 는 detail 로 — message 에 섞으면 errors.ts 가 매핑된 코드에서 문구를 갈아끼우며
         // 통째로 버린다(AI_ERROR/AI_AUTH/AI_RATE_LIMIT 는 전부 매핑돼 있다).
-        let detail = String::from_utf8_lossy(&output.stderr);
-        return Err(AiError::detailed(code, msg, detail.trim()));
+        return Err(AiError::detailed(code, msg, stderr.trim()));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let envelope = parse_envelope(&stdout)?;
 
     if envelope.is_error || envelope.subtype.as_deref() != Some("success") {
-        return Err(AiError::new("AI_ERROR", "claude 가 오류를 반환했습니다."));
+        // 실패 이유는 봉투 `.result` 에 있다 — 버리면 화면에 원인이 남지 않는다.
+        let reason = envelope_reason(&envelope, &String::from_utf8_lossy(&output.stderr));
+        let (code, msg) = classify_failure(&reason);
+        return Err(AiError::detailed(code, msg, reason));
     }
 
     let result_str = envelope
@@ -1177,6 +1181,45 @@ mod tests {
         let out = sys("BODY", Some("en"));
         assert!(out.starts_with("BODY"), "프롬프트 본문이 앞에 그대로 와야 한다");
         assert!(out.contains("[Output language]"));
+    }
+
+    // 인증 만료·한도 초과는 사용자가 직접 할 일이 있는 실패다 — 뭉뚱그려 AI_ERROR 로 보내면
+    // 화면에 "오류를 반환했어요" 만 남는다(실제로 그래서 리포트 생성이 원인 불명으로 보였다).
+    #[test]
+    fn classify_failure_separates_actionable_causes() {
+        let expired = "Failed to authenticate: OAuth session expired and could not be refreshed";
+        assert_eq!(classify_failure(expired).0, "AI_AUTH");
+        assert_eq!(
+            classify_failure("Claude AI usage limit reached").0,
+            "AI_RATE_LIMIT"
+        );
+        assert_eq!(classify_failure("EPIPE").0, "AI_ERROR");
+        assert_eq!(classify_failure("").0, "AI_ERROR");
+    }
+
+    // 실패 봉투의 이유는 .result 에 온다 — 비었을 때만 stderr·subtype 으로 내려간다
+    #[test]
+    fn envelope_reason_prefers_result_then_stderr() {
+        let with_result = Envelope {
+            is_error: true,
+            subtype: Some("error_during_execution".into()),
+            result: Some("  boom  ".into()),
+            session_id: None,
+            total_cost_usd: None,
+            duration_ms: None,
+            usage: None,
+        };
+        assert_eq!(envelope_reason(&with_result, "stderr text"), "boom");
+
+        let empty_result = Envelope {
+            result: None,
+            ..with_result
+        };
+        assert_eq!(envelope_reason(&empty_result, " stderr text "), "stderr text");
+        assert_eq!(
+            envelope_reason(&empty_result, "  "),
+            "error_during_execution"
+        );
     }
 
     // 프롬프트 파일에 특정 언어를 박아두면 그 기능만 UI 언어를 안 따르게 된다(context/README.md 규칙)
