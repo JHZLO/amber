@@ -5,7 +5,7 @@ import { invoke, Channel } from "@tauri-apps/api/core";
 import { ulid } from "ulid";
 import type { Confidence } from "../types";
 import { getLang } from "./i18n";
-import { errText } from "./errors";
+import { errText, isCodedError } from "./errors";
 
 export interface GeneratedNote {
   title: string;
@@ -37,6 +37,29 @@ export { isCodedError as isAiError } from "./errors";
 /** invoke rejection 을 사용자 안내 문구로 — 문구 매핑은 lib/errors.ts 한 곳에만 둔다 */
 export const friendlyError = errText;
 
+/** 인증 만료(AI_AUTH)를 알림받을 핸들러 — App 이 로그인 모달을 연다.
+ *  만료는 특정 화면의 사고가 아니라 앱 전체가 같이 멈추는 상태라, 기능마다 안내를 따로 두지 않고
+ *  호출 지점 한 곳에서 잡아 같은 창을 띄운다. */
+let onAuthRequired: (() => void) | null = null;
+
+export function setAuthRequiredHandler(fn: (() => void) | null): void {
+  onAuthRequired = fn;
+}
+
+/** AI 를 쓰는 커맨드 공용 invoke. 인증 만료만 가로채 알리고, 에러는 그대로 다시 던진다 —
+ *  각 화면의 기존 에러 표시를 뺏지 않는다(모달이 뜬 뒤에도 무엇이 실패했는지 남아야 한다). */
+export async function aiInvoke<T>(
+  cmd: string,
+  args: Record<string, unknown>,
+): Promise<T> {
+  try {
+    return await invoke<T>(cmd, args);
+  } catch (e) {
+    if (isCodedError(e) && e.code === "AI_AUTH") onAuthRequired?.();
+    throw e;
+  }
+}
+
 export async function aiGenerate(params: {
   transcript: string;
   instruction?: string | null;
@@ -45,7 +68,7 @@ export async function aiGenerate(params: {
   provider?: string | null;
   timeoutSecs?: number | null;
 }): Promise<GenerateResult> {
-  return invoke<GenerateResult>("ai_generate", {
+  return aiInvoke<GenerateResult>("ai_generate", {
     transcript: params.transcript,
     instruction: params.instruction ?? null,
     model: params.model ?? null,
@@ -68,7 +91,7 @@ export async function aiAugment(params: {
   provider?: string | null;
   timeoutSecs?: number | null;
 }): Promise<GenerateResult> {
-  return invoke<GenerateResult>("ai_augment", {
+  return aiInvoke<GenerateResult>("ai_augment", {
     title: params.title,
     summary: params.summary,
     tags: params.tags,
@@ -99,7 +122,7 @@ export async function aiNoteCompose(params: {
   provider?: string | null;
   timeoutSecs?: number | null;
 }): Promise<NoteComposeResult> {
-  return invoke<NoteComposeResult>("ai_note_compose", {
+  return aiInvoke<NoteComposeResult>("ai_note_compose", {
     title: params.title,
     markdown: params.markdown,
     instruction: params.instruction,
@@ -129,7 +152,7 @@ export async function aiNoteComposeStream(
 ): Promise<NoteComposeResult> {
   const channel = new Channel<string>();
   channel.onmessage = onDelta;
-  return invoke<NoteComposeResult>("ai_note_compose_stream", {
+  return aiInvoke<NoteComposeResult>("ai_note_compose_stream", {
     title: params.title,
     markdown: params.markdown,
     instruction: params.instruction,
@@ -159,7 +182,7 @@ export async function aiNoteAsk(params: {
   provider?: string | null;
   timeoutSecs?: number | null;
 }): Promise<NoteAskResult> {
-  return invoke<NoteAskResult>("ai_note_ask", {
+  return aiInvoke<NoteAskResult>("ai_note_ask", {
     selection: params.selection,
     question: params.question,
     noteMarkdown: params.noteMarkdown,
@@ -196,7 +219,7 @@ export async function aiErdGenerateStream(
 ): Promise<ErdResult> {
   const channel = new Channel<string>();
   channel.onmessage = onDelta;
-  return invoke<ErdResult>("ai_erd_generate_stream", {
+  return aiInvoke<ErdResult>("ai_erd_generate_stream", {
     ddl: params.ddl,
     instruction: params.instruction ?? null,
     current: params.current ?? null,

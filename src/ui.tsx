@@ -341,6 +341,12 @@ export function Modal({
         return;
       }
       if (e.key !== "Escape") return;
+      // 모달 위에 모달이 떠 있으면(설정 위의 로그인 창 등) 맨 위 것만 닫힌다 —
+      // 한 번의 Esc 로 아래 것까지 같이 닫히면 진행 중이던 작업이 통째로 날아간다
+      const overlays = document.querySelectorAll(".overlay");
+      if (overlays.length > 1 && overlays[overlays.length - 1] !== boxRef.current?.parentElement) {
+        return;
+      }
       // 커스텀 Select 드롭다운이 열려 있으면 그쪽이 먼저 닫히도록 모달은 유지
       if (document.querySelector(".select-menu")) return;
       // mermaid 확대 뷰어가 위에 떠 있으면 그쪽만 닫히게 모달은 유지

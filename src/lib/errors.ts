@@ -23,6 +23,8 @@ export const CODE_KEY: Record<string, MsgKey> = {
   // AI CLI 실행
   AI_NOT_FOUND: "common.err.ai.notFound",
   AI_AUTH: "common.err.ai.auth",
+  AI_AUTH_UNSUPPORTED: "common.err.ai.authUnsupported",
+  AI_AUTH_NO_SESSION: "common.err.ai.noLoginSession",
   AI_RATE_LIMIT: "common.err.ai.rateLimit",
   AI_TIMEOUT: "common.err.ai.timeout",
   AI_BAD_ENVELOPE: "common.err.ai.badEnvelope",

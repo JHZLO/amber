@@ -4,6 +4,7 @@
 const ko = {
   "common.close": "닫기",
   "common.cancel": "취소",
+  "common.done": "완료",
   "common.save": "저장",
   "common.delete": "삭제",
   "common.resizePane": "드래그해서 좌측 너비 조절",
@@ -39,7 +40,10 @@ const ko = {
 
   // Rust 커맨드 에러 (lib/errors.ts 가 code → 이 키로 변환). {detail} = 가변부(경로·초·OS 메시지)
   "common.err.ai.notFound": "AI CLI 를 찾을 수 없어요: {detail}. 설정(⚙)에서 경로를 확인하세요.",
-  "common.err.ai.auth": "AI CLI 인증이 필요해요. 터미널에서 로그인 후 다시 시도하세요.",
+  "common.err.ai.auth": "AI CLI 인증이 만료됐어요. 로그인 창에서 다시 로그인하세요.",
+  "common.err.ai.authUnsupported":
+    "이 CLI 는 앱 안에서 로그인할 수 없어요. 터미널에서 로그인한 뒤 다시 시도하세요.",
+  "common.err.ai.noLoginSession": "진행 중인 로그인이 없어요. 로그인을 다시 시작하세요.",
   "common.err.ai.rateLimit": "사용량 한도에 도달했어요. 잠시 후 다시 시도하세요.",
   "common.err.ai.timeout": "{detail}초 안에 응답이 없었어요. 다시 시도해 주세요.",
   "common.err.ai.badEnvelope":
@@ -81,6 +85,7 @@ const ko = {
 const en: Record<keyof typeof ko, string> = {
   "common.close": "Close",
   "common.cancel": "Cancel",
+  "common.done": "Done",
   "common.save": "Save",
   "common.delete": "Delete",
   "common.resizePane": "Drag to resize the left pane",
@@ -114,7 +119,10 @@ const en: Record<keyof typeof ko, string> = {
   "common.folder.dupTarget": "The destination already has an item with that name.",
 
   "common.err.ai.notFound": "Couldn't find the AI CLI: {detail}. Check its path in Settings (⚙).",
-  "common.err.ai.auth": "The AI CLI needs authentication. Log in from a terminal, then retry.",
+  "common.err.ai.auth": "The AI CLI sign-in has expired. Sign in again in the window that opened.",
+  "common.err.ai.authUnsupported":
+    "This CLI can't be signed in from the app. Log in from a terminal, then retry.",
+  "common.err.ai.noLoginSession": "No sign-in is in progress. Start it again.",
   "common.err.ai.rateLimit": "You've hit the usage limit. Try again in a bit.",
   "common.err.ai.timeout": "No response within {detail}s. Please try again.",
   "common.err.ai.badEnvelope":

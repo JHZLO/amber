@@ -4,6 +4,7 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import "./styles.css";
 import type { AppConfig } from "./lib/config";
 import { loadConfig } from "./lib/config";
+import { setAuthRequiredHandler } from "./lib/ai";
 import { useAnyReportGenerating } from "./lib/reportRun";
 import type {
   ConceptFilter,
@@ -26,6 +27,7 @@ import { AddConceptModal } from "./components/AddConceptModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { NotesView } from "./components/NotesView";
 import { AiOnboarding } from "./components/AiOnboarding";
+import { AiAuthModal } from "./components/AiAuthModal";
 import { DiagramsView } from "./components/DiagramsView";
 import { TodoView } from "./components/TodoView";
 import { SearchModal, type SearchHit } from "./components/SearchModal";
@@ -72,6 +74,13 @@ const RAIL: {
 
 function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
+  // CLI 인증 만료 → 로그인 모달. 어느 AI 기능에서 터지든 같은 창이 뜨도록 여기 한 곳에 둔다
+  // (lib/ai.ts 의 aiInvoke 가 AI_AUTH 를 보면 호출한다).
+  const [authOpen, setAuthOpen] = useState(false);
+  useEffect(() => {
+    setAuthRequiredHandler(() => setAuthOpen(true));
+    return () => setAuthRequiredHandler(null);
+  }, []);
   // 섹션 (TIL 개념 / 필기노트). 마지막 선택을 기억
   const [section, setSection] = useState<Section>(() =>
     ((): Section => {
@@ -507,6 +516,15 @@ function App() {
             notifyWidget();
           }}
           config={config}
+        />
+      )}
+      {/* CLI 인증 만료 — 터미널로 나가지 않고 여기서 다시 로그인한다 */}
+      {config && (
+        <AiAuthModal
+          open={authOpen}
+          provider={config.provider}
+          cliPath={config.cliPath}
+          onClose={() => setAuthOpen(false)}
         />
       )}
       {/* 최초 실행 시 AI CLI 감지·연결 온보딩 */}

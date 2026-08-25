@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { appDataDir } from "@tauri-apps/api/path";
@@ -12,6 +12,7 @@ import {
   loadConfig,
 } from "../lib/config";
 import { aiHealth, detectAiClis, type DetectedCli } from "../lib/ai";
+import { aiAuthStatus, type AuthStatus } from "../lib/auth";
 import {
   loadPrompts,
   makePrompt,
@@ -24,6 +25,7 @@ import { errText } from "../lib/errors";
 import { Modal, Select, Spinner, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { ReportSettings } from "./ReportSettings";
+import { AiAuthModal } from "./AiAuthModal";
 
 const THEMES: { id: ThemePref; label: string }[] = [
   { id: "system", label: t("settings.theme.system") },
@@ -64,6 +66,10 @@ export function SettingsModal({
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(
     null,
   );
+
+  // CLI 로그인 상태 — 만료를 AI 기능이 멈추고 나서야 알게 되지 않도록 여기서 먼저 보여 준다
+  const [auth, setAuth] = useState<AuthStatus | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
 
   const [theme, setTheme] = useState<ThemePref>("system");
   const [tab, setTab] = useState<SetTab>("ai");
@@ -165,6 +171,20 @@ export function SettingsModal({
   function removePrompt(id: string) {
     commitPrompts(prompts.filter((p) => p.id !== id));
   }
+
+  const refreshAuth = useCallback(async () => {
+    if (!provider) return;
+    setAuth(null);
+    const st = await aiAuthStatus(provider, path);
+    if (alive.current) setAuth(st);
+  }, [provider, path]);
+
+  // 설정을 열 때·프로바이더를 바꿀 때 한 번. 경로 입력 중에는 다시 묻지 않는다(타이핑마다 프로세스를 띄우게 된다)
+  useEffect(() => {
+    if (!open || !provider) return;
+    void refreshAuth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, provider]);
 
   async function test() {
     setTesting(true);
@@ -429,6 +449,35 @@ export function SettingsModal({
                   )}
                 </div>
 
+                <div className="field">
+                  <label>{t("settings.auth.row")}</label>
+                  <div className="set-inline">
+                    <span className="hint">
+                      {auth === null
+                        ? t("settings.auth.checking")
+                        : auth.supported === false
+                          ? t("settings.auth.rowUnknown")
+                          : auth.loggedIn === true
+                            ? t("settings.auth.rowOk")
+                            : auth.loggedIn === false
+                              ? t("settings.auth.rowExpired")
+                              : t("settings.auth.rowUnknown")}
+                    </span>
+                    <span className="spacer" />
+                    <button
+                      className="btn"
+                      onClick={() => setAuthOpen(true)}
+                      disabled={auth?.supported === false}
+                    >
+                      {t(
+                        auth?.loggedIn === true
+                          ? "settings.auth.again"
+                          : "settings.auth.rowAction",
+                      )}
+                    </button>
+                  </div>
+                </div>
+
                 <div className="field" style={{ marginBottom: 0 }}>
                   <label>{t("settings.ai.modelLabel")}</label>
                   <Select
@@ -546,6 +595,15 @@ export function SettingsModal({
     >
       <p style={{ margin: 0 }}>{t("settings.lang.confirmBody")}</p>
     </Modal>
+
+    {/* CLI 로그인 — 설정 위에 겹쳐 뜬다(나중에 마운트 = 위에 그려짐) */}
+    <AiAuthModal
+      open={authOpen}
+      provider={provider}
+      cliPath={path}
+      onClose={() => setAuthOpen(false)}
+      onLoggedIn={() => void refreshAuth()}
+    />
     </>
   );
 }

@@ -36,6 +36,34 @@ const ko = {
   "settings.ai.modelLabel": "모델",
   "settings.ai.creditHint": "AI 호출은 연결된 CLI 의 플랜/크레딧을 소모해요.",
 
+  // CLI 로그인 (AiAuthModal + 설정 › AI 의 인증 줄)
+  "settings.auth.title": "AI 로그인",
+  "settings.auth.checking": "인증 상태를 확인하는 중…",
+  "settings.auth.lead":
+    "{name} 인증이 만료됐어요. 여기서 다시 로그인하면 AI 기능이 바로 살아나요.",
+  "settings.auth.alreadyOk": "{name} 에 이미 로그인돼 있어요.",
+  "settings.auth.unsupported":
+    "{name} 은 앱 안에서 로그인할 수 없어요. 터미널에서 로그인한 뒤 다시 시도하세요.",
+  "settings.auth.start": "로그인 시작",
+  "settings.auth.again": "다시 로그인",
+  "settings.auth.waiting": "브라우저에서 로그인을 기다리는 중…",
+  "settings.auth.urlLabel": "인증 주소",
+  "settings.auth.openBrowser": "브라우저에서 열기",
+  "settings.auth.urlHint": "브라우저가 저절로 열리지 않았다면 이 주소를 여세요.",
+  "settings.auth.codeLabel": "인증 코드",
+  "settings.auth.codePlaceholder": "브라우저에서 받은 코드를 붙여넣으세요",
+  "settings.auth.codeSafety": "코드는 CLI 로 그대로 전달되고 Amber 에는 저장되지 않아요.",
+  "settings.auth.submit": "코드 전달",
+  "settings.auth.done": "로그인됐어요. 하던 작업을 다시 시도하면 돼요.",
+  "settings.auth.okNote": "{name} 로그인 완료",
+  "settings.auth.failed": "로그인이 끝나지 않았어요. 다시 시도해 주세요.",
+  // 설정 › AI 의 인증 줄
+  "settings.auth.row": "인증",
+  "settings.auth.rowOk": "로그인됨",
+  "settings.auth.rowExpired": "만료됨 — 다시 로그인이 필요해요",
+  "settings.auth.rowUnknown": "확인할 수 없음",
+  "settings.auth.rowAction": "로그인",
+
   // 모델 라벨 수식어 (config.ts 의 PROVIDER_MODELS 에서 조합)
   "settings.model.latestQuality": "최신·품질 우선",
   "settings.model.quality": "품질 우선",
@@ -124,6 +152,34 @@ const en: Record<keyof typeof ko, string> = {
   "settings.ai.testOk": "Connected — {version}",
   "settings.ai.modelLabel": "Model",
   "settings.ai.creditHint": "AI calls use the connected CLI's plan/credits.",
+
+  // CLI sign-in (AiAuthModal + the auth row in Settings › AI)
+  "settings.auth.title": "AI sign-in",
+  "settings.auth.checking": "Checking sign-in status…",
+  "settings.auth.lead":
+    "Your {name} sign-in has expired. Sign in here and the AI features come right back.",
+  "settings.auth.alreadyOk": "You're already signed in to {name}.",
+  "settings.auth.unsupported":
+    "{name} can't be signed in from the app. Log in from a terminal, then retry.",
+  "settings.auth.start": "Start sign-in",
+  "settings.auth.again": "Sign in again",
+  "settings.auth.waiting": "Waiting for the browser sign-in…",
+  "settings.auth.urlLabel": "Sign-in address",
+  "settings.auth.openBrowser": "Open in browser",
+  "settings.auth.urlHint": "If the browser didn't open on its own, open this address.",
+  "settings.auth.codeLabel": "Sign-in code",
+  "settings.auth.codePlaceholder": "Paste the code from the browser",
+  "settings.auth.codeSafety": "The code goes straight to the CLI — Amber never stores it.",
+  "settings.auth.submit": "Send code",
+  "settings.auth.done": "Signed in. You can retry what you were doing.",
+  "settings.auth.okNote": "Signed in to {name}",
+  "settings.auth.failed": "The sign-in didn't complete. Please try again.",
+  // The auth row in Settings › AI
+  "settings.auth.row": "Sign-in",
+  "settings.auth.rowOk": "Signed in",
+  "settings.auth.rowExpired": "Expired — sign in again",
+  "settings.auth.rowUnknown": "Can't tell",
+  "settings.auth.rowAction": "Sign in",
 
   "settings.model.latestQuality": "latest · best quality",
   "settings.model.quality": "best quality",

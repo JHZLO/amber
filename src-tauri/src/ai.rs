@@ -44,7 +44,7 @@ fn unregister(key: &str, pid: u32) {
 }
 
 /// SIGKILL 로 즉시 끝낸다 — SIGTERM 을 무시하는 CLI 가 있고, 사용자는 이미 그만두기로 했다.
-fn kill_pid(pid: u32) {
+pub(crate) fn kill_pid(pid: u32) {
     // Safety: kill(2) 는 pid 만 받는다. 이미 죽은 pid 면 ESRCH 로 무해하게 실패한다.
     unsafe {
         libc::kill(pid as libc::pid_t, libc::SIGKILL);
@@ -72,7 +72,7 @@ pub fn kill_all() {
 }
 
 /// 등록/해제를 스코프에 묶는다 — 정상 종료·에러·타임아웃 어느 경로로 빠져나가도 목록이 샌다.
-struct LiveGuard {
+pub(crate) struct LiveGuard {
     key: String,
     pid: u32,
 }
@@ -84,7 +84,7 @@ impl Drop for LiveGuard {
 }
 
 impl LiveGuard {
-    fn new(key: Option<&str>, pid: Option<u32>) -> Option<Self> {
+    pub(crate) fn new(key: Option<&str>, pid: Option<u32>) -> Option<Self> {
         let (key, pid) = (key?, pid?);
         register(key, pid);
         Some(Self { key: key.to_string(), pid })

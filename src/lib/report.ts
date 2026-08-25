@@ -5,6 +5,7 @@
 // - 투두 digest 빌더(DB → 마크다운). Rust 는 SQLite 미보유라 투두는 여기서 만든다.
 
 import { invoke, Channel } from "@tauri-apps/api/core";
+import { aiInvoke } from "./ai";
 import {
   BaseDirectory,
   mkdir,
@@ -164,7 +165,7 @@ export function reportGenerate(
 ): Promise<ReportGenResult> {
   const channel = new Channel<string>();
   channel.onmessage = onDelta;
-  return invoke<ReportGenResult>("report_generate", {
+  return aiInvoke<ReportGenResult>("report_generate", {
     date: params.date,
     todosDigest: params.todosDigest,
     digests: params.digests,
@@ -429,7 +430,7 @@ export function reportGenerateWeekly(
 ): Promise<ReportGenResult> {
   const channel = new Channel<string>();
   channel.onmessage = onDelta;
-  return invoke<ReportGenResult>("report_generate_weekly", {
+  return aiInvoke<ReportGenResult>("report_generate_weekly", {
     weekStart: params.weekStart,
     weekEnd: params.weekEnd,
     days: params.days,

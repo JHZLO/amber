@@ -1,4 +1,5 @@
 mod ai;
+mod auth;
 mod detect;
 mod report;
 
@@ -415,6 +416,10 @@ pub fn run() {
             ai::ai_erd_generate_stream,
             ai::ai_health,
             ai::ai_cancel,
+            auth::ai_auth_status,
+            auth::ai_auth_login,
+            auth::ai_auth_code,
+            auth::ai_auth_cancel,
             detect::detect_ai_clis,
             report::report_collect,
             report::report_generate,
