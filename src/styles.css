@@ -1267,6 +1267,55 @@ body.resizing-col .pane-resizer::after {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+/* 알림 블록(`> [!NOTE]` — lib/mdAlerts.ts + components/Markdown.tsx).
+   **색을 쓰지 않는다**(§2: 경고·정보도 무채색). 종류는 아이콘 + 라벨이 나르고,
+   중요도는 §3 의 채움/아웃라인 문법으로 단계를 준다:
+     참고·팁      = 아웃라인 (좌측 바만)
+     중요         = 옅은 채움
+     주의·경고    = 채움 + 진한 좌측 바 (가장 눈에 걸린다)
+   Paper(front-web-paper)는 같은 문법을 GitHub 색으로 렌더한다 — 문서 허브는 모노톤 제약이
+   없어서다. 문법이 같으므로 같은 노트가 양쪽에서 다 읽힌다. */
+.md-alert {
+  margin: 14px 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--border-strong);
+  border-radius: 0 6px 6px 0;
+  color: var(--text-2);
+}
+.md-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-3);
+}
+.md-alert > :last-child {
+  margin-bottom: 0;
+}
+/* 중요 — 옅은 채움으로 한 단 올린다 */
+.md-alert-important {
+  background: var(--surface-2);
+}
+.md-alert-important .md-alert-title {
+  color: var(--text-2);
+}
+/* 주의·경고 — 채움 + 진한 바 + 본문까지 또렷하게 (모노톤에서 낼 수 있는 최대 강조) */
+.md-alert-warning,
+.md-alert-caution {
+  background: var(--surface-2);
+  border-left-color: var(--text-3);
+  color: var(--text);
+}
+.md-alert-warning .md-alert-title,
+.md-alert-caution .md-alert-title {
+  color: var(--text);
+}
+.md-alert-caution {
+  border-left-color: var(--text);
+}
 
 /* ---- 위젯 (투명 창) ---- */
 html.widget-root,

@@ -75,6 +75,13 @@ const ko = {
   "common.err.trash.forbidden": "허용되지 않은 경로예요.",
   "common.err.trash.failed": "휴지통으로 옮기지 못했어요 — {detail}",
 
+  // 마크다운 알림 블록(`> [!NOTE]`) 라벨 — 모노톤이라 색이 아니라 이 라벨과 아이콘이 종류를 나른다
+  "common.alert.note": "참고",
+  "common.alert.tip": "팁",
+  "common.alert.important": "중요",
+  "common.alert.warning": "주의",
+  "common.alert.caution": "경고",
+
   "common.ai.notFound": "{cli} CLI를 찾을 수 없어요. 설정(⚙)에서 경로를 확인하세요.",
   "common.ai.auth": "{cli} 인증이 필요해요. 터미널에서 `{cli}` 로그인 후 다시 시도하세요.",
   "common.ai.rateLimit": "사용량 한도에 도달했어요. 잠시 후 다시 시도하세요.",
@@ -152,6 +159,12 @@ const en: Record<keyof typeof ko, string> = {
   "common.err.backup.path": "Couldn't locate the app data folder.",
   "common.err.trash.forbidden": "That path isn't allowed.",
   "common.err.trash.failed": "Couldn't move it to the Trash — {detail}",
+
+  "common.alert.note": "Note",
+  "common.alert.tip": "Tip",
+  "common.alert.important": "Important",
+  "common.alert.warning": "Warning",
+  "common.alert.caution": "Caution",
 
   "common.ai.notFound": "Couldn't find the {cli} CLI. Check its path in Settings (⚙).",
   "common.ai.auth": "{cli} needs authentication. Log in with `{cli}` in a terminal, then retry.",
