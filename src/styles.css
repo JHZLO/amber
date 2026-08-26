@@ -23,6 +23,15 @@
   --warning-soft: #f4f4f5;
   /* 파괴적 액션(삭제·버리고 이동 등)과 실패 상태는 모노톤 예외로 빨강 사용.
      danger=선/아이콘/테두리, danger-soft=배경 틴트, danger-text=틴트 위 본문(대비 확보용) */
+  /* 마크다운 알림 블록 5종 — GitHub 팔레트와 같게(Paper 렌더러와 한 벌). 대비는 --bg 위
+     4.66~5.02:1, --surface 위 4.87~5.24:1 로 전부 AA. surface-2/3 채움 위에서는 4.0~4.4 로
+     떨어지므로 알림에 배경을 깔지 않는다(§2 알림 블록). */
+  --alert-note: #0969da;
+  --alert-tip: #1a7f37;
+  --alert-important: #8250df;
+  --alert-warning: #9a6700;
+  --alert-caution: #d1242f;
+
   --danger: #dc2626;
   --danger-soft: #fef2f2;
   --danger-text: #b91c1c;
@@ -86,6 +95,14 @@
   --border-strong: #3a3a40;
   --accent: #f4f4f5;
   --accent-soft: #1f1f23;
+
+  /* 다크는 달력 예외와 같은 방식 — 채도를 낮추고 밝기를 올린다 (9.9~10.0:1 on --bg,
+     caution 만 7.65:1 로 낮은데 빨강을 더 밝히면 danger 와 뜻이 섞인다) */
+  --alert-note: #79c0ff;
+  --alert-tip: #56d364;
+  --alert-important: #d2a8ff;
+  --alert-warning: #e3b341;
+  --alert-caution: #ff7b72;
 
   --danger: #f87171;
   --danger-soft: #2b1a1c;
@@ -1268,46 +1285,43 @@ body.resizing-col .pane-resizer::after {
   text-underline-offset: 2px;
 }
 /* 알림 블록(`> [!NOTE]` — lib/mdAlerts.ts + components/Markdown.tsx).
-   **색을 쓰지 않는다**(§2: 경고·정보도 무채색). 종류는 아이콘 + 라벨이 나르고,
-   중요도는 §3 의 채움/아웃라인 문법으로 단계를 준다:
-     참고·팁      = 아웃라인 (좌측 바만)
-     중요         = 옅은 채움
-     주의·경고    = 채움 + 진한 좌측 바 (가장 눈에 걸린다)
-   Paper(front-web-paper)는 같은 문법을 GitHub 색으로 렌더한다 — 문서 허브는 모노톤 제약이
-   없어서다. 문법이 같으므로 같은 노트가 양쪽에서 다 읽힌다. */
+   §2 의 색 예외다 — 종류마다 전용 토큰(--alert-*)을 쓰고, GitHub·Paper 와 같은 팔레트로 맞춘다.
+   **배경을 깔지 않는다**: 라이트에서 이 색들이 surface-2/3 위에서 4.0~4.4:1 로 AA 아래로
+   떨어진다(--bg/--surface 위에서는 4.66:1+). 그래서 GitHub 과 같은 '컬러 좌측 바 + 컬러 라벨'
+   구성이고, 본문은 평소 본문색을 그대로 쓴다. */
 .md-alert {
+  --md-alert: var(--alert-note);
   margin: 14px 0;
-  padding: 10px 14px;
-  border-left: 3px solid var(--border-strong);
-  border-radius: 0 6px 6px 0;
-  color: var(--text-2);
+  padding: 2px 0 2px 14px;
+  border-left: 3px solid var(--md-alert);
+  color: var(--text);
 }
 .md-alert-title {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 4px;
-  font-size: 12px;
+  margin-bottom: 2px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--text-3);
+  color: var(--md-alert);
 }
 .md-alert > :last-child {
   margin-bottom: 0;
 }
-/* 중요 — 옅은 채움으로 한 단 올린다 */
+.md-alert-note {
+  --md-alert: var(--alert-note);
+}
+.md-alert-tip {
+  --md-alert: var(--alert-tip);
+}
 .md-alert-important {
-  background: var(--surface-2);
+  --md-alert: var(--alert-important);
 }
-.md-alert-important .md-alert-title {
-  color: var(--text-2);
+.md-alert-warning {
+  --md-alert: var(--alert-warning);
 }
-/* 주의·경고 — 채움 + 진한 바 + 본문까지 또렷하게 (모노톤에서 낼 수 있는 최대 강조) */
-.md-alert-warning,
 .md-alert-caution {
-  background: var(--surface-2);
-  border-left-color: var(--text-3);
-  color: var(--text);
+  --md-alert: var(--alert-caution);
 }
 .md-alert-warning .md-alert-title,
 .md-alert-caution .md-alert-title {

@@ -22,14 +22,13 @@ function isMermaid(className: unknown): boolean {
   return Array.isArray(className) && className.includes("language-mermaid");
 }
 
-// 알림 종류별 아이콘 — 모노톤 판이라 색이 아니라 아이콘 + 라벨 + 채움 단계가 종류를 나른다.
-// 정보류(NOTE/IMPORTANT)와 주의류(WARNING/CAUTION)는 아이콘 계열로 갈라 한눈에 구분된다.
+// 알림 종류별 아이콘 — GitHub 과 같은 대응. 색(--alert-*)과 함께 종류를 나르므로 5종을 다 나눈다.
 const ALERT_ICONS: Record<AlertKind, IconName> = {
   NOTE: "info",
   TIP: "lightbulb",
-  IMPORTANT: "info",
+  IMPORTANT: "message",
   WARNING: "alert-triangle",
-  CAUTION: "alert-triangle",
+  CAUTION: "alert-octagon",
 };
 
 // t() 는 키 유니온으로 타입 체크되므로 문자열을 조립하지 않고 리터럴로 적어 둔다
