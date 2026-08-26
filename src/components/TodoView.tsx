@@ -204,8 +204,9 @@ export function TodoView({
   // Todoist 문법: **세로 = 삽입 위치, 가로 = 깊이(들여쓰기)**. 한 제스처로 재정렬과
   // 부모 변경(하위로 넣기·꺼내기·다른 부모로)을 모두 처리한다.
   // 피드백: 원본(서브트리째)은 접히고, 삽입 지점 아래 행들이 **실시간으로 밀려 gap 을 연다**
-  // (0.24s ease-in-out). 행 복제 오버레이가 커서를 1:1 로 따라오고, gap 안의 깊이만큼 들여쓴
-  // 2px 삽입선이 떨어질 곳을 보여준다. 드래그 중 리렌더 없이 transform 명령형, 커밋은 놓을 때 한 번.
+  // (0.35s ease-in-out — 추종 모션 예외, §9). 행 복제 오버레이가 커서를 1:1 로 따라오고, gap 안의 깊이만큼 들여쓴
+  // 2px 삽입선이 같은 트랜지션으로 gap 과 함께 미끄러져 떨어질 곳을 보여준다.
+  // 드래그 중 리렌더 없이 transform 명령형, 커밋은 놓을 때 한 번.
   function startDrag(e: ReactMouseEvent, id: number) {
     e.preventDefault();
     const listEl = listRef.current;
@@ -288,9 +289,10 @@ export function TodoView({
         overlay.appendChild(chip);
       }
       document.body.appendChild(overlay);
+      // 삽입선은 첫 배치 좌표가 정해진 뒤(apply)에 붙인다 — 미리 붙이면 (0,0)에서
+      // 첫 슬롯까지 날아오는 트랜지션이 보인다
       line = document.createElement("div");
       line.className = "todo-drop-line";
-      listEl.appendChild(line);
     };
 
     const apply = (clientX: number, clientY: number) => {
@@ -313,15 +315,20 @@ export function TodoView({
         const el = els.get(others[j].id)!;
         el.style.transform = j >= idx ? `translateY(${gapH}px)` : "";
       }
-      // 삽입선: 열린 gap 의 세로 중앙 + 깊이만큼 들여쓴 왼쪽 (listing 좌표계)
+      // 삽입선: 열린 gap 의 세로 중앙 + 깊이만큼 들여쓴 왼쪽 (listing 좌표계).
+      // 위치는 transform — 세로 이동은 행 밀림과 같은 트랜지션으로 함께 미끄러진다(styles.css)
       const y = below
         ? rects.get(below.id)!.top + gapH / 2
         : above
           ? rects.get(above.id)!.bottom + 4
           : listRect.top + 2;
-      line.style.top = `${y - listRect.top - 1}px`;
-      line.style.left = `${10 + depth * INDENT}px`;
-      line.style.right = "8px";
+      const lx = 10 + depth * INDENT;
+      line.style.width = `${Math.max(0, listRect.width - lx - 8)}px`;
+      line.style.transform = `translate(${lx}px, ${y - listRect.top - 1}px)`;
+      if (!line.isConnected) {
+        listEl.appendChild(line); // 첫 배치 — 좌표를 갖고 붙어 그 자리에서 페이드인만
+        requestAnimationFrame(() => line?.classList.add("on"));
+      }
     };
 
     const onMove = (ev: MouseEvent) => {

@@ -3971,9 +3971,12 @@ body.resizing-tt * {
   position: relative;
 }
 /* 트리 드래그(세로=위치·가로=깊이): 원본(서브트리째)은 접히고, 삽입 지점 아래 행들이
-   실시간으로 밀려 gap 을 연다. 집은 것은 오버레이가 커서 1:1 추적(§8). */
+   실시간으로 밀려 gap 을 연다. 집은 것은 오버레이가 커서 1:1 추적(§8).
+   밀림은 '화면 안 이동'이라 ease-in-out(§9) — 시작이 급한 ease-out 은 행이 툭툭 튄다.
+   0.35s 는 상한(0.3s)의 예외(§9) — 커서를 따라 내내 재타겟되는 추종 모션은 길어야
+   행이 관성을 가진 듯 뒤따라온다(묵직함). 짧으면 목적지에 즉시 도착해 홱홱 끊긴다. */
 .todo-listing.reordering .todo-row {
-  transition: transform 0.18s var(--ease-out);
+  transition: transform 0.35s var(--ease-in-out);
 }
 /* 커서를 1:1 따라오는 행 복제 오버레이 (body 포탈, 위치는 인라인 transform) */
 .todo-drag-overlay {
@@ -4007,14 +4010,26 @@ body.resizing-tt * {
   padding: 1px 7px;
   font-variant-numeric: tabular-nums;
 }
-/* 삽입선 — 세로 위치 = 슬롯, 왼쪽 들여쓰기 = 선택한 깊이. 좌측 점으로 시작점 표시 */
+/* 삽입선 — 세로 위치 = 슬롯, 왼쪽 들여쓰기 = 선택한 깊이. 좌측 점으로 시작점 표시.
+   위치는 top/left 가 아니라 transform 으로 잡고(§9.2), 행 밀림과 **같은 트랜지션**을 태운다 —
+   선만 즉시 점프하면 아직 비켜나는 중인 행 위에 겹쳐 보인다(선과 gap 이 함께 도착해야 한다).
+   깊이(들여쓰기·width)는 즉시 스냅 — 깊이는 이산 선택이라 늦으면 오히려 어디로 갈지 흐려진다. */
 .todo-drop-line {
   position: absolute;
+  top: 0;
+  left: 0;
   height: 2px;
   border-radius: 1px;
   background: var(--text);
   z-index: 6;
   pointer-events: none;
+  opacity: 0; /* 등장은 .on 페이드인 — 뚝 나타나지 않게 */
+  transition:
+    transform 0.35s var(--ease-in-out),
+    opacity 0.15s var(--ease-out);
+}
+.todo-drop-line.on {
+  opacity: 1;
 }
 .todo-drop-line::before {
   content: "";
@@ -4639,6 +4654,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   .cal-title,
   .todo-row,
   .todo-listing.reordering .todo-row,
+  .todo-drop-line,
   .todo-text,
   .todo-row .row-actions,
   .todo-grip,
