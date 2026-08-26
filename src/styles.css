@@ -1339,13 +1339,6 @@ body.resizing-col .pane-resizer::after {
 .md-alert-caution {
   --md-alert: var(--alert-caution);
 }
-.md-alert-warning .md-alert-title,
-.md-alert-caution .md-alert-title {
-  color: var(--text);
-}
-.md-alert-caution {
-  border-left-color: var(--text);
-}
 
 /* ---- 위젯 (투명 창) ---- */
 html.widget-root,
