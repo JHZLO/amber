@@ -1190,14 +1190,32 @@ body.resizing-col .pane-resizer::after {
    h3(14px)가 본문과 같은 크기여서 굵기만으로 구분됐고, h2 와도 2px 차라 계층이 뭉쳤다.
    페이지 제목(.detail-title 23px)보다는 작게 유지한다 — 넘으면 위계가 뒤집힌다. */
 .markdown h1 {
+  --h1-pad-b: 10px; /* ::before 바가 구분선 위에서 멈추도록 아래 계산에서 다시 쓴다 */
+  position: relative;
   font-size: 21px;
   font-weight: 800;
   letter-spacing: -0.021em;
   line-height: 1.3;
   margin: 30px 0 14px;
+  /* 대제목 글머리 바 자리 — 바 4px + 간격 10px */
+  padding-left: 14px;
   /* 문서의 최상위 단면 — 연한 구분선으로 아래 본문과 끊어 읽는다 */
-  padding-bottom: 10px;
+  padding-bottom: var(--h1-pad-b);
   border-bottom: 1px solid var(--border);
+}
+/* 대제목 글머리 — 훑어볼 때 대제목만 튀어나오게 하는 굵은 세로 바.
+   `|` 글자를 쓰지 않는다(§6 유니코드 글리프 금지): 폰트에 따라 두께·높이가 흔들리고
+   글자라서 복사·검색에 섞인다. 색은 `--text` 하나로 다크=흰색, 라이트=near-black 자동 대응.
+   높이는 top/bottom 기준이라 제목이 두 줄로 접혀도 함께 늘어나고, 구분선 바로 위에서 멈춘다. */
+.markdown h1::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 4px;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--text);
 }
 .markdown h2 {
   font-size: 17.5px;
