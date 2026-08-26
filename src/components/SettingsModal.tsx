@@ -96,13 +96,17 @@ export function SettingsModal({
   const [editLabel, setEditLabel] = useState("");
   const [editText, setEditText] = useState("");
 
+  // 언마운트 뒤 setState 를 막는 가드. **본문에서 true 로 되돌리는 줄이 반드시 있어야 한다** —
+  // StrictMode(dev)는 마운트 직후 effect → cleanup → effect 를 한 번 더 돌리는데, cleanup 이
+  // 내려둔 false 를 아무도 올리지 않으면 그 뒤 모든 비동기 결과가 조용히 버려진다
+  // (CLI 감지·로그인 확인·연결 테스트·백업이 영원히 "…중" 에서 멈췄다).
   const alive = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    alive.current = true;
+    return () => {
       alive.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -175,8 +179,13 @@ export function SettingsModal({
   const refreshAuth = useCallback(async () => {
     if (!provider) return;
     setAuth(null);
-    const st = await aiAuthStatus(provider, path);
-    if (alive.current) setAuth(st);
+    try {
+      const st = await aiAuthStatus(provider, path);
+      if (alive.current) setAuth(st);
+    } catch {
+      // '알아내지 못했다'도 결과다 — null 로 남기면 확인 중 스피너가 영원히 돈다
+      if (alive.current) setAuth({ supported: true, loggedIn: null, detail: "" });
+    }
   }, [provider, path]);
 
   // 설정을 열 때·프로바이더를 바꿀 때 한 번. 경로 입력 중에는 다시 묻지 않는다(타이핑마다 프로세스를 띄우게 된다)
