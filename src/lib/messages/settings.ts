@@ -58,7 +58,6 @@ const ko = {
   "settings.auth.okNote": "{name} 로그인 완료",
   "settings.auth.failed": "로그인이 끝나지 않았어요. 다시 시도해 주세요.",
   // 설정 › AI 의 인증 줄
-  "settings.auth.row": "인증",
   "settings.auth.rowOk": "로그인됨",
   "settings.auth.rowExpired": "만료됨 — 다시 로그인이 필요해요",
   "settings.auth.rowUnknown": "확인할 수 없음",
@@ -175,7 +174,6 @@ const en: Record<keyof typeof ko, string> = {
   "settings.auth.okNote": "Signed in to {name}",
   "settings.auth.failed": "The sign-in didn't complete. Please try again.",
   // The auth row in Settings › AI
-  "settings.auth.row": "Sign-in",
   "settings.auth.rowOk": "Signed in",
   "settings.auth.rowExpired": "Expired — sign in again",
   "settings.auth.rowUnknown": "Can't tell",

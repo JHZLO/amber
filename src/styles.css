@@ -913,6 +913,29 @@ body.resizing-col .pane-resizer::after {
   line-height: 1.6;
   color: var(--text-3);
 }
+/* AI 연결 섹션의 로그인 상태 줄 — 리드 문장("CLI 의 로그인 세션을 그대로 쓴다")에 딸린
+   상태라 별도 필드로 떼지 않고 그 문장 바로 아래 붙인다. 색은 쓰지 않는다(§2: 정보·경고는
+   무채색) — 단계는 명암으로 주고, 급한 정도는 옆 버튼이 primary 냐 아니냐로 말한다. */
+.set-auth {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -4px 0 14px;
+}
+.set-auth-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.set-auth-state.ok {
+  color: var(--text-2);
+}
+.set-auth-state.warn {
+  color: var(--text);
+  font-weight: 600;
+}
 /* 선택된 프로바이더의 경로·모델 — 카드 아래에 점선으로 구분해 딸린 설정임을 보인다 */
 .set-provider {
   margin-top: 12px;

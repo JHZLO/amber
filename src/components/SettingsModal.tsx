@@ -396,6 +396,61 @@ export function SettingsModal({
                 : t("settings.ai.none")}
             </p>
 
+            {/* 로그인 상태 — 위 문장이 "CLI 의 로그인 세션을 그대로 쓴다"고 말하는 그 세션의
+                현재 상태다. 별도 'Sign-in' 필드로 떼어 두면 같은 얘기가 두 군데로 갈리고,
+                버튼이 상태와 무관하게 늘 'Sign in' 이라 이미 로그인한 사람에게도 로그인을
+                권하는 모양이 된다. **행동이 필요할 때만 버튼을 낸다**:
+                  · 확인 중       → 상태만 (버튼 없음 — 아직 뭘 해야 할지 모른다)
+                  · 로그인됨      → 체크 + 표준 버튼 '다시 로그인'(계정 교체용 탈출구)
+                  · 만료됨        → 경고 + primary 버튼 (여기서만 눌러야 할 이유가 있다)
+                  · 지원 안 함    → 터미널에서 로그인하라는 안내만 */}
+            {provider && (
+              <div className="set-auth">
+                {auth === null ? (
+                  <span className="set-auth-state">
+                    <Spinner />
+                    {t("settings.auth.checking")}
+                  </span>
+                ) : auth.supported === false ? (
+                  <span className="set-auth-state">
+                    {t("settings.auth.unsupported", {
+                      name: PROVIDER_LABELS[provider],
+                    })}
+                  </span>
+                ) : auth.loggedIn === true ? (
+                  <>
+                    <span className="set-auth-state ok">
+                      <Icon name="check" size={13} />
+                      {t("settings.auth.rowOk")}
+                    </span>
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => setAuthOpen(true)}
+                    >
+                      {t("settings.auth.again")}
+                    </button>
+                  </>
+                ) : auth.loggedIn === false ? (
+                  <>
+                    <span className="set-auth-state warn">
+                      <Icon name="alert-triangle" size={13} />
+                      {t("settings.auth.rowExpired")}
+                    </span>
+                    <button
+                      className="btn btn-sm btn-primary"
+                      onClick={() => setAuthOpen(true)}
+                    >
+                      {t("settings.auth.rowAction")}
+                    </button>
+                  </>
+                ) : (
+                  <span className="set-auth-state">
+                    {t("settings.auth.rowUnknown")}
+                  </span>
+                )}
+              </div>
+            )}
+
             {detecting && detected === null ? (
               <div className="loading-box" style={{ padding: "22px 0" }}>
                 <Spinner />
@@ -447,35 +502,6 @@ export function SettingsModal({
                       {testResult.msg}
                     </div>
                   )}
-                </div>
-
-                <div className="field">
-                  <label>{t("settings.auth.row")}</label>
-                  <div className="set-inline">
-                    <span className="hint">
-                      {auth === null
-                        ? t("settings.auth.checking")
-                        : auth.supported === false
-                          ? t("settings.auth.rowUnknown")
-                          : auth.loggedIn === true
-                            ? t("settings.auth.rowOk")
-                            : auth.loggedIn === false
-                              ? t("settings.auth.rowExpired")
-                              : t("settings.auth.rowUnknown")}
-                    </span>
-                    <span className="spacer" />
-                    <button
-                      className="btn"
-                      onClick={() => setAuthOpen(true)}
-                      disabled={auth?.supported === false}
-                    >
-                      {t(
-                        auth?.loggedIn === true
-                          ? "settings.auth.again"
-                          : "settings.auth.rowAction",
-                      )}
-                    </button>
-                  </div>
                 </div>
 
                 <div className="field" style={{ marginBottom: 0 }}>
