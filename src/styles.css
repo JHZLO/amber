@@ -1169,16 +1169,51 @@ body.resizing-col .pane-resizer::after {
 .markdown {
   line-height: 1.7;
 }
+/* 제목 계단 — 단계마다 크기·트래킹·행간이 함께 움직인다(§4). 예전엔 19/16/14 라
+   h3(14px)가 본문과 같은 크기여서 굵기만으로 구분됐고, h2 와도 2px 차라 계층이 뭉쳤다.
+   페이지 제목(.detail-title 23px)보다는 작게 유지한다 — 넘으면 위계가 뒤집힌다. */
+.markdown h1 {
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.021em;
+  line-height: 1.3;
+  margin: 30px 0 14px;
+  /* 문서의 최상위 단면 — 연한 구분선으로 아래 본문과 끊어 읽는다 */
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
 .markdown h2 {
-  font-size: 16px;
+  font-size: 17.5px;
   font-weight: 700;
-  margin: 22px 0 8px;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+  margin: 26px 0 8px;
 }
 .markdown h3 {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
-  margin: 16px 0 6px;
+  letter-spacing: -0.005em;
+  line-height: 1.45;
+  margin: 18px 0 6px;
+}
+/* h4 는 크기 차가 거의 없는 바닥 단계 — 명암(§3)으로 한 단 더 내린다 */
+.markdown h4 {
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--text-2);
+  margin: 14px 0 4px;
+}
+/* 첫 제목이 위 여백을 밀어내지 않게 — 본문 시작이 버튼 줄에 붙어 읽힌다 */
+.markdown > :first-child {
+  margin-top: 0;
+}
+/* 본문 구분선(--- ) — 정의가 없어 브라우저 기본 inset 선이 나오고 있었다(테마도 안 따른다).
+   h1 아래 선과 같은 토큰으로 맞춰 '구분선'이 앱 안에서 한 종류로 읽히게 한다. */
+.markdown hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 26px 0;
 }
 .markdown p {
   margin: 8px 0;
@@ -1731,15 +1766,11 @@ html.widget-root #root {
   min-width: 0;
   max-width: 780px; /* 읽기 좋은 본문 폭 + 우측 목차 자리 */
 }
-.markdown h1 {
-  font-size: 19px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  margin: 24px 0 10px;
-}
+/* 제목 스케일은 위 마크다운 블록이 정본 — 여기서 크기를 다시 정의하지 않는다 */
 .markdown h1,
 .markdown h2,
-.markdown h3 {
+.markdown h3,
+.markdown h4 {
   scroll-margin-top: 18px; /* 목차 클릭 이동 시 위 여백 */
 }
 .note-toc {
