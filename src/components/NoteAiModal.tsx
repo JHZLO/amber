@@ -49,6 +49,10 @@ export function NoteAiModal({
   const streamRef = useRef<HTMLPreElement>(null);
   // 진행 중인 실행의 취소 키 — 중단 버튼이 이걸로 CLI 를 끝낸다
   const cancelKey = useRef<string | null>(null);
+  // 실행 세대. 중단·재실행으로 버려진 실행의 델타가 새 버퍼에 섞여 들어가지 않게 한다 —
+  // 취소는 비동기라 프로세스가 죽기 전 조각이 더 오고, 그게 새 실행 텍스트와 뒤엉키면
+  // "## Met# 서비스 조adata" 처럼 두 생성이 한 글자씩 섞인 결과가 나온다.
+  const runSeq = useRef(0);
 
   // 편집(기존 내용 있음) vs 새로 작성 구분 — diff 는 기존 내용이 있을 때만 의미
   const hasExisting = currentBody.trim().length > 0;
@@ -56,6 +60,7 @@ export function NoteAiModal({
   // 열 때마다 초기화 (닫혀 있는 동안의 stale 상태 방지) + 저장 프롬프트 최신 로드
   useEffect(() => {
     if (!open) return;
+    runSeq.current++; // 닫힌 동안 계속 돌던 실행의 델타를 이 세션에서 끊는다
     setStep("prompt");
     setInstruction("");
     setError(null);
@@ -83,6 +88,7 @@ export function NoteAiModal({
     setStep("loading");
     const key = newCancelKey();
     cancelKey.current = key;
+    const my = ++runSeq.current;
     try {
       const { markdown } = await aiNoteComposeStream(
         {
@@ -94,18 +100,35 @@ export function NoteAiModal({
           provider: config.provider,
           cancelKey: key,
         },
-        (delta) => setStreamText((prev) => prev + delta),
+        (delta) => {
+          if (my !== runSeq.current) return; // 버려진 실행의 잔여 델타
+          setStreamText((prev) => prev + delta);
+        },
       );
+      if (my !== runSeq.current) return; // 중단·재실행됨 — 이 결과로 화면을 덮지 않는다
       setResultMd(markdown);
       // 기존 노트 편집이면 변경점(diff)을 먼저 보여주고, 새 작성이면 미리보기
       setViewMode(hasExisting ? "diff" : "preview");
       setStep("preview");
     } catch (e) {
+      // 사용자가 직접 끊은 실행은 에러가 아니다 — 죽은 CLI 의 비명을 노트에 띄우지 않는다
+      if (my !== runSeq.current) return;
       setError(friendlyError(e));
       setStep("prompt");
     } finally {
-      cancelKey.current = null;
+      if (my === runSeq.current) cancelKey.current = null;
     }
+  }
+
+  /** 중단 — CLI 를 죽이고 **기다리지 않고** 바로 지시 화면으로 돌아간다.
+   *  프로세스가 실제로 끝나는 걸 기다리면 누른 뒤에도 몇 초간 글자가 계속 흘러 안 먹은 듯 보인다. */
+  function stop() {
+    const k = cancelKey.current;
+    runSeq.current++; // 이 시점 이후 도착하는 델타·결과·에러는 전부 무효
+    cancelKey.current = null;
+    if (k) void aiCancel(k);
+    setStreamText("");
+    setStep("prompt");
   }
 
   // 텍스트가 있는 프롬프트만 칩으로 (설정에서 추가만 하고 비워둔 것 제외)
@@ -137,13 +160,7 @@ export function NoteAiModal({
   } else if (step === "loading") {
     // 5분짜리 실행에 탈출구가 없으면 앱을 끄는 것 말고 방법이 없다
     footer = (
-      <button
-        className="btn btn-sm"
-        onClick={() => {
-          const k = cancelKey.current;
-          if (k) void aiCancel(k);
-        }}
-      >
+      <button className="btn btn-sm" onClick={stop}>
         <Icon name="x" size={14} />
         {t("notes.ai.stop")}
       </button>

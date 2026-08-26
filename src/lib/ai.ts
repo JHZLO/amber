@@ -162,6 +162,9 @@ export async function aiNoteComposeStream(
     timeoutSecs: params.timeoutSecs ?? null,
     lang: getLang(),
     onDelta: channel,
+    // 이 줄이 빠지면 Rust 가 cancel_key=None 으로 받아 LiveGuard 가 pid 를 등록하지
+    // 않는다 — 중단 버튼이 죽일 대상을 못 찾아 조용히 아무 일도 안 한다
+    cancelKey: params.cancelKey ?? null,
   });
 }
 

@@ -46,6 +46,8 @@ export function DiagramAiModal({
   const streamRef = useRef<HTMLPreElement>(null);
   // 진행 중인 실행의 취소 키 — 중단 버튼이 이걸로 CLI 를 끝낸다
   const cancelKey = useRef<string | null>(null);
+  // 실행 세대 — 버려진 실행의 델타가 새 버퍼에 섞이지 않게 (NoteAiModal 과 같은 이유)
+  const runSeq = useRef(0);
 
   // 빈 다이어그램이면 비교할 대상이 없으니 diff 탭을 숨긴다
   const hasExisting = currentSource.trim().length > 0;
@@ -53,6 +55,7 @@ export function DiagramAiModal({
   // 열 때마다 초기화 (닫혀 있는 동안의 stale 상태 방지)
   useEffect(() => {
     if (!open) return;
+    runSeq.current++; // 닫힌 동안 계속 돌던 실행의 델타를 이 세션에서 끊는다
     setStep("prompt");
     setDdl("");
     setInstruction("");
@@ -80,6 +83,7 @@ export function DiagramAiModal({
     setStep("loading");
     const key = newCancelKey();
     cancelKey.current = key;
+    const my = ++runSeq.current;
     try {
       const { mermaid } = await aiErdGenerateStream(
         {
@@ -91,17 +95,32 @@ export function DiagramAiModal({
           provider: config.provider,
           cancelKey: key,
         },
-        (delta) => setStreamText((prev) => prev + delta),
+        (delta) => {
+          if (my !== runSeq.current) return; // 버려진 실행의 잔여 델타
+          setStreamText((prev) => prev + delta);
+        },
       );
+      if (my !== runSeq.current) return; // 중단·재실행됨 — 이 결과로 화면을 덮지 않는다
       setResult(mermaid);
       setViewMode("preview");
       setStep("preview");
     } catch (e) {
+      if (my !== runSeq.current) return; // 사용자가 직접 끊은 실행은 에러가 아니다
       setError(friendlyError(e));
       setStep("prompt");
     } finally {
-      cancelKey.current = null;
+      if (my === runSeq.current) cancelKey.current = null;
     }
+  }
+
+  /** 중단 — CLI 를 죽이고 기다리지 않고 바로 지시 화면으로 (NoteAiModal.stop 과 같은 규약) */
+  function stop() {
+    const k = cancelKey.current;
+    runSeq.current++;
+    cancelKey.current = null;
+    if (k) void aiCancel(k);
+    setStreamText("");
+    setStep("prompt");
   }
 
   const tooShort = ddl.trim().length < 20;
@@ -126,13 +145,7 @@ export function DiagramAiModal({
     );
   } else if (step === "loading") {
     footer = (
-      <button
-        className="btn btn-sm"
-        onClick={() => {
-          const k = cancelKey.current;
-          if (k) void aiCancel(k);
-        }}
-      >
+      <button className="btn btn-sm" onClick={stop}>
         <Icon name="x" size={14} />
         {t("diagrams.ai.stop")}
       </button>
