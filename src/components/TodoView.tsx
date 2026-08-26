@@ -188,8 +188,9 @@ export function TodoView({
   const editDone = useRef(false);
   const childDone = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
-  const todosRef = useRef(todos);
-  todosRef.current = todos;
+  // 드래그 모델 소스 = **지금 그려진 목록**(일: todos·주: weekTodos) — 아래 rows 계산 뒤 대입.
+  // 일 목록에 고정하면 주 모드에서 startDrag 가 행을 못 찾아 grip 이 조용히 죽는다.
+  const dragRowsRef = useRef<Todo[]>([]);
 
   const pane = usePaneResize({
     storageKey: CAL_W_KEY,
@@ -203,18 +204,27 @@ export function TodoView({
   // Todoist 문법: **세로 = 삽입 위치, 가로 = 깊이(들여쓰기)**. 한 제스처로 재정렬과
   // 부모 변경(하위로 넣기·꺼내기·다른 부모로)을 모두 처리한다.
   // 피드백: 원본(서브트리째)은 접히고, 삽입 지점 아래 행들이 **실시간으로 밀려 gap 을 연다**
-  // (0.18s ease-out). 행 복제 오버레이가 커서를 1:1 로 따라오고, gap 안의 깊이만큼 들여쓴
+  // (0.24s ease-in-out). 행 복제 오버레이가 커서를 1:1 로 따라오고, gap 안의 깊이만큼 들여쓴
   // 2px 삽입선이 떨어질 곳을 보여준다. 드래그 중 리렌더 없이 transform 명령형, 커밋은 놓을 때 한 번.
   function startDrag(e: ReactMouseEvent, id: number) {
     e.preventDefault();
     const listEl = listRef.current;
     if (!listEl) return;
-    // 이월 고스트(이 날짜에서 다른 날로 옮겨간 행)는 드래그 모델에서 제외한다 — 이 날짜의
-    // 형제 그룹이 아니라, 함께 sort_order 를 다시 매기면 실제 날짜에서의 순서가 망가진다.
-    // 고스트는 과거 날짜에만 나타나므로(lib/todos.ts listTodos) 오늘의 드래그는 그대로다.
-    const cur = todosRef.current.filter((t) => t.carried !== 1);
+    // 이월 고스트(다른 날로 옮겨간 행·그 기록)도 모델에 **남긴다** — 함께 밀리고, 그 하위로
+    // 드롭해 부모 삼을 수 있다(하위 추가(+)와 같은 문법: 새 자식은 보는 날짜에 남고 부모는
+    // 다른 날에 산다 — visibleRoots 가 그런 행을 그린다). 대신 커밋에서 둘을 거른다:
+    //  · gone(라이브 행이 지워진 기록)은 부모가 될 수 없다 — resolveDrop 이 null 로 거절
+    //  · sort_order 재부여는 이 날짜의 라이브 행만 — 고스트의 순서는 실제 날짜의 형제
+    //    그룹 소속이라, 같이 매기면 그 날짜에서의 순서가 망가진다
+    const cur = dragRowsRef.current;
     const node = cur.find((t) => t.id === id);
-    if (!node) return;
+    if (!node || node.carried === 1) return; // 고스트 자체는 도착 날짜에서 다룬다(grip 도 없다)
+    const goneIds = new Set(
+      cur.filter((t) => t.gone === 1).map((t) => t.id),
+    );
+    const carriedIds = new Set(
+      cur.filter((t) => t.carried === 1).map((t) => t.id),
+    );
 
     // 트리 판단(플랫 행·서브트리·깊이 clamp·드롭 해석)은 전부 순수 모듈 lib/todoTree.ts.
     // 여기 남는 건 실측(rect)·오버레이 transform·DB 커밋뿐이다.
@@ -341,14 +351,18 @@ export function TodoView({
       line?.remove();
       if (!moved || !slot) return;
 
-      const drop = resolveDrop(cur, others, id, slot); // null = 제자리·불가 슬롯
+      const drop = resolveDrop(cur, others, id, slot, goneIds); // null = 제자리·불가 슬롯
       if (!drop) return;
       const newParent = drop.newParentId;
       const oldParent = node.parent_id ?? null;
+      // 고스트 형제는 재부여에서 제외 — 그 행들의 sort_order 는 실제 날짜의 그룹 것이다
+      const liveOrder = drop.orderedSiblingIds.filter(
+        (sid) => !carriedIds.has(sid),
+      );
       void (async () => {
         try {
           if (newParent !== oldParent) await reparentTodo(id, newParent);
-          await reorderTodos(drop.orderedSiblingIds);
+          await reorderTodos(liveOrder);
           // 완료 상태 재계산: 떠난 그룹(마지막 미완료가 빠졌을 수 있음) + 새 그룹
           await recomputeChainFrom(oldParent);
           if (newParent !== oldParent) await recomputeChainFrom(newParent);
@@ -669,6 +683,7 @@ export function TodoView({
   // renderUnit 안에서 childrenOf 를 쓰므로, 그 소스도 단위에 맞춰 갈아준다.
   const weekTop = visibleRoots(weekTodos);
   const rows = unit === "week" ? weekTodos : todos;
+  dragRowsRef.current = rows;
   const childrenOf = (pid: number) => childrenIn(rows, pid);
   // 하단 진행률은 **이 날짜가 맡은 일**만 센다 — 고스트는 다른 날로 넘긴 기록이라 제외한다.
   // (캘린더 점·월 요약도 due_date 기준이라 listMonthCounts 와 같은 기준이 된다)

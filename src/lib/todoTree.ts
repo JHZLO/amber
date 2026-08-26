@@ -109,12 +109,15 @@ export function clampDropDepth(
 }
 
 /** 슬롯 → 새 부모 + 새 형제 순서. candidates 는 서브트리를 뺀 세로 순 후보 행.
+ *  invalidParents 는 부모가 될 수 없는 행 — 라이브 행이 지워진 이월 기록(gone)처럼
+ *  화면에는 있지만 실체가 없는 행 밑으로 들어가는 슬롯을 거절한다.
  *  제자리(변화 없음)거나 규칙상 불가능한 슬롯이면 null → 호출부는 커밋을 생략한다. */
 export function resolveDrop(
   nodes: readonly TodoNode[],
   candidates: readonly TreeRow[],
   draggedId: number,
   slot: DropSlot,
+  invalidParents?: ReadonlySet<number>,
 ): DropResolution | null {
   const dragged = nodes.find((n) => n.id === draggedId);
   if (!dragged) return null;
@@ -131,6 +134,7 @@ export function resolveDrop(
       if (candidates[i].depth < depth - 1) break;
     }
     if (newParentId == null) return null; // 방어 — 유효 깊이 규칙상 오지 않는 경로
+    if (invalidParents?.has(newParentId)) return null; // 예: gone 기록 밑
   }
 
   // 새 형제 순서: 슬롯 이전에 등장한 같은 부모의 행 수 = 삽입 위치

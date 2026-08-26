@@ -260,6 +260,23 @@ describe("resolveDrop — 방어", () => {
     expect(drop(TREE, 999, { idx: 0, depth: 0 })).toBeNull();
   });
 
+  // 과거 날짜 목록에는 라이브 행이 지워진 이월 기록(gone)이 남는다 — 화면에는 있지만
+  // 실체가 없으므로 그 밑으로는 못 들어간다. 살아있는 고스트(carried)는 부모가 된다.
+  it("invalidParents 에 든 행 밑으로는 null, 다른 부모는 그대로", () => {
+    const cand = candidatesFor(TREE, 7);
+    const slot: DropSlot = { idx: 3, depth: 2 }; // 부모 = 2
+    expect(resolveDrop(TREE, cand, 7, slot, new Set([2]))).toBeNull();
+    expect(resolveDrop(TREE, cand, 7, slot, new Set([5]))).toEqual(
+      resolveDrop(TREE, cand, 7, slot),
+    );
+  });
+
+  it("최상위 드롭(depth 0)은 invalidParents 와 무관하다", () => {
+    expect(
+      resolveDrop(TREE, candidatesFor(TREE, 4), 4, { idx: 6, depth: 0 }, new Set([1, 2, 5])),
+    ).toEqual(drop(TREE, 4, { idx: 6, depth: 0 }));
+  });
+
   it("모든 슬롯에서 newSortOrder 가 orderedSiblingIds 안 실제 위치와 일치한다", () => {
     // reorderTodos 가 배열 index 를 sort_order 로 쓰므로 둘이 어긋나면 조용히 순서가 틀어진다
     for (const node of TREE) {
