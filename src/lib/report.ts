@@ -16,6 +16,7 @@ import { writeAtomic } from "./vaultTree";
 import { getDb, getSetting, setSetting } from "./db";
 import { getLang } from "./i18n";
 import { listTodos, listOverdueOpen } from "./todos";
+import { visibleRoots } from "./todoTree";
 import { todayStr, formatDayShort, weekDays, weekdayShort } from "./date";
 import type {
   CollectProgress,
@@ -384,13 +385,24 @@ export async function readReportFile(date: string): Promise<string | null> {
 
 /** 선택 날짜의 할 일 + (오늘이면) 밀린 항목을 마크다운으로. Rust 생성 프롬프트의 '계획' 재료. */
 export async function buildTodosDigest(date: string): Promise<{ md: string; count: number }> {
-  // 이월 고스트(그 날짜에서 다른 날로 가져간 행)는 뺀다 — 그 날이 맡은 일이 아니라 넘긴
-  // 기록이라, 계획 축에 미완료로 섞이면 그 날 성과를 잘못 읽는다(lib/todos.ts listTodos)
-  const todos = (await listTodos(date)).filter((t) => t.carried !== 1);
+  // 이월 고스트(그 날짜에서 다른 날로 가져간 행)는 **체크 여부로 갈라서** 판단한다.
+  //  · 미체크 고스트 → 뺀다. 끝내지 못해 다른 날로 넘긴 것이라 그 날 성과가 아니다.
+  //  · 체크된 고스트 → **남긴다.** 끝난 일이고, 앱도 그 날짜 화면에서 취소선으로 '완료'로
+  //    보여 준다. 통째로 빼면 그 날 메인 작업이 리포트에서 사라진다 — 이월은 흔해서
+  //    (부모를 오늘로 가져가면 그 부모가 어제 날짜에서 고스트가 된다) 체크된 것까지 버리면
+  //    "내가 체크한 일이 리포트에 없다"가 된다.
+  // 기록만 남은 줄(gone)은 라이브 행이 지워진 흔적이라 여전히 제외한다.
+  const todos = (await listTodos(date)).filter(
+    (t) => (t.carried !== 1 || t.done === 1) && t.gone !== 1,
+  );
   const overdue = date === todayStr() ? await listOverdueOpen(date) : [];
   if (!todos.length && !overdue.length) return { md: "", count: 0 };
 
-  const tops = todos.filter((t) => t.parent_id == null);
+  // 루트는 visibleRoots 로 고른다 — `parent_id == null` 로만 고르면 **부모가 이 목록에서 빠진
+  // 자식이 통째로 사라진다.** 위 carried 필터로 이월된 부모가 걸러지면 그 아래 체크된 자식이
+  // 프롬프트에 아예 안 들어가, 그날 메인 작업이 리포트에서 누락됐다(화면은 같은 이유로
+  // 이미 visibleRoots 를 쓴다 — lib/todoTree.ts).
+  const tops = visibleRoots(todos);
   const kids = (pid: number) => todos.filter((t) => t.parent_id === pid);
   const mark = (t: Todo) => (t.done === 1 ? "[x]" : "[ ]");
 
