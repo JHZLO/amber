@@ -98,13 +98,23 @@ export function DailyReportPanel({
     }
   }, [run?.stream]);
 
-  // 표시값: 실행 중이면 스토어, 아니면 디스크 로드
-  const phase: "idle" | RunPhase = run?.phase ?? (loaded ? "done" : "idle");
-  const chips: RunChip[] = run?.chips ?? [];
-  const stream = run?.stream ?? "";
-  const report = run ? run.report : (loaded?.report ?? null);
-  const body = run ? run.body : (loaded?.body ?? "");
-  const error = run?.error ?? null;
+  // 표시값: 실행 중이면 스토어, 아니면 디스크 로드.
+  //
+  // **실패한 실행은 표시에서 배제한다.** 다시 생성이 실패했다고 그때까지 쓰던 문서가 화면에서
+  // 사라지면 안 된다 — 사용량 한도처럼 내 잘못이 아닌 이유로도 실패하는데, 그 대가로 멀쩡한
+  // 리포트를 잃는 셈이 된다. 갈아끼우는 시점은 **새 문서가 완성된 때** 하나뿐이다.
+  // 실패는 모달로 알리고(닫으면 clearRun), 화면은 직전 리포트를 그대로 유지한다.
+  const failed = run?.phase === "error";
+  const shown = failed && loaded ? null : run;
+  const phase: "idle" | RunPhase = shown?.phase ?? (loaded ? "done" : (run?.phase ?? "idle"));
+  const chips: RunChip[] = shown?.chips ?? [];
+  const stream = shown?.stream ?? "";
+  const report = shown ? shown.report : (loaded?.report ?? null);
+  const body = shown ? shown.body : (loaded?.body ?? "");
+  const failedWithPrev = failed && loaded ? (run?.error ?? null) : null;
+  // 인라인 에러 노트는 **되돌릴 리포트가 없을 때만** — 있으면 위 모달이 맡는다.
+  // shown?.error 로 쓰면 첫 실패(직전 리포트 없음)에서 shown 이 null 이라 에러가 통째로 사라진다.
+  const error = failedWithPrev ? null : (run?.error ?? null);
 
   async function generate() {
     if (isRunning(date) || isFuture) return;
@@ -400,6 +410,26 @@ export function DailyReportPanel({
       {phase === "error" && error && <div className="error-note">{error}</div>}
       {opError && <div className="error-note">{opError}</div>}
       {savedFlash && <div className="ok-note">{t("report.editSaved")}</div>}
+
+      {/* 다시 생성 실패 — 직전 리포트는 화면에 그대로 두고 실패만 알린다.
+          닫으면 실행 상태를 비워 디스크 리포트가 정본으로 남는다. */}
+      <Modal
+        open={!!failedWithPrev}
+        title={t("report.failedTitle")}
+        narrow
+        onClose={() => clearRun(date)}
+        footer={
+          <>
+            <span className="spacer" />
+            <button className="btn btn-sm" onClick={() => clearRun(date)}>
+              {t("common.close")}
+            </button>
+          </>
+        }
+      >
+        <p style={{ margin: 0 }}>{failedWithPrev}</p>
+        <p className="hint" style={{ marginBottom: 0 }}>{t("report.failedKept")}</p>
+      </Modal>
 
       {/* 초안 버리기 확인 — 노트·다이어그램과 같은 공용 모달(ui.tsx) */}
       <UnsavedModal

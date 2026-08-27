@@ -105,6 +105,8 @@ const ko = {
   // 패널 — 완료 액션·확인 모달
   "report.copy": "복사",
   "report.edit": "직접 수정",
+  "report.failedTitle": "다시 생성하지 못했어요",
+  "report.failedKept": "직전 리포트는 그대로 남아 있어요. 잠시 뒤 다시 시도해 보세요.",
   "report.editHint": "왼쪽이 원문, 오른쪽이 미리보기예요. ⌘S 로도 저장돼요.",
   "report.editSaved": "저장했어요",
   "report.regen": "다시 생성",
@@ -208,6 +210,8 @@ const en: Record<keyof typeof ko, string> = {
 
   "report.copy": "Copy",
   "report.edit": "Edit",
+  "report.failedTitle": "Couldn't regenerate",
+  "report.failedKept": "Your previous report is still here. Try again in a bit.",
   "report.editHint": "Source on the left, preview on the right. ⌘S saves too.",
   "report.editSaved": "Saved",
   "report.regen": "Regenerate",

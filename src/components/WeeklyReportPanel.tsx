@@ -108,11 +108,18 @@ export function WeeklyReportPanel({
     }
   }, [run?.stream]);
 
-  const phase: "idle" | RunPhase = run?.phase ?? (loaded ? "done" : "idle");
-  const stream = run?.stream ?? "";
-  const report = (run ? run.report : loaded?.report) as WeeklyReport | null;
-  const body = run ? run.body : (loaded?.body ?? "");
-  const error = run?.error ?? null;
+  // 실패한 실행은 표시에서 배제한다 — 직전 리포트를 그대로 두고 실패는 모달로 알린다
+  // (DailyReportPanel 과 같은 규약: 갈아끼우는 시점은 새 문서가 완성된 때뿐이다)
+  const failed = run?.phase === "error";
+  const shown = failed && loaded ? null : run;
+  const phase: "idle" | RunPhase = shown?.phase ?? (loaded ? "done" : (run?.phase ?? "idle"));
+  const stream = shown?.stream ?? "";
+  const report = (shown ? shown.report : loaded?.report) as WeeklyReport | null;
+  const body = shown ? shown.body : (loaded?.body ?? "");
+  const failedWithPrev = failed && loaded ? (run?.error ?? null) : null;
+  // 인라인 에러 노트는 **되돌릴 리포트가 없을 때만** — 있으면 위 모달이 맡는다.
+  // shown?.error 로 쓰면 첫 실패(직전 리포트 없음)에서 shown 이 null 이라 에러가 통째로 사라진다.
+  const error = failedWithPrev ? null : (run?.error ?? null);
 
   const have = sources?.filter((d) => !!d.body?.trim()) ?? null;
   const missing = sources?.filter((d) => !d.body?.trim()) ?? null;
@@ -333,6 +340,25 @@ export function WeeklyReportPanel({
         }
       >
         <p>{t("report.weekly.regenBody")}</p>
+      </Modal>
+
+      {/* 다시 생성 실패 — 직전 리포트를 화면에 두고 실패만 알린다(닫으면 실행 상태 비움) */}
+      <Modal
+        open={!!failedWithPrev}
+        title={t("report.failedTitle")}
+        narrow
+        onClose={() => clearRun(key)}
+        footer={
+          <>
+            <span className="spacer" />
+            <button className="btn btn-sm" onClick={() => clearRun(key)}>
+              {t("common.close")}
+            </button>
+          </>
+        }
+      >
+        <p style={{ margin: 0 }}>{failedWithPrev}</p>
+        <p className="hint" style={{ marginBottom: 0 }}>{t("report.failedKept")}</p>
       </Modal>
 
       <Modal
