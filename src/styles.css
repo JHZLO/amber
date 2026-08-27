@@ -1130,6 +1130,18 @@ body.resizing-col .pane-resizer::after {
 .ai-thinking.compact .ai-progress {
   max-width: none;
 }
+/* 리포트 안의 진행 표시만 숨을 트여 준다. `.ai-thinking.compact` 자체는 노트 코멘트
+   말풍선도 쓰는데(NoteComments) 거기선 인라인이라 좁은 게 맞다 — 그래서 전역이 아니라
+   `.report` 안으로 범위를 좁힌다. 리포트는 칩 줄·라벨·진행 바가 세 겹으로 쌓이는 자리라
+   기본 간격(6px)이면 세 줄이 한 덩어리로 뭉쳐 답답하게 읽힌다. */
+.report .ai-thinking.compact {
+  gap: 12px;
+  padding: 12px 0 8px;
+}
+/* 스트리밍 본문도 칩 줄에 붙지 않게 — 위 진행 표시와 같은 만큼 띄운다 */
+.report .note-stream-body {
+  margin-top: 12px;
+}
 @media (prefers-reduced-motion: reduce) {
   .ai-thinking-mark,
   .ai-progress-bar {
