@@ -104,6 +104,9 @@ const ko = {
 
   // 패널 — 완료 액션·확인 모달
   "report.copy": "복사",
+  "report.edit": "직접 수정",
+  "report.editHint": "왼쪽이 원문, 오른쪽이 미리보기예요. ⌘S 로도 저장돼요.",
+  "report.editSaved": "저장했어요",
   "report.regen": "다시 생성",
   "report.regenTitle": "리포트 다시 생성",
   "report.regenBody": "기존 리포트를 새로 생성한 내용으로 덮어써요. 계속할까요?",
@@ -204,6 +207,9 @@ const en: Record<keyof typeof ko, string> = {
   "report.empty": "No activity recorded for this date. Check off a to-do or pick another day.",
 
   "report.copy": "Copy",
+  "report.edit": "Edit",
+  "report.editHint": "Source on the left, preview on the right. ⌘S saves too.",
+  "report.editSaved": "Saved",
   "report.regen": "Regenerate",
   "report.regenTitle": "Regenerate report",
   "report.regenBody": "The existing report will be overwritten with a newly generated one. Continue?",

@@ -14,6 +14,7 @@ import {
   getReport,
   loadReportConfig,
   readReportFile,
+  writeReportFile,
 } from "../lib/report";
 import {
   cancelReport,
@@ -26,7 +27,7 @@ import {
 } from "../lib/reportRun";
 import { todayStr } from "../lib/date";
 import { Markdown } from "./Markdown";
-import { AiThinking, Modal, Spinner, Tooltip } from "../ui";
+import { AiThinking, Modal, Spinner, Tooltip, UnsavedModal } from "../ui";
 import { Icon } from "../icons";
 import { t, dateLocale } from "../lib/i18n";
 import { errText } from "../lib/errors";
@@ -68,6 +69,12 @@ export function DailyReportPanel({
   const [copied, setCopied] = useState(false);
   const [opError, setOpError] = useState<string | null>(null);
   const streamRef = useRef<HTMLPreElement>(null);
+  // 직접 수정 — 노트 편집과 같은 2분할(좌 원문 / 우 라이브 프리뷰). 정본은 파일이라
+  // 저장은 writeReportFile 한 번이고, DB 메타(생성 시각·모델)는 건드리지 않는다.
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   const isFuture = date > todayStr();
 
@@ -146,6 +153,57 @@ export function DailyReportPanel({
     }
   }
 
+  function startEdit() {
+    setDraft(body);
+    setOpError(null);
+    setEditing(true);
+  }
+
+  const dirty = editing && draft !== body;
+
+  /** 편집 종료 — 고친 게 있으면 확인을 받는다(초안은 파일에 없으니 닫으면 사라진다) */
+  function closeEdit() {
+    if (dirty) {
+      setConfirmDiscard(true);
+      return;
+    }
+    setEditing(false);
+  }
+
+  async function saveEdit() {
+    if (!editing) return;
+    const md = draft;
+    try {
+      await writeReportFile(date, md);
+      // 스토어에 실행이 남아 있으면 그쪽 body 가 표시 정본이라 방금 저장한 내용이 가려진다 —
+      // 저장 뒤로는 파일이 정본이므로 실행 상태를 비우고 로드본으로 갈아탄다.
+      // 메타는 DB 에서 다시 읽는다(run.report 는 일간·주간 공용 타입이라 그대로 못 쓴다).
+      const meta = await getReport(date);
+      if (meta) setLoaded({ report: meta, body: md });
+      clearRun(date);
+      setEditing(false);
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 1500);
+    } catch (e) {
+      setOpError(errText(e));
+    }
+  }
+
+  // ⌘S 저장 — 노트 편집과 같은 단축키(NotesView). 편집 중일 때만 가로챈다.
+  const saveRef = useRef(saveEdit);
+  saveRef.current = saveEdit;
+  useEffect(() => {
+    if (!editing) return;
+    const h = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void saveRef.current();
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [editing]);
+
   const doneSources: { id: string; ok: boolean; items: number; mcp?: boolean }[] =
     report ? safeParse(report.sources_json) : [];
 
@@ -157,8 +215,32 @@ export function DailyReportPanel({
           {t("report.title")}
         </span>
         <span className="spacer" />
-        {phase === "done" ? (
+        {phase === "done" && editing ? (
+          // 편집 중 헤더 — 되돌릴 수 없는 액션(재생성·삭제)은 감춘다. 초안이 열린 채로
+          // 눌리면 방금 고친 게 조용히 사라진다.
           <span className="report-actions">
+            <button className="btn btn-sm" onClick={closeEdit}>
+              {t("common.cancel")}
+            </button>
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={() => void saveEdit()}
+              disabled={!dirty}
+            >
+              {t("common.save")}
+            </button>
+          </span>
+        ) : phase === "done" ? (
+          <span className="report-actions">
+            <Tooltip label={t("report.edit")}>
+              <button
+                aria-label={t("report.edit")}
+                className="icon-btn sm"
+                onClick={startEdit}
+              >
+                <Icon name="pencil" size={13} />
+              </button>
+            </Tooltip>
             <Tooltip label={t("report.regen")}>
               <button
                 aria-label={t("report.regen")}
@@ -285,9 +367,28 @@ export function DailyReportPanel({
               </span>
             )}
           </div>
-          <div className="markdown report-body">
-            <Markdown>{body}</Markdown>
-          </div>
+          {editing ? (
+            // 좌 원문 / 우 라이브 프리뷰 — 노트 편집 모드와 같은 문법(.claude/DESIGN.md §7)
+            <>
+              <div className="report-edit-split">
+                <textarea
+                  className="textarea report-edit-src"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  spellCheck={false}
+                  autoFocus
+                />
+                <div className="markdown note-preview report-body">
+                  <Markdown>{draft}</Markdown>
+                </div>
+              </div>
+              <p className="report-hint">{t("report.editHint")}</p>
+            </>
+          ) : (
+            <div className="markdown report-body">
+              <Markdown>{body}</Markdown>
+            </div>
+          )}
         </>
       )}
 
@@ -297,6 +398,17 @@ export function DailyReportPanel({
       )}
       {phase === "error" && error && <div className="error-note">{error}</div>}
       {opError && <div className="error-note">{opError}</div>}
+      {savedFlash && <div className="ok-note">{t("report.editSaved")}</div>}
+
+      {/* 초안 버리기 확인 — 노트·다이어그램과 같은 공용 모달(ui.tsx) */}
+      <UnsavedModal
+        open={confirmDiscard}
+        onKeep={() => setConfirmDiscard(false)}
+        onDiscard={() => {
+          setConfirmDiscard(false);
+          setEditing(false);
+        }}
+      />
 
       <Modal
         open={confirmRegen}

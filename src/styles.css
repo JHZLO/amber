@@ -4630,6 +4630,29 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
 .report-body {
   font-size: 13.5px;
 }
+/* 리포트 직접 수정 — 노트 편집과 **같은 2분할 문법**(좌 원문 / 우 라이브 프리뷰, §7)이지만
+   컨테이너 사정이 다르다: 노트는 화면 높이를 차지하는 pane 이라 .note-edit-split 이
+   `flex:1 + height:100%` 로 부모 높이를 받아 쓰는데, 리포트는 **스크롤되는 detail 컬럼 안의
+   블록**이라 부모가 높이를 주지 않는다 — 그걸 그대로 쓰면 양쪽이 0 으로 접힌다.
+   그래서 여기서만 고정 높이를 주고, 안쪽 두 칸이 각자 스크롤한다.
+   프리뷰 박스는 노트와 같은 .note-preview 를 그대로 재사용한다(테두리·패딩·스크롤·배경). */
+.report-edit-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  height: 440px;
+  margin-bottom: 8px;
+}
+.report-edit-src {
+  height: 100%;
+  min-height: 0;
+  resize: none;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.report-edit-split .note-preview {
+  height: 100%;
+}
 /* 스트리밍 커서 — 깜빡이는 세로 바 (스트리밍 중 pre 안에서 사용) */
 .report-caret {
   display: inline-block;
