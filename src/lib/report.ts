@@ -119,6 +119,8 @@ export function reportCollect(
     tzOffsetMin: number;
     github: GithubCollectCfg | null;
     aiSessions: SessionsCollectCfg | null;
+    /** 그날 투두 본문 — 세션 중 어느 것을 '요청 내용까지' 펼칠지 고르는 기준 */
+    todos: string | null;
   },
   onProgress: (p: CollectProgress) => void,
 ): Promise<SourceDigest[]> {
@@ -131,6 +133,7 @@ export function reportCollect(
     tzOffsetMin: params.tzOffsetMin,
     github: params.github,
     aiSessions: params.aiSessions,
+    todos: params.todos,
     onProgress: channel,
   });
 }

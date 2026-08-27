@@ -181,6 +181,9 @@ export async function startReport(date: string, config: AppConfig): Promise<void
         aiSessions: sessR
           ? { rank: sessR.rank, claude: rc.sessionsClaude, codex: rc.sessionsCodex }
           : null,
+        // 투두를 수집기에도 넘긴다 — 세션 중 '오늘 계획과 관련된 것'을 골라 사용자 요청까지
+        // 펼치는 기준이다(Rust collect_ai_sessions). 생성 프롬프트에 넣는 것과 같은 본문.
+        todos: todosDigest || null,
       },
       (p: CollectProgress) => {
         const cur = runs.get(date);

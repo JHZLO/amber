@@ -33,6 +33,13 @@ const SESSION_CONCURRENCY: usize = 8;
 // 1행으로 판단하지 않는 이유: 머리에 나중 시각의 메타 행(pr-link·queue-operation)이 섞인다.
 // 실측상 가장 이른 타임스탬프는 5행 안에 나오므로 40행이면 충분히 여유롭다.
 const SESSION_SKIP_PROBE: u32 = 40;
+/// 사용자 요청까지 펼쳐 보여 줄 세션 수 — 투두와의 관련도 상위 N 건.
+/// 전부 펼치면 예산을 세션이 다 먹고 GitHub 이 밀린다.
+const MAX_DETAILED_SESSIONS: usize = 8;
+/// 한 세션에서 담을 사용자 요청 수. 첫 요청만으로는 '중간에 방향이 바뀐 지점'이 안 보인다.
+const MAX_MSGS_PER_SESSION: usize = 8;
+/// 요청 한 건의 길이 상한 — 붙여넣은 로그·코드가 통째로 들어오는 걸 막는다.
+const MSG_CHARS: usize = 200;
 
 const REPORT_SYSTEM_PROMPT: &str = r#"너는 사용자의 하루 업무를 정리해 '데일리 리포트'로 써 주는 조수다.
 입력(stdin)에는 [리포트 대상 날짜], [투두 — 오늘의 계획], 그리고 활성화된 플랫폼별 활동 요약이
@@ -85,7 +92,9 @@ PR·커밋·이슈·세션은 그 이야기의 근거일 뿐이다. 제목을 �
 
 [근거 없는 서사를 지어내지 마라 — 가장 중요한 안전장치]
 '왜/어떻게'는 입력에 실제로 있는 근거에서만 쓴다 — PR·이슈 본문, 커밋 메시지, 투두 문구,
-세션 제목, 메시지 내용.
+그리고 AI 세션의 `· 요청:` 줄(그 세션에서 사용자가 실제로 요청한 문장이다).
+세션 `· 요청:` 줄은 '무엇을 하려 했는지'가 사용자 말로 남은 유일한 근거다 — 같은 일을 가리키는
+PR 과 엮어 그 일의 계기·시행착오를 쓰는 데 우선 활용한다.
 - 근거가 있으면 그 문장을 리포트 문체로 옮겨 쓴다(요약·정리는 하되 뜻을 바꾸지 않는다).
 - 근거가 없으면 하위 불릿 없이 `##` 한 줄만 쓴다. 억지로 이유를 붙이는 것보다 결과만 있는
   항목이 낫다. 이유를 모르면 모르는 채로 두는 것이 정확한 리포트다.
@@ -232,12 +241,17 @@ const WEEKLY_TIMEOUT_SECS: u64 = 420;
 const WEEKLY_INPUT_BUDGET: usize = 28_000;
 
 /// rank → digest 문자 예산(우선순위 높을수록 더 상세히 담는다). PLAN §5.
+///
+/// 초기값(8k/4k/2k/1k)은 항목이 '제목 한 줄'이던 때의 어림값이었다. 지금은 1순위가
+/// PR 본문 1500자를, 세션이 사용자 요청 문장을 싣는다 — 그게 '왜 이걸 했는지'의 유일한
+/// 근거라서다. 8k 로는 PR 5건에서 차서 그날 일의 절반이 `… (이하 생략)` 으로 잘렸다.
+/// rank 1 의 정의 자체가 "항목 전부 + 본문/설명 포함"(PLAN §5)이므로 그 정의를 지키는 값으로 올린다.
 fn budget_for(rank: u8) -> usize {
     match rank {
-        1 => 8000,
-        2 => 4000,
-        3 => 2000,
-        _ => 1000,
+        1 => 30_000,
+        2 => 12_000,
+        3 => 5_000,
+        _ => 2_000,
     }
 }
 
@@ -651,6 +665,40 @@ struct SessionEntry {
     start: i64,
     end: i64,
     edits: u32,
+    /// 이 세션의 사용자 요청들(시간순). '왜 이걸 했는지'는 여기밖에 남지 않는다 —
+    /// 관련도 상위 세션만 리포트 입력에 펼친다(collect_ai_sessions).
+    messages: Vec<String>,
+}
+
+/// 투두 문구에서 관련도 판정에 쓸 키워드를 뽑는다.
+///
+/// 마크다운 체크박스·기호를 걷어내고 2글자 이상 토큰만 남긴다. '수정·개선·확인' 같은 일반
+/// 업무 동사는 **뺀다** — 투두와 세션 양쪽에 늘 있어서 남겨 두면 모든 세션이 만점이 되고
+/// 관련도가 무의미해진다(그게 이 함수의 존재 이유다).
+fn todo_keywords(todos: &str) -> Vec<String> {
+    const GENERIC: &[&str] = &[
+        "수정", "개선", "확인", "작업", "진행", "정리", "추가", "변경", "테스트", "적용",
+        "구현", "처리", "완료", "요청", "이슈", "리뷰", "머지", "배포", "관련", "부분",
+        "fix", "add", "update", "test", "todo", "done", "wip",
+    ];
+    let mut out: Vec<String> = Vec::new();
+    for raw in todos.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
+        let t = raw.trim().to_lowercase();
+        if t.chars().count() < 2 || GENERIC.contains(&t.as_str()) {
+            continue;
+        }
+        if !out.contains(&t) {
+            out.push(t);
+        }
+    }
+    out
+}
+
+/// 세션이 투두와 얼마나 겹치는지 — 일치한 **서로 다른** 키워드 수.
+/// 같은 단어가 여러 번 나온다고 더 관련된 건 아니라서 중복은 세지 않는다.
+fn relevance_score(keywords: &[String], haystack: &str) -> usize {
+    let hay = haystack.to_lowercase();
+    keywords.iter().filter(|k| hay.contains(k.as_str())).count()
 }
 
 fn basename_of(path: &str) -> String {
@@ -700,6 +748,7 @@ async fn parse_claude_file(path: PathBuf, start_ms: i64, end_ms: i64) -> Option<
     let mut max_ts: Option<i64> = None;
     let mut edits: u32 = 0;
     let mut past: u32 = 0;
+    let mut msgs: Vec<String> = Vec::new();
 
     while let Ok(Some(line)) = lines.next_line().await {
         let line = line.as_str();
@@ -736,9 +785,14 @@ async fn parse_claude_file(path: PathBuf, start_ms: i64, end_ms: i64) -> Option<
         min_ts = Some(min_ts.map_or(ts, |m| m.min(ts)));
         max_ts = Some(max_ts.map_or(ts, |m| m.max(ts)));
         if kind == "user" {
+            if let Some(t) = v.get("message").and_then(extract_user_text) {
+                // 도구 결과(중첩 배열)나 슬래시 명령 잡음은 건너뛰고 실제 요청만
+                if !t.trim_start().starts_with("<") && msgs.len() < MAX_MSGS_PER_SESSION {
+                    msgs.push(truncate_line(&t, MSG_CHARS));
+                }
+            }
             if first_user.is_none() {
                 if let Some(t) = v.get("message").and_then(extract_user_text) {
-                    // 도구 결과(중첩 배열)나 슬래시 명령 잡음은 건너뛰고 실제 요청만
                     if !t.trim_start().starts_with("<") {
                         first_user = Some(t);
                     }
@@ -769,6 +823,7 @@ async fn parse_claude_file(path: PathBuf, start_ms: i64, end_ms: i64) -> Option<
         start,
         end,
         edits,
+        messages: msgs,
     })
 }
 
@@ -844,6 +899,7 @@ async fn parse_codex_file(path: PathBuf, start_ms: i64, end_ms: i64) -> Option<S
     let mut min_ts: Option<i64> = None;
     let mut max_ts: Option<i64> = None;
     let mut past: u32 = 0;
+    let mut msgs: Vec<String> = Vec::new();
 
     while let Ok(Some(line)) = lines.next_line().await {
         let line = line.as_str();
@@ -873,8 +929,8 @@ async fn parse_codex_file(path: PathBuf, start_ms: i64, end_ms: i64) -> Option<S
                 max_ts = Some(max_ts.map_or(ts, |m| m.max(ts)));
             }
         }
-        // 첫 사용자 요청: 여러 포맷 방어 — payload.role=="user" 또는 event_msg(user_message)
-        if first_user.is_none() {
+        // 사용자 요청: 여러 포맷 방어 — payload.role=="user" 또는 event_msg(user_message)
+        {
             let role = payload.and_then(|p| p.get("role")).and_then(|r| r.as_str());
             let ptype = payload.and_then(|p| p.get("type")).and_then(|t| t.as_str());
             if role == Some("user") || ptype == Some("user_message") {
@@ -883,7 +939,12 @@ async fn parse_codex_file(path: PathBuf, start_ms: i64, end_ms: i64) -> Option<S
                         pl.get("message").and_then(|m| m.as_str()).map(String::from)
                     }) {
                         if !t.trim_start().starts_with('<') {
-                            first_user = Some(t);
+                            if msgs.len() < MAX_MSGS_PER_SESSION {
+                                msgs.push(truncate_line(&t, MSG_CHARS));
+                            }
+                            if first_user.is_none() {
+                                first_user = Some(t);
+                            }
                         }
                     }
                 }
@@ -908,6 +969,7 @@ async fn parse_codex_file(path: PathBuf, start_ms: i64, end_ms: i64) -> Option<S
         start,
         end,
         edits: 0,
+        messages: msgs,
     })
 }
 
@@ -936,7 +998,18 @@ async fn collect_codex_sessions(
     parse_sessions_bounded(paths, start_ms, end_ms, parse_codex_file).await
 }
 
-async fn collect_ai_sessions(cfg: &SessionsCfg, date: &str, start_ms: i64, end_ms: i64, tz: i32) -> SourceDigest {
+/// AI 세션 수집. `todos` 를 주면 **투두와 관련된 세션을 골라 사용자 요청까지 펼친다** —
+/// 리포트가 '왜 이걸 했는지'를 쓰려면 근거가 필요한데, 그 근거는 세션의 사용자 발화에만 있다.
+/// 전부 펼치지 않는 이유: 하루 세션이 수십 건이라 예산을 세션이 다 먹고 GitHub 이 밀린다.
+/// 관련도가 0 인 세션도 버리지 않고 한 줄로 남긴다(그 시간에 무엇을 했는지의 기록은 유지).
+async fn collect_ai_sessions(
+    cfg: &SessionsCfg,
+    date: &str,
+    start_ms: i64,
+    end_ms: i64,
+    tz: i32,
+    todos: Option<&str>,
+) -> SourceDigest {
     let gather = async {
         let mut sessions: Vec<SessionEntry> = Vec::new();
         if let Some(home) = home_dir() {
@@ -974,19 +1047,53 @@ async fn collect_ai_sessions(cfg: &SessionsCfg, date: &str, start_ms: i64, end_m
         };
     }
 
-    let lines: Vec<String> = sessions
-        .iter()
-        .map(|s| {
-            let time = format!("{}–{}", fmt_hhmm(s.start, tz), fmt_hhmm(s.end, tz));
-            let edits = if s.edits > 0 {
-                format!(" · 편집 {}", s.edits)
-            } else {
-                String::new()
-            };
-            format!("- [{}] {} {} · {}{}", s.tool, s.project, time, s.title, edits)
-        })
-        .collect();
-    let digest = format!("세션 {}건\n{}", sessions.len(), lines.join("\n"));
+    // 투두와의 관련도로 '펼칠 세션'을 고른다. 임계값이 아니라 **상위 N 건**인 이유:
+    // 일반 업무 단어를 걸러도 겹침 정도는 하루마다 달라서, 임계값을 쓰면 어떤 날은 전부
+    // 펼쳐지고 어떤 날은 하나도 안 펼쳐진다. 순위로 뽑으면 분량이 어느 날이든 일정하다.
+    let keywords = todos.map(todo_keywords).unwrap_or_default();
+    let mut detailed: Vec<usize> = Vec::new();
+    if !keywords.is_empty() {
+        let mut scored: Vec<(usize, usize)> = sessions
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
+                let hay = format!("{} {} {}", s.project, s.title, s.messages.join(" "));
+                (i, relevance_score(&keywords, &hay))
+            })
+            .filter(|(_, score)| *score > 0)
+            .collect();
+        // 관련도 내림차순, 같으면 이른 시각 우선(입력이 안정적이어야 리포트가 흔들리지 않는다)
+        scored.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+        scored.truncate(MAX_DETAILED_SESSIONS);
+        detailed = scored.into_iter().map(|(i, _)| i).collect();
+        detailed.sort_unstable();
+    }
+
+    let mut lines: Vec<String> = Vec::new();
+    for (i, s) in sessions.iter().enumerate() {
+        let time = format!("{}–{}", fmt_hhmm(s.start, tz), fmt_hhmm(s.end, tz));
+        let edits = if s.edits > 0 {
+            format!(" · 편집 {}", s.edits)
+        } else {
+            String::new()
+        };
+        lines.push(format!("- [{}] {} {} · {}{}", s.tool, s.project, time, s.title, edits));
+        if detailed.binary_search(&i).is_ok() {
+            for m in &s.messages {
+                lines.push(format!("    · 요청: {m}"));
+            }
+        }
+    }
+    let head = if detailed.is_empty() {
+        format!("세션 {}건", sessions.len())
+    } else {
+        format!(
+            "세션 {}건 (투두와 관련된 {}건은 사용자 요청까지 포함 — '왜 이걸 했는지'의 근거)",
+            sessions.len(),
+            detailed.len()
+        )
+    };
+    let digest = format!("{head}\n{}", lines.join("\n"));
     SourceDigest {
         id: "ai_sessions".into(),
         rank: cfg.rank,
@@ -1008,6 +1115,8 @@ pub async fn report_collect(
     tz_offset_min: i32,
     github: Option<GithubCfg>,
     ai_sessions: Option<SessionsCfg>,
+    // 그날 투두 본문 — 세션 관련도 판정에 쓴다(없으면 세션은 한 줄 요약만)
+    todos: Option<String>,
     on_progress: Channel<CollectProgress>,
 ) -> Result<Vec<SourceDigest>, AiError> {
     let gh_fut = async {
@@ -1018,7 +1127,10 @@ pub async fn report_collect(
     };
     let sess_fut = async {
         match ai_sessions.as_ref() {
-            Some(cfg) => Some(collect_ai_sessions(cfg, &date, start_ms, end_ms, tz_offset_min).await),
+            Some(cfg) => Some(
+                collect_ai_sessions(cfg, &date, start_ms, end_ms, tz_offset_min, todos.as_deref())
+                    .await,
+            ),
             None => None,
         }
     };
@@ -1622,6 +1734,45 @@ pub async fn report_gh_accounts(cli_path: Option<String>) -> Vec<GhAccount> {
 
 #[cfg(test)]
 mod tests {
+    use super::{relevance_score, todo_keywords};
+
+    #[test]
+    fn todo_keywords_drop_markdown_and_generic_work_verbs() {
+        let kw = todo_keywords("- [x] 파트너스 PB 항공편 개선\n- [ ] e-ticket 알림톡 수정");
+        // 체크박스·기호는 토큰이 아니다
+        assert!(!kw.iter().any(|k| k == "x" || k.is_empty()));
+        // 고유한 말은 남는다
+        assert!(kw.contains(&"파트너스".to_string()));
+        assert!(kw.contains(&"항공편".to_string()));
+        assert!(kw.contains(&"ticket".to_string()));
+        // 일반 업무 동사는 빠진다 — 남기면 모든 세션이 만점이 되어 관련도가 무의미해진다
+        assert!(!kw.contains(&"개선".to_string()));
+        assert!(!kw.contains(&"수정".to_string()));
+    }
+
+    #[test]
+    fn relevance_counts_distinct_keywords_only() {
+        let kw = todo_keywords("- [ ] 파트너스 PB 항공편");
+        // 같은 단어가 여러 번 나와도 1 로 센다
+        let repeated = relevance_score(&kw, "파트너스 파트너스 파트너스");
+        let two = relevance_score(&kw, "파트너스 항공편 화면 통일");
+        assert_eq!(repeated, 1);
+        assert_eq!(two, 2);
+    }
+
+    #[test]
+    fn relevance_is_case_insensitive_and_zero_when_unrelated() {
+        let kw = todo_keywords("- [ ] NUUA 여권 만료일 검증");
+        assert!(relevance_score(&kw, "nuua booking hold") >= 1);
+        assert_eq!(relevance_score(&kw, "완전히 다른 주제의 세션"), 0);
+    }
+
+    #[test]
+    fn empty_todos_yield_no_keywords() {
+        // 투두가 비면 관련도 판정 자체를 하지 않는다(호출부가 전체를 한 줄 요약으로 남긴다)
+        assert!(todo_keywords("").is_empty());
+        assert!(todo_keywords("- [ ] 수정 확인 진행").is_empty());
+    }
 
     #[test]
     fn strips_pr_links_but_keeps_the_sentence() {
