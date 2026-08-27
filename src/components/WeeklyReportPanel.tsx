@@ -262,9 +262,9 @@ export function WeeklyReportPanel({
       {/* ② 스트리밍 */}
       {phase === "streaming" && (
         <>
-          <div className="report-stop">
+          <div className="report-stop-row">
             <button
-              className="btn btn-sm"
+              className="btn btn-sm btn-danger-ghost"
               onClick={() => void cancelWeeklyReport(weekStart)}
               title={t("report.stopHint")}
             >

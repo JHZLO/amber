@@ -160,7 +160,7 @@ export function NoteAiModal({
   } else if (step === "loading") {
     // 5분짜리 실행에 탈출구가 없으면 앱을 끄는 것 말고 방법이 없다
     footer = (
-      <button className="btn btn-sm" onClick={stop}>
+      <button className="btn btn-sm btn-danger-ghost" onClick={stop}>
         <Icon name="x" size={14} />
         {t("notes.ai.stop")}
       </button>

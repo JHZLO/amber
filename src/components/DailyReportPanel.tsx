@@ -313,10 +313,10 @@ export function DailyReportPanel({
                 chip
               );
             })}
-          </div>
-          <div className="report-stop">
+            {/* 중단은 소스 칩과 **같은 줄** 우측 — 진행 중인 그 작업에 딸린 조작이라
+                줄을 따로 내면 무엇을 멈추는 버튼인지 연결이 끊긴다. */}
             <button
-              className="btn btn-sm"
+              className="btn btn-sm btn-danger-ghost report-stop"
               onClick={() => void cancelReport(date)}
               disabled={phase === "collecting"}
               title={t("report.stopHint")}
@@ -326,7 +326,8 @@ export function DailyReportPanel({
             </button>
           </div>
           {phase === "collecting" ? (
-            <AiThinking label={t("report.collecting")} compact />
+            // 수집은 gh·로컬 세션 파일을 훑는 단계라 '찾는 중'이 실제 동작에 가깝다
+            <AiThinking label={t("report.collecting")} compact icon="search" />
           ) : stream ? (
             <pre className="note-stream-body" ref={streamRef}>
               {stream}

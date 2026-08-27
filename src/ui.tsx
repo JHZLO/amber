@@ -95,11 +95,16 @@ export function AiThinking({
   hint,
   compact,
   indicator = "bar",
+  icon = "loader",
 }: {
   label: string;
   hint?: string;
   compact?: boolean;
   indicator?: "bar" | "ring";
+  /** 진행 표식 아이콘. 기본 `loader`(도는 원호). 하는 일이 분명하면 그 동작의 아이콘을
+   *  준다(예: 활동 수집 = `search`). **`sparkles` 는 쓰지 않는다** — 그건 'AI 기능'이라는
+   *  정체성 표식이라, 로딩에도 쓰면 한 화면에 같은 아이콘이 두 번 나와 뜻이 흐려진다. */
+  icon?: IconName;
 }) {
   const ring = indicator === "ring";
   return (
@@ -110,8 +115,8 @@ export function AiThinking({
     >
       {ring && <AiRing />}
       <div className="ai-thinking-label">
-        <span className="ai-thinking-spark">
-          <Icon name="sparkles" size={compact ? 12 : 14} />
+        <span className={`ai-thinking-mark ${icon === "loader" ? "spin" : ""}`}>
+          <Icon name={icon} size={compact ? 12 : 14} />
         </span>
         <span>{label}</span>
       </div>

@@ -1053,10 +1053,21 @@ body.resizing-col .pane-resizer::after {
   font-weight: 600;
   color: var(--text-2);
 }
-.ai-thinking-spark {
+/* 진행 표식 — 기본은 loader 아이콘이 도는 것(.spin), 상황 아이콘(search 등)은 맥박만.
+   회전을 아이콘 종류로 가르는 이유: 끊긴 원호는 돌아야 '로딩'으로 읽히고, 돋보기가
+   돌면 고장난 스피너처럼 보인다. 연속 모션이라 이징은 linear(§9). */
+.ai-thinking-mark {
   display: inline-flex;
   color: var(--text-3);
   animation: ai-spark 1.4s ease-in-out infinite;
+}
+.ai-thinking-mark.spin {
+  animation: ai-mark-spin 0.9s linear infinite;
+}
+@keyframes ai-mark-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 @keyframes ai-spark {
   0%,
@@ -1120,7 +1131,7 @@ body.resizing-col .pane-resizer::after {
   max-width: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .ai-thinking-spark,
+  .ai-thinking-mark,
   .ai-progress-bar {
     animation: none;
   }
@@ -1199,7 +1210,13 @@ body.resizing-col .pane-resizer::after {
 }
 
 /* 리포트 생성 중단 버튼 줄 — 진행 표시 위, 우측 정렬 */
+/* 중단 버튼 — 소스 칩과 같은 줄의 오른쪽 끝에 붙는다(무엇을 멈추는지 옆에서 읽히게).
+   칩이 여러 줄로 접히면 마지막 줄 끝으로 따라간다. */
 .report-stop {
+  margin-left: auto;
+}
+/* 주간 리포트는 소스 칩 줄이 없어 버튼만 우측 정렬한다 */
+.report-stop-row {
   display: flex;
   justify-content: flex-end;
   margin: 6px 0 2px;
@@ -4579,6 +4596,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
 .report-chips {
   display: flex;
   flex-wrap: wrap;
+  align-items: center; /* 칩(작은 높이)과 중단 버튼(28px)이 한 줄에 섞인다 */
   gap: 6px;
   margin-bottom: 12px;
 }

@@ -145,7 +145,7 @@ export function DiagramAiModal({
     );
   } else if (step === "loading") {
     footer = (
-      <button className="btn btn-sm" onClick={stop}>
+      <button className="btn btn-sm btn-danger-ghost" onClick={stop}>
         <Icon name="x" size={14} />
         {t("diagrams.ai.stop")}
       </button>
