@@ -336,15 +336,14 @@ export function DailyReportPanel({
             </button>
           </div>
           {phase === "collecting" ? (
-            // 수집은 gh·로컬 세션 파일을 훑는 단계라 '찾는 중'이 실제 동작에 가깝다
-            <AiThinking label={t("report.collecting")} compact icon="search" />
+            <AiThinking label={t("report.collecting")} indicator="ring" />
           ) : stream ? (
             <pre className="note-stream-body" ref={streamRef}>
               {stream}
               <span className="report-caret" aria-hidden="true" />
             </pre>
           ) : (
-            <AiThinking label={t("report.summarizing")} compact />
+            <AiThinking label={t("report.summarizing")} indicator="ring" />
           )}
         </>
       )}
