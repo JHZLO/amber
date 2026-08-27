@@ -1,7 +1,7 @@
 {
   "name": "amber",
   "private": true,
-  "version": "0.17.30",
+  "version": "0.17.31",
   "type": "module",
   "scripts": {
     "dev": "vite",
