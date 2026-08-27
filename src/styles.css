@@ -1329,8 +1329,11 @@ body.resizing-col .pane-resizer::after {
   padding: 6px 10px;
   text-align: left;
 }
+/* 인용구 — 좌측 바 굵기가 위계다: h1 대제목 4px > 알림 블록 3px > 인용 2px.
+   리포트가 항목마다 '왜·어떻게' 줄글을 인용구로 싣는데, 그 바가 제목 바만큼 굵으면
+   문단이 또 하나의 제목처럼 읽힌다. 가장 얇은 단계를 준다. */
 .markdown blockquote {
-  border-left: 3px solid var(--border-strong);
+  border-left: 2px solid var(--border-strong);
   margin: 10px 0;
   padding: 2px 14px;
   color: var(--text-2);
