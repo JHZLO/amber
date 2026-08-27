@@ -452,7 +452,7 @@ export function DailyReportPanel({
             <button className="btn btn-sm" onClick={() => setConfirmRegen(false)}>
               {t("common.cancel")}
             </button>
-            <button className="btn btn-primary" onClick={regenerate}>
+            <button className="btn btn-danger-ghost" onClick={regenerate}>
               {t("report.regen")}
             </button>
           </>

@@ -381,6 +381,13 @@ select {
 .tab.active .count {
   color: var(--text-2);
 }
+/* 버튼 포커스 링 — 정의가 없어 WKWebView 기본 링(파랑)이 그대로 나왔다. 모노톤 판에
+   유일하게 허용되지 않은 색이 키보드 조작 때마다 튀어나오던 셈이다(§2). */
+.btn:focus-visible,
+.icon-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
 .tab:focus-visible,
 .select-trigger:focus-visible {
   outline: none;
