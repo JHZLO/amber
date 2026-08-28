@@ -30,7 +30,7 @@ const HIGHLIGHT_KEY = "note-q";
 
 // 패널은 우측 여백에 고정(CSS)이라 좌표를 들고 다니지 않는다 — 상태 하나 = 패널 최대 1개
 type Pop =
-  | { kind: "ask"; anchor: string; occurrence: number }
+  | { kind: "ask"; anchor: string; occurrence: number; diagram?: boolean }
   | { kind: "view"; id: string };
 
 /** container 기준 텍스트 오프셋 (Range.toString 은 블록 개행을 추가하지 않아 textContent 와 동일 공간) */
@@ -104,12 +104,16 @@ export function NoteCommentLayer({
   config,
   onCountChange,
   onPromote,
+  askDiagram,
 }: {
   noteRel: string;
   body: string;
   containerRef: RefObject<HTMLDivElement | null>;
   config: AppConfig | null;
   onCountChange?: (n: number) => void;
+  /** 다이어그램 '질문' 칩에서 올라온 요청 — nonce 가 바뀔 때마다 질문창을 연다.
+   *  선택 텍스트가 없어도 팝오버는 우측 여백(dock)에 붙으므로 그대로 재사용한다. */
+  askDiagram?: { source: string; nonce: number } | null;
   /** 선택 영역을 개념으로 승격 (NotesView 가 모달을 연다). 선택 텍스트를 넘긴다 */
   onPromote?: (selection: string) => void;
 }) {
@@ -166,6 +170,21 @@ export function NoteCommentLayer({
     };
   }, [noteRel, notifyCount]);
 
+  // 다이어그램 '질문' 칩 → 같은 질문창. anchor 는 mermaid 소스다(AI 에게 구조를 넘긴다).
+  const askNonce = askDiagram?.nonce;
+  useEffect(() => {
+    if (!askDiagram) return;
+    setQuestion("");
+    setAskError(null);
+    setPop({
+      kind: "ask",
+      anchor: askDiagram.source,
+      occurrence: 0,
+      diagram: true,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askNonce]);
+
   // 하이라이트: 렌더된 DOM 에서 앵커 복원 → CSS Custom Highlight (미지원이면 표시만 생략)
   useEffect(() => {
     const c = containerRef.current;
@@ -181,6 +200,8 @@ export function NoteCommentLayer({
     ).Highlight;
     const found: { id: string; range: Range }[] = [];
     for (const cm of comments) {
+      // 다이어그램 질문의 앵커는 mermaid 소스라 본문 텍스트에 없다 — 찾지 않는다
+      if (cm.kind === "diagram") continue;
       // 노트가 수정돼 n번째 출현이 사라졌으면 첫 출현으로 폴백
       const r =
         findNthRange(c, cm.anchor, cm.occurrence) ??
@@ -189,7 +210,12 @@ export function NoteCommentLayer({
     }
     rangesRef.current = found;
     const reachable = new Set(found.map((f) => f.id));
-    setOrphanIds(comments.filter((cm) => !reachable.has(cm.id)).map((cm) => cm.id));
+    // 다이어그램 질문은 '앵커를 잃은 스레드'가 아니다 — 목록에 함께 두되 성격이 다르다
+    setOrphanIds(
+      comments
+        .filter((cm) => cm.kind === "diagram" || !reachable.has(cm.id))
+        .map((cm) => cm.id),
+    );
     if (found.length) registry.set(HIGHLIGHT_KEY, new HL(...found.map((f) => f.range)));
     else registry.delete(HIGHLIGHT_KEY);
     return () => {
@@ -381,6 +407,7 @@ export function NoteCommentLayer({
         answer,
         createdAt: Date.now(),
         model: meta.model,
+        ...(pop.diagram ? { kind: "diagram" as const } : {}),
       };
       // 항상 디스크 기준으로 병합-저장 (요청 중 노트를 이동했어도 원래 노트에 안전히 저장)
       const list = await loadComments(rel);
@@ -559,7 +586,9 @@ export function NoteCommentLayer({
                         setPop({ kind: "view", id });
                       }}
                     >
-                      “{cm.anchor}”
+                      {cm.kind === "diagram"
+                        ? t("notes.cmt.diagramThread")
+                        : `“${cm.anchor}”`}
                     </button>
                     <button
                       className="icon-btn ghost sm danger"
@@ -582,7 +611,9 @@ export function NoteCommentLayer({
             <>
               <div className="cmt-pop-head">
                 <div className="cmt-anchor" title={pop.anchor}>
-                  “{pop.anchor}”
+                  {pop.diagram
+                    ? t("notes.cmt.diagramThread")
+                    : `“${pop.anchor}”`}
                 </div>
                 <Tooltip label={t("common.close")}>
                   <button

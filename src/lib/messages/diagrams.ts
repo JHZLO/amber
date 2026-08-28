@@ -119,6 +119,8 @@ const ko = {
   "diagrams.mmd.failHead": "mermaid 문법 오류 — 렌더하지 못해 원본 코드를 표시해요",
   "diagrams.mmd.rendering": "다이어그램 렌더링 중…",
   "diagrams.mmd.clickToZoom": "클릭하면 확대해서 볼 수 있어요",
+  "diagrams.mmd.ask": "이 다이어그램에 대해 AI에게 물어봐요 (소스를 함께 넘겨요)",
+  "diagrams.mmd.askShort": "질문",
   "diagrams.mmd.staleBadge": "문법 오류 — 마지막 정상 상태 표시 중",
   "diagrams.mmd.expand": "확대",
 
@@ -236,6 +238,8 @@ const en: Record<keyof typeof ko, string> = {
   "diagrams.mmd.failHead": "Mermaid syntax error — couldn't render, showing the source instead",
   "diagrams.mmd.rendering": "Rendering diagram…",
   "diagrams.mmd.clickToZoom": "Click to zoom in",
+  "diagrams.mmd.ask": "Ask the AI about this diagram (its source goes along)",
+  "diagrams.mmd.askShort": "Ask",
   "diagrams.mmd.staleBadge": "Syntax error — showing the last good render",
   "diagrams.mmd.expand": "Zoom",
 

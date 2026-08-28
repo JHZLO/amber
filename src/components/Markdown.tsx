@@ -50,8 +50,11 @@ function alertKind(props: unknown): AlertKind | null {
 // 마크다운 재파싱/mermaid 재렌더를 건너뛴다 → 스크롤 시 깜빡임 제거.
 export const Markdown = memo(function Markdown({
   children,
+  onDiagramAsk,
 }: {
   children: string;
+  /** 다이어그램에 '질문' 칩을 붙인다(노트 읽기 모드에서만 넘긴다) */
+  onDiagramAsk?: (source: string) => void;
 }) {
   return (
     <ReactMarkdown
@@ -77,7 +80,9 @@ export const Markdown = memo(function Markdown({
           const code = node?.children?.[0];
           if (code?.tagName === "code" && isMermaid(code.properties?.className)) {
             const text = code.children?.[0]?.value ?? "";
-            return <Mermaid chart={String(text).trim()} />;
+            return (
+              <Mermaid chart={String(text).trim()} onAsk={onDiagramAsk} />
+            );
           }
           return <pre>{props.children}</pre>;
         },
