@@ -738,7 +738,29 @@ export function NotesView({
               {[t("notes.title"), ...crumbDirs].join(" › ")}
             </div>
             <div className="detail-head">
-              <h1 className="detail-title">{fileName}</h1>
+              {/* 제목 = 파일명이다. 트리까지 가지 않고 여기서 바꾸는 게 자연스럽다 —
+                  누르면 트리의 이름 변경과 **같은 모달**을 연다(이름 검증·중복 처리·에러
+                  표시가 이미 그쪽에 있다). renameEntry 가 `.md` 를 직접 붙이므로
+                  확장자를 뗀 fileName 을 그대로 넘긴다. */}
+              <h1 className="detail-title">
+                <button
+                  className="note-title-btn"
+                  onClick={() =>
+                    openRenameModal({
+                      name: fileName,
+                      path: selected,
+                      isDir: false,
+                    })
+                  }
+                  disabled={busy}
+                  title={t("notes.rename")}
+                >
+                  {fileName}
+                  <span className="note-title-pencil" aria-hidden="true">
+                    <Icon name="pencil" size={15} />
+                  </span>
+                </button>
+              </h1>
             </div>
 
             {opError && <div className="error-note">{opError}</div>}

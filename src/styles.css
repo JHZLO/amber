@@ -1868,6 +1868,42 @@ html.widget-root #root {
 .notes-detail.editing .detail-meta {
   margin-top: 14px;
 }
+/* 노트 제목 = 파일명. 눌러서 이름을 바꾼다 — 제목 크기·굵기는 그대로 물려받고
+   버튼 티는 내지 않는다(매일 보는 헤더가 버튼처럼 보이면 시끄럽다).
+   연필은 hover·포커스에서만 나타나 발견성만 담당한다. */
+.note-title-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.note-title-btn:disabled {
+  cursor: default;
+}
+.note-title-pencil {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--text-3);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.note-title-btn:hover .note-title-pencil,
+.note-title-btn:focus-visible .note-title-pencil {
+  opacity: 1;
+}
+.note-title-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: 6px;
+}
 .note-crumb {
   display: flex;
   align-items: center;
