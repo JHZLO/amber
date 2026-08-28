@@ -131,6 +131,9 @@ export function NoteCommentLayer({
   const [pendingQ, setPendingQ] = useState<{ id: string; q: string } | null>(
     null,
   );
+  // 답변 고쳐 쓰기 — turn 인덱스(0 = 첫 문답, 1.. = followUps)와 지시문 입력
+  const [revising, setRevising] = useState<number | null>(null);
+  const [reviseText, setReviseText] = useState("");
   // 패널을 놓을 자리: 본문 오른쪽 끝 ~ 목차 왼쪽 끝 사이의 여백(실측). 좁으면 null(우측 오버레이 폴백)
   const [dock, setDock] = useState<{ left: number; width: number } | null>(null);
 
@@ -466,6 +469,51 @@ export function NoteCommentLayer({
     }
   }
 
+  /** 이미 나온 답변을 지시문대로 고쳐 **제자리에서 교체**한다(후속 질문처럼 덧붙이지 않는다).
+   *  turn 0 = 첫 문답의 answer, 그 뒤는 followUps[turn-1].answer. */
+  async function submitRevise(turn: number) {
+    const target = viewComment;
+    const instruction = reviseText.trim();
+    if (!target || !config || asking || instruction.length < 2) return;
+    const prev =
+      turn === 0 ? target.answer : (target.followUps ?? [])[turn - 1]?.answer;
+    if (!prev) return;
+    const rel = noteRel;
+    setAsking(true);
+    setAskError(null);
+    try {
+      const { answer, meta } = await aiNoteAsk({
+        selection: target.anchor,
+        question: instruction,
+        noteMarkdown: body,
+        revise: prev, // 이게 있으면 '새 질문'이 아니라 고쳐쓰기 요청이 된다(context/note-ask.md)
+        model: config.model,
+        cliPath: config.cliPath,
+        provider: config.provider,
+      });
+      // 디스크 기준 병합 — 요청 중 다른 저장이 있었어도 이 답변만 갈아끼운다
+      const list = await loadComments(rel);
+      const next = list.map((c) => {
+        if (c.id !== target.id) return c;
+        if (turn === 0) return { ...c, answer, model: meta.model };
+        const ups = [...(c.followUps ?? [])];
+        if (!ups[turn - 1]) return c;
+        ups[turn - 1] = { ...ups[turn - 1], answer, model: meta.model };
+        return { ...c, followUps: ups };
+      });
+      await saveComments(rel, next);
+      if (relRef.current === rel) {
+        setComments(next);
+        setRevising(null);
+        setReviseText("");
+      }
+    } catch (e) {
+      setAskError(friendlyError(e));
+    } finally {
+      setAsking(false);
+    }
+  }
+
   async function deleteComment(id: string) {
     const next = comments.filter((c) => c.id !== id);
     await saveComments(noteRel, next);
@@ -650,15 +698,68 @@ export function NoteCommentLayer({
                 </Tooltip>
               </div>
               <div className="cmt-thread" ref={threadRef}>
-                {turns.map((t, i) => (
+                {turns.map((turnItem, i) => (
                   <div className="cmt-turn" key={i}>
                     <div className="cmt-q">
                       <Icon name="message" size={12} />
-                      {t.question}
+                      {turnItem.question}
                     </div>
                     <div className="cmt-a markdown">
-                      <Markdown>{t.answer}</Markdown>
+                      <Markdown>{turnItem.answer}</Markdown>
                     </div>
+                    {/* 고쳐 쓰기 — 답변을 새 문답으로 덧붙이지 않고 **이 자리에서 교체**한다.
+                        "한국어로 바꿔줘", "더 짧게" 처럼 나온 답을 다듬는 용도. */}
+                    {revising === i ? (
+                      <div className="cmt-revise">
+                        <textarea
+                          className="textarea"
+                          style={{ fontFamily: "var(--font)" }}
+                          rows={1}
+                          autoFocus
+                          placeholder={t("notes.cmt.revisePh")}
+                          value={reviseText}
+                          disabled={asking}
+                          onChange={(e) => setReviseText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.nativeEvent.isComposing) return;
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              void submitRevise(i);
+                            }
+                            if (e.key === "Escape") {
+                              setRevising(null);
+                              setReviseText("");
+                            }
+                          }}
+                        />
+                        <button
+                          className="btn btn-primary cmt-followup-send"
+                          title={t("notes.cmt.reviseSend")}
+                          onClick={() => void submitRevise(i)}
+                          disabled={asking || reviseText.trim().length < 2}
+                        >
+                          <Icon name="sparkles" size={15} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="cmt-turn-actions">
+                        <button
+                          className="cmt-turn-act"
+                          onClick={() => {
+                            setRevising(i);
+                            setReviseText("");
+                            setAskError(null);
+                          }}
+                          disabled={asking || !config?.provider}
+                        >
+                          <Icon name="pencil" size={11} />
+                          {t("notes.cmt.revise")}
+                        </button>
+                      </div>
+                    )}
+                    {asking && revising === i && (
+                      <AiThinking compact label={t("notes.cmt.revising")} />
+                    )}
                   </div>
                 ))}
                 {pendingQ?.id === viewComment.id && (

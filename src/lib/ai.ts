@@ -180,6 +180,8 @@ export async function aiNoteAsk(params: {
   question: string;
   noteMarkdown: string;
   history?: { question: string; answer: string }[];
+  /** 주면 '새 질문'이 아니라 이 답변을 고쳐 쓰는 요청 — question 이 지시문이 된다 */
+  revise?: string | null;
   model?: string | null;
   cliPath?: string | null;
   provider?: string | null;
@@ -192,6 +194,7 @@ export async function aiNoteAsk(params: {
     history: params.history?.length
       ? params.history.map((t) => ({ question: t.question, answer: t.answer }))
       : null,
+    revise: params.revise ?? null,
     model: params.model ?? null,
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,

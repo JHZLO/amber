@@ -3032,6 +3032,57 @@ html.widget-root #root {
   margin: 6px 0;
 }
 /* 후속 질문 입력 줄 (스레드 아래 고정) */
+/* 답변마다 붙는 '고쳐 쓰기' — 평소엔 조용히 두고 hover 에서 드러낸다(매 답변에 버튼이
+   또렷하면 스레드가 시끄러워진다). 지시 입력줄은 후속 질문 줄과 같은 치수를 쓴다. */
+.cmt-turn-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+  min-height: 20px;
+}
+.cmt-turn-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-3);
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s;
+}
+.cmt-turn:hover .cmt-turn-act,
+.cmt-turn-act:focus-visible {
+  opacity: 1;
+}
+.cmt-turn-act:hover {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.cmt-turn-act:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.cmt-revise {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.cmt-revise .textarea {
+  flex: 1;
+  height: 34px;
+  min-height: 34px;
+  padding: 6px 11px;
+  line-height: 20px;
+  resize: none;
+  overflow-y: auto;
+}
+
 /* 후속 질문 줄 — 입력창과 보내기 버튼이 **같은 높이(34px = 앱 표준 컨트롤 높이)** 여야 한다.
    전에는 입력창이 rows=1 의 자연 높이(≈41px)로 커지고 버튼은 btn-sm(28px)이라 둘이 어긋났다.
    높이를 명시해 못 박고(line-height 20 + padding 12 + border 2 = 34), 같은 높이니 정렬은 center. */

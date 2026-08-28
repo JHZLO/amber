@@ -668,6 +668,8 @@ pub async fn ai_note_ask(
     question: String,
     note_markdown: String,
     history: Option<Vec<AskExchange>>,
+    // 있으면 '새 질문'이 아니라 **이 답변을 고쳐 쓰는' 요청이다 — question 이 지시문이 된다
+    revise: Option<String>,
     model: Option<String>,
     cli_path: Option<String>,
     provider: Option<String>,
@@ -701,6 +703,9 @@ pub async fn ai_note_ask(
                 turn.answer.trim()
             ));
         }
+    }
+    if let Some(prev) = revise.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        input.push_str(&format!("[고쳐 쓸 답변]\n{prev}\n\n"));
     }
     input.push_str(&format!("[노트 전체 (Markdown)]\n{note}"));
 
