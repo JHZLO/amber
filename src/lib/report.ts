@@ -14,7 +14,7 @@ import {
 } from "@tauri-apps/plugin-fs";
 import { writeAtomic } from "./vaultTree";
 import { getDb, getSetting, setSetting } from "./db";
-import { getLang } from "./i18n";
+import { aiOutputLang } from "./i18n";
 import { listTodos, listOverdueOpen } from "./todos";
 import { visibleRoots } from "./todoTree";
 import { todayStr, formatDayShort, weekDays, weekdayShort } from "./date";
@@ -178,7 +178,7 @@ export function reportGenerate(
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
-    lang: getLang(),
+    lang: aiOutputLang(),
     onDelta: channel,
     cancelKey: params.cancelKey ?? null,
   });
@@ -454,7 +454,7 @@ export function reportGenerateWeekly(
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
-    lang: getLang(),
+    lang: aiOutputLang(),
     onDelta: channel,
     cancelKey: params.cancelKey ?? null,
   });

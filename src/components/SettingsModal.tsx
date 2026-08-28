@@ -10,6 +10,7 @@ import {
   PROVIDER_MODELS,
   connectProvider,
   loadConfig,
+  saveConfig,
 } from "../lib/config";
 import { aiHealth, detectAiClis, type DetectedCli } from "../lib/ai";
 import { aiAuthStatus, type AuthStatus } from "../lib/auth";
@@ -20,7 +21,14 @@ import {
   type SavedPrompt,
 } from "../lib/prompts";
 import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
-import { getLang, setLang, t, LANG_CHANGED_EVENT, type Lang } from "../lib/i18n";
+import {
+  getLang,
+  setLang,
+  t,
+  LANG_CHANGED_EVENT,
+  type AiLang,
+  type Lang,
+} from "../lib/i18n";
 import { errText } from "../lib/errors";
 import { Modal, Select, Spinner, Tooltip } from "../ui";
 import { Icon } from "../icons";
@@ -60,6 +68,8 @@ export function SettingsModal({
   const [provider, setProvider] = useState<AiProvider | null>(null);
   const [path, setPath] = useState("");
   const [model, setModel] = useState("");
+  // AI 응답 언어 — 'auto' 는 UI 언어를 따른다(lib/i18n.aiOutputLang)
+  const [aiLang, setAiLang] = useState<AiLang>("auto");
   const [detected, setDetected] = useState<DetectedCli[] | null>(null);
   const [detecting, setDetecting] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -114,6 +124,7 @@ export function SettingsModal({
         setProvider(c.provider);
         setPath(c.cliPath);
         setModel(c.model);
+        setAiLang(c.aiLang);
         setTestResult(null);
       });
       setDetected(null);
@@ -211,6 +222,8 @@ export function SettingsModal({
   }
 
   async function save() {
+    // 응답 언어는 연결 여부와 무관하게 저장한다(saveConfig 가 provider 없어도 처리)
+    await saveConfig({ provider, onboarded: true, cliPath: path.trim(), model, aiLang });
     if (provider) {
       const c = await connectProvider(provider, path.trim(), model);
       onSaved(c);
@@ -526,6 +539,26 @@ export function SettingsModal({
                   />
                   <div className="hint" style={{ marginTop: 6 }}>
                     {t("settings.ai.creditHint")}
+                  </div>
+                </div>
+
+                {/* 응답 언어 — UI 언어와 따로 둔다. 기술 노트는 본문이 영어 식별자로
+                    가득해서 예전엔 모델이 '입력은 영어'로 판단하고 한국어 UI 에서도 영어로
+                    답했다. 이제 이 값이 절대 지시로 프롬프트에 박힌다(ai.rs lang_directive). */}
+                <div className="field" style={{ marginBottom: 0, marginTop: 14 }}>
+                  <label>{t("settings.ai.langLabel")}</label>
+                  <Select<AiLang>
+                    block
+                    value={aiLang}
+                    options={[
+                      { value: "auto", label: t("settings.ai.langAuto") },
+                      { value: "ko", label: "한국어" },
+                      { value: "en", label: "English" },
+                    ]}
+                    onChange={setAiLang}
+                  />
+                  <div className="hint" style={{ marginTop: 6 }}>
+                    {t("settings.ai.langHint")}
                   </div>
                 </div>
               </div>

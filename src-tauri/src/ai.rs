@@ -123,20 +123,31 @@ const ASK_SYSTEM_PROMPT: &str = include_str!("../context/note-ask.md");
 // 다이어그램 탭: 스키마 DDL → ERD mermaid 소스. 노트와 같은 이유로 JSON 계약 없이 raw 텍스트.
 const ERD_SYSTEM_PROMPT: &str = include_str!("../context/diagram-erd.md");
 
-/// 출력 언어 지시 — **UI 언어(설정 › 모양)를 따라간다**. 프롬프트 본문에 언어를 박아 두면
-/// 기능마다 파일을 언어별로 복제해야 하므로, 이 블록 하나만 갈아끼운다.
-/// 사용자가 쓴 입력이 명확히 다른 언어면 그쪽을 따르게 해 한 노트에 두 언어가 섞이지 않게 한다.
+/// 출력 언어 지시 — 정본은 **설정 › AI 의 '응답 언어'**(auto 면 UI 언어). 프롬프트 본문에
+/// 언어를 박아 두면 기능마다 파일을 언어별로 복제해야 하므로, 이 블록 하나만 갈아끼운다.
+///
+/// **입력 언어를 따라가는 예외를 두지 않는다.** 예전엔 "입력이 명확히 다른 언어면 그쪽을 따르라"
+/// 는 탈출구가 있었는데, 기술 노트는 본문이 영어 식별자(PreparingRebalance, eager…)로 가득해서
+/// 모델이 '입력은 영어'로 판단하고 한국어 설정에서도 영어로 답했다. 언어는 사용자가 고른 것이고
+/// 입력에서 추론할 값이 아니다.
 pub(crate) fn lang_directive(lang: Option<&str>) -> &'static str {
     if lang == Some("en") {
-        "\n\n[Output language]\nWrite everything the user will read in English. Keep code, \
-identifiers and technical terms exactly as they appear in the input. If the user's own text in \
-the input is clearly written in another language, follow that language instead — never mix two \
-languages in one output."
+        "\n\n[Output language — absolute requirement]\nWrite EVERY sentence the user will read in \
+English. This is fixed by the user's setting and is NOT negotiable: do not switch languages \
+because the note, the selected text, the question or the collected activity is written in \
+another language. Even if the entire input is in Korean, answer in English.\n\
+The only things kept verbatim are code, commands, identifiers, error strings and proper nouns.\n\
+Never mix two languages in one output, and never translate or restate your answer in a second \
+language."
     } else {
-        "\n\n[Output language]\nWrite everything the user will read in Korean (한국어). Keep code, \
-identifiers and technical terms exactly as they appear in the input. If the user's own text in \
-the input is clearly written in another language, follow that language instead — never mix two \
-languages in one output."
+        "\n\n[Output language — absolute requirement]\nWrite EVERY sentence the user will read in \
+Korean (한국어). This is fixed by the user's setting and is NOT negotiable: do not switch \
+languages because the note, the selected text, the question or the collected activity is \
+written in another language. Even if the entire input is in English, answer in Korean.\n\
+The only things kept verbatim are code, commands, identifiers, error strings and proper nouns \
+(e.g. PreparingRebalance, session.timeout.ms) — surrounding prose stays Korean.\n\
+Never mix two languages in one output, and never translate or restate your answer in a second \
+language."
     }
 }
 
@@ -1176,11 +1187,24 @@ mod tests {
         assert!(lang_directive(Some("ja")).contains("한국어"));
     }
 
+    // 입력 언어를 따라가는 탈출구가 있으면 영어 식별자로 가득한 기술 노트에서 설정이 무시된다
+    #[test]
+    fn lang_directive_never_defers_to_the_input_language() {
+        for l in [Some("ko"), Some("en"), None] {
+            let d = lang_directive(l);
+            assert!(
+                !d.contains("follow that language"),
+                "입력 언어를 따르라는 지시가 남아 있으면 설정이 무력화된다"
+            );
+            assert!(d.contains("NOT negotiable"), "강제 문구가 있어야 한다");
+        }
+    }
+
     #[test]
     fn sys_appends_directive_after_the_prompt() {
         let out = sys("BODY", Some("en"));
         assert!(out.starts_with("BODY"), "프롬프트 본문이 앞에 그대로 와야 한다");
-        assert!(out.contains("[Output language]"));
+        assert!(out.contains("[Output language"));
     }
 
     // 인증 만료·한도 초과는 사용자가 직접 할 일이 있는 실패다 — 뭉뚱그려 AI_ERROR 로 보내면

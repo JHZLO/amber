@@ -3,7 +3,7 @@
 // ai_provider 로 저장하고, 경로/모델은 프로바이더별 키로 보관한다.
 
 import { getSetting, setSetting } from "./db";
-import { t } from "./i18n";
+import { setAiLangSetting, t, type AiLang } from "./i18n";
 
 export type AiProvider = "claude" | "codex" | "gemini";
 
@@ -43,6 +43,8 @@ export interface AppConfig {
   cliPath: string;
   /** 활성 프로바이더의 모델 id (빈 문자열 = CLI 기본) */
   model: string;
+  /** AI 응답 언어. 'auto' = UI 언어를 따른다 */
+  aiLang: AiLang;
 }
 
 const DEFAULT_CLAUDE_MODEL = "claude-opus-4-8";
@@ -52,6 +54,17 @@ const isProvider = (v: string | null): v is AiProvider =>
 
 const pathKey = (p: AiProvider) => `ai_path_${p}`;
 const modelKey = (p: AiProvider) => `ai_model_${p}`;
+
+const isAiLang = (v: string | null): v is AiLang =>
+  v === "auto" || v === "ko" || v === "en";
+
+/** DB 에 저장된 AI 응답 언어를 읽어 i18n 미러에도 반영한다(ai.ts 가 동기로 읽는다) */
+async function loadAiLang(): Promise<AiLang> {
+  const saved = await getSetting("ai_lang");
+  const lang: AiLang = isAiLang(saved) ? saved : "auto";
+  setAiLangSetting(lang);
+  return lang;
+}
 
 export async function loadConfig(): Promise<AppConfig> {
   let provider: AiProvider | null = null;
@@ -74,15 +87,17 @@ export async function loadConfig(): Promise<AppConfig> {
     }
   }
 
+  const aiLang = await loadAiLang();
+
   if (!provider) {
-    return { provider: null, onboarded, cliPath: "", model: "" };
+    return { provider: null, onboarded, cliPath: "", model: "", aiLang };
   }
 
   const cliPath = (await getSetting(pathKey(provider))) ?? "";
   const model =
     (await getSetting(modelKey(provider))) ??
     (provider === "claude" ? DEFAULT_CLAUDE_MODEL : "");
-  return { provider, onboarded, cliPath, model };
+  return { provider, onboarded, cliPath, model, aiLang };
 }
 
 /** 프로바이더 연결 (온보딩/설정 공용). 경로·모델을 프로바이더별 키에 저장 */
@@ -106,6 +121,9 @@ export async function skipAiOnboarding(): Promise<AppConfig> {
 
 /** 설정 화면 저장: 활성 프로바이더의 경로/모델 갱신 */
 export async function saveConfig(c: AppConfig): Promise<void> {
+  // 언어는 프로바이더와 무관하게 먼저 저장한다 — 미연결 상태에서도 고를 수 있어야 한다
+  await setSetting("ai_lang", c.aiLang);
+  setAiLangSetting(c.aiLang);
   if (!c.provider) return;
   await setSetting("ai_provider", c.provider);
   await setSetting(pathKey(c.provider), c.cliPath.trim());

@@ -34,6 +34,10 @@ const ko = {
   "settings.ai.test": "연결 테스트",
   "settings.ai.testOk": "연결 성공 — {version}",
   "settings.ai.modelLabel": "모델",
+  "settings.ai.langLabel": "응답 언어",
+  "settings.ai.langAuto": "자동 (화면 언어를 따름)",
+  "settings.ai.langHint":
+    "AI 답변·노트·리포트를 이 언어로만 씁니다. 노트가 영어로 쓰여 있어도 이 설정을 따라요 (코드·식별자는 원문 유지).",
   "settings.ai.creditHint": "AI 호출은 연결된 CLI 의 플랜/크레딧을 소모해요.",
 
   // CLI 로그인 (AiAuthModal + 설정 › AI 의 인증 줄)
@@ -150,6 +154,10 @@ const en: Record<keyof typeof ko, string> = {
   "settings.ai.test": "Test connection",
   "settings.ai.testOk": "Connected — {version}",
   "settings.ai.modelLabel": "Model",
+  "settings.ai.langLabel": "Response language",
+  "settings.ai.langAuto": "Auto (follow the interface)",
+  "settings.ai.langHint":
+    "AI answers, notes and reports are written only in this language, even when the note itself is in another one (code and identifiers stay as-is).",
   "settings.ai.creditHint": "AI calls use the connected CLI's plan/credits.",
 
   // CLI sign-in (AiAuthModal + the auth row in Settings › AI)

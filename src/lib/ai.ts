@@ -4,7 +4,7 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { ulid } from "ulid";
 import type { Confidence } from "../types";
-import { getLang } from "./i18n";
+import { aiOutputLang } from "./i18n";
 import { errText, isCodedError } from "./errors";
 
 export interface GeneratedNote {
@@ -75,7 +75,7 @@ export async function aiGenerate(params: {
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
-    lang: getLang(),
+    lang: aiOutputLang(),
   });
 }
 
@@ -101,7 +101,7 @@ export async function aiAugment(params: {
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
-    lang: getLang(),
+    lang: aiOutputLang(),
   });
 }
 
@@ -130,7 +130,7 @@ export async function aiNoteCompose(params: {
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
-    lang: getLang(),
+    lang: aiOutputLang(),
   });
 }
 
@@ -160,7 +160,7 @@ export async function aiNoteComposeStream(
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
-    lang: getLang(),
+    lang: aiOutputLang(),
     onDelta: channel,
     // 이 줄이 빠지면 Rust 가 cancel_key=None 으로 받아 LiveGuard 가 pid 를 등록하지
     // 않는다 — 중단 버튼이 죽일 대상을 못 찾아 조용히 아무 일도 안 한다
@@ -196,7 +196,7 @@ export async function aiNoteAsk(params: {
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
-    lang: getLang(),
+    lang: aiOutputLang(),
   });
 }
 
@@ -230,7 +230,7 @@ export async function aiErdGenerateStream(
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
-    lang: getLang(),
+    lang: aiOutputLang(),
     onDelta: channel,
     cancelKey: params.cancelKey ?? null,
   });

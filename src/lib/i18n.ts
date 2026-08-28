@@ -33,6 +33,22 @@ export function getLang(): Lang {
   return navigator.language?.toLowerCase().startsWith("ko") ? "ko" : "en";
 }
 
+/** AI 응답 언어 설정. `"auto"` = UI 언어를 따른다. */
+export type AiLang = "auto" | Lang;
+
+// 정본은 DB(설정 › AI). ai.ts 는 호출마다 동기로 읽어야 해서 여기에 미러를 둔다 —
+// config.loadConfig()/saveConfig() 가 갱신한다(i18n 은 config 를 import 하지 않는다: 순환 방지).
+let aiLangSetting: AiLang = "auto";
+
+export function setAiLangSetting(l: AiLang): void {
+  aiLangSetting = l;
+}
+
+/** AI 가 실제로 써야 할 언어 — 'auto' 면 UI 언어로 접힌다 */
+export function aiOutputLang(): Lang {
+  return aiLangSetting === "auto" ? getLang() : aiLangSetting;
+}
+
 /** 저장만 한다 — 적용(reload·위젯 통지)은 호출부(설정) 몫 */
 export function setLang(l: Lang): void {
   localStorage.setItem(KEY, l);
