@@ -41,8 +41,7 @@ export type IconName =
   | "info"
   | "lightbulb"
   | "alert-triangle"
-  | "alert-octagon"
-  | "loader";
+  | "alert-octagon";
 
 const PATHS: Record<IconName, ReactNode> = {
   "chevron-left": <path d="M15 18l-6-6 6-6" />,
@@ -210,9 +209,6 @@ const PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   message: <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />,
-  // 진행 중 표식 — 끊긴 원호가 돌아 '작업 중'을 말한다. sparkles 는 'AI 기능'이라는
-  // 정체성 표식이라 로딩에 겹쳐 쓰지 않는다(같은 아이콘이 한 화면에 두 번 나와 뜻이 흐려졌다).
-  loader: <path d="M21 12a9 9 0 1 1-6.22-8.56" />,
   // 마크다운 알림(NOTE/TIP/WARNING…) 표식 — 색을 못 쓰는 판이라 아이콘이 종류를 나른다
   info: (
     <>

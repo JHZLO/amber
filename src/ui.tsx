@@ -95,17 +95,11 @@ export function AiThinking({
   hint,
   compact,
   indicator = "bar",
-  icon = "loader",
 }: {
   label: string;
   hint?: string;
   compact?: boolean;
   indicator?: "bar" | "ring";
-  /** 진행 표식 아이콘. **`indicator="bar"` 일 때만 쓰인다**(ring 은 원호가 표식이다).
-   *  기본 `loader`(도는 원호). 하는 일이 분명하면 그 동작의 아이콘을
-   *  준다(예: 활동 수집 = `search`). **`sparkles` 는 쓰지 않는다** — 그건 'AI 기능'이라는
-   *  정체성 표식이라, 로딩에도 쓰면 한 화면에 같은 아이콘이 두 번 나와 뜻이 흐려진다. */
-  icon?: IconName;
 }) {
   const ring = indicator === "ring";
   return (
@@ -115,14 +109,9 @@ export function AiThinking({
       aria-live="polite"
     >
       {ring && <AiRing />}
+      {/* 라벨에 진행 표식을 붙이지 않는다 — **한 대기 상태에 모션은 하나**다(ring 이나 bar).
+          둘을 함께 두면 도는 것이 두 개가 되어 어디를 봐야 할지 흐려진다. */}
       <div className="ai-thinking-label">
-        {/* ring 모드에서는 원호가 곧 진행 표식이다 — 라벨에 또 표식을 붙이면 한 줄에
-            도는 것이 둘이 된다(§6 '표식은 뜻이 겹치지 않게'). 그래서 bar 모드에서만 낸다. */}
-        {!ring && (
-          <span className={`ai-thinking-mark ${icon === "loader" ? "spin" : ""}`}>
-            <Icon name={icon} size={compact ? 12 : 14} />
-          </span>
-        )}
         <span>{label}</span>
       </div>
       {!ring && (

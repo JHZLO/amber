@@ -696,8 +696,9 @@ export function NoteCommentLayer({
                     }
                   }}
                 />
+                {/* btn-sm(28px) 이 아니라 표준 높이(34px) — 옆 입력창과 같은 높이여야 한다 */}
                 <button
-                  className="btn btn-primary btn-sm"
+                  className="btn btn-primary cmt-followup-send"
                   title={t("notes.cmt.followUpSend")}
                   onClick={() => void submitFollowUp()}
                   disabled={asking || question.trim().length < 2 || !config?.provider}
