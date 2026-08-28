@@ -389,6 +389,21 @@ export function NotesView({
     await doOpen(selected);
   }
 
+  /** 노트 전문 복사 — 정본은 마크다운 원문이라 편집 중이면 초안, 읽기 모드면 저장된 본문.
+   *  리포트 패널과 같은 규약: 성공하면 1.5초 동안 체크로 바뀐다(별도 알림 띄우지 않는다). */
+  const [copied, setCopied] = useState(false);
+  async function copyAll() {
+    const text = editing ? draft : body;
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* 클립보드 실패는 조용히 무시 — 되돌릴 것도 없다 */
+    }
+  }
+
   // ⌘S 저장 (노트 섹션이 보일 때 + 편집 중일 때만)
   const saveRef = useRef(save);
   saveRef.current = save;
@@ -786,6 +801,19 @@ export function NotesView({
                       <Icon name="sparkles" size={14} />
                       {t("notes.aiWrite")}
                     </button>
+                    {/* 전문 복사 — 다른 곳(슬랙·이슈)에 붙일 때 쓰는 동작이라
+                        편집·AI 와 같은 좌측 그룹에 둔다(삭제 그룹과 섞지 않는다) */}
+                    <Tooltip label={t("notes.copyAll")}>
+                      <button
+                        className="btn btn-sm"
+                        aria-label={t("notes.copyAll")}
+                        onClick={() => void copyAll()}
+                        disabled={busy || loadingBody || !!readError || !body}
+                      >
+                        <Icon name={copied ? "check" : "copy"} size={14} />
+                        {copied ? t("notes.copied") : t("notes.copy")}
+                      </button>
+                    </Tooltip>
                   </>
                 )}
               </div>

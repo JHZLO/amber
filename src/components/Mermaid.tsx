@@ -24,6 +24,10 @@ const BASE_CONFIG = {
   securityLevel: "strict", // 라벨을 HTML 로 해석하지 않음(XSS 방지)
   suppressErrorRendering: true, // 실패 시 mermaid 가 에러 SVG 를 DOM 에 심지 않게
   fontFamily: "var(--font)",
+  // 시퀀스 다이어그램: 긴 Note·메시지를 줄바꿈한다. 기본값(wrap: false)이면 상자 폭을
+  // 넘긴 글자가 **잘리지 않고 삐져나와** 양옆이 잘린 것처럼 보인다 — 한글은 같은 글자
+  // 수로도 폭이 넓어 특히 자주 걸린다(`Note over A,B` 는 두 참여자 사이 폭에 묶인다).
+  sequence: { wrap: true },
 };
 
 // mermaid 설정은 전역(싱글턴)이라 레이아웃도 전역이다. 마지막으로 적용한 값을 들고
