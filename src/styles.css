@@ -2113,6 +2113,11 @@ html.widget-root #root {
   display: flex;
   justify-content: center;
   width: 100%;
+  /* 스크롤 성능 — 큰 시퀀스 다이어그램은 노드가 수백 개라 스크롤로 새 타일이 드러날 때마다
+     벡터를 다시 래스터화하느라 프레임이 밀린다(뚝뚝 끊김의 실제 원인 — React 재렌더가 아니다).
+     자체 합성 레이어로 올리면 한 번 래스터화한 뒤 스크롤은 레이어 이동으로 끝난다.
+     (`contain: paint` 는 쓰지 않는다 — 폭이 넓은 다이어그램의 가로 스크롤을 잘라낼 수 있다.) */
+  transform: translateZ(0);
 }
 .mermaid-rendered svg {
   max-width: 100%;
