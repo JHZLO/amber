@@ -1292,8 +1292,11 @@ body.resizing-col .pane-resizer::after {
   font-family: var(--mono);
   font-size: 0.86em;
   background: var(--surface-2);
-  padding: 1px 5px;
-  border-radius: 4px;
+  /* 좌우 패딩을 두지 않는다. `::highlight()` 는 **텍스트만** 칠하므로 인라인 요소의
+     패딩은 칠해지지 않는다 — 질문 형광펜(note-q)이 코드 칩마다 10px 씩 끊겼다.
+     세로 패딩은 텍스트 줄 안이라 하이라이트에 영향이 없어 남긴다. */
+  padding: 1px 0;
+  border-radius: 3px;
 }
 .markdown pre {
   background: var(--surface-2);
@@ -3047,10 +3050,13 @@ html.widget-root #root {
   resize: none;
   overflow-y: auto;
 }
-/* 아이콘만 있는 정사각 버튼 — 라벨이 없으니 좌우 패딩 대신 폭을 높이와 같게 */
+/* 아이콘만 있는 정사각 버튼 — 라벨이 없으니 좌우 패딩 대신 폭을 높이와 같게.
+   `.btn` 에는 justify-content 가 없다(라벨 버튼은 폭이 내용에 맞아 필요 없었다) —
+   폭을 고정하는 순간 내용이 한쪽으로 붙으므로 여기서 중앙정렬을 직접 준다. */
 .cmt-followup-send {
   width: 34px;
   padding: 0;
+  justify-content: center;
   flex-shrink: 0;
 }
 .cmt-meta {

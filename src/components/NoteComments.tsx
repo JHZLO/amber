@@ -703,7 +703,7 @@ export function NoteCommentLayer({
                   onClick={() => void submitFollowUp()}
                   disabled={asking || question.trim().length < 2 || !config?.provider}
                 >
-                  <Icon name="sparkles" size={13} />
+                  <Icon name="sparkles" size={15} />
                 </button>
               </div>
               <div className="cmt-meta">
