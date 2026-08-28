@@ -27,7 +27,7 @@ import {
 } from "../lib/reportRun";
 import { todayStr } from "../lib/date";
 import { Markdown } from "./Markdown";
-import { AiThinking, Modal, Spinner, Tooltip, UnsavedModal } from "../ui";
+import { AiThinking, Modal, Tooltip, UnsavedModal } from "../ui";
 import { Icon } from "../icons";
 import { t, dateLocale } from "../lib/i18n";
 import { errText } from "../lib/errors";
@@ -306,8 +306,10 @@ export function DailyReportPanel({
             {chips.map((c) => {
               const chip = (
                 <span key={c.id} className={`report-chip ${c.status}`}>
+                  {/* 대기 칩에 스피너를 넣지 않는다 — 상태는 아웃라인(대기)/채움+체크(완료)가
+                      이미 나르고(§3), 아래 원호가 '진행 중'을 맡는다. 셋을 다 두면 한 화면에
+                      도는 것이 여러 개가 되어 어디를 봐야 할지 흐려진다. */}
                   {c.status === "ok" && <Icon name="check" size={12} />}
-                  {c.status === "pending" && <Spinner />}
                   {c.status === "error" && <Icon name="x" size={12} />}
                   {c.status === "mcp" && <Icon name="workflow" size={12} />}
                   {SRC_LABEL[c.id] ?? c.id}

@@ -4642,11 +4642,6 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   color: var(--text-3);
   border: 1px dashed var(--border-strong);
 }
-.report-chip .spinner {
-  width: 11px;
-  height: 11px;
-}
-
 /* 완성 메타: 근거 소스 태그 + 시각·모델 스탬프 */
 .report-meta {
   display: flex;
