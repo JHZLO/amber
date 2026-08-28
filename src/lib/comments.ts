@@ -34,10 +34,6 @@ export interface NoteComment {
   model?: string;
   /** 후속 티키타카 (v1 파일엔 없음 — 없으면 첫 문답 하나짜리 스레드) */
   followUps?: AskTurn[];
-  /** 다이어그램에 대한 질문이면 `"diagram"`. 이때 `anchor` 는 mermaid 소스라
-   *  **본문 텍스트에서 찾을 수 없다** — 하이라이트 대상이 아니고, 앵커를 못 찾았다고
-   *  '떠도는 스레드'로 취급해서도 안 된다(그게 이 필드가 필요한 이유다). 없으면 텍스트 질문. */
-  kind?: "diagram";
 }
 
 /** 노트 상대경로 → 사이드카 상대경로 */

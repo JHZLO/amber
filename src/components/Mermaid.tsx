@@ -82,15 +82,7 @@ export async function renderMermaid(
   }
 }
 
-export function Mermaid({
-  chart,
-  onAsk,
-}: {
-  chart: string;
-  /** 있으면 다이어그램에 '질문' 칩이 붙는다 — 누르면 mermaid 소스를 그대로 넘긴다.
-   *  소스를 넘기는 이유: 렌더된 SVG 라벨만으로는 화살표 방향·순서 같은 구조가 안 읽힌다. */
-  onAsk?: (source: string) => void;
-}) {
+export function Mermaid({ chart }: { chart: string }) {
   const [svg, setSvg] = useState("");
   const [failed, setFailed] = useState(false);
   const [errMsg, setErrMsg] = useState("");
@@ -150,19 +142,6 @@ export function Mermaid({
           <span className="mermaid-error-badge">
             {t("diagrams.mmd.staleBadge")}
           </span>
-        )}
-        {onAsk && (
-          <button
-            className="mermaid-ask"
-            title={t("diagrams.mmd.ask")}
-            onClick={(e) => {
-              e.stopPropagation(); // 컨테이너 클릭은 확대다 — 질문은 확대를 열지 않는다
-              onAsk(chart);
-            }}
-          >
-            <Icon name="message" size={12} />
-            {t("diagrams.mmd.askShort")}
-          </button>
         )}
         <span className="mermaid-expand">
           <Icon name="expand" size={13} />

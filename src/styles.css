@@ -2145,38 +2145,6 @@ html.widget-root #root {
 .mermaid-rendered:hover .mermaid-expand {
   opacity: 0.92;
 }
-/* 다이어그램 질문 칩 — Zoom 배지와 같은 옷을 입되 **클릭이 살아 있어야** 한다
-   (Zoom 배지는 pointer-events:none 로 컨테이너 클릭에 맡긴다). 자리는 Zoom 왼쪽. */
-.mermaid-ask {
-  position: absolute;
-  top: 8px;
-  right: 74px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border: none;
-  border-radius: 6px;
-  background: #18181b;
-  color: #fff;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.mermaid-rendered:hover .mermaid-ask,
-.mermaid-ask:focus-visible {
-  opacity: 0.92;
-}
-.mermaid-ask:hover {
-  opacity: 1;
-}
-.mermaid-ask:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
 
 /* ---- mermaid 확대 뷰어 (전체화면 팬/줌) ---- */
 .mmd-zoom-overlay {

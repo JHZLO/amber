@@ -389,19 +389,6 @@ export function NotesView({
     await doOpen(selected);
   }
 
-  // 다이어그램 '질문' 칩 → 코멘트 레이어로 전달(레이어가 질문창을 연다).
-  // nonce 를 같이 두는 이유: 같은 다이어그램을 연달아 물어도 effect 가 다시 돌아야 한다.
-  const [diagramAsk, setDiagramAsk] = useState<{
-    source: string;
-    nonce: number;
-  } | null>(null);
-  /** **반드시 useCallback 이어야 한다.** Markdown 은 memo 인데(스크롤 스파이가 매 스크롤마다
-   *  이 컴포넌트를 리렌더한다) 인라인 화살표를 넘기면 prop 신원이 매번 바뀌어 memo 가 깨지고,
-   *  긴 노트의 마크다운 전체가 스크롤마다 다시 파싱돼 뚝뚝 끊긴다. */
-  const onDiagramAsk = useCallback((source: string) => {
-    setDiagramAsk({ source, nonce: Date.now() });
-  }, []);
-
   /** 노트 전문 복사 — 정본은 마크다운 원문이라 편집 중이면 초안, 읽기 모드면 저장된 본문.
    *  리포트 패널과 같은 규약: 성공하면 1.5초 동안 체크로 바뀐다(별도 알림 띄우지 않는다). */
   const [copied, setCopied] = useState(false);
@@ -888,7 +875,7 @@ export function NotesView({
             ) : (
               <div className="note-read-wrap">
                 <div className="markdown" ref={mdRef}>
-                  <Markdown onDiagramAsk={onDiagramAsk}>{body}</Markdown>
+                  <Markdown>{body}</Markdown>
                 </div>
                 {/* 드래그 → 질문(AI 답변) / 개념으로(승격). 본문 밖 사이드카에 저장 */}
                 <NoteCommentLayer
@@ -901,7 +888,6 @@ export function NotesView({
                   onPromote={(selection) =>
                     setPromote({ noteRel: selected, selection, noteBody: body })
                   }
-                  askDiagram={diagramAsk}
                 />
                 {toc.length >= 2 && (
                   <nav className="note-toc" ref={tocRef}>
