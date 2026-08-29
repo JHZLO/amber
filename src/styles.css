@@ -26,6 +26,19 @@
   /* 마크다운 알림 블록 5종 — GitHub 팔레트와 같게(Paper 렌더러와 한 벌). 대비는 --bg 위
      4.66~5.02:1, --surface 위 4.87~5.24:1 로 전부 AA. surface-2/3 채움 위에서는 4.0~4.4 로
      떨어지므로 알림에 배경을 깔지 않는다(§2 알림 블록). */
+  /* 코드블록(macOS 창) + 문법 하이라이트 — §2 의 모노톤 예외. 색 수를 여섯으로 묶어
+     코드가 무지개가 되지 않게 한다. 대비는 --code-bg 위 4.67~15.2:1 로 전부 AA. */
+  --code-bg: #f6f6f7;
+  --code-bar: #ececed;
+  --code-bar-line: #e0e0e3;
+  --code-fg: #1f1f23;
+  --code-kw: #8250df;
+  --code-str: #0a7b34;
+  --code-num: #b3460f;
+  --code-fn: #0550ae;
+  --code-type: #953800;
+  --code-dim: #6b6b76;
+
   --alert-note: #0969da;
   --alert-tip: #1a7f37;
   --alert-important: #8250df;
@@ -98,6 +111,18 @@
 
   /* 다크는 달력 예외와 같은 방식 — 채도를 낮추고 밝기를 올린다 (9.9~10.0:1 on --bg,
      caution 만 7.65:1 로 낮은데 빨강을 더 밝히면 danger 와 뜻이 섞인다) */
+  /* 다크는 달력·알림 예외와 같은 방식 — 채도를 낮추고 밝기를 올린다(5.35~14.5:1) */
+  --code-bg: #16161a;
+  --code-bar: #1e1e23;
+  --code-bar-line: #2a2a30;
+  --code-fg: #e6e6ea;
+  --code-kw: #d2a8ff;
+  --code-str: #7ee787;
+  --code-num: #ffa657;
+  --code-fn: #79c0ff;
+  --code-type: #ffa198;
+  --code-dim: #8b8b95;
+
   --alert-note: #79c0ff;
   --alert-tip: #56d364;
   --alert-important: #d2a8ff;
@@ -1298,6 +1323,51 @@ body.resizing-col .pane-resizer::after {
   padding: 1px 0;
   border-radius: 3px;
 }
+/* 코드블록 = macOS 창. 신호등 막대 + 그 아래 코드. 창처럼 보이게 하는 이유는 장식이 아니라
+   경계다 — 본문 중간의 코드가 어디서 시작해 어디서 끝나는지 훑어보는 눈에 바로 걸린다. */
+.code-win {
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--code-bg);
+}
+.code-win-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--code-bar);
+  border-bottom: 1px solid var(--code-bar-line);
+}
+/* 신호등 — macOS 관례라 색을 그대로 쓴다(§2 의 코드블록 예외). 크기·간격도 실물 비율 */
+.code-win-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #ff5f57;
+}
+.code-win-dot:nth-child(2) {
+  background: #febc2e;
+}
+.code-win-dot:nth-child(3) {
+  background: #28c840;
+}
+.code-win-lang {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--code-dim);
+  letter-spacing: 0.02em;
+}
+.markdown .code-win pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  padding: 12px 14px;
+  overflow-x: auto;
+}
 .markdown pre {
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -1308,6 +1378,54 @@ body.resizing-col .pane-resizer::after {
 .markdown pre code {
   background: none;
   padding: 0;
+  color: var(--code-fg);
+}
+
+/* 문법 하이라이트 — highlight.js 가 붙인 클래스에 색만 입힌다(§2 의 코드블록 예외).
+   테마를 통째로 가져오지 않고 토큰으로 정의하는 이유: 라이트/다크가 앱과 같은 판에서
+   움직여야 하고, 색 수를 여섯으로 묶어 코드가 무지개가 되지 않게 하려는 것이다. */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section {
+  color: var(--code-kw);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-attribute {
+  color: var(--code-str);
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--code-num);
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-name {
+  color: var(--code-fn);
+}
+.hljs-type,
+.hljs-class .hljs-title,
+.hljs-built_in,
+.hljs-variable.language_ {
+  color: var(--code-type);
+}
+.hljs-comment,
+.hljs-quote,
+.hljs-meta {
+  color: var(--code-dim);
+  font-style: italic;
+}
+.hljs-deletion {
+  color: var(--danger);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 700;
 }
 .markdown table {
   border-collapse: collapse;

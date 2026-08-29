@@ -4,6 +4,7 @@
 import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
 import { Mermaid } from "./Mermaid";
 import { Icon, type IconName } from "../icons";
 import { t, type MsgKey } from "../lib/i18n";
@@ -40,6 +41,15 @@ const ALERT_LABELS: Record<AlertKind, MsgKey> = {
   CAUTION: "common.alert.caution",
 };
 
+/** ```ts 처럼 붙인 언어 이름 (없으면 빈 문자열) — 코드블록 헤더에 표시한다 */
+function fenceLang(className: unknown): string {
+  if (!Array.isArray(className)) return "";
+  const hit = className.find(
+    (c) => typeof c === "string" && c.startsWith("language-"),
+  );
+  return typeof hit === "string" ? hit.slice("language-".length) : "";
+}
+
 /** blockquote 의 data-alert 속성(remarkAlerts 가 심는다)에서 종류를 읽는다 */
 function alertKind(props: unknown): AlertKind | null {
   const kind = (props as { "data-alert"?: string })["data-alert"];
@@ -56,6 +66,9 @@ export const Markdown = memo(function Markdown({
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkAlerts]}
+      // 문법 하이라이트 — 클래스(hljs-*)만 붙이고 색은 styles.css 의 토큰이 정한다.
+      // detect: false 로 **언어를 적은 블록만** 칠한다(추측이 틀리면 색이 엉뚱해진다).
+      rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
       components={{
         // `> [!NOTE]` 인용구 → 콜아웃. 종류는 remarkAlerts 가 data-alert 로 넘긴다.
         blockquote(props) {
@@ -79,7 +92,19 @@ export const Markdown = memo(function Markdown({
             const text = code.children?.[0]?.value ?? "";
             return <Mermaid chart={String(text).trim()} />;
           }
-          return <pre>{props.children}</pre>;
+          // macOS 창 크롬 — 신호등 + 언어 라벨을 얹고 코드는 그 아래.
+          const lang = fenceLang(code?.properties?.className);
+          return (
+            <div className="code-win">
+              <div className="code-win-bar" aria-hidden="true">
+                <span className="code-win-dot" />
+                <span className="code-win-dot" />
+                <span className="code-win-dot" />
+                {lang && <span className="code-win-lang">{lang}</span>}
+              </div>
+              <pre>{props.children}</pre>
+            </div>
+          );
         },
       }}
     >
