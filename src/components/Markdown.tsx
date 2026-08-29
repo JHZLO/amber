@@ -9,6 +9,7 @@ import { Mermaid } from "./Mermaid";
 import { Icon, type IconName } from "../icons";
 import { t, type MsgKey } from "../lib/i18n";
 import { remarkAlerts, type AlertKind } from "../lib/mdAlerts";
+import { remarkSecRefs } from "../lib/mdSecRefs";
 
 // pre>code 의 AST 노드에서 mermaid 여부/원문을 뽑기 위한 최소 형태
 type PreNode = {
@@ -65,7 +66,7 @@ export const Markdown = memo(function Markdown({
 }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkAlerts]}
+      remarkPlugins={[remarkGfm, remarkAlerts, remarkSecRefs]}
       // 문법 하이라이트 — 클래스(hljs-*)만 붙이고 색은 styles.css 의 토큰이 정한다.
       // detect: false 로 **언어를 적은 블록만** 칠한다(추측이 틀리면 색이 엉뚱해진다).
       rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}

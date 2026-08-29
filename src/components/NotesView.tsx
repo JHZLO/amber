@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
+import { headingSection } from "../lib/mdSecRefs";
 import { NoteCommentLayer } from "./NoteComments";
 import {
   createFolder,
@@ -155,6 +156,11 @@ export function NotesView({
     const entries = hs
       .map((el, i) => {
         el.id = `note-h-${i}`;
+        // 절 번호를 따로 남긴다 — 본문의 `[[1-2]]` 가 이걸로 목적지를 찾는다.
+        // id 는 인덱스 기반이라(note-h-N) 번호로는 못 찾는다.
+        const sec = headingSection(el.textContent ?? "");
+        if (sec) el.dataset.sec = sec;
+        else delete el.dataset.sec;
         return {
           id: el.id,
           text: el.textContent?.trim() ?? "",
@@ -203,6 +209,26 @@ export function NotesView({
     // toc 도 의존성이다 — 헤딩 id 는 인덱스 기반(note-h-0…)이라 다른 글로 넘어가도 활성 id 가
     // 그대로일 수 있다. 그러면 목차만 이전 글의 스크롤 위치에 남는다.
   }, [activeHeading, toc]);
+
+  // 본문의 절 참조(`[[1-2]]`) 클릭 → 그 번호를 단 제목으로 이동.
+  // 위임으로 받는 이유: 링크는 마크다운이 매 렌더 새로 만들고, 목적지 탐색·스크롤은
+  // 제목 id 와 스크롤 컨테이너를 아는 이 컴포넌트가 해야 한다.
+  useEffect(() => {
+    const c = mdRef.current;
+    if (!c || editing) return;
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement | null)?.closest?.("[data-secref]");
+      const sec = (a as HTMLElement | null)?.dataset.secref;
+      if (!sec) return;
+      e.preventDefault(); // 앵커 기본 이동은 앱 라우팅을 건드린다
+      const target = c.querySelector<HTMLElement>(`[data-sec="${CSS.escape(sec)}"]`);
+      if (target?.id) scrollToHeading(target.id);
+    };
+    c.addEventListener("click", onClick);
+    return () => c.removeEventListener("click", onClick);
+    // toc 가 갱신되면 제목 id·data-sec 도 다시 붙는다 — 그 뒤로 다시 건다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, toc]);
 
   function scrollToHeading(id: string) {
     setActiveHeading(id);

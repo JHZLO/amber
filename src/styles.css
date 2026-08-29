@@ -1463,6 +1463,18 @@ body.resizing-col .pane-resizer::after {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+/* 절 참조(`[[1-2]]`) — 바깥으로 나가는 링크가 아니라 **같은 글 안의 이동**이라
+   밑줄 대신 점선을 쓴다. 실선 밑줄이면 외부 링크와 구분이 안 된다. */
+.markdown a.sec-ref {
+  text-decoration: none;
+  border-bottom: 1px dashed var(--border-strong);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.markdown a.sec-ref:hover {
+  color: var(--text);
+  border-bottom-color: var(--text-3);
+}
 /* 알림 블록(`> [!NOTE]` — lib/mdAlerts.ts + components/Markdown.tsx).
    §2 의 색 예외다 — 종류마다 전용 토큰(--alert-*)을 쓰고, GitHub·Paper 와 같은 팔레트로 맞춘다.
    **배경을 깔지 않는다**: 라이트에서 이 색들이 surface-2/3 위에서 4.0~4.4:1 로 AA 아래로
