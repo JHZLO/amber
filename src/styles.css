@@ -2613,13 +2613,15 @@ html.widget-root #root {
 }
 /* 검색 결과 — 걸린 글자와 그 글자가 든 테이블 상자를 함께 표시한다.
    현재 결과는 밑줄 + 상자 테두리를 한 단계 굵혀, 한 테이블에 여러 건이 걸려도 어디를 보는지 잃지 않는다.
+   **글자 폭을 바꾸는 속성(font-weight, font-size, letter-spacing)은 쓰지 않는다** —
+   mermaid 는 렌더 시점 글자 폭에 맞춰 라벨 상자(foreignObject) 너비를 고정하므로,
+   굵히면 그 폭을 넘어 뒷글자가 잘린다. 색과 밑줄은 폭을 바꾸지 않아 안전하다.
    **fill 과 color 를 함께 준다**: mermaid 라벨은 SVG text 일 때도 있고 foreignObject 안 HTML 일
    때도 있어서(ERD 가 후자), 한쪽만 주면 절반이 안 칠해진다. */
 .dgm-hit,
 .dgm-hit * {
   fill: #b3460f !important;
   color: #b3460f !important;
-  font-weight: 700 !important;
 }
 .dgm-hit-cur,
 .dgm-hit-cur * {
