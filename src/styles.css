@@ -3210,6 +3210,43 @@ html.widget-root #root {
     transform: none;
   }
 }
+/* 목록을 여는 트리거 — 본문 오른쪽 여백에 뜬다. 자리(left/top)는 JS 가 실측해 넣고
+   여백이 좁으면 아래 기본값(우측 상단)으로 폴백한다. */
+.cmt-list-trigger {
+  position: fixed;
+  z-index: 93;
+  top: 76px;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+.cmt-list-trigger:hover {
+  color: var(--text);
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+.cmt-list-trigger:active {
+  transform: scale(0.97);
+}
+.cmt-list-trigger svg {
+  color: var(--text-3);
+}
+.cmt-list-trigger:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 /* 글 단위 질문 목록 — 스레드 패널(cmt-pop)과 같은 자리·같은 틀을 쓰고 내용만 목록이다 */
 .cmt-list-title {
   flex: 1;

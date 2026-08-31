@@ -94,7 +94,6 @@ const ko = {
 
   // 글 단위 질문 목록 — 문장을 클릭하는 길과 별도로, 이 노트의 질문을 모아 본다
   "notes.qlist.btn": "질문 {n}",
-  "notes.qlist.btnTip": "이 노트에 단 질문 모아보기",
   "notes.qlist.title": "이 노트의 질문 {n}개",
   "notes.qlist.empty": "아직 단 질문이 없어요.",
   "notes.qlist.turns": "문답 {n}",
@@ -219,7 +218,6 @@ const en: Record<keyof typeof ko, string> = {
   "notes.cmt.deleteThread": "Delete this thread",
 
   "notes.qlist.btn": "{n} questions",
-  "notes.qlist.btnTip": "See every question you asked in this note",
   "notes.qlist.title": "{n} questions in this note",
   "notes.qlist.empty": "No questions here yet.",
   "notes.qlist.turns": "{n} turns",

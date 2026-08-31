@@ -111,8 +111,6 @@ export function NoteCommentLayer({
   config,
   onCountChange,
   onPromote,
-  listOpen = false,
-  onListOpenChange,
 }: {
   noteRel: string;
   body: string;
@@ -121,9 +119,6 @@ export function NoteCommentLayer({
   onCountChange?: (n: number) => void;
   /** 선택 영역을 개념으로 승격 (NotesView 가 모달을 연다). 선택 텍스트를 넘긴다 */
   onPromote?: (selection: string) => void;
-  /** 질문 목록 패널 표시 — 여는 버튼은 노트 툴바(NotesView)에 있어 상태를 위에서 들고 있다 */
-  listOpen?: boolean;
-  onListOpenChange?: (open: boolean) => void;
 }) {
   const [comments, setComments] = useState<NoteComment[]>([]);
   // 선택 정보는 "선택하는 순간" 미리 계산해 둔다 — 버튼 클릭 시점의 라이브 셀렉션에
@@ -136,6 +131,8 @@ export function NoteCommentLayer({
     occurrence: number;
   } | null>(null);
   const [pop, setPop] = useState<Pop | null>(null);
+  // 질문 목록 — 본문 오른쪽 여백의 트리거로 열고 닫는다(노트를 옮기면 key 로 리마운트돼 닫힌다)
+  const [listOpen, setListOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const [askError, setAskError] = useState<string | null>(null);
@@ -147,7 +144,12 @@ export function NoteCommentLayer({
   const [revising, setRevising] = useState<number | null>(null);
   const [reviseText, setReviseText] = useState("");
   // 패널을 놓을 자리: 본문 오른쪽 끝 ~ 목차 왼쪽 끝 사이의 여백(실측). 좁으면 null(우측 오버레이 폴백)
-  const [dock, setDock] = useState<{ left: number; width: number } | null>(null);
+  const [dock, setDock] = useState<{
+    left: number;
+    width: number;
+    top: number;
+    maxHeight: number;
+  } | null>(null);
 
   const popRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -178,7 +180,7 @@ export function NoteCommentLayer({
       setReviseText("");
       setPop({ kind: "view", id, fromList });
       if (!fromList) return;
-      onListOpenChange?.(false);
+      setListOpen(false);
       const hit = rangesRef.current.find((r) => r.id === id);
       // Range 는 스크롤 대상이 못 되므로 앵커가 걸린 요소를 올린다 — 문장 단위면 충분하다
       hit?.range.startContainer.parentElement?.scrollIntoView({
@@ -186,7 +188,7 @@ export function NoteCommentLayer({
         behavior: "smooth",
       });
     },
-    [onListOpenChange],
+    [],
   );
 
   // 노트가 바뀌면 사이드카 로드
@@ -374,18 +376,15 @@ export function NoteCommentLayer({
     };
   }, [pop, asking]);
 
-  // 목록 닫기: 바깥 클릭 / Esc. 여는 버튼(.cmt-list-trigger)은 예외다 —
-  // mousedown 으로 먼저 닫으면 뒤이은 click 의 토글이 도로 열어 버려 눌러도 안 닫힌다.
+  // 목록 닫기: 바깥 클릭 / Esc (여는 트리거는 목록이 닫혀 있을 때만 렌더돼 경합이 없다)
   useEffect(() => {
     if (!listOpen || pop) return;
     const down = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target?.closest?.(".cmt-list-trigger")) return;
       if (listRef.current && !listRef.current.contains(e.target as Node))
-        onListOpenChange?.(false);
+        setListOpen(false);
     };
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onListOpenChange?.(false);
+      if (e.key === "Escape") setListOpen(false);
     };
     document.addEventListener("mousedown", down);
     window.addEventListener("keydown", key);
@@ -393,22 +392,29 @@ export function NoteCommentLayer({
       document.removeEventListener("mousedown", down);
       window.removeEventListener("keydown", key);
     };
-  }, [listOpen, pop, onListOpenChange]);
+  }, [listOpen, pop]);
 
-  // 패널 자리 실측: 본문(.markdown) 오른쪽 끝 ~ 목차(.note-toc) 왼쪽 끝 사이 여백에 끼운다.
-  // 그 여백을 넘치지 않게 폭을 줄이고, 여백이 너무 좁으면(좁은 창·목차 숨김) 우측 오버레이로 폴백.
+  // 자리 실측 — 트리거·패널이 공통으로 쓴다.
+  // 가로: 본문(.markdown) 오른쪽 끝 ~ 목차(.note-toc) 왼쪽 끝 사이 여백. 좁으면 null(우측 폴백).
+  // 세로: **본문 블록 안에 갇힌다.** 뷰포트에만 고정하면 스크롤을 내렸을 때 제목·툴바 위로
+  // 올라가 글 밖에 떠 버린다 — 위는 스크롤 영역 상단, 아래는 본문 끝에 딱 걸리게 한다.
   useEffect(() => {
-    if (!pop && !listOpen) return;
     const GAP = 24; // 본문/목차와 띄울 간격
     const MIN = 260; // 이보다 좁은 여백이면 폴백(우측 오버레이) — 너무 좁은 패널 방지
     const MAX = 380; // 패널 최대 폭
+    // 위 여유는 화면 안에서 찾기 바(.page-find, sticky) 한 줄만큼 — 스크롤을 내려 위에 걸릴 때
+    // 그 바와 겹치지 않는다. 안 내렸을 땐 본문 시작이 더 아래라 이 값이 쓰이지 않는다.
+    const PAD_TOP = 44;
+    const PAD_BOTTOM = 12;
+    const MIN_H = 140; // 이보다 낮아지면 더 줄이지 않는다(본문 끝을 지나 스크롤한 경우)
+    let raf = 0;
     const measure = () => {
+      raf = 0;
       const content = containerRef.current;
-      if (!content) return setDock(null);
+      const wrap = content?.closest(".note-read-wrap") as HTMLElement | null;
+      if (!content || !wrap) return setDock(null);
       const cRect = content.getBoundingClientRect();
-      const toc = content
-        .closest(".note-read-wrap")
-        ?.querySelector(".note-toc") as HTMLElement | null;
+      const toc = wrap.querySelector(".note-toc") as HTMLElement | null;
       const leftBound = cRect.right + GAP;
       const rightBound =
         toc && toc.offsetParent !== null
@@ -416,12 +422,39 @@ export function NoteCommentLayer({
           : window.innerWidth - 16;
       const avail = rightBound - leftBound;
       if (avail < MIN) return setDock(null);
-      setDock({ left: leftBound, width: Math.min(MAX, avail) });
+      const scroller = content.closest(".detail") as HTMLElement | null;
+      const sRect = scroller?.getBoundingClientRect();
+      const topLimit = (sRect?.top ?? 0) + PAD_TOP;
+      const bottomLimit = (sRect?.bottom ?? window.innerHeight) - PAD_BOTTOM;
+      const wRect = wrap.getBoundingClientRect();
+      // 아래쪽 걸림: 본문 끝을 넘어가지 않게 — 본문이 끝나면 패널도 거기서 멈춘다
+      const floor = Math.min(wRect.bottom, bottomLimit);
+      const top = Math.min(
+        Math.max(wRect.top, topLimit),
+        Math.max(topLimit, floor - MIN_H),
+      );
+      const maxHeight = Math.max(MIN_H, floor - top);
+      setDock((prev) =>
+        prev &&
+        prev.left === leftBound &&
+        prev.top === top &&
+        prev.maxHeight === maxHeight
+          ? prev // 스크롤마다 같은 값으로 재렌더하지 않는다
+          : { left: leftBound, width: Math.min(MAX, avail), top, maxHeight },
+      );
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(measure);
     };
     measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [pop, listOpen, containerRef]);
+    window.addEventListener("resize", onScroll);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("scroll", onScroll, true);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [containerRef, body, comments.length]);
 
   // "질문" 버튼: 선택 시점에 계산해 둔 정보로 패널을 연다 (라이브 셀렉션에 의존하지 않음)
   function openAsk() {
@@ -430,7 +463,7 @@ export function NoteCommentLayer({
     setQuestion("");
     setAskError(null);
     setPop({ kind: "ask", anchor: si.anchor, occurrence: si.occurrence });
-    onListOpenChange?.(false); // 새 질문을 쓰는 중엔 목록을 뒤에 남겨 두지 않는다
+    setListOpen(false); // 새 질문을 쓰는 중엔 목록을 뒤에 남겨 두지 않는다
     setSelInfo(null);
     window.getSelection()?.removeAllRanges();
   }
@@ -618,7 +651,13 @@ export function NoteCommentLayer({
 
   // 실측한 여백이 있으면 그 자리에(폭 제한), 없으면 CSS 기본값(우측 오버레이 폴백)
   const popStyle = dock
-    ? { left: dock.left, width: dock.width, right: "auto" as const }
+    ? {
+        left: dock.left,
+        width: dock.width,
+        top: dock.top,
+        maxHeight: dock.maxHeight,
+        right: "auto" as const,
+      }
     : undefined;
 
   // 목록 순서 = 본문 등장 순서. 읽던 흐름과 같아야 어디에 단 질문인지 바로 잡힌다.
@@ -672,6 +711,23 @@ export function NoteCommentLayer({
         </div>
       )}
 
+      {/* 목록을 여는 트리거 — 본문 오른쪽 여백에 떠서 스크롤을 따라온다(본문 범위에 갇힘).
+          질문이 없으면 트리거도 없다. 목록/스레드가 열려 있으면 자리를 넘긴다. */}
+      {comments.length > 0 && !listOpen && !pop && (
+        <button
+          className="cmt-list-trigger"
+          style={
+            dock
+              ? { left: dock.left, top: dock.top, right: "auto" }
+              : undefined
+          }
+          onClick={() => setListOpen(true)}
+        >
+          <Icon name="message" size={13} />
+          {t("notes.qlist.btn", { n: comments.length })}
+        </button>
+      )}
+
       {/* 이 노트의 질문 전부 — 본문 등장 순서. 한 줄을 누르면 그 스레드 뷰로 넘어간다.
           앵커가 사라진 질문도 여기선 그냥 한 줄일 뿐이라, 따로 경고를 띄우지 않는다. */}
       {listOpen && !pop && (
@@ -685,7 +741,7 @@ export function NoteCommentLayer({
               <button
                 aria-label={t("common.close")}
                 className="icon-btn ghost sm"
-                onClick={() => onListOpenChange?.(false)}
+                onClick={() => setListOpen(false)}
               >
                 <Icon name="x" size={14} />
               </button>
@@ -810,7 +866,7 @@ export function NoteCommentLayer({
                       className="icon-btn ghost sm"
                       onClick={() => {
                         setPop(null);
-                        onListOpenChange?.(true);
+                        setListOpen(true);
                       }}
                       disabled={asking}
                     >

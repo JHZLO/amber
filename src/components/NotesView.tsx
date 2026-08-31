@@ -110,8 +110,6 @@ export function NotesView({
   const [body, setBody] = useState("");
   const [mtime, setMtime] = useState<number | null>(null);
   const [commentCount, setCommentCount] = useState(0);
-  // 이 노트의 질문 목록 패널 — 여는 버튼은 툴바에, 패널은 NoteCommentLayer 가 그린다
-  const [qListOpen, setQListOpen] = useState(false);
   const [loadingBody, setLoadingBody] = useState(false);
   const [readError, setReadError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -174,11 +172,6 @@ export function NotesView({
     setToc(entries);
     setActiveHeading(entries[0]?.id ?? "");
   }, [body, editing, loadingBody, selected]);
-
-  // 질문 목록은 그 노트/그 읽기 화면에 매인 패널이다 — 노트를 옮기거나 편집으로 들어가면 닫는다
-  useEffect(() => {
-    setQListOpen(false);
-  }, [selected, editing]);
 
   // 스크롤 스파이: 스크롤 위치 기준 현재 섹션 하이라이트
   useEffect(() => {
@@ -872,21 +865,6 @@ export function NotesView({
                         {copied ? t("notes.copied") : t("notes.copy")}
                       </button>
                     </Tooltip>
-                    {/* 질문은 문장을 클릭해야 보였다 — 글 단위로 모아보는 길을 하나 더 둔다.
-                        질문이 없으면 버튼도 없다(눌러도 빈 패널인 버튼을 두지 않는다) */}
-                    {commentCount > 0 && (
-                      <Tooltip label={t("notes.qlist.btnTip")}>
-                        <button
-                          className="btn btn-sm cmt-list-trigger"
-                          aria-pressed={qListOpen}
-                          onClick={() => setQListOpen((v) => !v)}
-                          disabled={loadingBody || !!readError}
-                        >
-                          <Icon name="message" size={14} />
-                          {t("notes.qlist.btn", { n: commentCount })}
-                        </button>
-                      </Tooltip>
-                    )}
                   </>
                 )}
               </div>
@@ -936,8 +914,6 @@ export function NotesView({
                   containerRef={mdRef}
                   config={config}
                   onCountChange={setCommentCount}
-                  listOpen={qListOpen}
-                  onListOpenChange={setQListOpen}
                   onPromote={(selection) =>
                     setPromote({ noteRel: selected, selection, noteBody: body })
                   }
