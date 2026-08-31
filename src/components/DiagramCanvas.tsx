@@ -239,6 +239,15 @@ export function DiagramCanvas({
 
   // 컬럼 목록 펼침 — 노드를 바꿔 고르면 접힌 상태로 돌아간다
   const [showCols, setShowCols] = useState(false);
+  // 검색 — 큰 ERD 에서 테이블·컬럼 이름을 눈으로 훑는 건 사실상 불가능하다.
+  // 렌더된 SVG 의 text 노드를 그대로 뒤진다(원본 mermaid 소스가 아니라): 화면에 보이는
+  // 문자열과 검색 대상이 정확히 같아야 "분명 있는데 안 잡힌다"가 생기지 않는다.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [hitIdx, setHitIdx] = useState(0);
+  const [hitCount, setHitCount] = useState(0);
+  const hitsRef = useRef<SVGGraphicsElement[]>([]);
+  const searchRef = useRef<HTMLInputElement>(null);
   // 이름 복사 피드백 — 리포트 복사 버튼과 같은 문법(1.5s 뒤 원래대로)
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -436,6 +445,13 @@ export function DiagramCanvas({
         return;
       }
       if (!hoverRef.current || !pzRef.current) return;
+      // '/' 로 검색 열기 — 입력창에 포커스가 있으면 그냥 글자다
+      if (e.key === "/") {
+        setSearchOpen(true);
+        requestAnimationFrame(() => searchRef.current?.focus());
+        e.preventDefault();
+        return;
+      }
       if (e.key === "+" || e.key === "=") pzRef.current.zoomIn();
       else if (e.key === "-") pzRef.current.zoomOut();
       else if (e.key === "1") {
@@ -456,6 +472,70 @@ export function DiagramCanvas({
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, []);
+
+  /** 검색어에 걸리는 SVG text 노드를 모아 표시하고, 첫 결과로 이동한다.
+   *  칠하는 건 text 하나가 아니라 그 text 를 품은 그룹(테이블 상자)까지다 — 컬럼 하나가
+   *  걸렸을 때 어느 테이블 안인지 같이 보여야 검색이 쓸모 있다. */
+  function runSearch(q: string) {
+    const host = hostRef.current;
+    if (!host) return;
+    for (const el of Array.from(host.querySelectorAll(".dgm-hit, .dgm-hit-box, .dgm-hit-cur"))) {
+      el.classList.remove("dgm-hit", "dgm-hit-box", "dgm-hit-cur");
+    }
+    const term = q.trim().toLowerCase();
+    if (!term) {
+      hitsRef.current = [];
+      setHitCount(0);
+      setHitIdx(0);
+      return;
+    }
+    const hits: SVGGraphicsElement[] = [];
+    for (const el of Array.from(host.querySelectorAll<SVGGraphicsElement>("svg text"))) {
+      if (!(el.textContent ?? "").toLowerCase().includes(term)) continue;
+      el.classList.add("dgm-hit");
+      // 상자까지 표시 — 조상 g 안의 rect 에 **직접** 클래스를 건다.
+      // CSS 자식 선택자로 잡으면 mermaid 가 rect 를 한 겹 더 감쌌을 때 조용히 안 그려진다.
+      const rect = el.closest("g")?.querySelector("rect");
+      rect?.classList.add("dgm-hit-box");
+      hits.push(el);
+    }
+    hitsRef.current = hits;
+    setHitCount(hits.length);
+    setHitIdx(0);
+    if (hits.length) focusHit(0);
+  }
+
+  /** 결과 하나를 화면 중앙으로. 화면 좌표로 계산해 현재 줌·팬 상태와 무관하게 맞는다. */
+  function focusHit(i: number) {
+    const hits = hitsRef.current;
+    const pz = pzRef.current;
+    const host = hostRef.current;
+    if (!hits.length || !pz || !host) return;
+    const el = hits[((i % hits.length) + hits.length) % hits.length];
+    for (const h of hits) h.classList.remove("dgm-hit-cur");
+    el.classList.add("dgm-hit-cur");
+    const r = el.getBoundingClientRect();
+    const h = host.getBoundingClientRect();
+    pz.panBy({
+      x: h.left + h.width / 2 - (r.left + r.width / 2),
+      y: h.top + h.height / 2 - (r.top + r.height / 2),
+    });
+  }
+
+  function stepHit(delta: number) {
+    if (!hitsRef.current.length) return;
+    const next =
+      (((hitIdx + delta) % hitsRef.current.length) + hitsRef.current.length) %
+      hitsRef.current.length;
+    setHitIdx(next);
+    focusHit(next);
+  }
+
+  function closeSearch() {
+    setSearchOpen(false);
+    setQuery("");
+    runSearch("");
+  }
 
   const zoomIn = () => pzRef.current?.zoomIn();
   const zoomOut = () => pzRef.current?.zoomOut();
@@ -487,10 +567,73 @@ export function DiagramCanvas({
         }}
       />
 
+      {/* 검색 바 — 툴바 바로 아래. 결과 개수와 이동이 한 줄에 있어야 훑는 흐름이 안 끊긴다 */}
+      {searchOpen && (
+        <div className="dgm-search">
+          <Icon name="search" size={14} />
+          <input
+            ref={searchRef}
+            className="dgm-search-input"
+            placeholder={t("diagrams.search.ph")}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              runSearch(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
+              if (e.key === "Enter") stepHit(e.shiftKey ? -1 : 1);
+              if (e.key === "Escape") closeSearch();
+            }}
+          />
+          <span className="dgm-search-count">
+            {hitCount ? `${hitIdx + 1}/${hitCount}` : query.trim() ? "0" : ""}
+          </span>
+          <button
+            className="dgm-search-nav"
+            aria-label={t("diagrams.search.prev")}
+            onClick={() => stepHit(-1)}
+            disabled={!hitCount}
+          >
+            <Icon name="chevron-left" size={14} />
+          </button>
+          <button
+            className="dgm-search-nav"
+            aria-label={t("diagrams.search.next")}
+            onClick={() => stepHit(1)}
+            disabled={!hitCount}
+          >
+            <Icon name="chevron-right" size={14} />
+          </button>
+          <button
+            className="dgm-search-nav"
+            aria-label={t("common.close")}
+            onClick={closeSearch}
+          >
+            <Icon name="x" size={14} />
+          </button>
+        </div>
+      )}
+
       {/* 우상단 — 화면 조작. 캔버스 위에 떠 있어 그림 폭을 잡아먹지 않는다.
           아이콘 뜻: 네 귀퉁이 브래킷 = 프레임에 담는다(맞춤), 대각 화살표 = 밖으로 펼친다(전체화면).
           네이티브 title 은 WKWebView 에서 안 뜨므로 공용 Tooltip 으로 감싼다. */}
       <div className="dgm-float dgm-float-tr">
+        <Tooltip label={`${t("diagrams.search.open")} (/)`}>
+          <button
+            className={`dgm-float-btn ${searchOpen ? "on" : ""}`}
+            aria-label={t("diagrams.search.open")}
+            onClick={() => {
+              if (searchOpen) closeSearch();
+              else {
+                setSearchOpen(true);
+                requestAnimationFrame(() => searchRef.current?.focus());
+              }
+            }}
+          >
+            <Icon name="search" size={16} />
+          </button>
+        </Tooltip>
         <Tooltip label={`${t("diagrams.zoom.fitTitle")} (0)`}>
           <button
             className="dgm-float-btn"

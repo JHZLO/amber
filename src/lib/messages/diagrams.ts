@@ -98,6 +98,10 @@ const ko = {
   "diagrams.zoom.in": "확대",
   "diagrams.zoom.out": "축소",
   "diagrams.zoom.fit": "맞춤",
+  "diagrams.search.open": "테이블/컬럼 검색",
+  "diagrams.search.ph": "테이블이나 컬럼 이름",
+  "diagrams.search.prev": "이전 결과",
+  "diagrams.search.next": "다음 결과",
   "diagrams.zoom.fitTitle": "화면에 맞춤",
   "diagrams.copy": "복사",
 
@@ -218,6 +222,10 @@ const en: Record<keyof typeof ko, string> = {
   "diagrams.zoom.in": "Zoom in",
   "diagrams.zoom.out": "Zoom out",
   "diagrams.zoom.fit": "Fit",
+  "diagrams.search.open": "Search tables and columns",
+  "diagrams.search.ph": "Table or column name",
+  "diagrams.search.prev": "Previous match",
+  "diagrams.search.next": "Next match",
   "diagrams.zoom.fitTitle": "Fit to view",
   "diagrams.copy": "Copy",
 

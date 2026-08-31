@@ -2561,6 +2561,73 @@ html.widget-root #root {
   top: 10px;
   right: 10px;
 }
+/* 검색 바 — 툴바 바로 아래 같은 옷. 캔버스는 흰 판이라(다이어그램은 라이트로 렌더된다)
+   툴바와 마찬가지로 테마 토큰이 아니라 고정색을 쓴다. */
+.dgm-search {
+  position: absolute;
+  z-index: 2;
+  top: 52px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid rgba(24, 24, 27, 0.1);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 1px 3px rgba(24, 24, 27, 0.1);
+  color: #52525b;
+}
+.dgm-search-input {
+  width: 190px;
+  border: none;
+  background: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 13px;
+  color: #18181b;
+}
+.dgm-search-count {
+  min-width: 34px;
+  text-align: right;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: #71717a;
+}
+.dgm-search-nav {
+  display: inline-flex;
+  padding: 3px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: #52525b;
+  cursor: pointer;
+}
+.dgm-search-nav:hover:not(:disabled) {
+  background: rgba(24, 24, 27, 0.07);
+}
+.dgm-search-nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+/* 검색 결과 — 걸린 글자와 그 글자가 든 테이블 상자를 함께 표시한다.
+   현재 결과만 한 단계 더 진하게 해 여러 개가 걸려도 지금 어디를 보는지 잃지 않는다. */
+.dgm-hit {
+  fill: #b3460f !important;
+  font-weight: 700;
+}
+.dgm-hit-box {
+  stroke: #b3460f !important;
+  stroke-width: 2px !important;
+}
+.dgm-hit-cur {
+  fill: #ffffff !important;
+  paint-order: stroke;
+  stroke: #b3460f;
+  stroke-width: 6px;
+  stroke-linejoin: round;
+}
 .dgm-float-bl {
   bottom: 10px;
   left: 10px;
