@@ -1236,6 +1236,79 @@ body.resizing-col .pane-resizer::after {
   margin: 6px 0 2px;
 }
 
+/* 페이지 내 검색 바(⌘F) — 필기노트·개념·투두 공용(components/PageFind.tsx).
+   pane 우상단에 떠 있어 본문 폭을 밀지 않는다. 다이어그램 캔버스의 검색 바(.dgm-search)와
+   구성은 같지만, 저쪽은 흰 캔버스 위라 고정색이고 여기는 앱 판이라 토큰을 쓴다. */
+.page-find {
+  /* sticky — `.detail` 이 스크롤 컨테이너라 absolute 로 두면 본문과 함께 흘러가 사라진다.
+     아래 여백을 음수로 줘서 본문을 밀지 않고 그 위에 떠 있는다(열 때 화면이 튀지 않는다). */
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  width: max-content;
+  margin: 0 0 -44px auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text-3);
+}
+.page-find-input {
+  width: 200px;
+  border: none;
+  background: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+}
+.page-find-count {
+  min-width: 34px;
+  text-align: right;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+}
+.page-find-nav {
+  display: inline-flex;
+  padding: 3px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-3);
+  cursor: pointer;
+}
+.page-find-nav:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.page-find-nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.page-find-nav:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+/* 검색 결과 — 노트 질문 하이라이트(note-q)와 같은 층이지만 색을 달리해 겹쳐도 구분된다.
+   현재 결과만 진하게: 여러 건이 걸렸을 때 지금 어디에 서 있는지가 보여야 한다. */
+::highlight(page-find) {
+  background-color: rgba(120, 120, 130, 0.3);
+}
+::highlight(page-find-cur) {
+  background-color: rgba(250, 204, 21, 0.55);
+}
+:root[data-theme="dark"] ::highlight(page-find) {
+  background-color: rgba(160, 160, 175, 0.3);
+}
+:root[data-theme="dark"] ::highlight(page-find-cur) {
+  background-color: rgba(202, 138, 4, 0.62);
+}
+
 /* ---- 마크다운 렌더 ---- */
 .markdown {
   line-height: 1.7;

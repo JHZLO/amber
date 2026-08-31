@@ -67,6 +67,7 @@ import { errText } from "../lib/errors";
 import { Checkbox, Modal, Select, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { MiniCalendar } from "./MiniCalendar";
+import { PageFind } from "./PageFind";
 import { DayTimetable, type TtView } from "./DayTimetable";
 import { DailyReportPanel } from "./DailyReportPanel";
 import { WeeklyReportPanel } from "./WeeklyReportPanel";
@@ -188,6 +189,7 @@ export function TodoView({
   const editDone = useRef(false);
   const childDone = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLElement | null>(null); // ⌘F 검색 대상(체크리스트·리포트 전체)
   // 드래그 모델 소스 = **지금 그려진 목록**(일: todos·주: weekTodos) — 아래 rows 계산 뒤 대입.
   // 일 목록에 고정하면 주 모드에서 startDrag 가 행을 못 찾아 grip 이 조용히 죽는다.
   const dragRowsRef = useRef<Todo[]>([]);
@@ -974,7 +976,8 @@ export function TodoView({
 
       <div {...pane.resizerProps} />
 
-      <section className="detail">
+      <section className="detail" ref={detailRef}>
+        <PageFind containerRef={detailRef} active={active} />
         <div className="detail-head todo-head">
           <h1 className="detail-title">
             {unit === "week"

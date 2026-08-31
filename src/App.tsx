@@ -23,6 +23,7 @@ import {
 } from "./ui";
 import { AmberMark, Icon } from "./icons";
 import { ConceptDetail } from "./components/ConceptDetail";
+import { PageFind } from "./components/PageFind";
 import { AddConceptModal } from "./components/AddConceptModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { NotesView } from "./components/NotesView";
@@ -82,6 +83,7 @@ function App() {
     return () => setAuthRequiredHandler(null);
   }, []);
   // 섹션 (TIL 개념 / 필기노트). 마지막 선택을 기억
+  const conceptPaneRef = useRef<HTMLElement | null>(null); // 개념 상세의 ⌘F 검색 대상
   const [section, setSection] = useState<Section>(() =>
     ((): Section => {
       const s = localStorage.getItem("til.section");
@@ -254,8 +256,11 @@ function App() {
         setSearchOpen(true);
         return;
       }
-      // ⌘F = 보관함 검색(⌘K 와 같은 창), ⌘, = 설정 — PRD MVP 단축키 명세
-      if (k === "f") {
+      // ⌘P = 보관함 검색(⌘K 와 같은 창), ⌘, = 설정.
+      // **⌘F 는 여기서 쓰지 않는다** — 화면 안에서 찾기(components/PageFind)가 가져갔다.
+      // 브라우저·에디터에서 ⌘F 는 '지금 보는 화면에서 찾기'라, 그 관례를 따르는 편이
+      // 보관함 전체 검색보다 놀람이 적다.
+      if (k === "p") {
         e.preventDefault();
         setSearchOpen(true);
         return;
@@ -467,7 +472,9 @@ function App() {
 
         <div {...pane.resizerProps} />
 
-        <section className="detail">
+        <section className="detail" ref={conceptPaneRef}>
+          {/* ⌘F — 지금 열어 둔 개념 안에서 찾기 */}
+          <PageFind containerRef={conceptPaneRef} active={section === "til"} />
           {selected ? (
             <ConceptDetail
               key={selected.id}

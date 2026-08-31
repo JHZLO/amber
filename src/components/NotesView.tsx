@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
+import { PageFind } from "./PageFind";
 import { headingSection } from "../lib/mdSecRefs";
 import { NoteCommentLayer } from "./NoteComments";
 import {
@@ -757,6 +758,8 @@ export function NotesView({
       <div {...pane.resizerProps} />
 
       <section className="detail" ref={detailRef}>
+        {/* ⌘F — 지금 보고 있는 노트 안에서 찾기(전역 보관함 검색은 ⌘K·⌘P) */}
+        <PageFind containerRef={detailRef} active={active} />
         {selected ? (
           <div className={`notes-detail ${editing ? "editing" : ""}`}>
             <div className="note-crumb">

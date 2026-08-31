@@ -82,6 +82,11 @@ const ko = {
   "common.alert.warning": "주의",
   "common.alert.caution": "경고",
 
+  // 페이지 내 검색(⌘F) — 필기노트·개념·투두 공용 (components/PageFind.tsx)
+  "common.find.ph": "이 화면에서 찾기",
+  "common.find.prev": "이전 결과",
+  "common.find.next": "다음 결과",
+
   "common.ai.notFound": "{cli} CLI를 찾을 수 없어요. 설정(⚙)에서 경로를 확인하세요.",
   "common.ai.auth": "{cli} 인증이 필요해요. 터미널에서 `{cli}` 로그인 후 다시 시도하세요.",
   "common.ai.rateLimit": "사용량 한도에 도달했어요. 잠시 후 다시 시도하세요.",
@@ -165,6 +170,10 @@ const en: Record<keyof typeof ko, string> = {
   "common.alert.important": "Important",
   "common.alert.warning": "Warning",
   "common.alert.caution": "Caution",
+
+  "common.find.ph": "Find on this screen",
+  "common.find.prev": "Previous match",
+  "common.find.next": "Next match",
 
   "common.ai.notFound": "Couldn't find the {cli} CLI. Check its path in Settings (⚙).",
   "common.ai.auth": "{cli} needs authentication. Log in with `{cli}` in a terminal, then retry.",

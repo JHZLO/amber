@@ -444,8 +444,16 @@ export function DiagramCanvas({
         e.preventDefault();
         return;
       }
+      // ⌘F 로 검색 열기 — 다른 섹션의 페이지 내 검색(PageFind)과 같은 키다.
+      // hover 조건 앞에 둔다: 캔버스에 마우스를 올려놓지 않아도 열려야 한다.
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "f") {
+        setSearchOpen(true);
+        requestAnimationFrame(() => searchRef.current?.select());
+        e.preventDefault();
+        return;
+      }
       if (!hoverRef.current || !pzRef.current) return;
-      // '/' 로 검색 열기 — 입력창에 포커스가 있으면 그냥 글자다
+      // '/' 로도 열린다 — 캔버스에 손이 올라가 있을 때 한 손으로 닿는다
       if (e.key === "/") {
         setSearchOpen(true);
         requestAnimationFrame(() => searchRef.current?.focus());
@@ -634,7 +642,7 @@ export function DiagramCanvas({
           아이콘 뜻: 네 귀퉁이 브래킷 = 프레임에 담는다(맞춤), 대각 화살표 = 밖으로 펼친다(전체화면).
           네이티브 title 은 WKWebView 에서 안 뜨므로 공용 Tooltip 으로 감싼다. */}
       <div className="dgm-float dgm-float-tr">
-        <Tooltip label={`${t("diagrams.search.open")} (/)`}>
+        <Tooltip label={`${t("diagrams.search.open")} (⌘F)`}>
           <button
             className={`dgm-float-btn ${searchOpen ? "on" : ""}`}
             aria-label={t("diagrams.search.open")}
