@@ -3140,8 +3140,16 @@ html.widget-root #root {
 ::highlight(note-q) {
   background-color: rgba(250, 204, 21, 0.32);
 }
+/* 지금 열려 있는 스레드의 문장만 진하게 — 목록에서 들어왔을 때 본문의 어디였는지 보여야 한다.
+   page-find 와 같은 규약(기본 + 현재 한 건만 진하게)이라 값도 맞춘다. */
+::highlight(note-q-cur) {
+  background-color: rgba(250, 204, 21, 0.55);
+}
 :root[data-theme="dark"] ::highlight(note-q) {
   background-color: rgba(202, 138, 4, 0.42);
+}
+:root[data-theme="dark"] ::highlight(note-q-cur) {
+  background-color: rgba(202, 138, 4, 0.62);
 }
 
 /* 드래그 선택 시 뜨는 플로팅 "질문" 버튼 */
@@ -3202,53 +3210,94 @@ html.widget-root #root {
     transform: none;
   }
 }
-/* 앵커가 끊긴 질문 스레드 목록 — 하이라이트로 못 여는 것들의 유일한 통로 (cmt-pop 과 같은 자리) */
-.cmt-orphans {
-  position: fixed;
-  z-index: 94;
-  top: 76px;
-  right: 16px;
-  width: 380px;
-  max-width: calc(100vw - 24px);
-  max-height: calc(100vh - 100px);
-  overflow: auto;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow-sm);
-  padding: 8px 10px;
-}
-.cmt-orphans-head {
+/* 글 단위 질문 목록 — 스레드 패널(cmt-pop)과 같은 자리·같은 틀을 쓰고 내용만 목록이다 */
+.cmt-list-title {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 4px;
-  width: 100%;
-  border: none;
-  background: transparent;
-  color: var(--text-2);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 2px 0;
-  cursor: pointer;
-}
-.cmt-orphans-head:hover {
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--text);
 }
-.cmt-orphan-row {
+.cmt-list-title svg {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+.cmt-list-rows {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -4px;
+}
+.cmt-list-row {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  padding: 3px 0;
+  gap: 4px;
 }
-.cmt-orphan-row .cmt-anchor {
+.cmt-list-row + .cmt-list-row {
+  border-top: 1px solid var(--border);
+}
+.cmt-list-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 4px;
   border: none;
+  border-radius: 6px;
   background: transparent;
-  border-left: 2px solid var(--border-strong);
   text-align: left;
   cursor: pointer;
 }
-.cmt-orphan-row .cmt-anchor:hover {
+.cmt-list-main:hover {
+  background: var(--surface-2);
+}
+.cmt-list-main:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.cmt-list-q {
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* 목록 안의 앵커는 세로로 쌓이는 한 줄이라 cmt-pop-head 의 flex 규칙을 물려받지 않는다 */
+.cmt-list-main .cmt-anchor {
+  flex: none;
+  -webkit-line-clamp: 1;
+}
+.cmt-list-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+/* 본문에서 사라진 앵커 — 경고가 아니라 상태 표시다(목록으로 계속 닿는다) */
+.cmt-list-gone {
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 10px;
+  color: var(--text-3);
+}
+.cmt-list-row .icon-btn,
+.cmt-list-row .tip-wrap {
+  flex-shrink: 0;
+  margin-top: 8px;
+  opacity: 0;
+}
+.cmt-list-row:hover .icon-btn,
+.cmt-list-row:hover .tip-wrap,
+.cmt-list-row:focus-within .tip-wrap {
+  opacity: 1;
 }
 
 .cmt-pop-head {

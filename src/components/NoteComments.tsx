@@ -3,6 +3,10 @@
 // 저장된 질문은 본문 텍스트에 하이라이트(CSS Custom Highlight API, DOM 무변경)로 표시되고
 // 클릭하면 우측 패널(항상 1개)로 스레드를 본다. 패널에서 후속 질문을 이어갈 수 있고
 // 이전 문답이 AI 에 문맥으로 전달된다. 앵커 = "렌더된 텍스트 문자열 + n번째 출현".
+//
+// 문장을 클릭하는 길 외에 **글 단위 목록**(listOpen)이 하나 더 있다: 이 노트에 단 질문이
+// 본문 등장 순서로 쫘르르 뜨고, 한 줄을 누르면 그 스레드 뷰로 넘어간다. 그래서 앵커 문장이
+// 사라져도 질문은 목록으로 계속 닿는다 — 예전처럼 "연결이 끊겼다"고 알릴 이유가 없다.
 
 import {
   useCallback,
@@ -27,11 +31,13 @@ import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 
 const HIGHLIGHT_KEY = "note-q";
+const CURRENT_KEY = "note-q-cur";
 
 // 패널은 우측 여백에 고정(CSS)이라 좌표를 들고 다니지 않는다 — 상태 하나 = 패널 최대 1개
 type Pop =
   | { kind: "ask"; anchor: string; occurrence: number }
-  | { kind: "view"; id: string };
+  // fromList = 목록에서 들어온 스레드 (헤드에 목록으로 돌아가는 버튼이 붙는다)
+  | { kind: "view"; id: string; fromList?: boolean };
 
 /** container 기준 텍스트 오프셋 (Range.toString 은 블록 개행을 추가하지 않아 textContent 와 동일 공간) */
 function offsetIn(container: Node, node: Node, offset: number): number {
@@ -45,20 +51,21 @@ function offsetIn(container: Node, node: Node, offset: number): number {
   return r.toString().length;
 }
 
-/** anchor 의 occurrence 번째 출현을 Range 로 복원 (없으면 null) */
-function findNthRange(
-  container: HTMLElement,
-  anchor: string,
-  occurrence: number,
-): Range | null {
-  if (!anchor) return null;
-  const fullText = container.textContent ?? "";
+/** fullText 에서 anchor 의 occurrence 번째 출현 위치 (없으면 -1) */
+function nthIndex(fullText: string, anchor: string, occurrence: number): number {
+  if (!anchor) return -1;
   let idx = -1;
   for (let i = 0; i <= occurrence; i++) {
     idx = fullText.indexOf(anchor, idx + 1);
-    if (idx === -1) return null;
+    if (idx === -1) return -1;
   }
-  const endIdx = idx + anchor.length;
+  return idx;
+}
+
+/** container 의 텍스트 공간에서 [idx, idx+len) 구간을 Range 로 복원 (없으면 null).
+ *  위치를 따로 받는 이유: 목록 정렬에 그 위치(본문 등장 순서)를 그대로 쓴다. */
+function rangeAt(container: HTMLElement, idx: number, len: number): Range | null {
+  const endIdx = idx + len;
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
   let acc = 0;
   let startNode: Text | null = null;
@@ -104,6 +111,8 @@ export function NoteCommentLayer({
   config,
   onCountChange,
   onPromote,
+  listOpen = false,
+  onListOpenChange,
 }: {
   noteRel: string;
   body: string;
@@ -112,6 +121,9 @@ export function NoteCommentLayer({
   onCountChange?: (n: number) => void;
   /** 선택 영역을 개념으로 승격 (NotesView 가 모달을 연다). 선택 텍스트를 넘긴다 */
   onPromote?: (selection: string) => void;
+  /** 질문 목록 패널 표시 — 여는 버튼은 노트 툴바(NotesView)에 있어 상태를 위에서 들고 있다 */
+  listOpen?: boolean;
+  onListOpenChange?: (open: boolean) => void;
 }) {
   const [comments, setComments] = useState<NoteComment[]>([]);
   // 선택 정보는 "선택하는 순간" 미리 계산해 둔다 — 버튼 클릭 시점의 라이브 셀렉션에
@@ -138,20 +150,43 @@ export function NoteCommentLayer({
   const [dock, setDock] = useState<{ left: number; width: number } | null>(null);
 
   const popRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const followUpRef = useRef<HTMLTextAreaElement>(null);
   const rangesRef = useRef<{ id: string; range: Range }[]>([]);
   const relRef = useRef(noteRel);
   relRef.current = noteRel;
 
-  // 앵커 텍스트가 수정돼 본문에서 못 찾은 스레드 — 하이라이트가 없어 클릭으로 열 방법이 사라진다.
-  // 배지는 계속 세고 있어서 "질문 3개"인데 2개만 열리는 상태가 된다. 여기서 따로 표면화한다.
-  const [orphanIds, setOrphanIds] = useState<string[]>([]);
-  const [orphanOpen, setOrphanOpen] = useState(false);
+  // 본문에서의 앵커 위치. pos = 텍스트 오프셋(목록 정렬 = 본문 등장 순서),
+  // missing = 앵커 문장이 수정돼 본문에서 못 찾은 스레드(목록에서 조용히 표시만 한다).
+  const [anchors, setAnchors] = useState<{
+    pos: Map<string, number>;
+    missing: Set<string>;
+  }>({ pos: new Map(), missing: new Set() });
 
   const notifyCount = useCallback(
     (list: NoteComment[]) => onCountChange?.(list.length),
     [onCountChange],
+  );
+
+  /** 스레드 열기. 목록에서 왔으면 본문의 그 문장으로 스크롤해 준다(클릭으로 왔으면 이미 보인다) */
+  const openThread = useCallback(
+    (id: string, fromList: boolean) => {
+      setQuestion("");
+      setAskError(null);
+      setRevising(null);
+      setReviseText("");
+      setPop({ kind: "view", id, fromList });
+      if (!fromList) return;
+      onListOpenChange?.(false);
+      const hit = rangesRef.current.find((r) => r.id === id);
+      // Range 는 스크롤 대상이 못 되므로 앵커가 걸린 요소를 올린다 — 문장 단위면 충분하다
+      hit?.range.startContainer.parentElement?.scrollIntoView({
+        block: "center",
+        behavior: "smooth",
+      });
+    },
+    [onListOpenChange],
   );
 
   // 노트가 바뀌면 사이드카 로드
@@ -169,30 +204,36 @@ export function NoteCommentLayer({
     };
   }, [noteRel, notifyCount]);
 
-  // 하이라이트: 렌더된 DOM 에서 앵커 복원 → CSS Custom Highlight (미지원이면 표시만 생략)
+  // 앵커 복원: 위치(목록 정렬용) → Range → CSS Custom Highlight.
+  // 하이라이트를 못 쓰는 환경에서도 위치 계산과 스크롤은 그대로 살려 둔다(목록은 계속 동작).
   useEffect(() => {
     const c = containerRef.current;
     rangesRef.current = [];
-    const registry = highlightRegistry();
-    // 하이라이트를 못 쓰는 환경에서는 모든 스레드가 클릭으로 도달 불가 — 전부 목록으로 돌린다
-    if (!c || !registry) {
-      setOrphanIds(comments.map((cm) => cm.id));
-      return;
+    if (!c) return;
+    const fullText = c.textContent ?? "";
+    const found: { id: string; range: Range }[] = [];
+    const pos = new Map<string, number>();
+    const missing = new Set<string>();
+    for (const cm of comments) {
+      // 노트가 수정돼 n번째 출현이 사라졌으면 첫 출현으로 폴백
+      let idx = nthIndex(fullText, cm.anchor, cm.occurrence);
+      if (idx === -1) idx = nthIndex(fullText, cm.anchor, 0);
+      if (idx === -1) {
+        missing.add(cm.id);
+        continue;
+      }
+      pos.set(cm.id, idx);
+      const r = rangeAt(c, idx, cm.anchor.length);
+      if (r) found.push({ id: cm.id, range: r });
+      else missing.add(cm.id);
     }
+    rangesRef.current = found;
+    setAnchors({ pos, missing });
+    const registry = highlightRegistry();
+    if (!registry) return;
     const HL = (
       window as unknown as { Highlight: new (...r: Range[]) => unknown }
     ).Highlight;
-    const found: { id: string; range: Range }[] = [];
-    for (const cm of comments) {
-      // 노트가 수정돼 n번째 출현이 사라졌으면 첫 출현으로 폴백
-      const r =
-        findNthRange(c, cm.anchor, cm.occurrence) ??
-        findNthRange(c, cm.anchor, 0);
-      if (r) found.push({ id: cm.id, range: r });
-    }
-    rangesRef.current = found;
-    const reachable = new Set(found.map((f) => f.id));
-    setOrphanIds(comments.filter((cm) => !reachable.has(cm.id)).map((cm) => cm.id));
     if (found.length) registry.set(HIGHLIGHT_KEY, new HL(...found.map((f) => f.range)));
     else registry.delete(HIGHLIGHT_KEY);
     return () => {
@@ -203,6 +244,30 @@ export function NoteCommentLayer({
       }
     };
   }, [comments, body, containerRef]);
+
+  // 지금 열려 있는 스레드의 문장만 진하게. 목록에서 들어왔을 때 "본문의 어디였는지"가
+  // 보여야 하기 때문이다 — 그 한 건만 덮어 칠하므로 note-q 위에 얹는다.
+  useEffect(() => {
+    const registry = highlightRegistry();
+    if (!registry) return;
+    const id = pop?.kind === "view" ? pop.id : null;
+    const hit = id ? rangesRef.current.find((r) => r.id === id) : null;
+    if (!hit) {
+      registry.delete(CURRENT_KEY);
+      return;
+    }
+    const HL = (
+      window as unknown as { Highlight: new (...r: Range[]) => unknown }
+    ).Highlight;
+    registry.set(CURRENT_KEY, new HL(hit.range));
+    return () => {
+      try {
+        registry.delete(CURRENT_KEY);
+      } catch {
+        /* noop */
+      }
+    };
+  }, [pop, comments]);
 
   // 드래그 선택 감시 → 앵커/출현 인덱스/버튼 위치를 그 자리에서 계산 (rAF 스로틀)
   useEffect(() => {
@@ -278,9 +343,7 @@ export function NoteCommentLayer({
       for (const { id, range } of rangesRef.current) {
         try {
           if (range.isPointInRange(caret.startContainer, caret.startOffset)) {
-            setQuestion("");
-            setAskError(null);
-            setPop({ kind: "view", id });
+            openThread(id, false);
             return;
           }
         } catch {
@@ -290,7 +353,7 @@ export function NoteCommentLayer({
     };
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
-  }, [containerRef]);
+  }, [containerRef, openThread]);
 
   // 패널 닫기: 바깥 클릭 / Esc (답변 생성 중 Esc 는 무시).
   // 우측에 고정된 패널이라 스크롤로는 닫지 않는다 — 본문을 훑으며 스레드를 이어갈 수 있게.
@@ -311,10 +374,31 @@ export function NoteCommentLayer({
     };
   }, [pop, asking]);
 
+  // 목록 닫기: 바깥 클릭 / Esc. 여는 버튼(.cmt-list-trigger)은 예외다 —
+  // mousedown 으로 먼저 닫으면 뒤이은 click 의 토글이 도로 열어 버려 눌러도 안 닫힌다.
+  useEffect(() => {
+    if (!listOpen || pop) return;
+    const down = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.(".cmt-list-trigger")) return;
+      if (listRef.current && !listRef.current.contains(e.target as Node))
+        onListOpenChange?.(false);
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onListOpenChange?.(false);
+    };
+    document.addEventListener("mousedown", down);
+    window.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("mousedown", down);
+      window.removeEventListener("keydown", key);
+    };
+  }, [listOpen, pop, onListOpenChange]);
+
   // 패널 자리 실측: 본문(.markdown) 오른쪽 끝 ~ 목차(.note-toc) 왼쪽 끝 사이 여백에 끼운다.
   // 그 여백을 넘치지 않게 폭을 줄이고, 여백이 너무 좁으면(좁은 창·목차 숨김) 우측 오버레이로 폴백.
   useEffect(() => {
-    if (!pop) return;
+    if (!pop && !listOpen) return;
     const GAP = 24; // 본문/목차와 띄울 간격
     const MIN = 260; // 이보다 좁은 여백이면 폴백(우측 오버레이) — 너무 좁은 패널 방지
     const MAX = 380; // 패널 최대 폭
@@ -337,7 +421,7 @@ export function NoteCommentLayer({
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, [pop, containerRef]);
+  }, [pop, listOpen, containerRef]);
 
   // "질문" 버튼: 선택 시점에 계산해 둔 정보로 패널을 연다 (라이브 셀렉션에 의존하지 않음)
   function openAsk() {
@@ -346,6 +430,7 @@ export function NoteCommentLayer({
     setQuestion("");
     setAskError(null);
     setPop({ kind: "ask", anchor: si.anchor, occurrence: si.occurrence });
+    onListOpenChange?.(false); // 새 질문을 쓰는 중엔 목록을 뒤에 남겨 두지 않는다
     setSelInfo(null);
     window.getSelection()?.removeAllRanges();
   }
@@ -536,6 +621,14 @@ export function NoteCommentLayer({
     ? { left: dock.left, width: dock.width, right: "auto" as const }
     : undefined;
 
+  // 목록 순서 = 본문 등장 순서. 읽던 흐름과 같아야 어디에 단 질문인지 바로 잡힌다.
+  // 앵커가 사라진 건 위치가 없으니 맨 뒤로 보내고, 그 안에서는 새로 단 순서.
+  const listRows = [...comments].sort((a, b) => {
+    const pa = anchors.pos.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+    const pb = anchors.pos.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+    return pa !== pb ? pa - pb : a.createdAt - b.createdAt;
+  });
+
   const viewComment =
     pop?.kind === "view" ? comments.find((c) => c.id === pop.id) : undefined;
   // 스레드 = 첫 문답 + 후속 문답들 (v1 사이드카는 첫 문답 하나)
@@ -579,47 +672,73 @@ export function NoteCommentLayer({
         </div>
       )}
 
-      {orphanIds.length > 0 && !pop && (
-        <div className="cmt-orphans" style={popStyle}>
-          <button
-            className="cmt-orphans-head"
-            onClick={() => setOrphanOpen((v) => !v)}
-            aria-expanded={orphanOpen}
-          >
-            <Icon name={orphanOpen ? "chevron-down" : "chevron-right"} size={12} />
-            {t("notes.cmt.orphans", { n: orphanIds.length })}
-          </button>
-          {orphanOpen && (
-            <>
-              <p className="hint" style={{ margin: "2px 0 6px" }}>
-                {t("notes.cmt.orphansHint")}
-              </p>
-              {orphanIds.map((id) => {
-                const cm = comments.find((c) => c.id === id);
-                if (!cm) return null;
+      {/* 이 노트의 질문 전부 — 본문 등장 순서. 한 줄을 누르면 그 스레드 뷰로 넘어간다.
+          앵커가 사라진 질문도 여기선 그냥 한 줄일 뿐이라, 따로 경고를 띄우지 않는다. */}
+      {listOpen && !pop && (
+        <div ref={listRef} className="cmt-pop cmt-list" style={popStyle}>
+          <div className="cmt-pop-head">
+            <div className="cmt-list-title">
+              <Icon name="message" size={13} />
+              {t("notes.qlist.title", { n: comments.length })}
+            </div>
+            <Tooltip label={t("common.close")}>
+              <button
+                aria-label={t("common.close")}
+                className="icon-btn ghost sm"
+                onClick={() => onListOpenChange?.(false)}
+              >
+                <Icon name="x" size={14} />
+              </button>
+            </Tooltip>
+          </div>
+          {comments.length === 0 ? (
+            <p className="hint" style={{ margin: 0 }}>
+              {t("notes.qlist.empty")}
+            </p>
+          ) : (
+            <div className="cmt-list-rows">
+              {listRows.map((cm) => {
+                const turnCount = 1 + (cm.followUps?.length ?? 0);
+                const last =
+                  cm.followUps?.length
+                    ? cm.followUps[cm.followUps.length - 1].createdAt
+                    : cm.createdAt;
                 return (
-                  <div key={id} className="cmt-orphan-row">
+                  <div className="cmt-list-row" key={cm.id}>
                     <button
-                      className="cmt-anchor"
-                      onClick={() => {
-                        setQuestion("");
-                        setAskError(null);
-                        setPop({ kind: "view", id });
-                      }}
+                      className="cmt-list-main"
+                      onClick={() => openThread(cm.id, true)}
                     >
-                      “{cm.anchor}”
+                      <span className="cmt-list-q">{cm.question}</span>
+                      <span className="cmt-anchor">“{cm.anchor}”</span>
+                      <span className="cmt-list-meta">
+                        {timeAgo(last)}
+                        {turnCount > 1 && (
+                          <> · {t("notes.qlist.turns", { n: turnCount })}</>
+                        )}
+                        {anchors.missing.has(cm.id) && (
+                          <span
+                            className="cmt-list-gone"
+                            title={t("notes.qlist.missingTip")}
+                          >
+                            {t("notes.qlist.missing")}
+                          </span>
+                        )}
+                      </span>
                     </button>
-                    <button
-                      className="icon-btn ghost sm danger"
-                      aria-label={t("notes.cmt.deleteThread")}
-                      onClick={() => void deleteComment(id)}
-                    >
-                      <Icon name="trash" size={12} />
-                    </button>
+                    <Tooltip label={t("notes.cmt.deleteThread")}>
+                      <button
+                        className="icon-btn ghost sm danger"
+                        aria-label={t("notes.cmt.deleteThread")}
+                        onClick={() => void deleteComment(cm.id)}
+                      >
+                        <Icon name="trash" size={12} />
+                      </button>
+                    </Tooltip>
                   </div>
                 );
               })}
-            </>
+            </div>
           )}
         </div>
       )}
@@ -684,6 +803,21 @@ export function NoteCommentLayer({
           ) : viewComment ? (
             <>
               <div className="cmt-pop-head">
+                {pop.fromList && (
+                  <Tooltip label={t("notes.qlist.back")}>
+                    <button
+                      aria-label={t("notes.qlist.back")}
+                      className="icon-btn ghost sm"
+                      onClick={() => {
+                        setPop(null);
+                        onListOpenChange?.(true);
+                      }}
+                      disabled={asking}
+                    >
+                      <Icon name="chevron-left" size={14} />
+                    </button>
+                  </Tooltip>
+                )}
                 <div className="cmt-anchor" title={viewComment.anchor}>
                   “{viewComment.anchor}”
                 </div>

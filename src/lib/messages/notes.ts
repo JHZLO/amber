@@ -91,10 +91,18 @@ const ko = {
   "notes.cmt.followUpPh": "이어서 질문하기…",
   "notes.cmt.followUpSend": "후속 질문 보내기",
   "notes.cmt.deleteThread": "질문 스레드 삭제",
-  // 앵커 문장이 수정돼 본문에서 못 찾은 스레드 — 하이라이트가 없어 클릭으로 열 수 없다
-  "notes.cmt.orphans": "연결이 끊긴 질문 {n}개",
-  "notes.cmt.orphansHint":
-    "질문을 단 문장이 수정돼 본문에서 못 찾았어요. 여기서 읽거나 지울 수 있어요.",
+
+  // 글 단위 질문 목록 — 문장을 클릭하는 길과 별도로, 이 노트의 질문을 모아 본다
+  "notes.qlist.btn": "질문 {n}",
+  "notes.qlist.btnTip": "이 노트에 단 질문 모아보기",
+  "notes.qlist.title": "이 노트의 질문 {n}개",
+  "notes.qlist.empty": "아직 단 질문이 없어요.",
+  "notes.qlist.turns": "문답 {n}",
+  "notes.qlist.back": "목록으로",
+  // 앵커 문장이 수정돼 본문에서 못 찾은 스레드 — 목록으로 계속 닿으니 경고가 아니라 표시만
+  "notes.qlist.missing": "본문에 없음",
+  "notes.qlist.missingTip":
+    "질문을 단 문장이 수정돼 본문에서 찾지 못했어요. 문답은 그대로 남아 있어요.",
 
   // AI 작성 모달
   "notes.ai.title": "AI로 노트 작성",
@@ -209,9 +217,16 @@ const en: Record<keyof typeof ko, string> = {
   "notes.cmt.followUpPh": "Ask a follow-up…",
   "notes.cmt.followUpSend": "Send follow-up",
   "notes.cmt.deleteThread": "Delete this thread",
-  "notes.cmt.orphans": "{n} unlinked question(s)",
-  "notes.cmt.orphansHint":
-    "The sentence these were attached to has changed, so they no longer appear in the text. Read or delete them here.",
+
+  "notes.qlist.btn": "{n} questions",
+  "notes.qlist.btnTip": "See every question you asked in this note",
+  "notes.qlist.title": "{n} questions in this note",
+  "notes.qlist.empty": "No questions here yet.",
+  "notes.qlist.turns": "{n} turns",
+  "notes.qlist.back": "Back to the list",
+  "notes.qlist.missing": "not in the text",
+  "notes.qlist.missingTip":
+    "The sentence this was attached to has changed, so it is no longer in the text. The thread is still here.",
 
   "notes.ai.title": "Write note with AI",
   "notes.ai.run": "Write with AI",
