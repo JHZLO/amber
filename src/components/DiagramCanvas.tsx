@@ -479,8 +479,10 @@ export function DiagramCanvas({
   function runSearch(q: string) {
     const host = hostRef.current;
     if (!host) return;
-    for (const el of Array.from(host.querySelectorAll(".dgm-hit, .dgm-hit-box, .dgm-hit-cur"))) {
-      el.classList.remove("dgm-hit", "dgm-hit-box", "dgm-hit-cur");
+    for (const el of Array.from(
+      host.querySelectorAll(".dgm-hit, .dgm-hit-box, .dgm-hit-cur, .dgm-hit-box-cur"),
+    )) {
+      el.classList.remove("dgm-hit", "dgm-hit-box", "dgm-hit-cur", "dgm-hit-box-cur");
     }
     const term = q.trim().toLowerCase();
     if (!term) {
@@ -489,13 +491,20 @@ export function DiagramCanvas({
       setHitIdx(0);
       return;
     }
+    // 라벨은 `g.label` 로 찾는다. **`svg text` 로 찾으면 안 된다** — mermaid 는 라벨을
+    // `<foreignObject>` 안 HTML 로 그려서 SVG text 노드가 아예 없는 경우가 있다
+    // (ERD 가 그렇다. 같은 파일 getNodeText 가 foreignObject 를 먼저 보는 것도 같은 이유).
+    // textContent 는 두 형태 모두에서 동작하므로 판정은 그대로 쓴다.
+    const labels = host.querySelectorAll<SVGGraphicsElement>("svg g.label");
+    const pool = labels.length
+      ? Array.from(labels)
+      : Array.from(host.querySelectorAll<SVGGraphicsElement>("svg text"));
     const hits: SVGGraphicsElement[] = [];
-    for (const el of Array.from(host.querySelectorAll<SVGGraphicsElement>("svg text"))) {
+    for (const el of pool) {
       if (!(el.textContent ?? "").toLowerCase().includes(term)) continue;
       el.classList.add("dgm-hit");
-      // 상자까지 표시 — 조상 g 안의 rect 에 **직접** 클래스를 건다.
-      // CSS 자식 선택자로 잡으면 mermaid 가 rect 를 한 겹 더 감쌌을 때 조용히 안 그려진다.
-      const rect = el.closest("g")?.querySelector("rect");
+      // 상자까지 표시 — 엔티티는 g.node 다(readColumns 와 같은 기준)
+      const rect = (el.closest("g.node") ?? el.closest("g"))?.querySelector("rect");
       rect?.classList.add("dgm-hit-box");
       hits.push(el);
     }
@@ -513,7 +522,13 @@ export function DiagramCanvas({
     if (!hits.length || !pz || !host) return;
     const el = hits[((i % hits.length) + hits.length) % hits.length];
     for (const h of hits) h.classList.remove("dgm-hit-cur");
+    for (const r of Array.from(host.querySelectorAll(".dgm-hit-box-cur"))) {
+      r.classList.remove("dgm-hit-box-cur");
+    }
     el.classList.add("dgm-hit-cur");
+    (el.closest("g.node") ?? el.closest("g"))
+      ?.querySelector("rect")
+      ?.classList.add("dgm-hit-box-cur");
     const r = el.getBoundingClientRect();
     const h = host.getBoundingClientRect();
     pz.panBy({

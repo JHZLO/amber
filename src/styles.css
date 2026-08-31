@@ -2612,21 +2612,26 @@ html.widget-root #root {
   cursor: default;
 }
 /* 검색 결과 — 걸린 글자와 그 글자가 든 테이블 상자를 함께 표시한다.
-   현재 결과만 한 단계 더 진하게 해 여러 개가 걸려도 지금 어디를 보는지 잃지 않는다. */
-.dgm-hit {
+   현재 결과는 밑줄 + 상자 테두리를 한 단계 굵혀, 한 테이블에 여러 건이 걸려도 어디를 보는지 잃지 않는다.
+   **fill 과 color 를 함께 준다**: mermaid 라벨은 SVG text 일 때도 있고 foreignObject 안 HTML 일
+   때도 있어서(ERD 가 후자), 한쪽만 주면 절반이 안 칠해진다. */
+.dgm-hit,
+.dgm-hit * {
   fill: #b3460f !important;
-  font-weight: 700;
+  color: #b3460f !important;
+  font-weight: 700 !important;
+}
+.dgm-hit-cur,
+.dgm-hit-cur * {
+  text-decoration: underline !important;
+  text-underline-offset: 2px;
 }
 .dgm-hit-box {
   stroke: #b3460f !important;
   stroke-width: 2px !important;
 }
-.dgm-hit-cur {
-  fill: #ffffff !important;
-  paint-order: stroke;
-  stroke: #b3460f;
-  stroke-width: 6px;
-  stroke-linejoin: round;
+.dgm-hit-box-cur {
+  stroke-width: 3.5px !important;
 }
 .dgm-float-bl {
   bottom: 10px;
