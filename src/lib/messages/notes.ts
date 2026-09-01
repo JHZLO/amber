@@ -103,6 +103,29 @@ const ko = {
   "notes.qlist.missingTip":
     "질문을 단 문장이 수정돼 본문에서 찾지 못했어요. 문답은 그대로 남아 있어요.",
 
+  // 부분만 고쳐 쓰는 AI 모달 (전문 재작성과 별개 — 출력이 조각뿐이라 훨씬 빠르다)
+  "notes.spanAi.title": "부분만 AI로 수정",
+  "notes.spanAi.selBtn": "선택 수정",
+  "notes.spanAi.selBtnTip": "선택한 부분만 AI로 고쳐 써요 — 전문을 다시 받지 않아 훨씬 빨라요",
+  "notes.spanAi.selBtnEmpty": "왼쪽 원문에서 고칠 부분을 먼저 선택해 주세요",
+  "notes.spanAi.secBtn": "절 수정",
+  "notes.spanAi.secBtnTip": "절 하나만 골라 AI로 고쳐 써요",
+  "notes.spanAi.pickLabel": "고칠 절",
+  "notes.spanAi.backToPick": "다른 절 고르기",
+  "notes.spanAi.pickHint": "고른 절만 다시 써요. 노트 전체는 문맥으로만 보내니 대기 시간이 절 길이에만 걸려요.",
+  "notes.spanAi.noSections":
+    "제목이 없어서 나눌 절이 없어요. 편집 모드에서 고칠 부분을 선택해 수정해 보세요.",
+  "notes.spanAi.selectionLabel": "고칠 부분 (선택 영역)",
+  "notes.spanAi.chars": "{n}자",
+  "notes.spanAi.instructionLabel": "어떻게 고칠까요?",
+  "notes.spanAi.instructionPh": "예: 이 문단을 짧게 줄여줘 / 표로 바꿔줘 / 예시 하나 추가",
+  "notes.spanAi.hint": "이 부분만 바뀌어요. 나머지 본문은 그대로 남아요. (⌘Enter 로 실행)",
+  "notes.spanAi.run": "이 부분만 수정",
+  "notes.spanAi.editing": "이 부분을 고쳐 쓰는 중…",
+  "notes.spanAi.resultLabel": "고쳐 쓴 부분",
+  "notes.spanAi.apply": "이 부분 반영",
+  "notes.spanAi.applyHint": "반영하면 편집 초안의 그 자리에만 들어가요. 저장은 ⌘S 로 해요.",
+
   // AI 작성 모달
   "notes.ai.title": "AI로 노트 작성",
   "notes.ai.run": "AI로 작성",
@@ -225,6 +248,28 @@ const en: Record<keyof typeof ko, string> = {
   "notes.qlist.missing": "not in the text",
   "notes.qlist.missingTip":
     "The sentence this was attached to has changed, so it is no longer in the text. The thread is still here.",
+
+  "notes.spanAi.title": "Edit one part with AI",
+  "notes.spanAi.selBtn": "Edit selection",
+  "notes.spanAi.selBtnTip": "Rewrite just the selected part — the whole note is never re-emitted, so it is far faster",
+  "notes.spanAi.selBtnEmpty": "Select the part to edit in the source pane first",
+  "notes.spanAi.secBtn": "Edit section",
+  "notes.spanAi.secBtnTip": "Pick one section and rewrite just that",
+  "notes.spanAi.pickLabel": "Section to edit",
+  "notes.spanAi.backToPick": "Pick another section",
+  "notes.spanAi.pickHint": "Only the section you pick is rewritten. The whole note goes along as context, so the wait scales with the section, not the note.",
+  "notes.spanAi.noSections":
+    "No headings to split on. Select the part to edit in edit mode instead.",
+  "notes.spanAi.selectionLabel": "Part to edit (selection)",
+  "notes.spanAi.chars": "{n} chars",
+  "notes.spanAi.instructionLabel": "How should it change?",
+  "notes.spanAi.instructionPh": "e.g. shorten this paragraph / turn it into a table / add one example",
+  "notes.spanAi.hint": "Only this part changes; the rest of the note stays as it is. (⌘Enter to run)",
+  "notes.spanAi.run": "Edit this part",
+  "notes.spanAi.editing": "Rewriting this part…",
+  "notes.spanAi.resultLabel": "Rewritten part",
+  "notes.spanAi.apply": "Apply to this part",
+  "notes.spanAi.applyHint": "Applying puts it back in place in the draft. Save with ⌘S.",
 
   "notes.ai.title": "Write note with AI",
   "notes.ai.run": "Write with AI",

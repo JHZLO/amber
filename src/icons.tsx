@@ -41,9 +41,19 @@ export type IconName =
   | "info"
   | "lightbulb"
   | "alert-triangle"
-  | "alert-octagon";
+  | "alert-octagon"
+  | "scissors";
 
 const PATHS: Record<IconName, ReactNode> = {
+  // 부분만 고쳐 쓰기 — 전문 재작성(sparkles)과 나란히 서므로 아이콘으로 갈라 준다
+  scissors: (
+    <>
+      <circle cx="6" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M8.12 8.12L20 20" />
+      <path d="M20 4L8.12 15.88" />
+    </>
+  ),
   "chevron-left": <path d="M15 18l-6-6 6-6" />,
   "chevron-right": <path d="M9 18l6-6-6-6" />,
   "chevron-down": <path d="M6 9l6 6 6-6" />,

@@ -115,6 +115,7 @@ const AUGMENT_SYSTEM_PROMPT: &str = include_str!("../context/concept-augment.md"
 // 큰 마크다운을 JSON 문자열에 담게 하면(특히 sonnet) 이스케이프/전체 코드펜스 래핑으로 이중 파싱이
 // 간헐적으로 깨진다 → "raw 마크다운 그 자체"만 받고 봉투 .result 를 그대로 본문으로 쓴다(CLI 가 이스케이프 담당).
 const NOTE_SYSTEM_PROMPT: &str = include_str!("../context/note-compose.md");
+const NOTE_EDIT_SYSTEM_PROMPT: &str = include_str!("../context/note-edit.md");
 
 // 필기노트 인라인 질문(노션 댓글식): 드래그한 문장 + 질문 → 짧은 답변.
 // 노트 본문을 불리지 않는 별도 Q&A 라 "간결함"을 프롬프트로 강제한다.
@@ -370,6 +371,13 @@ pub struct MetaOut {
 #[derive(Debug, Serialize)]
 pub struct NoteComposeResult {
     pub markdown: String,
+    pub meta: MetaOut,
+}
+
+/// 조각 고쳐쓰기 결과 = **그 조각을 대신할 텍스트만** + 메타 (노트 전문이 아니다)
+#[derive(Debug, Serialize)]
+pub struct NoteEditResult {
+    pub text: String,
     pub meta: MetaOut,
 }
 
@@ -652,6 +660,77 @@ pub async fn ai_note_compose_stream(
     }
 
     Ok(NoteComposeResult { markdown: md, meta })
+}
+
+/// 노트의 **한 조각만** 고쳐 쓴다 (스트리밍). 노트 전문은 참고 입력으로만 들어가고,
+/// 출력은 그 조각을 대신할 텍스트뿐이다 — 프론트가 원래 자리에 끼운다.
+///
+/// 전문 재작성(`ai_note_compose_stream`)과 나뉘어 있는 이유는 비용이다: 출력은 순차 생성이라
+/// 길이가 곧 대기 시간인데, 오타 하나를 고칠 때도 41KB 노트를 다시 타이핑하면 수 분이 걸린다.
+/// 조각만 받으면 같은 수정이 초 단위로 끝난다.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn ai_note_edit_span(
+    title: String,
+    markdown: String,
+    span: String,
+    instruction: String,
+    // span_kind: "section" | 그 외(선택 영역) — 프롬프트가 조각의 성격을 알아야 제목 줄을 지킨다
+    span_kind: Option<String>,
+    model: Option<String>,
+    cli_path: Option<String>,
+    provider: Option<String>,
+    timeout_secs: Option<u64>,
+    lang: Option<String>,
+    on_delta: Channel<String>,
+    cancel_key: Option<String>,
+) -> Result<NoteEditResult, AiError> {
+    let instr = instruction.trim();
+    if instr.is_empty() {
+        return Err(AiError::new("EMPTY_INSTRUCTION", "수정 지시를 입력해 주세요."));
+    }
+    let span = span.trim();
+    if span.is_empty() {
+        return Err(AiError::new("EMPTY_SELECTION", "고쳐 쓸 부분이 비어 있습니다."));
+    }
+
+    let kind = provider_kind(provider.as_deref());
+    let program =
+        cli_path.filter(|p| !p.is_empty()).unwrap_or_else(|| default_binary(kind).to_string());
+    let model = resolve_model(kind, model);
+    let dur = Duration::from_secs(timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS));
+
+    // 알 수 없는 값이 와도 조각 그대로 고치는 쪽(선택 영역)이 안전하다 — 제목 규칙만 안 붙는다
+    let span_kind = match span_kind.as_deref() {
+        Some("section") => "절 전체",
+        _ => "선택 영역",
+    };
+    let body = markdown.trim();
+    let body = if body.is_empty() { "(비어 있음)" } else { body };
+    let input = format!(
+        "[수정 지시]\n{instr}\n\n[대상 종류]\n{span_kind}\n\n[선택한 부분]\n{span}\n\n\
+         [노트 전체]\n제목: {title}\n\n{body}"
+    );
+
+    let (result_str, meta) = if kind == ProviderKind::Claude {
+        stream_claude_result(program, model, dur, &sys(NOTE_EDIT_SYSTEM_PROMPT, lang.as_deref()), input, &[], &on_delta, cancel_key.as_deref())
+            .await?
+    } else {
+        let r = run_provider_text(kind, program, model, dur, &sys(NOTE_EDIT_SYSTEM_PROMPT, lang.as_deref()), input)
+            .await?;
+        let _ = on_delta.send(r.0.clone());
+        r
+    };
+
+    let text = strip_outer_fence(&result_str).trim().to_string();
+    if text.is_empty() {
+        return Err(AiError::new(
+            "AI_BAD_CONTRACT",
+            "고쳐 쓴 내용이 비어 있습니다. 다시 시도해 주세요.",
+        ));
+    }
+
+    Ok(NoteEditResult { text, meta })
 }
 
 /// 후속 질문에 실어 보내는 이전 문답 한 쌍 (프론트 사이드카의 스레드에서 옴)
@@ -1258,6 +1337,7 @@ mod tests {
             ("concept-generate", SYSTEM_PROMPT),
             ("concept-augment", AUGMENT_SYSTEM_PROMPT),
             ("note-compose", NOTE_SYSTEM_PROMPT),
+            ("note-edit", NOTE_EDIT_SYSTEM_PROMPT),
             ("note-ask", ASK_SYSTEM_PROMPT),
         ] {
             assert!(

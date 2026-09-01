@@ -10,6 +10,7 @@ Amber의 AI 기능이 쓰는 시스템 프롬프트 모음이다. 각 파일은 
 | `concept-generate.md` | `ai_generate` | Q&A 원문 → 개념 카드, 그리고 "선택 영역 → 개념 승격" | raw JSON (Contract) |
 | `concept-augment.md`  | `ai_augment`  | 기존 개념 노트 보강 | raw JSON (Contract) |
 | `note-compose.md`     | `ai_note_compose` / `_stream` | 필기노트 작성·보강 | raw 마크다운 |
+| `note-edit.md`        | `ai_note_edit_span` | 필기노트의 **한 조각만** 고쳐 쓰기 (선택 영역 / 절 하나) | 조각을 대신할 raw 텍스트 |
 | `note-ask.md`         | `ai_note_ask` | 노트 인라인 질문에 짧은 답변 | 평문 텍스트 |
 | `diagram-erd.md`      | `ai_erd_generate_stream` | 다이어그램 탭: 스키마 DDL → ERD mermaid | raw mermaid 소스 |
 
@@ -29,6 +30,7 @@ Amber의 AI 기능이 쓰는 시스템 프롬프트 모음이다. 각 파일은 
 - **출력·프로토콜에 쓰이는 한국어 토큰은 번역하지 않는다.** `ai.rs`가 입력에 끼워 넣는
   섹션 마커 — `[사용자 추가 지시]` · `[대화 원문]` · `[보강 요청]` · `[현재 노트]` ·
   `[작성 요청]` · `[질문]` · `[선택한 부분]` · `[이전 문답]` · `[노트 전체]` ·
+  `[수정 지시]` · `[대상 종류]`(값 `선택 영역` · `절 전체`) ·
   `[스키마 DDL]` · `[추가 지시]` · `[현재 다이어그램 (Mermaid)]` — 와
   `concept-generate.md` 안의 권장 섹션 헤더(`## 핵심` · `## 예시` …)는 리터럴이다.
   번역하면 입력 매칭이 깨지거나 사용자 노트 구조가 바뀐다.

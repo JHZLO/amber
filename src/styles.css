@@ -2561,6 +2561,76 @@ html.widget-root #root {
   color: var(--danger);
 }
 
+/* ---- 부분만 고쳐 쓰기 모달 (NoteSpanAiModal) ---- */
+/* 고칠 조각 원문 — 읽기 전용이라 입력처럼 보이지 않게 스트림 박스와 같은 톤을 쓴다 */
+.span-source {
+  margin: 0;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-2);
+}
+/* 절 고르기 목록 — 들여쓰기로 제목 단계를 보여준다(목차와 같은 문법) */
+.span-pick {
+  max-height: 340px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.span-pick-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.span-pick-row + .span-pick-row {
+  border-top: 1px solid var(--border);
+}
+.span-pick-row:hover {
+  background: var(--surface-2);
+}
+.span-pick-row:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.span-pick-row.lv2 {
+  padding-left: 28px;
+}
+.span-pick-row.lv3 {
+  padding-left: 44px;
+}
+.span-pick-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.span-pick-row.lv1 .span-pick-title {
+  font-weight: 600;
+}
+.span-pick-size {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+
 /* ---- AI 노트 스트리밍(생성 중 실시간 표시) ---- */
 .note-stream {
   display: flex;

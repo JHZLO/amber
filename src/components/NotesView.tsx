@@ -40,6 +40,7 @@ import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
 import type { AppConfig } from "../lib/config";
 import { NoteAiModal } from "./NoteAiModal";
+import { NoteSpanAiModal } from "./NoteSpanAiModal";
 import { RootPicker } from "./RootPicker";
 import { rootDisplayName, WORKSPACE_EVENT } from "../lib/workspace";
 import {
@@ -128,6 +129,10 @@ export function NotesView({
   const [pendingOpen, setPendingOpen] = useState<string | null>(null);
   const [pendingRoot, setPendingRoot] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  // 부분만 고쳐 쓰기 — 편집 모드 선택 영역(selection) 또는 절 하나(section).
+  // 선택 구간은 textarea 의 selectionStart/End = **마크다운 소스 좌표**라 되끼울 위치를 안 찾는다.
+  const [spanAi, setSpanAi] = useState<"selection" | "section" | null>(null);
+  const [srcSel, setSrcSel] = useState<{ start: number; end: number } | null>(null);
   const [promote, setPromote] = useState<PromoteTarget | null>(null);
   const [madeConcepts, setMadeConcepts] = useState<NoteConceptLink[]>([]);
 
@@ -831,6 +836,23 @@ export function NotesView({
                       <Icon name="sparkles" size={14} />
                       {t("notes.aiWrite")}
                     </button>
+                    {/* 전문을 다시 받지 않고 **선택한 부분만** 고쳐 쓴다 — 출력이 짧아 초 단위로 끝난다 */}
+                    <Tooltip
+                      label={
+                        srcSel
+                          ? t("notes.spanAi.selBtnTip")
+                          : t("notes.spanAi.selBtnEmpty")
+                      }
+                    >
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => setSpanAi("selection")}
+                        disabled={busy || !config?.provider || !srcSel}
+                      >
+                        <Icon name="scissors" size={14} />
+                        {t("notes.spanAi.selBtn")}
+                      </button>
+                    </Tooltip>
                   </>
                 ) : (
                   <>
@@ -870,6 +892,19 @@ export function NotesView({
                         {copied ? t("notes.copied") : t("notes.copy")}
                       </button>
                     </Tooltip>
+                    {/* 절 하나만 고쳐 쓰기 — 읽다가 눈에 걸린 절을 그 자리에서 손본다 */}
+                    <Tooltip label={t("notes.spanAi.secBtnTip")}>
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => setSpanAi("section")}
+                        disabled={
+                          busy || loadingBody || !!readError || !body || !config?.provider
+                        }
+                      >
+                        <Icon name="scissors" size={14} />
+                        {t("notes.spanAi.secBtn")}
+                      </button>
+                    </Tooltip>
                   </>
                 )}
               </div>
@@ -900,7 +935,22 @@ export function NotesView({
                   ref={srcRef}
                   className="textarea note-textarea"
                   value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    // 글자를 고치면 앞서 잡아 둔 구간의 오프셋이 밀린다 — 그 자리에 그대로
+                    // 끼우면 엉뚱한 데를 자르므로 선택은 버린다(다시 고르게 한다)
+                    setSrcSel(null);
+                  }}
+                  // 선택 구간을 그때그때 담아 둔다 — 툴바 버튼을 누르면 포커스가 옮겨가지만
+                  // 구간은 이미 잡혀 있어야 한다
+                  onSelect={(e) => {
+                    const el = e.currentTarget;
+                    setSrcSel(
+                      el.selectionEnd > el.selectionStart
+                        ? { start: el.selectionStart, end: el.selectionEnd }
+                        : null,
+                    );
+                  }}
                   spellCheck={false}
                 />
                 <div className="markdown note-preview" ref={previewRef}>
@@ -1155,6 +1205,24 @@ export function NotesView({
           onApplied={(md) => {
             setDraft(md);
             setPreviewMd(md);
+            setEditing(true);
+          }}
+        />
+      )}
+
+      {/* 부분만 고쳐 쓰기 — 결과는 전문에 끼워진 뒤 편집 초안으로 (저장은 ⌘S) */}
+      {selected && spanAi && (
+        <NoteSpanAiModal
+          open
+          mode={spanAi}
+          title={fileName}
+          body={editing ? draft : body}
+          selection={srcSel}
+          config={config}
+          onClose={() => setSpanAi(null)}
+          onApplied={(next) => {
+            setDraft(next);
+            setPreviewMd(next);
             setEditing(true);
           }}
         />

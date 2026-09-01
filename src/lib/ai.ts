@@ -168,6 +168,51 @@ export async function aiNoteComposeStream(
   });
 }
 
+export interface NoteEditResult {
+  /** 조각을 대신할 텍스트만. 노트 전문이 아니다 */
+  text: string;
+  meta: InvocationMeta;
+}
+
+/** 노트의 **한 조각만** 고쳐 쓴다. 노트 전문은 문맥으로만 보내고 출력은 그 조각뿐이라,
+ *  전문 재작성(aiNoteComposeStream)보다 출력이 수십 배 짧다 — 출력 길이가 곧 대기 시간이다.
+ *  받은 텍스트는 호출한 쪽이 mdSections.spliceSpan 으로 원래 자리에 끼운다. */
+export async function aiNoteEditSpanStream(
+  params: {
+    title: string;
+    /** 노트 전문 — 참고 문맥 */
+    markdown: string;
+    /** 고쳐 쓸 조각 (소스 그대로) */
+    span: string;
+    instruction: string;
+    /** "section" 이면 제목 줄·번호를 지키게 한다. 그 외는 임의 선택 영역 */
+    spanKind?: "selection" | "section";
+    model?: string | null;
+    cliPath?: string | null;
+    provider?: string | null;
+    timeoutSecs?: number | null;
+    cancelKey?: string | null;
+  },
+  onDelta: (text: string) => void,
+): Promise<NoteEditResult> {
+  const channel = new Channel<string>();
+  channel.onmessage = onDelta;
+  return aiInvoke<NoteEditResult>("ai_note_edit_span", {
+    title: params.title,
+    markdown: params.markdown,
+    span: params.span,
+    instruction: params.instruction,
+    spanKind: params.spanKind ?? "selection",
+    model: params.model ?? null,
+    cliPath: params.cliPath ?? null,
+    provider: params.provider ?? null,
+    timeoutSecs: params.timeoutSecs ?? null,
+    lang: aiOutputLang(),
+    onDelta: channel,
+    cancelKey: params.cancelKey ?? null,
+  });
+}
+
 export interface NoteAskResult {
   answer: string;
   meta: InvocationMeta;
