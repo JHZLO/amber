@@ -165,6 +165,9 @@ Default writing style (apply unless the request specifies a different style):
 - 콜론으로 대상을 좁히는 형태도 좋다: `## 3-1. 상태 모델: epoch 와 target assignment`.
 
 시각화 (mermaid)
+- **여는 펜스에 반드시 `mermaid` 를 적는다** — ```mermaid 로 열고 ``` 로 닫는다.
+  이 태그가 곧 렌더 조건이다. 태그를 빠뜨리면 다이어그램이 그려지지 않고 소스가 그대로 보이는
+  코드블록이 된다. 다이어그램 종류(`sequenceDiagram` 등)는 그 다음 줄부터 쓴다.
 - 글로만 설명하면 따라가기 어려운 부분은 mermaid 다이어그램으로 함께 보여준다:
   - 요청/데이터의 이동, 시스템 구성 → flowchart 또는 sequenceDiagram
   - 상태가 바뀌는 규칙 → stateDiagram

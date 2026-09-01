@@ -10,6 +10,7 @@ import { Icon, type IconName } from "../icons";
 import { t, type MsgKey } from "../lib/i18n";
 import { remarkAlerts, type AlertKind } from "../lib/mdAlerts";
 import { remarkSecRefs } from "../lib/mdSecRefs";
+import { looksLikeMermaid } from "../lib/mdMermaid";
 
 // pre>code 의 AST 노드에서 mermaid 여부/원문을 뽑기 위한 최소 형태
 type PreNode = {
@@ -89,12 +90,18 @@ export const Markdown = memo(function Markdown({
         pre(props) {
           const node = (props as { node?: PreNode }).node;
           const code = node?.children?.[0];
-          if (code?.tagName === "code" && isMermaid(code.properties?.className)) {
-            const text = code.children?.[0]?.value ?? "";
-            return <Mermaid chart={String(text).trim()} />;
+          const lang = fenceLang(code?.properties?.className);
+          const text = String(code?.children?.[0]?.value ?? "");
+          // ```mermaid 로 열었으면 그대로, **언어를 안 적었으면** 첫 줄로 알아본다 —
+          // 모델이 태그를 빠뜨린 노트의 다이어그램이 코드블록으로 굳어 있지 않게 (mdMermaid.ts)
+          const isDiagram =
+            code?.tagName === "code" &&
+            (isMermaid(code.properties?.className) ||
+              (!lang && looksLikeMermaid(text)));
+          if (isDiagram) {
+            return <Mermaid chart={text.trim()} />;
           }
           // macOS 창 크롬 — 신호등 + 언어 라벨을 얹고 코드는 그 아래.
-          const lang = fenceLang(code?.properties?.className);
           return (
             <div className="code-win">
               <div className="code-win-bar" aria-hidden="true">

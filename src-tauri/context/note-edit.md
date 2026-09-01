@@ -29,6 +29,8 @@ Rules:
   remove sibling sections — you only hold this one.
 - 대상 종류 = `선택 영역`: do not add a heading that was not in the fragment, and do not close a
   structure the fragment left open.
+- A mermaid diagram must be fenced as ```mermaid (that tag is what makes it render). Keep the tag on
+  any diagram passing through the fragment, and put it on one you add.
 - Cross-references (`[[1-2]]`) and numbering elsewhere in the note are outside your reach. If the
   instruction would require renumbering other sections, do the local edit and note the limitation in
   no more than one short sentence appended as a separate line starting with `> [!NOTE]`.
