@@ -31,6 +31,7 @@ import { AiThinking, Modal, Tooltip, UnsavedModal } from "../ui";
 import { Icon } from "../icons";
 import { t, dateLocale } from "../lib/i18n";
 import { errText } from "../lib/errors";
+import { useScrollSync } from "../lib/useScrollSync";
 
 // GitHub·Slack·Notion 은 브랜드명이라 번역하지 않는다
 const SRC_LABEL: Record<string, string> = {
@@ -75,6 +76,10 @@ export function DailyReportPanel({
   const [draft, setDraft] = useState("");
   const [savedFlash, setSavedFlash] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  // 편집 모드 2분할 — 한쪽을 굴리면 다른 쪽도 같은 비율로 따라온다(노트 편집과 같은 문법)
+  const srcRef = useRef<HTMLTextAreaElement | null>(null);
+  const previewRef = useRef<HTMLDivElement | null>(null);
+  useScrollSync(srcRef, previewRef, editing);
 
   const isFuture = date > todayStr();
 
@@ -384,13 +389,14 @@ export function DailyReportPanel({
             <>
               <div className="report-edit-split">
                 <textarea
+                  ref={srcRef}
                   className="textarea report-edit-src"
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   spellCheck={false}
                   autoFocus
                 />
-                <div className="markdown note-preview report-body">
+                <div className="markdown note-preview report-body" ref={previewRef}>
                   <Markdown>{draft}</Markdown>
                 </div>
               </div>

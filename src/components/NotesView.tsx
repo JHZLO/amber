@@ -25,6 +25,7 @@ import {
 import { ancestorPaths, remapPath, remapPaths } from "../lib/vaultTree";
 import { useTreeDnd } from "../lib/useTreeDnd";
 import { usePaneResize } from "../lib/usePaneResize";
+import { useScrollSync } from "../lib/useScrollSync";
 import {
   Modal,
   Select,
@@ -132,6 +133,10 @@ export function NotesView({
 
   // 우측 플로팅 목차 (읽기 모드, h1~h3)
   const detailRef = useRef<HTMLElement | null>(null);
+  // 편집 모드 2분할 — 한쪽을 굴리면 다른 쪽도 같은 비율로 따라온다
+  const srcRef = useRef<HTMLTextAreaElement | null>(null);
+  const previewRef = useRef<HTMLDivElement | null>(null);
+  useScrollSync(srcRef, previewRef, editing && !loadingBody);
   const mdRef = useRef<HTMLDivElement | null>(null);
   const tocRef = useRef<HTMLElement | null>(null);
   const [toc, setToc] = useState<{ id: string; text: string; level: number }[]>(
@@ -892,12 +897,13 @@ export function NotesView({
               // 좌 소스 / 우 라이브 프리뷰 (PRD §4.2 편집 모드)
               <div className="note-edit-split">
                 <textarea
+                  ref={srcRef}
                   className="textarea note-textarea"
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   spellCheck={false}
                 />
-                <div className="markdown note-preview">
+                <div className="markdown note-preview" ref={previewRef}>
                   <Markdown>{previewMd}</Markdown>
                 </div>
               </div>
