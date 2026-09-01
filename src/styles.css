@@ -2606,6 +2606,26 @@ html.widget-root #root {
   outline: none;
   box-shadow: var(--focus-ring);
 }
+/* 고른 줄 — 색이 아니라 채움으로 (§3). 체크 상자가 상태를 나르고 배경이 뒷받침한다 */
+.span-pick-row.on {
+  background: var(--surface-3);
+}
+.span-pick-box {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bg);
+}
+.span-pick-row.on .span-pick-box {
+  background: var(--text);
+  border-color: var(--text);
+}
 .span-pick-row.lv2 {
   padding-left: 28px;
 }
@@ -2629,6 +2649,26 @@ html.widget-root #root {
   font-family: var(--mono);
   font-size: 10.5px;
   color: var(--text-3);
+}
+/* 묶음 여러 개 — 각 묶음의 원문·결과를 자기 이름 아래에 둔다 */
+.span-run + .span-run {
+  margin-top: 12px;
+}
+.span-run-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.span-run-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---- AI 노트 스트리밍(생성 중 실시간 표시) ---- */

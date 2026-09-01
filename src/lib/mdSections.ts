@@ -49,6 +49,27 @@ export function splitSections(md: string): MdSection[] {
   }));
 }
 
+/** 고른 구간들을 **붙어 있는 것끼리 한 덩어리로** 묶는다.
+ *  절을 여러 개 골랐을 때 이어진 절은 한 번에 고쳐야 이음새(앞 절을 되짚는 문장)가 어긋나지
+ *  않고, 떨어진 묶음은 각각 따로 고쳐야 사이에 있는 절을 삼키지 않는다. */
+export function mergeRuns<T extends { start: number; end: number }>(
+  spans: readonly T[],
+): { start: number; end: number; items: T[] }[] {
+  const sorted = [...spans].sort((a, b) => a.start - b.start);
+  const runs: { start: number; end: number; items: T[] }[] = [];
+  for (const s of sorted) {
+    const last = runs[runs.length - 1];
+    // 절 경계는 겹치지 않고 맞닿아 있다(앞 절의 end === 뒤 절의 start) — 그래서 <= 로 붙인다
+    if (last && s.start <= last.end) {
+      last.end = Math.max(last.end, s.end);
+      last.items.push(s);
+    } else {
+      runs.push({ start: s.start, end: s.end, items: [s] });
+    }
+  }
+  return runs;
+}
+
 /** [start, end) 를 replacement 로 갈아끼운 새 소스.
  *  원래 조각의 앞뒤 공백(빈 줄)은 그대로 두고 안쪽만 바꾼다 — 모델이 끝 개행을 떨어뜨려도
  *  절 사이 빈 줄이 사라지지 않는다. */

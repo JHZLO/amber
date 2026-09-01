@@ -24,9 +24,10 @@ Rules:
 - Keep the fragment's role in the document. It is spliced back at exactly the place it came from, so
   it must still fit its neighbours: same indentation level, same list depth, same markdown structure
   at the seams (a fragment that started mid-list stays a list).
-- 대상 종류 = `절 전체`: keep the heading line, its level (`#`/`##`/`###`) and its number exactly as
-  given (`## 2-3.` stays `## 2-3.`) unless the instruction is about the title itself. Do not add or
-  remove sibling sections — you only hold this one.
+- 대상 종류 = `절 전체`: the fragment holds one or more whole sections. Keep every heading line, its
+  level (`#`/`##`/`###`) and its number exactly as given (`## 2-3.` stays `## 2-3.`) unless the
+  instruction is about the title itself. Do not add or remove sections — you hold exactly the ones in
+  the fragment, and the sections around them are being left alone.
 - 대상 종류 = `선택 영역`: do not add a heading that was not in the fragment, and do not close a
   structure the fragment left open.
 - A mermaid diagram must be fenced as ```mermaid (that tag is what makes it render). Keep the tag on

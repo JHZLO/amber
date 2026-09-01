@@ -111,8 +111,14 @@ const ko = {
   "notes.spanAi.secBtn": "절 수정",
   "notes.spanAi.secBtnTip": "절 하나만 골라 AI로 고쳐 써요",
   "notes.spanAi.pickLabel": "고칠 절",
-  "notes.spanAi.backToPick": "다른 절 고르기",
-  "notes.spanAi.pickHint": "고른 절만 다시 써요. 노트 전체는 문맥으로만 보내니 대기 시간이 절 길이에만 걸려요.",
+  "notes.spanAi.backToPick": "다시 고르기",
+  "notes.spanAi.pickCount": "{n}개 선택 · {chars}자",
+  "notes.spanAi.next": "다음",
+  "notes.spanAi.runsLabel": "고칠 {n}묶음",
+  "notes.spanAi.runsHint":
+    "떨어져 있는 묶음이라 묶음마다 따로 고쳐 써요. 이어진 절은 한 묶음으로 묶여 한 번에 고쳐요.",
+  "notes.spanAi.progress": "{i}/{n} 묶음 고쳐 쓰는 중…",
+  "notes.spanAi.pickHint": "고른 절만 다시 써요. 여러 개 골라도 되고, 이어진 절은 한 번에 고쳐요.",
   "notes.spanAi.noSections":
     "제목이 없어서 나눌 절이 없어요. 편집 모드에서 고칠 부분을 선택해 수정해 보세요.",
   "notes.spanAi.selectionLabel": "고칠 부분 (선택 영역)",
@@ -256,8 +262,14 @@ const en: Record<keyof typeof ko, string> = {
   "notes.spanAi.secBtn": "Edit section",
   "notes.spanAi.secBtnTip": "Pick one section and rewrite just that",
   "notes.spanAi.pickLabel": "Section to edit",
-  "notes.spanAi.backToPick": "Pick another section",
-  "notes.spanAi.pickHint": "Only the section you pick is rewritten. The whole note goes along as context, so the wait scales with the section, not the note.",
+  "notes.spanAi.backToPick": "Pick again",
+  "notes.spanAi.pickCount": "{n} picked · {chars} chars",
+  "notes.spanAi.next": "Next",
+  "notes.spanAi.runsLabel": "{n} stretches to edit",
+  "notes.spanAi.runsHint":
+    "These picks are not adjacent, so each stretch is rewritten on its own. Sections that touch are merged into one.",
+  "notes.spanAi.progress": "Rewriting stretch {i} of {n}…",
+  "notes.spanAi.pickHint": "Only what you pick is rewritten. Pick several if you like — sections that touch are done in one pass.",
   "notes.spanAi.noSections":
     "No headings to split on. Select the part to edit in edit mode instead.",
   "notes.spanAi.selectionLabel": "Part to edit (selection)",

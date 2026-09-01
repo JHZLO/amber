@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { splitSections, spliceSpan } from "./mdSections";
+import { mergeRuns, splitSections, spliceSpan } from "./mdSections";
 
 const DOC = [
   "들어가는 문단.",
@@ -65,5 +65,42 @@ describe("spliceSpan", () => {
     // 실제 진입 경로는 빈 조각을 막지만, 앞뒤 공백을 지키는 계산이 자기 자신을 두 번
     // 세면 개행이 늘어난다. 그 경우엔 평범한 치환으로 떨어진다.
     expect(spliceSpan("A\n\n\nB", 1, 3, "X")).toBe("AX\nB");
+  });
+});
+
+describe("mergeRuns", () => {
+  it("맞닿은 구간은 한 덩어리로 묶는다", () => {
+    const runs = mergeRuns([
+      { start: 0, end: 10 },
+      { start: 10, end: 25 },
+      { start: 25, end: 30 },
+    ]);
+    expect(runs).toHaveLength(1);
+    expect([runs[0].start, runs[0].end]).toEqual([0, 30]);
+    expect(runs[0].items).toHaveLength(3);
+  });
+
+  it("떨어진 구간은 따로 남긴다 — 사이에 있는 절을 삼키지 않게", () => {
+    const runs = mergeRuns([
+      { start: 0, end: 10 },
+      { start: 40, end: 50 },
+    ]);
+    expect(runs.map((r) => [r.start, r.end])).toEqual([
+      [0, 10],
+      [40, 50],
+    ]);
+  });
+
+  it("순서가 뒤섞여 들어와도 정렬해서 묶는다", () => {
+    const runs = mergeRuns([
+      { start: 25, end: 30 },
+      { start: 0, end: 10 },
+      { start: 10, end: 25 },
+    ]);
+    expect(runs).toHaveLength(1);
+  });
+
+  it("빈 입력은 빈 결과", () => {
+    expect(mergeRuns([])).toEqual([]);
   });
 });
