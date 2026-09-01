@@ -11,6 +11,8 @@ import { t, type MsgKey } from "../lib/i18n";
 import { remarkAlerts, type AlertKind } from "../lib/mdAlerts";
 import { remarkSecRefs } from "../lib/mdSecRefs";
 import { looksLikeMermaid } from "../lib/mdMermaid";
+// 블록마다 소스 좌표를 심는다 — 읽기 모드 드래그를 마크다운 구간으로 되돌리는 좌표계(§7)
+import { srcAttrs } from "../lib/mdBlocks";
 
 // pre>code 의 AST 노드에서 mermaid 여부/원문을 뽑기 위한 최소 형태
 type PreNode = {
@@ -75,9 +77,10 @@ export const Markdown = memo(function Markdown({
         // `> [!NOTE]` 인용구 → 콜아웃. 종류는 remarkAlerts 가 data-alert 로 넘긴다.
         blockquote(props) {
           const kind = alertKind(props);
-          if (!kind) return <blockquote>{props.children}</blockquote>;
+          const src = srcAttrs(props.node, children);
+          if (!kind) return <blockquote {...src}>{props.children}</blockquote>;
           return (
-            <div className={`md-alert md-alert-${kind.toLowerCase()}`}>
+            <div className={`md-alert md-alert-${kind.toLowerCase()}`} {...src}>
               <div className="md-alert-title">
                 <Icon name={ALERT_ICONS[kind]} size={14} />
                 {t(ALERT_LABELS[kind])}
@@ -85,6 +88,25 @@ export const Markdown = memo(function Markdown({
               {props.children}
             </div>
           );
+        },
+        // 아래 블록들은 렌더를 바꾸지 않는다 — 소스 좌표만 얹는다(읽기 모드 드래그 → 부분 수정)
+        p(props) {
+          return <p {...srcAttrs(props.node, children)}>{props.children}</p>;
+        },
+        h1(props) {
+          return <h1 {...srcAttrs(props.node, children)}>{props.children}</h1>;
+        },
+        h2(props) {
+          return <h2 {...srcAttrs(props.node, children)}>{props.children}</h2>;
+        },
+        h3(props) {
+          return <h3 {...srcAttrs(props.node, children)}>{props.children}</h3>;
+        },
+        li(props) {
+          return <li {...srcAttrs(props.node, children)}>{props.children}</li>;
+        },
+        table(props) {
+          return <table {...srcAttrs(props.node, children)}>{props.children}</table>;
         },
         // 코드블록은 pre 레벨에서 가로채, mermaid 면 다이어그램으로 대체 (그 외엔 기본 pre)
         pre(props) {
@@ -103,7 +125,7 @@ export const Markdown = memo(function Markdown({
           }
           // macOS 창 크롬 — 신호등 + 언어 라벨을 얹고 코드는 그 아래.
           return (
-            <div className="code-win">
+            <div className="code-win" {...srcAttrs(props.node, children)}>
               <div className="code-win-bar" aria-hidden="true">
                 <span className="code-win-dot" />
                 <span className="code-win-dot" />

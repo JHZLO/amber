@@ -29,6 +29,7 @@ import { Markdown } from "./Markdown";
 import { AiThinking, timeAgo, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
+import { blockRangeFromSelection } from "../lib/mdBlocks";
 
 const HIGHLIGHT_KEY = "note-q";
 const CURRENT_KEY = "note-q-cur";
@@ -111,6 +112,7 @@ export function NoteCommentLayer({
   config,
   onCountChange,
   onPromote,
+  onEditSpan,
 }: {
   noteRel: string;
   body: string;
@@ -119,6 +121,9 @@ export function NoteCommentLayer({
   onCountChange?: (n: number) => void;
   /** 선택 영역을 개념으로 승격 (NotesView 가 모달을 연다). 선택 텍스트를 넘긴다 */
   onPromote?: (selection: string) => void;
+  /** 선택이 걸친 블록을 AI 로 고쳐 쓰기 — **마크다운 소스 구간**을 넘긴다(lib/mdBlocks.ts).
+   *  렌더된 텍스트 좌표(앵커)와 달리 이건 소스에 그대로 되끼울 수 있는 좌표다. */
+  onEditSpan?: (span: { start: number; end: number }) => void;
 }) {
   const [comments, setComments] = useState<NoteComment[]>([]);
   // 선택 정보는 "선택하는 순간" 미리 계산해 둔다 — 버튼 클릭 시점의 라이브 셀렉션에
@@ -129,6 +134,8 @@ export function NoteCommentLayer({
     bottom: number;
     anchor: string;
     occurrence: number;
+    /** 선택이 걸친 블록의 마크다운 소스 구간 — 없으면(좌표를 못 찾으면) 수정 버튼을 숨긴다 */
+    block: { start: number; end: number } | null;
   } | null>(null);
   const [pop, setPop] = useState<Pop | null>(null);
   // 질문 목록 — 본문 오른쪽 여백의 트리거로 열고 닫는다(노트를 옮기면 key 로 리마운트돼 닫힌다)
@@ -317,6 +324,7 @@ export function NoteCommentLayer({
         bottom: rect.bottom,
         anchor,
         occurrence: occ,
+        block: blockRangeFromSelection(c, r),
       });
     };
     const onSel = () => {
@@ -464,6 +472,15 @@ export function NoteCommentLayer({
     setAskError(null);
     setPop({ kind: "ask", anchor: si.anchor, occurrence: si.occurrence });
     setListOpen(false); // 새 질문을 쓰는 중엔 목록을 뒤에 남겨 두지 않는다
+    setSelInfo(null);
+    window.getSelection()?.removeAllRanges();
+  }
+
+  /** "수정": 선택이 걸친 블록의 **소스 구간**을 위로 넘긴다 (부분 수정 모달을 NotesView 가 연다) */
+  function openEditSpan() {
+    const block = selInfo?.block;
+    if (!block || !onEditSpan) return;
+    onEditSpan(block);
     setSelInfo(null);
     window.getSelection()?.removeAllRanges();
   }
@@ -644,7 +661,9 @@ export function NoteCommentLayer({
 
   const fabStyle = selInfo
     ? {
-        left: Math.min(Math.max(12, selInfo.x + 6), window.innerWidth - 96),
+        // 여유 250px = 버튼 세 개(질문·개념으로·수정)가 들어가는 바 폭. 좁게 잡으면 오른쪽
+        // 끝에서 선택했을 때 마지막 버튼이 화면 밖으로 나간다.
+        left: Math.min(Math.max(12, selInfo.x + 6), window.innerWidth - 250),
         top: Math.max(8, selInfo.y - 38),
       }
     : undefined;
@@ -706,6 +725,18 @@ export function NoteCommentLayer({
             >
               <Icon name="layers" size={13} />
               {t("notes.cmt.promote")}
+            </button>
+          )}
+          {/* 소스 좌표를 찾은 선택만 고칠 수 있다 — 다이어그램(SVG) 안 같은 곳은 좌표가 없다 */}
+          {onEditSpan && selInfo.block && (
+            <button
+              className="cmt-fab"
+              title={t("notes.cmt.editTip")}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={openEditSpan}
+            >
+              <Icon name="scissors" size={13} />
+              {t("notes.cmt.edit")}
             </button>
           )}
         </div>

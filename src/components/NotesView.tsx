@@ -973,6 +973,12 @@ export function NotesView({
                   onPromote={(selection) =>
                     setPromote({ noteRel: selected, selection, noteBody: body })
                   }
+                  // 드래그 → 그 블록만 AI 로 고쳐 쓰기. 넘어오는 구간은 **body 의 소스 좌표**라
+                  // (읽기 모드라 초안이 없다) 그대로 부분 수정 모달에 실어 보낼 수 있다.
+                  onEditSpan={(span) => {
+                    setSrcSel(span);
+                    setSpanAi("selection");
+                  }}
                 />
                 {toc.length >= 2 && (
                   <nav className="note-toc" ref={tocRef}>

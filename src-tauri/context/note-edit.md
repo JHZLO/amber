@@ -29,7 +29,8 @@ Rules:
   instruction is about the title itself. Do not add or remove sections — you hold exactly the ones in
   the fragment, and the sections around them are being left alone.
 - 대상 종류 = `선택 영역`: do not add a heading that was not in the fragment, and do not close a
-  structure the fragment left open.
+  structure the fragment left open. If a heading line IS in the fragment, keep it exactly as given —
+  same level, same number.
 - A mermaid diagram must be fenced as ```mermaid (that tag is what makes it render). Keep the tag on
   any diagram passing through the fragment, and put it on one you add.
 - Cross-references (`[[1-2]]`) and numbering elsewhere in the note are outside your reach. If the
