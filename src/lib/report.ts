@@ -16,8 +16,8 @@ import { writeAtomic } from "./vaultTree";
 import { getDb, getSetting, setSetting } from "./db";
 import { aiOutputLang } from "./i18n";
 import { listTodos, listOverdueOpen } from "./todos";
-import { visibleRoots } from "./todoTree";
-import { todayStr, formatDayShort, weekDays, weekdayShort } from "./date";
+import { todoDigestLines } from "./reportTodos";
+import { todayStr, weekDays, weekdayShort } from "./date";
 import type {
   CollectProgress,
   DailyReport,
@@ -26,7 +26,6 @@ import type {
   ReportSourceId,
   ReportSourcePref,
   SourceDigest,
-  Todo,
   WeeklyReport,
 } from "../types";
 
@@ -402,27 +401,9 @@ export async function buildTodosDigest(date: string): Promise<{ md: string; coun
   // 자식이 통째로 사라진다.** 위 carried 필터로 이월된 부모가 걸러지면 그 아래 체크된 자식이
   // 프롬프트에 아예 안 들어가, 그날 메인 작업이 리포트에서 누락됐다(화면은 같은 이유로
   // 이미 visibleRoots 를 쓴다 — lib/todoTree.ts).
-  const tops = visibleRoots(todos);
-  const kids = (pid: number) => todos.filter((t) => t.parent_id === pid);
-  const mark = (t: Todo) => (t.done === 1 ? "[x]" : "[ ]");
-
-  const lines: string[] = [];
-  // 중첩 깊이는 무제한이라 재귀로 끝까지 내려간다(2단만 찍으면 하위 계획이 프롬프트에서 통째로 빠진다).
-  // seen 은 parent_id 가 순환하도록 망가진 데이터에서 무한 루프를 막는 안전장치.
-  const seen = new Set<number>();
-  const walk = (t: Todo, depth: number) => {
-    if (seen.has(t.id)) return;
-    seen.add(t.id);
-    lines.push(`${"  ".repeat(depth)}- ${mark(t)} ${t.content}`);
-    for (const c of kids(t.id)) walk(c, depth + 1);
-  };
-  for (const p of tops) walk(p, 0);
-  if (overdue.length) {
-    lines.push("", "밀린(미완료) 항목:");
-    for (const t of overdue.slice(0, 20)) {
-      lines.push(`- [ ] ${t.content} (원래 ${formatDayShort(t.due_date)})`);
-    }
-  }
+  // 줄 만들기는 lib/reportTodos.ts (순수 함수라 테스트가 붙어 있다) — 자식 줄에는 상위
+  // 경로가 함께 붙는다: 들여쓰기만으로는 AI 가 자식 항목을 엉뚱한 부모에 붙였다.
+  const lines = todoDigestLines(todos, overdue.slice(0, 20));
   return { md: lines.join("\n"), count: todos.length };
 }
 
