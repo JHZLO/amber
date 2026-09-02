@@ -4,8 +4,8 @@
 // SELECT)과 `SELECT VERSION()`. 사용자 입력이 SQL 로 가는 경로는 없다(바인딩 파라미터는 스키마 이름 하나).
 // 세션은 시작 시 READ ONLY 로 잠근다 — 계정이 쓰기 권한을 가졌더라도 한 겹 더.
 //
-// 비밀번호는 macOS 키체인에서 꺼내 접속 옵션에 바로 꽂는다. URL 문자열을 조립하지 않으므로(인코딩 버그·
-// 로그 노출 원천 차단) 어디에도 문자열로 남지 않고, 에러 `detail` 에도 실리지 않는다.
+// 비밀번호는 macOS 키체인(`security` CLI, 아래 "키체인" 절)에서 꺼내 접속 옵션에 바로 꽂는다. URL 문자열을
+// 조립하지 않으므로(인코딩 버그·로그 노출 원천 차단) 어디에도 문자열로 남지 않고, 에러 `detail` 에도 실리지 않는다.
 //
 // 스냅샷의 형태는 프론트 `src/lib/schemaSnapshot.ts` 와 1:1 — 지문(fingerprint)은 프론트가 붙인다.
 
@@ -25,8 +25,8 @@ use crate::ai::AiError;
 const KEYCHAIN_SERVICE: &str = "dev.jhzlo.amber";
 const CONNECT_TIMEOUT_SECS: u64 = 5;
 const QUERY_TIMEOUT_SECS: u64 = 20;
-/// 연결당 풀 크기 — 여러 스키마를 잇달아 동기화할 때 재접속을 피하는 용도지 동시성이 목적이 아니다.
-const POOL_MAX: u32 = 2;
+/// 연결당 풀 크기 — 프론트가 스키마 셋을 동시에 introspect 한다(DiagramsView.autoSyncMissing). 그보다 하나 여유.
+const POOL_MAX: u32 = 4;
 /// 스키마 목록에서 늘 숨기는 MySQL 시스템 스키마
 const SYSTEM_SCHEMAS: &[&str] = &["mysql", "sys", "performance_schema", "information_schema"];
 
@@ -167,30 +167,163 @@ pub struct RawSnapshot {
 }
 
 // ---- 키체인 ----
+//
+// 저장·읽기·삭제를 전부 macOS 의 `/usr/bin/security` 로 한다 — 앱 바이너리가 직접 Security 프레임워크를
+// 부르지 않는 이유가 이 기능의 핵심이다. 키체인 항목은 "만든 앱"만 조용히 읽을 수 있고 다른 서명의 앱이
+// 읽으면 로그인 키체인 암호를 묻는 창이 뜬다. 개발 빌드는 빌드마다 다른 앱이라 그 창이 매번 떴다(실측).
+// `security` 가 만들고 `security` 가 읽으면 접근 주체가 늘 같은(Apple 서명) 바이너리라 창이 뜨지 않는다 —
+// git·docker 의 osxkeychain 자격 증명 도우미가 같은 방식이다.
+// 그래도 프로세스가 사는 동안은 연결마다 한 번만 두드린다(메모리 캐시 + 풀 재사용).
+
+const SECURITY_BIN: &str = "/usr/bin/security";
+/// `security` 가 접근 확인창을 띄우면 사용자가 로그인 키체인 암호를 치는 시간이 여기 든다.
+/// 20초로 잘랐을 때 암호를 치는 동안 프로세스가 죽어 실패 처리되고 창만 남았다(실측) — 넉넉히 5분.
+const KEYCHAIN_TIMEOUT_SECS: u64 = 300;
+/// 키체인 앱에서 보이는 항목 이름
+const KEYCHAIN_LABEL: &str = "Amber DB connection";
+/// `security` 의 errSecItemNotFound 종료 코드
+const SEC_ITEM_NOT_FOUND: i32 = 44;
+
+static SECRETS: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+/// 키체인 읽기는 한 번에 하나만 — 여러 스키마 동기화가 겹치면 확인창이 겹겹이 뜬다. 먼저 읽은 값이
+/// 캐시에 들어가면 뒤에 기다리던 쪽은 키체인을 두드리지 않는다.
+static READ_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+
+fn secrets() -> &'static Mutex<HashMap<String, String>> {
+    SECRETS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn remember_secret(ulid: &str, password: &str) {
+    if let Ok(mut m) = secrets().lock() {
+        m.insert(ulid.to_string(), password.to_string());
+    }
+}
+
+fn forget_secret(ulid: &str) {
+    if let Ok(mut m) = secrets().lock() {
+        m.remove(ulid);
+    }
+}
+
+fn recall_secret(ulid: &str) -> Option<String> {
+    secrets().lock().ok().and_then(|m| m.get(ulid).cloned())
+}
 
 fn keychain_account(ulid: &str) -> String {
     format!("db/{ulid}")
 }
 
-fn keychain_entry(ulid: &str) -> Result<keyring::Entry, AiError> {
-    keyring::Entry::new(KEYCHAIN_SERVICE, &keychain_account(ulid)).map_err(|e| {
-        AiError::detailed("KEYCHAIN_DENIED", "키체인을 열 수 없습니다.", e.to_string())
-    })
+fn keychain_denied(detail: impl Into<String>) -> AiError {
+    AiError::detailed("KEYCHAIN_DENIED", "키체인에 접근하지 못했습니다.", detail)
 }
 
-fn keychain_read(ulid: &str) -> Result<String, AiError> {
-    match keychain_entry(ulid)?.get_password() {
-        Ok(p) => Ok(p),
-        Err(keyring::Error::NoEntry) => Err(AiError::new(
+/// `security <args>` 실행. 셸을 거치지 않으므로 비밀번호가 히스토리·확장에 노출되지 않는다.
+async fn security(args: &[&str]) -> Result<std::process::Output, AiError> {
+    timeout(
+        Duration::from_secs(KEYCHAIN_TIMEOUT_SECS),
+        tokio::process::Command::new(SECURITY_BIN)
+            .args(args)
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .map_err(|_| keychain_denied(format!("{KEYCHAIN_TIMEOUT_SECS}s timeout")))?
+    .map_err(|e| keychain_denied(e.to_string()))
+}
+
+fn stderr_of(out: &std::process::Output) -> String {
+    String::from_utf8_lossy(&out.stderr).trim().to_string()
+}
+
+async fn keychain_read(ulid: &str) -> Result<String, AiError> {
+    let account = keychain_account(ulid);
+    let out = security(&[
+        "find-generic-password",
+        "-s",
+        KEYCHAIN_SERVICE,
+        "-a",
+        &account,
+        "-w",
+    ])
+    .await?;
+    if out.status.code() == Some(SEC_ITEM_NOT_FOUND) {
+        return Err(AiError::new(
             "KEYCHAIN_MISSING",
             "저장된 비밀번호가 없습니다. 연결 설정에서 비밀번호를 다시 입력해 주세요.",
-        )),
-        Err(e) => Err(AiError::detailed(
-            "KEYCHAIN_DENIED",
-            "키체인에서 비밀번호를 읽지 못했습니다.",
-            e.to_string(),
-        )),
+        ));
     }
+    if !out.status.success() {
+        return Err(keychain_denied(stderr_of(&out)));
+    }
+    // -w 는 값 뒤에 개행 하나를 붙인다. 비밀번호 안의 공백은 살려야 하므로 개행만 뗀다
+    let raw = String::from_utf8_lossy(&out.stdout).into_owned();
+    Ok(raw.trim_end_matches(['\n', '\r']).to_string())
+}
+
+/// 항목을 지우고 새로 만든다 — 다른 바이너리(예전 Amber)가 만든 항목을 `-U` 로 고치면 그 항목의 접근 제어가
+/// 남아 다음 읽기에 창이 뜬다. 지우기는 접근 제어를 타지 않는다.
+async fn keychain_write(ulid: &str, password: &str) -> Result<(), AiError> {
+    let account = keychain_account(ulid);
+    let _ = security(&[
+        "delete-generic-password",
+        "-s",
+        KEYCHAIN_SERVICE,
+        "-a",
+        &account,
+    ])
+    .await;
+    let out = security(&[
+        "add-generic-password",
+        "-s",
+        KEYCHAIN_SERVICE,
+        "-a",
+        &account,
+        "-l",
+        KEYCHAIN_LABEL,
+        "-w",
+        password,
+        "-U",
+    ])
+    .await?;
+    if !out.status.success() {
+        return Err(keychain_denied(stderr_of(&out)));
+    }
+    Ok(())
+}
+
+/// 없는 항목 삭제는 멱등 성공
+async fn keychain_delete(ulid: &str) -> Result<(), AiError> {
+    let account = keychain_account(ulid);
+    let out = security(&[
+        "delete-generic-password",
+        "-s",
+        KEYCHAIN_SERVICE,
+        "-a",
+        &account,
+    ])
+    .await?;
+    if out.status.success() || out.status.code() == Some(SEC_ITEM_NOT_FOUND) {
+        return Ok(());
+    }
+    Err(keychain_denied(stderr_of(&out)))
+}
+
+/// 이 연결의 비밀번호 — 메모리에 있으면 그것, 없으면 키체인에서 한 번 읽어 기억한다.
+async fn password_for(ulid: &str) -> Result<String, AiError> {
+    if let Some(p) = recall_secret(ulid) {
+        return Ok(p);
+    }
+    let _guard = READ_LOCK
+        .get_or_init(|| tokio::sync::Mutex::new(()))
+        .lock()
+        .await;
+    // 기다리는 동안 다른 호출이 읽어 두었을 수 있다
+    if let Some(p) = recall_secret(ulid) {
+        return Ok(p);
+    }
+    let p = keychain_read(ulid).await?;
+    remember_secret(ulid, &p);
+    Ok(p)
 }
 
 /// 비밀번호를 키체인에 저장한다. IPC 를 지나는 유일한 순간 — 이후 프론트는 비밀번호를 모른다.
@@ -204,51 +337,23 @@ pub async fn db_secret_set(ulid: String, password: String) -> Result<(), AiError
         ));
     }
     drop_pool(&ulid);
-    tokio::task::spawn_blocking(move || {
-        keychain_entry(&ulid)?.set_password(&password).map_err(|e| {
-            AiError::detailed(
-                "KEYCHAIN_DENIED",
-                "키체인에 비밀번호를 저장하지 못했습니다.",
-                e.to_string(),
-            )
-        })
-    })
-    .await
-    .map_err(|e| AiError::detailed("KEYCHAIN_DENIED", e.to_string(), e.to_string()))?
+    forget_secret(&ulid);
+    keychain_write(&ulid, &password).await?;
+    // 방금 저장한 값은 이미 안다 — 곧 이어지는 첫 동기화가 키체인을 다시 두드리지 않게
+    remember_secret(&ulid, &password);
+    Ok(())
 }
 
 /// 키체인 항목 삭제 (연결 삭제 시). 항목이 없으면 멱등 성공.
 #[tauri::command]
 pub async fn db_secret_delete(ulid: String) -> Result<(), AiError> {
     drop_pool(&ulid);
-    tokio::task::spawn_blocking(move || match keychain_entry(&ulid)?.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(AiError::detailed(
-            "KEYCHAIN_DENIED",
-            "키체인 항목을 지우지 못했습니다.",
-            e.to_string(),
-        )),
-    })
-    .await
-    .map_err(|e| AiError::detailed("KEYCHAIN_DENIED", e.to_string(), e.to_string()))?
+    forget_secret(&ulid);
+    keychain_delete(&ulid).await
 }
 
-/// 비밀번호가 키체인에 있는가 — 백업을 다른 기기에 복원하면 프로필은 있는데 비밀번호가 없다.
-/// 그 상태를 "연결 실패"가 아니라 "비밀번호 필요"로 이름 붙여 보여주기 위한 조회.
-#[tauri::command]
-pub async fn db_secret_exists(ulid: String) -> Result<bool, AiError> {
-    tokio::task::spawn_blocking(move || match keychain_entry(&ulid)?.get_password() {
-        Ok(_) => Ok(true),
-        Err(keyring::Error::NoEntry) => Ok(false),
-        Err(e) => Err(AiError::detailed(
-            "KEYCHAIN_DENIED",
-            "키체인을 읽지 못했습니다.",
-            e.to_string(),
-        )),
-    })
-    .await
-    .map_err(|e| AiError::detailed("KEYCHAIN_DENIED", e.to_string(), e.to_string()))?
-}
+// "비밀번호가 키체인에 있나"를 따로 묻는 커맨드는 두지 않는다 — 없는 상태는 동기화가 KEYCHAIN_MISSING 으로
+// 실패하며 드러나고, 프론트가 그 코드를 보고 "비밀번호 필요"로 표시한다(백업을 다른 기기에 복원한 경우).
 
 // ---- 접속 ----
 
@@ -363,14 +468,17 @@ fn profile_sig(p: &DbProfile) -> String {
     )
 }
 
-fn pool_for(profile: &DbProfile, password: &str) -> Result<MySqlPool, AiError> {
+/// 같은 프로필(호스트·포트·사용자·TLS)로 이미 만든 풀
+fn cached_pool(profile: &DbProfile) -> Option<MySqlPool> {
     let sig = profile_sig(profile);
-    if let Ok(m) = pools().lock() {
-        if let Some((s, pool)) = m.get(&profile.ulid) {
-            if *s == sig {
-                return Ok(pool.clone());
-            }
-        }
+    let m = pools().lock().ok()?;
+    let (s, pool) = m.get(&profile.ulid)?;
+    (*s == sig).then(|| pool.clone())
+}
+
+fn pool_for(profile: &DbProfile, password: &str) -> Result<MySqlPool, AiError> {
+    if let Some(pool) = cached_pool(profile) {
+        return Ok(pool);
     }
     let opts = connect_options(profile, password)?;
     let pool = MySqlPoolOptions::new()
@@ -385,7 +493,7 @@ fn pool_for(profile: &DbProfile, password: &str) -> Result<MySqlPool, AiError> {
         })
         .connect_lazy_with(opts);
     if let Ok(mut m) = pools().lock() {
-        m.insert(profile.ulid.clone(), (sig, pool.clone()));
+        m.insert(profile.ulid.clone(), (profile_sig(profile), pool.clone()));
     }
     Ok(pool)
 }
@@ -459,12 +567,7 @@ pub async fn db_test(
 ) -> Result<DbTestResult, AiError> {
     let password = match password {
         Some(p) if !p.is_empty() => p,
-        _ => {
-            let ulid = profile.ulid.clone();
-            tokio::task::spawn_blocking(move || keychain_read(&ulid))
-                .await
-                .map_err(|e| AiError::detailed("KEYCHAIN_DENIED", e.to_string(), e.to_string()))??
-        }
+        _ => password_for(&profile.ulid).await?,
     };
     let opts = connect_options(&profile, &password)?;
     let started = Instant::now();
@@ -523,11 +626,11 @@ pub async fn db_introspect(profile: DbProfile, schema: String) -> Result<RawSnap
             "스키마 이름이 비어 있습니다.",
         ));
     }
-    let ulid = profile.ulid.clone();
-    let password = tokio::task::spawn_blocking(move || keychain_read(&ulid))
-        .await
-        .map_err(|e| AiError::detailed("KEYCHAIN_DENIED", e.to_string(), e.to_string()))??;
-    let pool = pool_for(&profile, &password)?;
+    // 같은 프로필의 풀이 살아 있으면 비밀번호가 필요 없다 — 키체인은 첫 스키마에서만 한 번
+    let pool = match cached_pool(&profile) {
+        Some(p) => p,
+        None => pool_for(&profile, &password_for(&profile.ulid).await?)?,
+    };
 
     let version: String = timeout(
         Duration::from_secs(QUERY_TIMEOUT_SECS),

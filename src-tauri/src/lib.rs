@@ -437,7 +437,6 @@ pub fn run() {
             report::report_gh_accounts,
             dbconn::db_secret_set,
             dbconn::db_secret_delete,
-            dbconn::db_secret_exists,
             dbconn::db_test,
             dbconn::db_introspect
         ])
