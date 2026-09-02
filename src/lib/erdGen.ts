@@ -20,6 +20,11 @@ import type {
 
 export type ErdLang = "ko" | "en";
 
+/** 생성 규칙 버전. 같은 스냅샷에서 다른 출력이 나오게 규칙을 고칠 때마다 올린다 — 헤더에 실려 있어
+ *  예전 규칙으로 만든 파일에 "생성 규칙이 새로워졌어요" 배너가 뜬다(사용자가 다시 생성을 고른다).
+ *  2: 코멘트 참조·접미사 후보·타입 호환·관계선 병합·중복 설명 정리·인코딩 복원 (2026-09) */
+export const ERD_GEN_VERSION = 2;
+
 export interface ErdGenOptions {
   /** 관계 라벨의 근거 단어·범례 주석의 언어. 테이블/컬럼 코멘트는 번역하지 않는다 */
   lang: ErdLang;
@@ -48,6 +53,8 @@ export interface RefEdge {
   indexName: string | null;
   /** 물리 FK 의 제약 이름 */
   constraintName: string | null;
+  /** 어떻게 알았나 — 선언된 FK / 컬럼 코멘트의 `table.column` / 컬럼 이름 규칙 */
+  source: "fk" | "comment" | "name";
 }
 
 export interface ErdStats {
@@ -79,6 +86,8 @@ interface Wording {
   physicalUq: string;
   logicalIx: (index: string) => string;
   logicalNoIx: string;
+  /** 코멘트가 대상 테이블을 적어 둔 덕에 찾은 참조 — 인덱스도 제약도 없을 때의 근거 */
+  logicalComment: string;
   logicalUq: string;
   /** 설명의 참조 문구 앞머리 — `<refPhysical> -> table.col` */
   refPhysical: string;
@@ -93,6 +102,7 @@ const WORDING: Record<ErdLang, Wording> = {
     physicalUq: "uq, 물리 FK",
     logicalIx: (index) => `논리 FK(${index})`,
     logicalNoIx: "논리 FK, DB 제약 없음",
+    logicalComment: "논리 FK(코멘트)",
     logicalUq: "uq, 논리",
     refPhysical: "물리 FK",
     refLogical: "논리 FK",
@@ -105,6 +115,7 @@ const WORDING: Record<ErdLang, Wording> = {
     physicalUq: "uq, physical FK",
     logicalIx: (index) => `logical FK(${index})`,
     logicalNoIx: "logical FK, no DB constraint",
+    logicalComment: "logical FK(comment)",
     logicalUq: "uq, logical",
     refPhysical: "physical FK",
     refLogical: "logical FK",
@@ -130,8 +141,40 @@ const typ = (dataType: string): string => dataType.toLowerCase().replace(/[^A-Za
 /** mermaid 는 `\"` 를 모른다 — 따옴표는 `#quot;` 로만 살아남는다 */
 const q = (s: string): string => s.replace(/"/g, "#quot;");
 
-/** 코멘트 정리 — 줄바꿈은 공백으로(설명은 한 줄이어야 한다), 양끝 공백 제거 */
-const cleanText = (s: string): string => s.replace(/\s*[\r\n]+\s*/g, " ").trim();
+/** 잘못된 문자셋으로 저장된 코멘트("ì—¬í–‰")를 되살린다 — UTF-8 바이트를 latin1 로 읽은 꼴이라, 모든 글자가
+ *  0xFF 이하이고 그 바이트열이 온전한 UTF-8 이면 되돌릴 수 있다. 한 글자라도 그 밖이면 진짜 텍스트로 두고 손대지 않는다. */
+function fixMojibake(s: string): string {
+  // UTF-8 선두 바이트(C2~F4)가 라틴 글자로 보이지 않으면 깨진 게 아니다
+  if (!/[\u00C2-\u00F4]/.test(s)) return s;
+  const bytes = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) {
+    let code = s.charCodeAt(i);
+    if (code > 0xff) {
+      // windows-1252 로 읽힌 0x80~0x9F 구간(€ ‚ ƒ … ˆ ‰ ™ 등)은 원래 바이트로 되돌린다
+      const b = CP1252_REVERSE.get(code);
+      if (b === undefined) return s;
+      code = b;
+    }
+    bytes[i] = code;
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return s;
+  }
+}
+
+/** windows-1252 가 0x80~0x9F 에 배정한 글자 → 바이트. 정의되지 않은 자리(0x81·0x8D·0x8F·0x90·0x9D)는 제어문자로 남아 그대로 통과한다 */
+const CP1252_REVERSE = new Map<number, number>([
+  [0x20ac, 0x80], [0x201a, 0x82], [0x0192, 0x83], [0x201e, 0x84], [0x2026, 0x85], [0x2020, 0x86],
+  [0x2021, 0x87], [0x02c6, 0x88], [0x2030, 0x89], [0x0160, 0x8a], [0x2039, 0x8b], [0x0152, 0x8c],
+  [0x017d, 0x8e], [0x2018, 0x91], [0x2019, 0x92], [0x201c, 0x93], [0x201d, 0x94], [0x2022, 0x95],
+  [0x2013, 0x96], [0x2014, 0x97], [0x02dc, 0x98], [0x2122, 0x99], [0x0161, 0x9a], [0x203a, 0x9b],
+  [0x0153, 0x9c], [0x017e, 0x9e], [0x0178, 0x9f],
+]);
+
+/** 코멘트 정리 — 깨진 인코딩 복원, 줄바꿈은 공백으로(설명은 한 줄이어야 한다), 양끝 공백 제거 */
+const cleanText = (s: string): string => fixMojibake(s).replace(/\s*[\r\n]+\s*/g, " ").trim();
 
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -161,7 +204,18 @@ export function commonTablePrefix(names: string[]): string {
     lcp = lcp.slice(0, k);
   }
   const cut = lcp.lastIndexOf("_");
-  return cut < 0 ? "" : lcp.slice(0, cut + 1);
+  if (cut >= 0) return lcp.slice(0, cut + 1);
+  // 공통 문자열이 없어도 대다수가 같은 첫 토큰을 쓰면 그게 접두사다 — `editing_logs` 하나가 끼어 있다고
+  // `ts_` 마흔 개가 접두사를 잃으면 `device_id` 가 `ts_devices` 를 못 찾는다(실측).
+  const counts = new Map<string, number>();
+  for (const n of names) {
+    const i = n.indexOf("_");
+    if (i > 0) counts.set(n.slice(0, i + 1), (counts.get(n.slice(0, i + 1)) ?? 0) + 1);
+  }
+  let best = "";
+  let bestN = 0;
+  for (const [tok, c] of counts) if (c > bestN || (c === bestN && cmp(tok, best) < 0)) [best, bestN] = [tok, c];
+  return bestN >= 2 && bestN * 5 >= names.length * 3 ? best : "";
 }
 
 // ---- 인덱스 조회 ----
@@ -189,23 +243,67 @@ function hasSingleUnique(t: SnapshotTable, c: SnapshotColumn): boolean {
   return indexesOf(t).some((ix) => ix.unique && ix.columns.length === 1 && ix.columns[0] === c.name);
 }
 
-/** col 을 포함하는 2컬럼 이상 UNIQUE 인덱스 — 같은 이름은 한 번만 */
+/** col 이 첫 컬럼인 2컬럼 이상 UNIQUE 인덱스 — 복합 uk 는 첫 컬럼에만 적는다(컬럼마다 반복하면 설명이 uk 로 도배된다) */
 function compositeUniques(t: SnapshotTable, col: string): SnapshotIndex[] {
   const seen = new Set<string>();
   const out: SnapshotIndex[] = [];
   for (const ix of indexesOf(t)) {
-    if (!ix.unique || ix.columns.length < 2 || !ix.columns.includes(col) || seen.has(ix.name)) continue;
+    if (!ix.unique || ix.columns.length < 2 || ix.columns[0] !== col || seen.has(ix.name)) continue;
     seen.add(ix.name);
     out.push(ix);
   }
   return out;
 }
 
-// ---- 논리 참조 추론 ----
+// ---- 타입 호환 ----
+//
+// `travel_id varchar` 가 `ts_travels.id bigint` 를 가리킬 수는 없다 — 그때는 같은 이름의 UNIQUE 컬럼(travel_id)이 대상이다.
 
-function hasIdPk(t: SnapshotTable | undefined): boolean {
-  return !!t && t.columns.some((c) => c.name === "id" && c.key === "PRI");
+const INT_TYPES = new Set(["tinyint", "smallint", "mediumint", "int", "integer", "bigint"]);
+const CHAR_TYPES = new Set(["char", "varchar", "text", "tinytext", "mediumtext", "longtext"]);
+
+function typesCompatible(a: string, b: string): boolean {
+  const x = a.toLowerCase();
+  const y = b.toLowerCase();
+  if (x === y) return true;
+  if (INT_TYPES.has(x) && INT_TYPES.has(y)) return true;
+  return CHAR_TYPES.has(x) && CHAR_TYPES.has(y);
 }
+
+/** 후보 테이블 T 에서 자식 컬럼 c 가 가리킬 컬럼 — 타입이 맞는 `id` PK, 아니면 같은 이름의 UNIQUE/PK 컬럼 */
+function targetColumn(T: SnapshotTable, c: SnapshotColumn): string | null {
+  const id = T.columns.find((col) => col.name === "id" && col.key === "PRI");
+  if (id && typesCompatible(id.data_type, c.data_type)) return "id";
+  const same = T.columns.find(
+    (col) => col.name === c.name && (col.key === "PRI" || col.key === "UNI" || hasSingleUnique(T, col)),
+  );
+  if (same && typesCompatible(same.data_type, c.data_type)) return same.name;
+  return null;
+}
+
+// ---- 코멘트 속 참조 ----
+//
+// "ts_customers.id - 유저 ID", "FK to ts_organizations.id" 처럼 작성자가 대상을 적어 둔 코멘트가 많다.
+// 앞뒤에 점이 없는 `table.column` 한 쌍만 읽는다 — `svc_inventory.ts_packages.id` 같은 다른 스키마 참조는
+// 세 토막이라 걸리지 않는다(그건 설명으로만 남는다).
+const COMMENT_REF_RE = /(?<![\w.])([A-Za-z]\w*)\.([A-Za-z_]\w*)(?![\w.])/g;
+
+function commentRefs(
+  comment: string,
+  byName: Map<string, SnapshotTable>,
+  self: string,
+): { table: string; column: string }[] {
+  const out = new Map<string, { table: string; column: string }>();
+  for (const m of comment.matchAll(COMMENT_REF_RE)) {
+    const T = byName.get(m[1]);
+    if (!T || m[1] === self || !isDomain(m[1])) continue;
+    if (!T.columns.some((c) => c.name === m[2])) continue;
+    out.set(`${m[1]}.${m[2]}`, { table: m[1], column: m[2] });
+  }
+  return [...out.values()];
+}
+
+// ---- 논리 참조 추론 ----
 
 /** `x_id` 의 x 가 가리킬 만한 테이블 이름 후보 — 단수·복수·접두사 유무 */
 function candidateNames(x: string, prefix: string): string[] {
@@ -215,6 +313,14 @@ function candidateNames(x: string, prefix: string): string[] {
     raw.push(ies, prefix + ies);
   }
   return [...new Set(raw)];
+}
+
+/** 이름이 `_x`·`_xs`… 로 끝나는 테이블 — `profile_id` → `ts_user_profiles`, `policy_set_id` → `ts_authorization_policy_sets`.
+ *  정확한 이름이 안 맞을 때의 2차 후보. 둘 이상 걸리면 추측하지 않는다(`share_id` 가 like_share 둘에 걸리듯). */
+function suffixCandidates(x: string, names: string[]): string[] {
+  const forms = [x, `${x}s`, `${x}es`];
+  if (x.endsWith("y")) forms.push(`${x.slice(0, -1)}ies`);
+  return names.filter((n) => forms.some((f) => n.endsWith(`_${f}`)));
 }
 
 /**
@@ -249,31 +355,50 @@ export function inferReferences(snapshot: SchemaSnapshot): {
         oneToOne: col ? hasSingleUnique(t, col) : false,
         indexName: leadingIndex(t, fromColumn)?.name ?? null,
         constraintName: fk.name,
+        source: "fk",
       });
     }
 
     if (!isDomain(t.name)) continue;
+    const domainNames = snapshot.tables.map((x) => x.name).filter((n) => n !== t.name && isDomain(n));
     for (const c of t.columns) {
       if (c.key === "PRI" || covered.has(c.name)) continue;
-      const m = /^(.+)_id$/.exec(c.name);
-      if (!m) continue;
-      const cands = candidateNames(m[1], prefix).filter(
-        (n) => n !== t.name && isDomain(n) && hasIdPk(byName.get(n)),
-      );
-      if (cands.length !== 1) {
-        unresolved.push({ table: t.name, column: c.name });
-        continue;
-      }
-      edges.push({
+      const logical = (to: string, toColumn: string, source: "comment" | "name"): RefEdge => ({
         from: t.name,
         fromColumn: c.name,
-        to: cands[0],
-        toColumn: "id",
+        to,
+        toColumn,
         physical: false,
         oneToOne: hasSingleUnique(t, c),
         indexName: leadingIndex(t, c.name)?.name ?? null,
         constraintName: null,
+        source,
       });
+
+      // 1) 코멘트가 대상을 적어 뒀으면 그게 가장 정확하다 — 이름 규칙으로는 못 잇는 user_id → ts_customers 도 풀린다
+      const refs = commentRefs(c.comment, byName, t.name).filter((r) => {
+        const target = byName.get(r.table)!.columns.find((col) => col.name === r.column)!;
+        return typesCompatible(target.data_type, c.data_type);
+      });
+      if (refs.length === 1) {
+        edges.push(logical(refs[0].table, refs[0].column, "comment"));
+        continue;
+      }
+
+      // 2) `x_id` 이름 규칙 — 정확한 이름(단복수·접두사) 후보가 하나면 그것, 아니면 `_x` 로 끝나는 테이블이 하나일 때
+      const m = /^(.+)_id$/.exec(c.name);
+      if (!m) continue;
+      const resolve = (names: string[]) =>
+        names
+          .map((n) => ({ n, col: targetColumn(byName.get(n)!, c) }))
+          .filter((h): h is { n: string; col: string } => h.col !== null);
+      const exact = resolve(candidateNames(m[1], prefix).filter((n) => domainNames.includes(n)));
+      const hits = exact.length === 1 ? exact : resolve(suffixCandidates(m[1], domainNames));
+      if (hits.length !== 1) {
+        unresolved.push({ table: t.name, column: c.name });
+        continue;
+      }
+      edges.push(logical(hits[0].n, hits[0].col, "name"));
     }
   }
 
@@ -302,6 +427,7 @@ interface Ctx {
 const edgeKey = (table: string, column: string): string => `${table}\u0000${column}`;
 
 const ENC_RE = /암호화|encrypt|enc\b/i;
+const TRIVIAL_ID_RE = /^(id|pk|primary key|고유\s*식별자|식별자|아이디)$/i;
 const SENSITIVE_NAME_RE = /(name|phone|mobile|email|birth|passport|doc_id|ssn|card_no|address)/i;
 
 /** 암호문을 담을 만큼 넓은 컬럼 — text 또는 varchar(255+) */
@@ -345,7 +471,8 @@ function enumValues(t: SnapshotTable, c: SnapshotColumn): string[] {
 function evidence(w: Wording, e: RefEdge): string {
   if (e.physical) return e.oneToOne ? w.physicalUq : w.physical;
   if (e.oneToOne) return w.logicalUq;
-  return e.indexName ? w.logicalIx(e.indexName) : w.logicalNoIx;
+  if (e.indexName) return w.logicalIx(e.indexName);
+  return e.source === "comment" ? w.logicalComment : w.logicalNoIx;
 }
 
 function connector(e: RefEdge): string {
@@ -355,12 +482,15 @@ function connector(e: RefEdge): string {
 
 /** 설명의 참조 사실. 관계가 없어도 선언된 FK 가 있으면(다른 스키마·스냅샷 밖 테이블) 사실은 적는다 */
 function referenceFact(ctx: Ctx, t: SnapshotTable, c: SnapshotColumn, edge: RefEdge | null): string | null {
+  // 코멘트가 이미 대상 테이블을 말하면("FK to ts_customers.id") 같은 말을 되풀이하지 않는다
+  const said = (table: string) => cleanText(c.comment).includes(table);
   if (edge) {
+    if (said(edge.to)) return null;
     const word = edge.physical ? ctx.w.refPhysical : ctx.w.refLogical;
     return `${word} -> ${ent(stripPrefix(edge.to, ctx.prefix))}.${ent(edge.toColumn)}`;
   }
   const fk = t.foreign_keys.find((f) => f.columns[0] === c.name);
-  if (!fk) return null;
+  if (!fk || said(fk.ref_table)) return null;
   const target =
     fk.ref_schema !== ctx.schema
       ? `${ent(fk.ref_schema)}.${ent(fk.ref_table)}`
@@ -381,14 +511,17 @@ function describe(ctx: Ctx, t: SnapshotTable, c: SnapshotColumn, edge: RefEdge |
     else facts.push(p);
   };
 
-  const meaning = cleanText(c.comment);
+  let meaning = cleanText(c.comment);
+  // `id PK "ID"` — 이름이 이미 말하는 걸 코멘트가 되풀이한 것. 하우스 규칙(id 엔 설명 없음)대로 비운다
+  if (c.key === "PRI" && c.name.toLowerCase() === "id" && TRIVIAL_ID_RE.test(meaning)) meaning = "";
   if (meaning) facts.push(meaning);
   if (isEncrypted(c, encTable)) attach("(enc)");
   const en = enumValues(t, c);
   if (en.length) facts.push(en.join("/"));
   if (c.key !== "PRI") {
     const ix = leadingNonUniqueIndex(t, c.name);
-    if (ix) attach(`(${ix.name})`);
+    // MySQL 이 FK 마다 자동으로 만드는 같은 이름의 인덱스는 FK 사실에 이미 들어 있다
+    if (ix && ix.name !== edge?.constraintName) attach(`(${ix.name})`);
   }
   for (const u of compositeUniques(t, c.name)) facts.push(`uk(${u.columns.map(ent).join(",")})`);
   const ref = referenceFact(ctx, t, c, edge);
@@ -482,10 +615,30 @@ export function generateErd(snapshot: SchemaSnapshot, opts: ErdGenOptions): ErdG
       !isRevinfo(e.to) &&
       !isAudit(e.from),
   );
-  const domainLines = domainEdges.map((e) => {
+  // 같은 두 테이블 사이의 관계선은 하나 — FK 컬럼이 여럿이면(정·부 담당자 등) ×N 으로 적는다.
+  // 컬럼별 사실은 각 속성 설명에 그대로 있다. (edges 는 to·from·column 순으로 이미 정렬돼 있다)
+  const pairs = new Map<string, { edge: RefEdge; n: number }>();
+  for (const e of domainEdges) {
+    const k = `${e.to}\u0000${e.from}`;
+    const g = pairs.get(k);
+    if (g) g.n++;
+    else pairs.set(k, { edge: e, n: 1 });
+  }
+  // 자식 테이블이 많은 부모(허브)부터 — ts_customers 같은 중심 테이블이 다이어그램 머리에 온다.
+  // 컬럼 수가 아니라 이어진 테이블 수로 잰다(한 테이블에 FK 셋인 건 허브가 아니다).
+  const childCount = new Map<string, number>();
+  for (const { edge } of pairs.values()) childCount.set(edge.to, (childCount.get(edge.to) ?? 0) + 1);
+  const ordered = [...pairs.values()].sort(
+    (a, b) =>
+      (childCount.get(b.edge.to) ?? 0) - (childCount.get(a.edge.to) ?? 0) ||
+      cmp(a.edge.to, b.edge.to) ||
+      cmp(a.edge.from, b.edge.from),
+  );
+  const domainLines = ordered.map(({ edge: e, n }) => {
     const child = byName.get(e.from);
     const meaning = cleanText(child?.comment ?? "") || ent(stripPrefix(e.from, prefix));
-    return `    ${ent(e.to)} ${connector(e)} ${ent(e.from)} : "${q(`${meaning} · ${evidence(w, e)}`)}"`;
+    const ev = n > 1 ? `${evidence(w, e)} ×${n}` : evidence(w, e);
+    return `    ${ent(e.to)} ${connector(e)} ${ent(e.from)} : "${q(`${meaning} · ${ev}`)}"`;
   });
 
   const drawnAudits = [...drawn].filter(isAudit).sort(cmp);
@@ -502,7 +655,7 @@ export function generateErd(snapshot: SchemaSnapshot, opts: ErdGenOptions): ErdG
     seen.add(n);
     order.push(n);
   };
-  for (const e of domainEdges) {
+  for (const { edge: e } of ordered) {
     add(e.to);
     add(e.from);
   }

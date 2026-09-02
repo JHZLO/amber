@@ -241,6 +241,7 @@ const ko = {
   "diagrams.db.audit.hint": "Envers *_aud 테이블과 revinfo 를 ERD 에 그려요. 끄면 도메인 테이블만 남아요.",
   "diagrams.db.audit.modalLabel": "감사(_aud) 테이블을 ERD 에 포함",
   "diagrams.db.banner.optionChanged": "감사 테이블 포함 설정이 바뀌었어요",
+  "diagrams.db.banner.rulesChanged": "ERD 생성 규칙이 새로워졌어요",
 } as const;
 
 const en: Record<keyof typeof ko, string> = {
@@ -469,6 +470,7 @@ const en: Record<keyof typeof ko, string> = {
   "diagrams.db.audit.hint": "Draw Envers *_aud tables and revinfo in the ERD. Off keeps only the domain tables.",
   "diagrams.db.audit.modalLabel": "Include audit (_aud) tables in ERDs",
   "diagrams.db.banner.optionChanged": "The audit-table setting changed",
+  "diagrams.db.banner.rulesChanged": "The ERD generator was updated",
 } as const;
 
 export const diagramsMessages = { ko, en };

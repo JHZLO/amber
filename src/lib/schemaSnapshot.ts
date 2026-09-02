@@ -196,14 +196,14 @@ export function diffIsEmpty(d: SchemaDiff): boolean {
 //
 // 자동 생성 파일의 두 번째 줄(erDiagram 다음)에 남는 출처 표식. 앱은 이 줄로 "DB 연동 파일"을
 // 알아보고(동기화 버튼·변경 배너), 사람은 파일만 봐도 어디서 언제 왔는지 안다.
-//   %% amber:db dev/svc_booking · 2026-09-02 09:41 · 3f9a1c0b2d4e5f[ · noaud]
-// 지문 토막은 생성 당시 스냅샷의 지문 — `schema.json` 의 지문과 다르면 "DB 가 그 뒤 바뀌었다"는
-// 뜻이라, 연결이 끊긴 채로도 파일이 낡았는지 판정할 수 있다. `noaud` 는 감사 테이블(*_aud·revinfo)을
-// 빼고 그렸다는 표식 — 옵션이 바뀌면 지문이 같아도 파일은 낡은 것이다.
+//   %% amber:db dev/svc_booking · 2026-09-02 09:41 · 3f9a1c0b2d4e5f · g2[ · noaud]
+// 시각 뒤 토막들은 순서 없는 표식 집합이다. 지문은 생성 당시 스냅샷의 지문 — `schema.json` 의 지문과 다르면
+// "DB 가 그 뒤 바뀌었다"는 뜻이라, 연결이 끊긴 채로도 파일이 낡았는지 판정할 수 있다. `gN` 은 생성 규칙 버전
+// (erdGen.ERD_GEN_VERSION), `noaud` 는 감사 테이블(*_aud·revinfo)을 빼고 그렸다는 표식 — 둘 중 하나가 지금 설정과
+// 다르면 지문이 같아도 파일은 낡은 것이다.
 // 연결 이름엔 공백이 올 수 있어 스키마는 뒤에서 잡는다(스키마 이름엔 공백·슬래시가 없다).
 
-const DB_HEADER_RE =
-  /^\s*%% amber:db (.+)\/([^\s/]+) · (\d{4}-\d{2}-\d{2} \d{2}:\d{2})(?: · ([0-9a-f]+))?(?: · (noaud))?\s*$/;
+const DB_HEADER_RE = /^\s*%% amber:db (.+)\/([^\s/]+) · (\d{4}-\d{2}-\d{2} \d{2}:\d{2})((?: · \S+)*)\s*$/;
 
 export interface DbHeader {
   connection: string;
@@ -213,11 +213,15 @@ export interface DbHeader {
   fingerprint: string | null;
   /** 감사 테이블(*_aud·revinfo)을 포함해 그렸는가 */
   audit: boolean;
+  /** 생성 규칙 버전(gN). 표식이 없던 첫 버전은 1 */
+  gen: number;
 }
 
 export interface DbHeaderOptions {
   /** false 면 ` · noaud` 표식을 붙인다 */
   audit?: boolean;
+  /** 생성 규칙 버전 — erdGen.ERD_GEN_VERSION 을 넘긴다. 없으면 표식을 안 붙인다(=1) */
+  gen?: number;
 }
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -234,22 +238,27 @@ export function formatDbHeader(
   fingerprint: string,
   opts: DbHeaderOptions = {},
 ): string {
-  const flag = opts.audit === false ? " · noaud" : "";
-  return `    %% amber:db ${connection}/${schema} · ${formatHeaderTime(at)} · ${fingerprint}${flag}`;
+  const tags = [fingerprint];
+  if (opts.gen !== undefined && opts.gen > 1) tags.push(`g${opts.gen}`);
+  if (opts.audit === false) tags.push("noaud");
+  return `    %% amber:db ${connection}/${schema} · ${formatHeaderTime(at)} · ${tags.join(" · ")}`;
 }
 
 /** 소스 앞머리(5줄)에서 연동 헤더를 찾는다. 없으면 null = 손으로 만든 다이어그램 */
 export function parseDbHeader(source: string): DbHeader | null {
   for (const line of source.split("\n", 5)) {
     const m = DB_HEADER_RE.exec(line);
-    if (m)
-      return {
-        connection: m[1],
-        schema: m[2],
-        generatedAt: m[3],
-        fingerprint: m[4] ?? null,
-        audit: m[5] !== "noaud",
-      };
+    if (!m) continue;
+    const tags = m[4].split(" · ").map((x) => x.trim()).filter(Boolean);
+    const gen = tags.find((x) => /^g\d+$/.test(x));
+    return {
+      connection: m[1],
+      schema: m[2],
+      generatedAt: m[3],
+      fingerprint: tags.find((x) => /^[0-9a-f]{6,}$/.test(x)) ?? null,
+      audit: !tags.includes("noaud"),
+      gen: gen ? Number(gen.slice(1)) : 1,
+    };
   }
   return null;
 }

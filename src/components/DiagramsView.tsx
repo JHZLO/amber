@@ -35,7 +35,7 @@ import {
   timeAgo,
 } from "../ui";
 import { Icon } from "../icons";
-import { getLang, t } from "../lib/i18n";
+import { aiOutputLang, t } from "../lib/i18n";
 import { errText } from "../lib/errors";
 import { RootPicker } from "./RootPicker";
 import type { AppConfig } from "../lib/config";
@@ -72,7 +72,7 @@ import {
   type SchemaDiff,
   type SchemaSnapshot,
 } from "../lib/schemaSnapshot";
-import { generateErd } from "../lib/erdGen";
+import { ERD_GEN_VERSION, generateErd } from "../lib/erdGen";
 
 // 이동/생성 위치 Select 값 인코딩 (루트 '' ↔ '/')
 const encodeDir = (d: string) => (d ? `/${d}` : "/");
@@ -201,9 +201,13 @@ export function DiagramsView({
     if (!(await diagramFileExists(path))) {
       const audit = prefAudit(pref);
       const { mermaid } = generateErd(snapshot, {
-        lang: getLang(),
+        // 라벨 언어는 AI 변환(DDL → ERD)과 같은 설정을 따른다 — UI 가 영어라도 ERD 는 한국어로 받을 수 있게
+        lang: aiOutputLang(),
         audit,
-        header: formatDbHeader(conn.name, pref.name, new Date(), snapshot.fingerprint, { audit }),
+        header: formatDbHeader(conn.name, pref.name, new Date(), snapshot.fingerprint, {
+          audit,
+          gen: ERD_GEN_VERSION,
+        }),
       });
       await writeDiagramFile(path, mermaid);
       await reload();
@@ -899,12 +903,14 @@ export function DiagramsView({
     const schemaChanged = !!snap && hdr.fingerprint !== null && hdr.fingerprint !== snap.fingerprint;
     // 감사 테이블 포함 설정이 파일을 만들 때와 다르면 구조가 같아도 파일은 낡았다
     const optionChanged = hdr.audit !== prefAudit(hit.pref);
+    // 생성 규칙이 새로워졌으면(참조 추론·설명 규칙 등) 같은 스냅샷에서도 다른 파일이 나온다
+    const rulesChanged = hdr.gen !== ERD_GEN_VERSION;
     return {
       hdr,
       conn: hit.conn,
       pref: hit.pref,
       snap,
-      stale: schemaChanged || (!!snap && optionChanged),
+      stale: schemaChanged || (!!snap && (optionChanged || rulesChanged)),
       schemaChanged,
       optionChanged,
       diff: diffByFolder.get(folder) ?? null,
@@ -917,10 +923,11 @@ export function DiagramsView({
     if (!dbFile?.snap) return "";
     const audit = prefAudit(dbFile.pref);
     return generateErd(dbFile.snap, {
-      lang: getLang(),
+      lang: aiOutputLang(),
       audit,
       header: formatDbHeader(dbFile.conn.name, dbFile.pref.name, new Date(), dbFile.snap.fingerprint, {
         audit,
+        gen: ERD_GEN_VERSION,
       }),
     }).mermaid;
   }
@@ -1146,7 +1153,9 @@ export function DiagramsView({
                   <b>
                     {dbFile.schemaChanged
                       ? t("diagrams.db.banner.changed")
-                      : t("diagrams.db.banner.optionChanged")}
+                      : dbFile.optionChanged
+                        ? t("diagrams.db.banner.optionChanged")
+                        : t("diagrams.db.banner.rulesChanged")}
                   </b>
                   {" · "}
                   {dbFile.diff && dbFile.schemaChanged

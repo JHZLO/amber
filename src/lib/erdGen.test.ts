@@ -197,7 +197,7 @@ const GOLDEN_KO = `erDiagram
     ts_booking_coupon_use {
         bigint id PK
         bigint booking_id FK "uk(booking_id,coupon_code); 논리 FK -> booking.id"
-        varchar coupon_code "uk(booking_id,coupon_code)"
+        varchar coupon_code
         datetime created_at
     }
 
@@ -348,6 +348,127 @@ describe("generateErd — 부분집합", () => {
     const r = generateErd(snap(FIXTURE), { lang: "ko", tables: ["nope", "revinfo"] });
     expect(r.stats.tables).toBe(1);
     expect(r.mermaid).toContain("    revinfo {");
+  });
+});
+
+describe("참조 추론 보강 — 실제 accounts 스키마에서 나온 구멍들", () => {
+  const customers = tbl("ts_customers", [pk(), col("name", "varchar", { column_type: "varchar(50)" })], { comment: "회원" });
+  const devices = tbl("ts_devices", [pk(), col("device_key", "varchar", { column_type: "varchar(64)", key: "UNI" })], {
+    comment: "디바이스",
+  });
+
+  it("코멘트의 `table.column` 이 이름 규칙으로 못 잇는 user_id → ts_customers 를 잇고, 설명은 참조를 되풀이하지 않는다", () => {
+    const consents = tbl(
+      "ts_customer_consents",
+      [pk(), col("user_id", "bigint", { nullable: true, comment: "ts_customers.id - 유저 ID" })],
+      { comment: "수신동의" },
+    );
+    const r = generateErd(snap([customers, consents]), { lang: "ko" });
+    expect(r.mermaid).toContain('ts_customers ||..o{ ts_customer_consents : "수신동의 · 논리 FK(코멘트)"');
+    expect(r.mermaid).toContain('bigint? user_id FK "ts_customers.id - 유저 ID; DB 제약/인덱스 없음"');
+    expect(r.stats.unresolvedRefs).toBe(0);
+  });
+
+  it("공통 접두사가 없어도 대다수 토큰(ts_)을 접두사로 삼아 device_id → ts_devices 를 찾는다", () => {
+    const consents = tbl("ts_customer_consents", [pk(), col("device_id", "bigint", { key: "MUL" })], {
+      indexes: [ix("ix_device", ["device_id"])],
+    });
+    const logs = tbl("editing_logs", [pk(), col("target_id", "bigint")]);
+    const i18n = tbl("i18n_messages", [pk("no", "int"), col("code", "varchar")]);
+    expect(commonTablePrefix([customers.name, devices.name, consents.name, logs.name, i18n.name])).toBe("ts_");
+    const { edges } = inferReferences(snap([customers, devices, consents, logs, i18n]));
+    expect(edges.map((e) => `${e.from}.${e.fromColumn} -> ${e.to}.${e.toColumn}`)).toEqual([
+      "ts_customer_consents.device_id -> ts_devices.id",
+    ]);
+  });
+
+  it("`_x` 로 끝나는 테이블이 하나면 잇고(profile_id → ts_user_profiles), 둘이면 추측하지 않는다(share_id)", () => {
+    const profiles = tbl("ts_user_profiles", [pk()]);
+    const members = tbl("ts_org_members", [pk(), col("profile_id", "bigint")]);
+    const shareA = tbl("ts_travel_like_share", [pk()]);
+    const shareB = tbl("ts_domestic_property_like_share", [pk()]);
+    const item = tbl("ts_travel_like_share_item", [pk(), col("share_id", "bigint")]);
+    const { edges, unresolved } = inferReferences(snap([profiles, members, shareA, shareB, item]));
+    expect(edges.map((e) => `${e.from}.${e.fromColumn} -> ${e.to}`)).toEqual([
+      "ts_org_members.profile_id -> ts_user_profiles",
+    ]);
+    expect(unresolved).toEqual([{ table: "ts_travel_like_share_item", column: "share_id" }]);
+  });
+
+  it("타입이 안 맞으면 id 대신 같은 이름의 UNIQUE 컬럼을 가리킨다 (varchar travel_id → ts_travels.travel_id)", () => {
+    const travels = tbl("ts_travels", [
+      pk(),
+      col("travel_id", "varchar", { column_type: "varchar(36)", key: "UNI" }),
+    ]);
+    const dibs = tbl("ts_user_travel_interactions", [
+      col("travel_id", "varchar", { column_type: "varchar(36)", key: "PRI" }),
+      col("user_id", "bigint", { key: "PRI" }),
+      col("trip_code", "varchar"),
+    ]);
+    // PK 컬럼은 추론 대상이 아니다 — travel_id 가 일반 컬럼인 테이블로 본다
+    const queue = tbl("ts_travel_change_queue", [pk(), col("travel_id", "varchar", { column_type: "varchar(36)" })]);
+    const { edges } = inferReferences(snap([travels, dibs, queue]));
+    expect(edges.map((e) => `${e.from}.${e.fromColumn} -> ${e.to}.${e.toColumn}`)).toEqual([
+      "ts_travel_change_queue.travel_id -> ts_travels.travel_id",
+    ]);
+  });
+
+  it("같은 두 테이블 사이의 FK 가 셋이면 관계선은 하나에 ×3, 관계가 많은 부모가 먼저 온다", () => {
+    const contacts = tbl("ts_personal_contacts", [pk()], { comment: "연락처" });
+    const orgs = tbl("ts_organizations", [pk()], { comment: "조직" });
+    const fkTo = (name: string, column: string, ref_table: string) => ({
+      name,
+      columns: [column],
+      ref_schema: "svc_booking",
+      ref_table,
+      ref_columns: ["id"],
+    });
+    const details = tbl(
+      "ts_org_details",
+      [
+        pk(),
+        col("org_id", "bigint", { comment: "조직 ID. FK to ts_organizations.id" }),
+        col("contract_manager_contact_id", "bigint"),
+        col("primary_settlement_contact_id", "bigint"),
+        col("secondary_settlement_contact_id", "bigint", { nullable: true }),
+      ],
+      {
+        comment: "조직 상세",
+        indexes: [ix("org_id", ["org_id"]), ix("contract_manager_contact_id", ["contract_manager_contact_id"])],
+        fks: [
+          fkTo("org_id", "org_id", "ts_organizations"),
+          fkTo("contract_manager_contact_id", "contract_manager_contact_id", "ts_personal_contacts"),
+          fkTo("primary_settlement_contact_id", "primary_settlement_contact_id", "ts_personal_contacts"),
+          fkTo("secondary_settlement_contact_id", "secondary_settlement_contact_id", "ts_personal_contacts"),
+        ],
+      },
+    );
+    const members = tbl("ts_org_members", [pk(), col("org_id", "bigint")], {
+      comment: "구성원",
+      fks: [fkTo("fk_members_org", "org_id", "ts_organizations")],
+    });
+    const r = generateErd(snap([contacts, orgs, details, members]), { lang: "ko" });
+    const lines = r.mermaid.split("\n").filter((l) => l.includes("||--"));
+    expect(lines).toEqual([
+      '    ts_organizations ||--o{ ts_org_details : "조직 상세 · 물리 FK"',
+      '    ts_organizations ||--o{ ts_org_members : "구성원 · 물리 FK"',
+      '    ts_personal_contacts ||--o{ ts_org_details : "조직 상세 · 물리 FK ×3"',
+    ]);
+    // FK 자동 인덱스(제약과 같은 이름)는 적지 않고, 코멘트가 대상을 말하면 참조 문구도 되풀이하지 않는다
+    expect(r.mermaid).toContain('bigint org_id FK "조직 ID. FK to ts_organizations.id"');
+    expect(r.mermaid).toContain('bigint contract_manager_contact_id FK "물리 FK -> personal_contacts.id"');
+    expect(r.stats.physicalFk).toBe(5);
+  });
+
+  it("id PK 의 코멘트가 'ID' 같은 되풀이면 비우고, 깨진 인코딩 코멘트는 되살린다", () => {
+    // 실제 장애 모양대로: UTF-8 바이트를 windows-1252 로 읽어 저장한 코멘트
+    const broken = new TextDecoder("windows-1252").decode(new TextEncoder().encode("마지막 변경 감지 시각"));
+    expect(broken).not.toBe("마지막 변경 감지 시각");
+    const t = tbl("ts_queue", [pk("id", "bigint"), col("changed_at", "datetime", { comment: broken })]);
+    t.columns[0].comment = "ID";
+    const r = generateErd(snap([t]), { lang: "ko" });
+    expect(r.mermaid).toContain("        bigint id PK\n");
+    expect(r.mermaid).toContain('datetime changed_at "마지막 변경 감지 시각"');
   });
 });
 
