@@ -1,5 +1,6 @@
 mod ai;
 mod auth;
+mod dbconn;
 mod detect;
 mod report;
 
@@ -328,6 +329,12 @@ pub fn run() {
             sql: include_str!("../migrations/0014_carry_snapshot.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 15,
+            description: "add_db_connections",
+            sql: include_str!("../migrations/0015_db_connections.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -427,7 +434,12 @@ pub fn run() {
             report::report_generate_weekly,
             report::detect_report_tools,
             report::report_mcp_servers,
-            report::report_gh_accounts
+            report::report_gh_accounts,
+            dbconn::db_secret_set,
+            dbconn::db_secret_delete,
+            dbconn::db_secret_exists,
+            dbconn::db_test,
+            dbconn::db_introspect
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

@@ -36,6 +36,9 @@ const tree = createVaultTree({
 
 export const listDiagramTree = tree.listTree;
 export const readDiagramFile = tree.readFile;
+export const readDiagramFileIfExists = tree.readFileIfExists;
+export const diagramFileExists = tree.fileExists;
+export const ensureDiagramDir = tree.ensureDir;
 export const writeDiagramFile = tree.writeFile;
 export const diagramMtime = tree.fileMtime;
 export const createFolder = tree.createFolder;

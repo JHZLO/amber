@@ -10,6 +10,7 @@ const ko = {
   "settings.tab.prompts": "프롬프트",
   "settings.tab.report": "데일리 리포트",
   "settings.tab.appearance": "모양",
+  "settings.tab.databases": "데이터베이스",
   "settings.openDataFolder": "데이터 폴더 열기",
   "settings.openFolderFail": "폴더 열기 실패: {err}",
 
@@ -124,6 +125,22 @@ const ko = {
   "settings.root.openDialogTitle": "작업 폴더 열기",
   "settings.root.copyPath": "경로 복사",
   "settings.root.copied": "복사됨",
+
+  // 데이터베이스 연결 관리 (DB 스키마 연동)
+  "settings.db.title": "데이터베이스 연결",
+  "settings.db.add": "연결 추가",
+  "settings.db.none":
+    "연결된 데이터베이스가 없어요. 연결하면 스키마별 ERD 가 다이어그램 탭에 자동으로 생겨요.",
+  "settings.db.schemas": "스키마 {n}",
+  "settings.db.folder": "폴더 {path}",
+  "settings.db.edit": "편집",
+  "settings.db.enterPassword": "비밀번호 입력",
+  "settings.db.deleteTitle": "연결 삭제",
+  "settings.db.deleteBody": "연결과 저장된 비밀번호를 지울까요? 다이어그램 파일은 그대로 남아요.",
+  "settings.db.hint":
+    "비밀번호는 macOS 키체인에만 저장돼요. 연결을 삭제하면 키체인 항목도 함께 지워지고, 생성된 다이어그램 파일은 남아요 — 폴더는 일반 폴더로 돌아가요.",
+  "settings.db.passwordTitle": "비밀번호 입력 — {name}",
+  "settings.db.passwordSaved": "저장했어요. 다음 동기화부터 이 비밀번호를 써요.",
 } as const;
 
 const en: Record<keyof typeof ko, string> = {
@@ -132,6 +149,7 @@ const en: Record<keyof typeof ko, string> = {
   "settings.tab.prompts": "Prompts",
   "settings.tab.report": "Daily report",
   "settings.tab.appearance": "Appearance",
+  "settings.tab.databases": "Databases",
   "settings.openDataFolder": "Open data folder",
   "settings.openFolderFail": "Couldn't open the folder: {err}",
 
@@ -241,6 +259,21 @@ const en: Record<keyof typeof ko, string> = {
   "settings.root.openDialogTitle": "Open a working folder",
   "settings.root.copyPath": "Copy path",
   "settings.root.copied": "Copied",
+
+  "settings.db.title": "Database connections",
+  "settings.db.add": "Add connection",
+  "settings.db.none":
+    "No databases connected. Connect one and an ERD per schema appears in the Diagrams tab automatically.",
+  "settings.db.schemas": "{n} schemas",
+  "settings.db.folder": "folder {path}",
+  "settings.db.edit": "Edit",
+  "settings.db.enterPassword": "Enter password",
+  "settings.db.deleteTitle": "Delete connection",
+  "settings.db.deleteBody": "Delete the connection and its saved password? Diagram files stay where they are.",
+  "settings.db.hint":
+    "Passwords live only in the macOS Keychain. Deleting a connection removes its Keychain item too; generated diagram files stay and the folder becomes a plain folder.",
+  "settings.db.passwordTitle": "Enter password — {name}",
+  "settings.db.passwordSaved": "Saved. The next sync uses this password.",
 } as const;
 
 export const settingsMessages = { ko, en };

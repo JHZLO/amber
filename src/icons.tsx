@@ -42,9 +42,32 @@ export type IconName =
   | "lightbulb"
   | "alert-triangle"
   | "alert-octagon"
-  | "scissors";
+  | "scissors"
+  | "database"
+  | "table"
+  | "key";
 
 const PATHS: Record<IconName, ReactNode> = {
+  // DB 연동 — 연결 폴더(database)·스키마 폴더(table)·키체인 표식(key). 폴더 아이콘과 나란히 서므로 획을 단순하게
+  database: (
+    <>
+      <ellipse cx="12" cy="5" rx="8" ry="3" />
+      <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
+      <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+    </>
+  ),
+  table: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 10h18M9 4v16" />
+    </>
+  ),
+  key: (
+    <>
+      <circle cx="7.5" cy="15.5" r="4.5" />
+      <path d="m10.5 12.5 9-9M15 6l3 3M18 3l3 3" />
+    </>
+  ),
   // 부분만 고쳐 쓰기 — 전문 재작성(sparkles)과 나란히 서므로 아이콘으로 갈라 준다
   scissors: (
     <>

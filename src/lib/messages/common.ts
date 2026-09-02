@@ -74,6 +74,20 @@ const ko = {
   "common.err.backup.path": "앱 데이터 폴더를 찾지 못했어요.",
   "common.err.trash.forbidden": "허용되지 않은 경로예요.",
   "common.err.trash.failed": "휴지통으로 옮기지 못했어요 — {detail}",
+  // DB 스키마 연동 — 원인별로 갈라 사용자가 무엇을 고쳐야 할지 바로 알게 한다
+  "common.err.db.refused":
+    "DB 에 연결할 수 없어요 — {detail}. 포트 포워딩·터널이 살아 있는지 확인하세요.",
+  "common.err.db.auth": "DB 인증에 실패했어요. 사용자·비밀번호를 확인하세요.",
+  "common.err.db.timeout": "DB 가 {detail}초 안에 응답하지 않았어요.",
+  "common.err.db.tls": "TLS 협상에 실패했어요 — {detail}",
+  "common.err.db.schemaDenied": "스키마를 읽을 수 없어요 — {detail}. 권한이 없거나 존재하지 않아요.",
+  "common.err.db.query": "DB 조회에 실패했어요 — {detail}",
+  "common.err.db.unsupported": "지원하지 않는 DB 종류예요 — {detail}",
+  "common.err.db.emptyField": "호스트·사용자·스키마 이름을 확인해 주세요.",
+  "common.err.db.emptyPassword": "비밀번호를 입력해 주세요.",
+  "common.err.keychain.denied": "macOS 키체인에 접근하지 못했어요 — {detail}",
+  "common.err.keychain.missing":
+    "저장된 비밀번호가 없어요. 연결 설정에서 비밀번호를 다시 입력해 주세요.",
 
   // 마크다운 알림 블록(`> [!NOTE]`) 라벨 — 모노톤이라 색이 아니라 이 라벨과 아이콘이 종류를 나른다
   "common.alert.note": "참고",
@@ -164,6 +178,19 @@ const en: Record<keyof typeof ko, string> = {
   "common.err.backup.path": "Couldn't locate the app data folder.",
   "common.err.trash.forbidden": "That path isn't allowed.",
   "common.err.trash.failed": "Couldn't move it to the Trash — {detail}",
+  "common.err.db.refused":
+    "Couldn't reach the database — {detail}. Check that your port-forward or tunnel is up.",
+  "common.err.db.auth": "Database sign-in failed. Check the user and password.",
+  "common.err.db.timeout": "The database didn't answer within {detail}s.",
+  "common.err.db.tls": "TLS negotiation failed — {detail}",
+  "common.err.db.schemaDenied": "Couldn't read the schema — {detail}. It doesn't exist or you lack access.",
+  "common.err.db.query": "The database query failed — {detail}",
+  "common.err.db.unsupported": "Unsupported database kind — {detail}",
+  "common.err.db.emptyField": "Check the host, user, and schema name.",
+  "common.err.db.emptyPassword": "Enter a password.",
+  "common.err.keychain.denied": "Couldn't access the macOS Keychain — {detail}",
+  "common.err.keychain.missing":
+    "No saved password. Enter the password again in the connection settings.",
 
   "common.alert.note": "Note",
   "common.alert.tip": "Tip",

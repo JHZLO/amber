@@ -55,6 +55,18 @@ export const CODE_KEY: Record<string, MsgKey> = {
   BACKUP_PATH: "common.err.backup.path",
   TRASH_FORBIDDEN: "common.err.trash.forbidden",
   TRASH_FAILED: "common.err.trash.failed",
+  // DB 스키마 연동 (dbconn.rs)
+  DB_REFUSED: "common.err.db.refused",
+  DB_AUTH: "common.err.db.auth",
+  DB_TIMEOUT: "common.err.db.timeout",
+  DB_TLS: "common.err.db.tls",
+  DB_SCHEMA_DENIED: "common.err.db.schemaDenied",
+  DB_QUERY: "common.err.db.query",
+  DB_UNSUPPORTED: "common.err.db.unsupported",
+  DB_EMPTY_FIELD: "common.err.db.emptyField",
+  DB_EMPTY_PASSWORD: "common.err.db.emptyPassword",
+  KEYCHAIN_DENIED: "common.err.keychain.denied",
+  KEYCHAIN_MISSING: "common.err.keychain.missing",
 };
 
 /** 어떤 예외든 화면에 쓸 한 줄로. 코드가 있으면 번역, 없으면 원문. */

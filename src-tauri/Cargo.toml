@@ -26,11 +26,17 @@ tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
-tokio = { version = "1", features = ["process", "io-util", "time", "rt", "macros"] }
+tokio = { version = "1", features = ["process", "io-util", "time", "rt", "macros", "sync"] }
 trash = "5"
 # AI CLI 자식 프로세스 취소·종료 정리용 kill(2). tokio 의 kill_on_drop 은 트레이 "종료"(process::exit)에서
 # Drop 이 안 돌아 발화하지 않는다.
 libc = "0.2"
+# DB 스키마 연동(dbconn.rs) — MySQL information_schema 를 읽기 전용으로 introspect 한다.
+# tauri-plugin-sql 이 이미 끌어온 sqlx 0.8 과 같은 계열이라 한 번만 컴파일된다
+# (다른 메이저를 고르면 sqlx 가 통째로 두 번 빌드된다). TLS 는 rustls — 시스템 OpenSSL 의존 없음.
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "mysql"] }
+# 접속 비밀번호는 macOS 키체인에만 — amber.db·파일·로그 어디에도 쓰지 않는다.
+keyring = { version = "3", features = ["apple-native"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-window-state = "2"
