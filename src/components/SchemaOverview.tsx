@@ -1,13 +1,13 @@
 // 스키마 개요 — 다이어그램 트리에서 연결의 스키마 폴더를 클릭했을 때 우측 pane.
-// 스냅샷(.schema.json)으로 그린다 — 연결이 끊긴 채로도 마지막 구조가 보인다.
+// 스냅샷(schema.json)으로 그린다 — 연결이 끊긴 채로도 마지막 구조가 보인다.
 // 주 행동은 하나: [전체 ERD 생성](없을 때) 또는 [ERD 열기](있을 때). 재생성은 ERD 화면의 변경 배너에서 한다.
 
 import { useMemo, useState } from "react";
-import { Spinner, timeAgo } from "../ui";
+import { Checkbox, Spinner, Tooltip, timeAgo } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { rootDisplayName } from "../lib/workspace";
-import { envLabel, schemaFolder, type DbConnection, type DbSchemaPref } from "../lib/dbconn";
+import { envLabel, prefAudit, schemaFolder, type DbConnection, type DbSchemaPref } from "../lib/dbconn";
 import { SNAPSHOT_FILE, formatHeaderTime, type SchemaSnapshot } from "../lib/schemaSnapshot";
 import { inferReferences } from "../lib/erdGen";
 
@@ -30,6 +30,7 @@ export function SchemaOverview({
   onSync,
   onGenerate,
   onOpenFull,
+  onToggleAudit,
 }: {
   conn: DbConnection;
   pref: DbSchemaPref;
@@ -40,7 +41,10 @@ export function SchemaOverview({
   onSync: () => void;
   onGenerate: () => void;
   onOpenFull: () => void;
+  /** 감사 테이블 포함 토글 — 값은 스키마 설정에 저장되고 생성·재생성이 따른다 */
+  onToggleAudit: (audit: boolean) => void;
 }) {
+  const audit = prefAudit(pref);
   const [query, setQuery] = useState("");
 
   const refs = useMemo(() => (snapshot ? inferReferences(snapshot) : null), [snapshot]);
@@ -89,6 +93,16 @@ export function SchemaOverview({
           </h1>
         </div>
         <span className="spacer" />
+        <Tooltip label={t("diagrams.db.audit.hint")}>
+          <span className={`db-audit-toggle ${syncing ? "disabled" : ""}`}>
+            <Checkbox
+              checked={audit}
+              onChange={() => !syncing && onToggleAudit(!audit)}
+              label={t("diagrams.db.audit.include")}
+            />
+            <span onClick={() => !syncing && onToggleAudit(!audit)}>{t("diagrams.db.audit.include")}</span>
+          </span>
+        </Tooltip>
         <button className="btn btn-sm" onClick={onSync} disabled={syncing}>
           <Icon name="refresh" size={14} />
           {syncing

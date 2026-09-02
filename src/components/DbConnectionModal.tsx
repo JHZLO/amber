@@ -21,6 +21,7 @@ import {
   envLabel,
   folderNameFor,
   getConnection,
+  listConnections,
   notifyConnectionsChanged,
   updateConnection,
   type DbConnection,
@@ -120,6 +121,10 @@ export function DbConnectionModal({
   const [test, setTest] = useState<DbTestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [prefs, setPrefs] = useState<DbSchemaPref[]>([]);
+  // 감사(_aud) 테이블 포함 — 새 연결의 기본값. 편집에선 사용자가 건드렸을 때만 스키마 전체에 다시 적용한다
+  // (스키마 개요에서 스키마별로 바꿔 둔 값을 모달이 조용히 덮지 않게).
+  const [includeAudit, setIncludeAudit] = useState(true);
+  const [auditTouched, setAuditTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [prodConfirm, setProdConfirm] = useState(false);
 
@@ -139,6 +144,8 @@ export function DbConnectionModal({
     setTest(null);
     setError(null);
     setPrefs(connection?.schemas ?? []);
+    setIncludeAudit(!(connection && connection.schemas.length > 0 && connection.schemas.every((p) => p.audit === false)));
+    setAuditTouched(false);
     setBusy(false);
     setProdConfirm(false);
   }, [open, connection]);
@@ -210,11 +217,23 @@ export function DbConnectionModal({
     setPrefs((prev) => prev.map((p) => (p.name === name ? { ...p, label } : p)));
   }
 
-  /** 새 연결 폴더 이름 — 같은 이름의 폴더가 있으면 -2, -3… 을 붙인다 */
+  /** 저장할 스키마 목록 — 새 연결이거나 체크를 건드렸으면 감사 포함 여부를 전체에 적용 */
+  function prefsToSave(): DbSchemaPref[] {
+    if (editing && !auditTouched) return prefs;
+    return prefs.map((p) => {
+      const { audit: _drop, ...rest } = p;
+      return includeAudit ? rest : { ...rest, audit: false };
+    });
+  }
+
+  /** 새 연결 폴더 이름 — 디스크의 폴더나 다른 연결의 folder_path 와 겹치면 -2, -3… 을 붙인다.
+   *  비교는 소문자로 — macOS 파일시스템은 대소문자를 구분하지 않는다. */
   async function pickFolder(): Promise<string> {
     const base = folderNameFor(name);
+    const taken = new Set((await listConnections()).map((c) => c.folder_path.toLowerCase()));
     let folder = base;
-    for (let i = 2; await diagramFileExists(folder); i++) folder = `${base}-${i}`;
+    for (let i = 2; taken.has(folder.toLowerCase()) || (await diagramFileExists(folder)); i++)
+      folder = `${base}-${i}`;
     return folder;
   }
 
@@ -237,7 +256,7 @@ export function DbConnectionModal({
           username,
           tls,
           // 테스트를 안 했으면 스키마 목록은 손대지 않는다(연결 없이 이름만 고치는 경로)
-          ...(test ? { schemas: prefs } : {}),
+          ...(test || auditTouched ? { schemas: prefsToSave() } : {}),
         });
         if (changePw && password) await dbSecretSet(connection.ulid, password);
         const fresh = await getConnection(connection.id);
@@ -254,7 +273,7 @@ export function DbConnectionModal({
           username,
           tls,
           folder_path: folder,
-          schemas: prefs,
+          schemas: prefsToSave(),
         });
         try {
           await dbSecretSet(saved.ulid, password);
@@ -504,6 +523,24 @@ export function DbConnectionModal({
                   );
                 })}
               </div>
+            </div>
+            <div className="db-audit-toggle" style={{ marginTop: 12 }}>
+              <Checkbox
+                checked={includeAudit}
+                onChange={() => {
+                  setIncludeAudit((v) => !v);
+                  setAuditTouched(true);
+                }}
+                label={t("diagrams.db.audit.modalLabel")}
+              />
+              <span
+                onClick={() => {
+                  setIncludeAudit((v) => !v);
+                  setAuditTouched(true);
+                }}
+              >
+                {t("diagrams.db.audit.modalLabel")}
+              </span>
             </div>
             <div className="field" style={{ marginTop: 14 }}>
               <label>{t("diagrams.db.folder.label")}</label>

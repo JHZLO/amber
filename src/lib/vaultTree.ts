@@ -286,7 +286,7 @@ export function createVaultTree(cfg: VaultTreeConfig) {
     return readTextFile(full(relPath), { baseDir: BASE });
   }
 
-  /** 있으면 본문, 없으면 null. 사이드카(.schema.json 등)처럼 '없을 수 있는' 파일용 — 예외로 흐름을 끊지 않는다 */
+  /** 있으면 본문, 없으면 null. 사이드카(schema.json 등)처럼 '없을 수 있는' 파일용 — 예외로 흐름을 끊지 않는다 */
   async function readFileIfExists(relPath: string): Promise<string | null> {
     if (!(await exists(full(relPath), { baseDir: BASE }))) return null;
     return readTextFile(full(relPath), { baseDir: BASE });

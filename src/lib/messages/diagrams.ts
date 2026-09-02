@@ -202,6 +202,9 @@ const ko = {
   "diagrams.db.regenerate": "다시 생성",
   "diagrams.db.fullErdFile": "전체 ERD",
   "diagrams.db.tree.syncHere": "이 스키마 동기화",
+  "diagrams.db.tree.syncing": "만드는 중…",
+  "diagrams.db.tree.queued": "대기 중",
+  "diagrams.db.tree.progress": "동기화 {done}/{total}",
   "diagrams.db.tree.overview": "스키마 개요",
   "diagrams.db.overview.stats": "테이블 {tables} · 컬럼 {columns}",
   "diagrams.db.overview.audit": "감사 테이블 {n}",
@@ -230,6 +233,14 @@ const ko = {
     "다시 생성은 새 소스를 편집 초안으로 넣어요. 파일은 ⌘S 로 저장할 때까지 그대로예요.",
   "diagrams.db.banner.upToDate": "DB 스키마와 같아요",
   "diagrams.db.meta.generated": "DB 에서 자동 생성 {time}",
+  "diagrams.db.delete.localOnly":
+    "DB 에는 아무 일도 일어나지 않아요. 이 폴더의 다이어그램과 스냅샷 파일만 휴지통으로 가고, 다음 동기화 때 폴더가 다시 만들어져요.",
+  "diagrams.db.delete.connection":
+    "연결 정보와 키체인에 저장된 비밀번호도 함께 지워요. DB 에는 아무 일도 일어나지 않아요.",
+  "diagrams.db.audit.include": "감사 테이블 포함",
+  "diagrams.db.audit.hint": "Envers *_aud 테이블과 revinfo 를 ERD 에 그려요. 끄면 도메인 테이블만 남아요.",
+  "diagrams.db.audit.modalLabel": "감사(_aud) 테이블을 ERD 에 포함",
+  "diagrams.db.banner.optionChanged": "감사 테이블 포함 설정이 바뀌었어요",
 } as const;
 
 const en: Record<keyof typeof ko, string> = {
@@ -420,6 +431,9 @@ const en: Record<keyof typeof ko, string> = {
   "diagrams.db.regenerate": "Regenerate",
   "diagrams.db.fullErdFile": "Full ERD",
   "diagrams.db.tree.syncHere": "Sync this schema",
+  "diagrams.db.tree.syncing": "Building…",
+  "diagrams.db.tree.queued": "Queued",
+  "diagrams.db.tree.progress": "Syncing {done}/{total}",
   "diagrams.db.tree.overview": "Schema overview",
   "diagrams.db.overview.stats": "{tables} tables · {columns} columns",
   "diagrams.db.overview.audit": "{n} audit tables",
@@ -447,6 +461,14 @@ const en: Record<keyof typeof ko, string> = {
     "Regenerate puts the new source into the editor as a draft. The file stays as-is until you save (⌘S).",
   "diagrams.db.banner.upToDate": "Matches the database schema",
   "diagrams.db.meta.generated": "generated from DB {time}",
+  "diagrams.db.delete.localOnly":
+    "Nothing happens to the database. Only this folder's diagrams and snapshot go to the Trash, and the folder comes back on the next sync.",
+  "diagrams.db.delete.connection":
+    "The connection profile and its Keychain password are removed too. Nothing happens to the database.",
+  "diagrams.db.audit.include": "Include audit tables",
+  "diagrams.db.audit.hint": "Draw Envers *_aud tables and revinfo in the ERD. Off keeps only the domain tables.",
+  "diagrams.db.audit.modalLabel": "Include audit (_aud) tables in ERDs",
+  "diagrams.db.banner.optionChanged": "The audit-table setting changed",
 } as const;
 
 export const diagramsMessages = { ko, en };

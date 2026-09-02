@@ -124,7 +124,7 @@ filesystem; only volatile metadata (card status, todos, settings) lives in SQLit
 └── vault/
     ├── concepts/<ulid>/index.md  # concept detail notes
     ├── notes/**/*.md             # notes (+ *.comments.json Q&A sidecars)
-    └── diagrams/**/*.mmd         # mermaid sources (+ <connection>/<schema>/.schema.json DB snapshots)
+    └── diagrams/**/*.mmd         # mermaid sources (+ <connection>/<schema>/schema.json DB snapshots)
 ```
 
 ## Install

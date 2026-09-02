@@ -7,20 +7,13 @@ import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import {
   DB_CONNECTIONS_EVENT,
-  dbSecretExists,
+  connStatus,
+  connStatusDot,
+  connStatusLabel,
   envLabel,
   listConnections,
   type DbConnection,
 } from "../lib/dbconn";
-
-type Status = "connected" | "failed" | "needsPassword" | "never";
-
-function statusOf(c: DbConnection, hasSecret: boolean): Status {
-  if (!hasSecret) return "needsPassword";
-  if (c.last_error) return "failed";
-  if (c.last_sync_at) return "connected";
-  return "never";
-}
 
 export function DbSettings({
   onAdd,
@@ -40,15 +33,9 @@ export function DbSettings({
   error?: string | null;
 }) {
   const [list, setList] = useState<DbConnection[] | null>(null);
-  const [secrets, setSecrets] = useState<Record<string, boolean>>({});
 
   const reload = useCallback(async () => {
-    const rows = await listConnections();
-    setList(rows);
-    const entries = await Promise.all(
-      rows.map(async (c) => [c.ulid, await dbSecretExists(c.ulid).catch(() => true)] as const),
-    );
-    setSecrets(Object.fromEntries(entries));
+    setList(await listConnections());
   }, []);
 
   useEffect(() => {
@@ -83,7 +70,7 @@ export function DbSettings({
       {list && list.length > 0 && (
         <div className="db-conn-list">
           {list.map((c) => {
-            const st = statusOf(c, secrets[c.ulid] ?? true);
+            const st = connStatus(c);
             return (
               <div key={c.id} className={`db-conn-row ${st === "needsPassword" ? "needs-pw" : ""}`}>
                 <Icon name={st === "needsPassword" ? "key" : "database"} size={16} className="db-conn-ico" />
@@ -100,23 +87,14 @@ export function DbSettings({
                 </div>
                 <div className="db-conn-side">
                   <div className="db-conn-status">
-                    {st !== "needsPassword" && (
-                      <span className={`db-dot ${st === "connected" ? "on" : ""}`} />
-                    )}
-                    {st === "connected" && (
-                      <>
-                        {t("diagrams.db.status.connected")}
-                        {c.last_sync_at && ` · ${t("diagrams.db.syncAgo", { ago: timeAgo(c.last_sync_at) })}`}
-                      </>
-                    )}
-                    {st === "failed" && (
-                      <>
-                        {t("diagrams.db.status.failed")}
-                        {c.last_sync_at && ` · ${t("diagrams.db.syncAgo", { ago: timeAgo(c.last_sync_at) })}`}
-                      </>
-                    )}
-                    {st === "never" && t("diagrams.db.status.never")}
-                    {st === "needsPassword" && t("diagrams.db.status.needsPassword")}
+                    {/* 점이 색으로 상태를 말하고 바로 옆 글자가 같은 것을 단어로 말한다 — 색만으로
+                        정보를 전하지 않는다(DESIGN §2 결과 색) */}
+                    <span className={`db-dot ${connStatusDot(st)}`} />
+                    {connStatusLabel(st)}
+                    {/* 마지막 시도 시각은 성공이든 실패든 '언제 기준의 상태인가'를 말해 준다 */}
+                    {(st === "connected" || st === "failed") &&
+                      c.last_sync_at &&
+                      ` · ${t("diagrams.db.syncAgo", { ago: timeAgo(c.last_sync_at) })}`}
                   </div>
                   <div className="db-conn-actions">
                     {st === "needsPassword" && (

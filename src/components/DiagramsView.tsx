@@ -46,14 +46,21 @@ import { SchemaOverview } from "./SchemaOverview";
 import { DiffView } from "./DiffView";
 import {
   DB_CONNECTIONS_EVENT,
+  connStatus,
+  connStatusDot,
+  connStatusLabel,
+  deleteConnection,
   enabledSchemas,
   envLabel,
   indexConnections,
   isStale,
   listConnections,
+  notifyConnectionsChanged,
+  prefAudit,
   readSnapshot,
   remapConnectionFolders,
   schemaFolder,
+  setSchemaAudit,
   syncSchema,
   type DbConnection,
   type DbSchemaPref,
@@ -122,10 +129,12 @@ export function DiagramsView({
   // 연결은 트리 안의 폴더다: folder_path 가 연결 폴더, 그 아래 스키마 폴더. 여기서는 경로로 알아본다.
   const [connections, setConnections] = useState<DbConnection[]>([]);
   const connIndex = useMemo(() => indexConnections(connections), [connections]);
-  // 스키마 폴더 경로 → .schema.json 스냅샷 (null = 아직 없음)
+  // 스키마 폴더 경로 → schema.json 스냅샷 (null = 아직 없음)
   const [snapByFolder, setSnapByFolder] = useState<Map<string, SchemaSnapshot | null>>(new Map());
   // 동기화 중인 스키마 폴더 — 트리 행 아이콘이 돈다
   const [syncing, setSyncing] = useState<Set<string>>(new Set());
+  // 자동 동기화 차례를 기다리는 스키마 폴더 — 트리 행에 "대기 중". 연결 폴더 행은 진행 n/N 을 보여준다
+  const [queued, setQueued] = useState<Set<string>>(new Set());
   const syncingRef = useRef<Set<string>>(new Set());
   // 이 세션에서 동기화로 알게 된 구조 변화 — 배너 문구의 재료(없으면 시각만 보여준다)
   const [diffByFolder, setDiffByFolder] = useState<Map<string, SchemaDiff>>(new Map());
@@ -190,9 +199,11 @@ export function DiagramsView({
   ): Promise<string> {
     const path = fullErdPath(conn, pref);
     if (!(await diagramFileExists(path))) {
+      const audit = prefAudit(pref);
       const { mermaid } = generateErd(snapshot, {
         lang: getLang(),
-        header: formatDbHeader(conn.name, pref.name, new Date(), snapshot.fingerprint),
+        audit,
+        header: formatDbHeader(conn.name, pref.name, new Date(), snapshot.fingerprint, { audit }),
       });
       await writeDiagramFile(path, mermaid);
       await reload();
@@ -237,17 +248,48 @@ export function DiagramsView({
   }
 
   /** 스냅샷이 없는 활성 스키마를 세션당 한 번 채운다 — 새 연결(설정에서 만든 것 포함)의 첫 동기화·첫 ERD */
+  /** 한 연결에서 동시에 읽는 스키마 수 — 터널 너머 왕복이 병목이라 셋이면 체감이 다르다(Rust 풀은 4) */
+  const SYNC_WORKERS = 3;
+
   async function autoSyncMissing(
     list: DbConnection[],
     snaps: Map<string, SchemaSnapshot | null>,
   ) {
     for (const conn of list) {
-      for (const pref of enabledSchemas(conn)) {
+      const todo = enabledSchemas(conn).filter((pref) => {
         const folder = schemaFolder(conn, pref.name);
-        if (snaps.get(folder) || attempted.current.has(folder)) continue;
-        attempted.current.add(folder);
-        await syncFolder(conn, pref, { generate: true });
-      }
+        return !snaps.get(folder) && !attempted.current.has(folder);
+      });
+      if (!todo.length) continue;
+      // 이 연결의 이번 세션 시도는 지금 전부 — 실패해도 이벤트마다 다시 두드리지 않는다(실측: 키체인
+      // 확인창이 스키마 수만큼 떴다). 사용자가 [동기화]로 다시 시도한다.
+      const folders = todo.map((p) => schemaFolder(conn, p.name));
+      for (const f of folders) attempted.current.add(f);
+      setQueued((q) => new Set([...q, ...folders]));
+      expandTo(conn.folder_path); // 진행이 보이게 연결 폴더를 펼친다
+
+      let failed = false;
+      const queue = [...todo];
+      const worker = async () => {
+        while (queue.length && !failed) {
+          const pref = queue.shift()!;
+          const folder = schemaFolder(conn, pref.name);
+          setQueued((q) => {
+            const n = new Set(q);
+            n.delete(folder);
+            return n;
+          });
+          const ok = await syncFolder(conn, pref, { generate: true });
+          // 접속·키체인 실패는 연결 단위의 사고다 — 남은 스키마는 이번엔 건너뛴다
+          if (!ok) failed = true;
+        }
+      };
+      await Promise.all(Array.from({ length: SYNC_WORKERS }, worker));
+      setQueued((q) => {
+        const n = new Set(q);
+        for (const f of folders) n.delete(f);
+        return n;
+      });
     }
   }
   const autoSyncRef = useRef(autoSyncMissing);
@@ -264,6 +306,21 @@ export function DiagramsView({
     window.addEventListener(DB_CONNECTIONS_EVENT, h);
     return () => window.removeEventListener(DB_CONNECTIONS_EVENT, h);
   }, [loadConnections]);
+
+  /** 감사 테이블 포함 토글 — 스키마 설정에 저장하고, 화면의 선택(pref)도 새 값으로 바꾼다.
+   *  열린 ERD 가 있으면 헤더의 표식과 달라져 변경 배너가 뜬다(다시 생성은 사용자가 고른다). */
+  async function toggleAudit(conn: DbConnection, pref: DbSchemaPref, audit: boolean) {
+    try {
+      await setSchemaAudit(conn, pref.name, audit);
+      const list = await listConnections();
+      setConnections(list);
+      const c2 = list.find((c) => c.id === conn.id);
+      const p2 = c2?.schemas.find((p) => p.name === pref.name);
+      if (c2 && p2) setSelectedSchema({ conn: c2, pref: p2 });
+    } catch (e) {
+      setDbError(errMsg(e));
+    }
+  }
 
   /** 스키마 폴더 클릭 → 우측에 스키마 개요. 스냅샷이 오래됐으면(10분) 한 번 다시 읽는다 */
   function doOpenSchema(conn: DbConnection, pref: DbSchemaPref) {
@@ -584,6 +641,22 @@ export function DiagramsView({
     setBusy(true);
     try {
       await deleteEntry(t.path);
+      // 연결 폴더(또는 그 조상)를 지우면 프로필도 함께 — 폴더가 곧 연결이다. 행만 남으면 같은 이름으로
+      // 다시 만들 때 folder_path UNIQUE 에 걸리고(실측), 설정에는 "폴더 없음" 유령이 남는다.
+      const orphaned = connections.filter(
+        (c) => c.folder_path === t.path || c.folder_path.startsWith(`${t.path}/`),
+      );
+      for (const c of orphaned) await deleteConnection(c);
+      if (orphaned.length) {
+        notifyConnectionsChanged();
+        await loadConnections();
+      }
+      if (
+        selectedSchema &&
+        schemaFolder(selectedSchema.conn, selectedSchema.pref.name).startsWith(t.path)
+      ) {
+        setSelectedSchema(null);
+      }
       if (
         selected &&
         (selected === t.path || selected.startsWith(`${t.path}/`))
@@ -636,7 +709,15 @@ export function DiagramsView({
             !!selectedSchema &&
             schemaFolder(selectedSchema.conn, selectedSchema.pref.name) === n.path;
           const isSyncing = !!schemaHit && syncing.has(n.path);
+          const isQueued = !!schemaHit && !isSyncing && queued.has(n.path);
           const schemaSnap = schemaHit ? snapByFolder.get(n.path) : undefined;
+          // 연결 행: 아래 스키마 중 돌고 있거나 기다리는 것이 있으면 n/N 진행
+          const connProgress = (() => {
+            if (!connHit) return null;
+            const all = enabledSchemas(connHit).map((p) => schemaFolder(connHit, p.name));
+            const active = all.filter((f) => syncing.has(f) || queued.has(f)).length;
+            return active ? { done: all.length - active, total: all.length } : null;
+          })();
           return (
             <div key={n.path} className="tree-branch">
               <div
@@ -695,13 +776,28 @@ export function DiagramsView({
                 {schemaHit?.pref.label && <span className="tree-sub">{schemaHit.pref.label}</span>}
                 {connHit && (
                   <span className="tree-count">
-                    <span
-                      className={`db-dot ${!connHit.last_error && connHit.last_sync_at ? "on" : ""}`}
-                    />
-                    {envLabel(connHit.env)}
+                    {connProgress ? (
+                      // 동기화가 도는 동안은 상태 점 대신 진행 — 사용자가 기다리는 이유가 여기 보인다
+                      t("diagrams.db.tree.progress", connProgress)
+                    ) : (
+                      <>
+                        {/* 트리 행에는 상태 글자가 들어갈 자리가 없어 점이 유일한 신호다 —
+                            색만으로 끝내지 않도록 툴팁이 같은 상태를 단어로 준다(DESIGN §2 결과 색) */}
+                        <Tooltip label={connStatusLabel(connStatus(connHit))}>
+                          <span className={`db-dot ${connStatusDot(connStatus(connHit))}`} />
+                        </Tooltip>
+                        {envLabel(connHit.env)}
+                      </>
+                    )}
                   </span>
                 )}
-                {schemaHit && schemaSnap && (
+                {schemaHit && isSyncing && (
+                  <span className="tree-count">{t("diagrams.db.tree.syncing")}</span>
+                )}
+                {schemaHit && isQueued && (
+                  <span className="tree-count">{t("diagrams.db.tree.queued")}</span>
+                )}
+                {schemaHit && !isSyncing && !isQueued && schemaSnap && (
                   <span className="tree-count">{schemaSnap.tables.length}</span>
                 )}
                 <span
@@ -800,13 +896,17 @@ export function DiagramsView({
     if (!hit) return null;
     const folder = schemaFolder(hit.conn, hit.pref.name);
     const snap = snapByFolder.get(folder) ?? null;
-    const stale = !!snap && hdr.fingerprint !== null && hdr.fingerprint !== snap.fingerprint;
+    const schemaChanged = !!snap && hdr.fingerprint !== null && hdr.fingerprint !== snap.fingerprint;
+    // 감사 테이블 포함 설정이 파일을 만들 때와 다르면 구조가 같아도 파일은 낡았다
+    const optionChanged = hdr.audit !== prefAudit(hit.pref);
     return {
       hdr,
       conn: hit.conn,
       pref: hit.pref,
       snap,
-      stale,
+      stale: schemaChanged || (!!snap && optionChanged),
+      schemaChanged,
+      optionChanged,
       diff: diffByFolder.get(folder) ?? null,
       syncing: syncing.has(folder),
     };
@@ -815,9 +915,13 @@ export function DiagramsView({
   /** 최신 스냅샷으로 다시 만든 소스 — [변경 보기]의 오른쪽, [다시 생성]의 초안 */
   function regeneratedSource(): string {
     if (!dbFile?.snap) return "";
+    const audit = prefAudit(dbFile.pref);
     return generateErd(dbFile.snap, {
       lang: getLang(),
-      header: formatDbHeader(dbFile.conn.name, dbFile.pref.name, new Date(), dbFile.snap.fingerprint),
+      audit,
+      header: formatDbHeader(dbFile.conn.name, dbFile.pref.name, new Date(), dbFile.snap.fingerprint, {
+        audit,
+      }),
     }).mermaid;
   }
 
@@ -947,6 +1051,7 @@ export function DiagramsView({
               );
             }}
             onOpenFull={() => openFile(fullErdPath(selectedSchema.conn, selectedSchema.pref))}
+            onToggleAudit={(audit) => void toggleAudit(selectedSchema.conn, selectedSchema.pref, audit)}
           />
         ) : selected ? (
           // 읽기/편집 모두 화면 높이 고정('editing' 레이아웃) — 캔버스가 남은 공간을 채우고 팬/줌
@@ -1038,9 +1143,13 @@ export function DiagramsView({
               <div className="db-banner">
                 <Icon name="database" size={14} />
                 <span>
-                  <b>{t("diagrams.db.banner.changed")}</b>
+                  <b>
+                    {dbFile.schemaChanged
+                      ? t("diagrams.db.banner.changed")
+                      : t("diagrams.db.banner.optionChanged")}
+                  </b>
                   {" · "}
-                  {dbFile.diff
+                  {dbFile.diff && dbFile.schemaChanged
                     ? t("diagrams.db.banner.detail", {
                         ta: dbFile.diff.tablesAdded.length,
                         tr: dbFile.diff.tablesRemoved.length,
@@ -1255,6 +1364,19 @@ export function DiagramsView({
             : t("diagrams.delete.bodyFile")}
           <br />
           {t("diagrams.delete.trashNote")}
+          {/* 연결·스키마 폴더는 "DB 를 지우나?" 하는 걱정이 따라온다 — 무엇이 지워지는지 그 자리에서 말한다 */}
+          {confirmDelete?.isDir && connIndex.byFolder.has(confirmDelete.path) && (
+            <>
+              <br />
+              {t("diagrams.db.delete.connection")}
+            </>
+          )}
+          {confirmDelete?.isDir && connIndex.schemaByFolder.has(confirmDelete.path) && (
+            <>
+              <br />
+              {t("diagrams.db.delete.localOnly")}
+            </>
+          )}
         </p>
       </Modal>
 
@@ -1346,8 +1468,15 @@ export function DiagramsView({
         open={dbModal.open}
         connection={dbModal.connection}
         onClose={() => setDbModal({ open: false, connection: null })}
-        onSaved={() => {
-          void loadConnections().then((r) => r && autoSyncRef.current(r.list, r.snaps));
+        onSaved={(c) => {
+          // 폴더는 모달이 이미 만들었다 — 먼저 트리에 보이고 펼친 뒤 동기화가 행마다 진행을 채운다
+          void (async () => {
+            await reload();
+            expandTo(c.folder_path);
+            setActiveDir(c.folder_path);
+            const r = await loadConnections();
+            if (r) await autoSyncRef.current(r.list, r.snaps);
+          })();
         }}
       />
 

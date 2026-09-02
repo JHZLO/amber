@@ -16,11 +16,6 @@
   --accent: #18181b;
   --accent-soft: #f4f4f5;
 
-  /* 시맨틱 토큰도 모두 그레이스케일 (어디서 쓰여도 모노톤 유지) */
-  --success: #18181b;
-  --success-soft: #f4f4f5;
-  --warning: #52525b;
-  --warning-soft: #f4f4f5;
   /* 파괴적 액션(삭제·버리고 이동 등)과 실패 상태는 모노톤 예외로 빨강 사용.
      danger=선/아이콘/테두리, danger-soft=배경 틴트, danger-text=틴트 위 본문(대비 확보용) */
   /* 마크다운 알림 블록 5종 — GitHub 팔레트와 같게(Paper 렌더러와 한 벌). 대비는 --bg 위
@@ -48,6 +43,15 @@
   --danger: #dc2626;
   --danger-soft: #fef2f2;
   --danger-text: #b91c1c;
+  /* 결과 3극 — 위 danger 와 한 벌 (DESIGN.md §2 '결과 색'). danger 와 같은 3종 구성:
+     기본=선/바/점(면적 작은 강조) · soft=배경 틴트 · text=그 틴트 위 본문.
+     새 색을 만들지 않는다 — 초록은 --alert-tip/--diff-add-fg 와 같은 값, 앰버는 --vacation 과 같은 값이다.
+     대비: success 5.08:1 · warning 4.92:1 on --surface (최악인 --surface-3 위에서도 4.19/4.06:1 로
+     그래픽 요소 기준 3:1 을 넉넉히 넘는다), success-text 6.81:1 on --success-soft. */
+  --success: #1a7f37;
+  --success-soft: #f0fdf4;
+  --success-text: #166534;
+  --warning: #a16207;
   /* 달력 주말·공휴일 — 모노톤 예외 2 (DESIGN.md §2). 한국 달력의 일=빨강/토=파랑 관례는
      장식이 아니라 '쉬는 날' 을 읽는 문법이라, 흑백으로는 대체할 수 없어 색을 쓴다.
      danger 와 토큰을 나눈 이유: 빨강이 '실패' 로 읽히면 안 된다(뜻이 다른 두 신호).
@@ -132,6 +136,12 @@
   --danger: #f87171;
   --danger-soft: #2b1a1c;
   --danger-text: #fca5a5;
+  /* 다크는 다른 예외들과 같은 방식 — 채도를 낮추고 밝기를 올린다.
+     10.37:1(success) · 12.53:1(warning) on --surface, success-text 10.98:1 on --success-soft */
+  --success: #4ade80;
+  --success-soft: #13291d;
+  --success-text: #86efac;
+  --warning: #fcd34d;
   /* 다크에선 채도를 낮추고 밝기를 올린다 (9.4~10.2:1 on --bg, 선택 원 위 6.9:1 이상) */
   --cal-sun: #fca5a5;
   --cal-sat: #93b4ff;
@@ -1166,7 +1176,8 @@ body.resizing-col .pane-resizer::after {
   gap: 12px;
   text-align: center;
 }
-/* 상태 메시지: 좌측 바 + 옅은 배경. 성공은 무채색, 실패는 --danger 계열로 구분한다(§3) */
+/* 결과 알림: 좌측 바 + 옅은 배경. 방금 누른 것의 답이라 성공·실패 둘 다 색을 갖는다(§2 결과 색).
+   기본형(무채색)은 결과가 아닌 알림용으로 남겨 둔다 — 색은 .ok-note/.error-note 가 얹는다. */
 .error-note,
 .ok-note {
   background: var(--surface-2);
@@ -1177,6 +1188,11 @@ body.resizing-col .pane-resizer::after {
   padding: 10px 12px;
   font-size: 13px;
   white-space: pre-wrap;
+}
+.ok-note {
+  background: var(--success-soft);
+  color: var(--success-text);
+  border-left-color: var(--success);
 }
 .error-note {
   background: var(--danger-soft);
@@ -5446,7 +5462,8 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   .modal,
   .tip,
   .error-note,
-  .ok-note {
+  .ok-note,
+  .db-dot.ok {
     animation: none;
   }
   .btn:active:not(:disabled),
@@ -5479,19 +5496,42 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   border-color: var(--primary-bg);
 }
 
-/* 연결 상태 점 — 채움=마지막 시도 성공, 아웃라인=실패/미동기화 (DESIGN §3 채움/아웃라인 문법) */
+/* 연결 상태 점 — 채움/아웃라인(§3)에 색(§2 결과 색)을 얹은 2중 채널.
+   채움 여부가 '연결됐나'를, 색이 '안 됐다면 왜'를 말한다. 색맹 환경에서도 채움만으로 연결
+   여부가 읽히고, 정확한 단어는 옆의 상태 글자(설정)나 툴팁(트리)이 갖는다.
+   기본형 = 동기화 전(무채색 아웃라인 — 아직 아무 결과도 없는 상태). */
 .db-dot {
   display: inline-block;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   border: 1.5px solid var(--text-3);
   background: transparent;
   flex-shrink: 0;
 }
-.db-dot.on {
-  background: var(--text);
-  border-color: var(--text);
+/* 연결됨 점만 천천히 숨 쉰다 — '지금 살아 있는 연결'과 '마지막에 성공했던 흔적'을 가르는 신호다.
+   실패·주의·동기화 전 점은 움직이지 않는다(아무 일도 일어나고 있지 않은 상태다) — 모션 자체가
+   채움·색에 이은 세 번째 채널이 된다. §9 의 0.3s 상한 예외: 사용자를 기다리게 하는 전이가 아니라
+   상시 주기 모션이라 느릴수록 조용하다. 진폭은 7px→8.5px 로, 곁눈에는 안 걸리고 볼 때만 보인다. */
+@keyframes db-dot-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.22);
+  }
+}
+.db-dot.ok {
+  background: var(--success);
+  border-color: var(--success);
+  animation: db-dot-breathe 2.6s ease-in-out infinite;
+}
+.db-dot.warn {
+  border-color: var(--warning);
+}
+.db-dot.bad {
+  border-color: var(--danger);
 }
 
 /* --- 연결 모달 --- */
@@ -5767,6 +5807,24 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   background: var(--surface);
 }
 
+/* 감사 테이블 포함 토글 — Checkbox primitive + 라벨, 헤더 버튼들과 한 줄 */
+.db-audit-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.db-audit-toggle.disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* --- 변경 감지 배너 (연동 ERD 위) — 정보이지 경고가 아니라 surface-2, 색 없음 --- */
 .db-banner {
   display: flex;
@@ -5828,11 +5886,17 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   border-radius: 8px;
   background: var(--surface);
 }
+/* 비밀번호 필요 — 사용자가 손을 대야 끝나는 유일한 상태라 행 전체가 표식이다(점선 + 주의색 테두리).
+   테두리·아이콘처럼 면적이 작은 곳에만 색을 쓴다(§2) — 배경은 칠하지 않는다. */
 .db-conn-row.needs-pw {
   border-style: dashed;
+  border-color: var(--warning);
 }
 .db-conn-ico {
   color: var(--text-2);
+}
+.db-conn-row.needs-pw .db-conn-ico {
+  color: var(--warning);
 }
 .db-conn-main {
   min-width: 0;

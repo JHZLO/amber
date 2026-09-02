@@ -1,6 +1,6 @@
 // DB 연동 — 연결 프로필(SQLite `db_connections`) · Rust 커맨드 래퍼 · 스냅샷 파일 · 동기화.
 //
-// 분담(DESIGN §11): 프로필은 SQLite, 스키마 구조는 스키마 폴더의 `.schema.json`, 비밀번호는 키체인(Rust).
+// 분담(DESIGN §11): 프로필은 SQLite, 스키마 구조는 스키마 폴더의 `schema.json`, 비밀번호는 키체인(Rust).
 // 프론트는 비밀번호를 저장 순간 한 번 Rust 로 넘기고 그 뒤로는 모른다 — 여기 어떤 함수도 비밀번호를
 // 돌려주지 않는다. 순수 계산(지문·비교·헤더)은 lib/schemaSnapshot.ts, mermaid 생성은 lib/erdGen.ts.
 
@@ -29,7 +29,11 @@ export interface DbSchemaPref {
   name: string;
   label: string;
   enabled: boolean;
+  /** ERD 에 감사 테이블(*_aud·revinfo)을 그리는가. 없으면 true (하우스 스타일 기본) */
+  audit?: boolean;
 }
+
+export const prefAudit = (p: DbSchemaPref): boolean => p.audit !== false;
 
 /** db_connections 한 행 (schemas_json 은 풀어서 담는다) */
 export interface DbConnection {
@@ -94,7 +98,12 @@ function parseSchemas(json: string): DbSchemaPref[] {
     if (!Array.isArray(arr)) return [];
     return arr
       .filter((s): s is DbSchemaPref => s && typeof s.name === "string")
-      .map((s) => ({ name: s.name, label: String(s.label ?? ""), enabled: s.enabled !== false }));
+      .map((s) => ({
+        name: s.name,
+        label: String(s.label ?? ""),
+        enabled: s.enabled !== false,
+        ...(s.audit === false ? { audit: false } : {}),
+      }));
   } catch {
     return [];
   }
@@ -246,10 +255,6 @@ export function dbSecretDelete(ulid: string): Promise<void> {
   return invoke("db_secret_delete", { ulid });
 }
 
-export function dbSecretExists(ulid: string): Promise<boolean> {
-  return invoke<boolean>("db_secret_exists", { ulid });
-}
-
 // ---- 폴더 · 스냅샷 파일 ----
 
 export const schemaFolder = (c: DbConnection, schema: string) => `${c.folder_path}/${schema}`;
@@ -280,7 +285,7 @@ export interface SyncResult {
   diff: SchemaDiff | null;
 }
 
-/** 스키마 하나를 DB 에서 다시 읽어 `.schema.json` 을 갱신한다. 파일(ERD)은 건드리지 않는다 —
+/** 스키마 하나를 DB 에서 다시 읽어 `schema.json` 을 갱신한다. 파일(ERD)은 건드리지 않는다 —
  *  ERD 는 사용자가 [다시 생성] 으로 초안을 받아 ⌘S 할 때만 바뀐다. */
 export async function syncSchema(c: DbConnection, schema: string): Promise<SyncResult> {
   const previous = await readSnapshot(c, schema);
@@ -298,6 +303,16 @@ export async function syncSchema(c: DbConnection, schema: string): Promise<SyncR
 
 export function enabledSchemas(c: DbConnection): DbSchemaPref[] {
   return c.schemas.filter((s) => s.enabled);
+}
+
+/** 스키마 하나의 감사 테이블 포함 여부를 바꿔 저장한다 (true 는 기본값이라 키를 지운다) */
+export async function setSchemaAudit(c: DbConnection, schema: string, audit: boolean): Promise<void> {
+  const schemas = c.schemas.map((p) => {
+    if (p.name !== schema) return p;
+    const { audit: _drop, ...rest } = p;
+    return audit ? rest : { ...rest, audit: false };
+  });
+  await updateConnection(c.id, { schemas });
 }
 
 /** 트리가 폴더 경로로 연결·스키마를 알아보기 위한 색인 */
@@ -324,6 +339,40 @@ export function envLabel(env: DbEnv): string {
     : env === "staging"
       ? t("diagrams.db.env.staging")
       : t("diagrams.db.env.dev");
+}
+
+// ---- 연결 상태 ----
+//
+// 설정 목록과 다이어그램 트리가 같은 판정·같은 색을 쓰도록 여기 한 곳에 둔다(둘이 갈리면 같은 연결이
+// 화면마다 다른 상태로 보인다). 키체인을 읽어 비밀번호 존재를 확인하지 않는다 — 읽기 자체가 macOS
+// 확인창을 띄운다. 동기화가 KEYCHAIN_MISSING 으로 실패한 흔적(last_error)으로 "비밀번호 필요"를 안다.
+
+export type DbConnStatus = "connected" | "failed" | "needsPassword" | "never";
+
+export function connStatus(c: DbConnection): DbConnStatus {
+  if (c.last_error === "KEYCHAIN_MISSING") return "needsPassword";
+  if (c.last_error) return "failed";
+  if (c.last_sync_at) return "connected";
+  return "never";
+}
+
+const STATUS_KEY = {
+  connected: "diagrams.db.status.connected",
+  failed: "diagrams.db.status.failed",
+  needsPassword: "diagrams.db.status.needsPassword",
+  never: "diagrams.db.status.never",
+} as const;
+
+export function connStatusLabel(st: DbConnStatus): string {
+  return t(STATUS_KEY[st]);
+}
+
+/** 상태 점(`.db-dot`)의 수식 클래스 — 채움=연결됨, 색=안 됐다면 왜. 동기화 전은 무채색 기본형이라 빈 문자열 */
+export function connStatusDot(st: DbConnStatus): string {
+  if (st === "connected") return "ok";
+  if (st === "needsPassword") return "warn";
+  if (st === "failed") return "bad";
+  return "";
 }
 
 /** 연결 이름 → 폴더 이름. 경로 구분자·선행 점만 걸러낸다(폴더 규칙은 vaultTree.invalidNameReason 이 정본) */

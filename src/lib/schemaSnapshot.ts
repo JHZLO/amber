@@ -1,5 +1,5 @@
 // DB 연동 — 스키마 스냅샷의 형태와 그 위의 순수 연산(지문·비교·연동 헤더).
-// Rust `dbconn.rs` 의 `db_introspect` 가 돌려주는 JSON 과 1:1 이고, 스키마 폴더의 `.schema.json`
+// Rust `dbconn.rs` 의 `db_introspect` 가 돌려주는 JSON 과 1:1 이고, 스키마 폴더의 `schema.json`
 // 에 그대로 저장된다. I/O(파일·SQLite·invoke)는 lib/dbconn.ts, mermaid 생성은 lib/erdGen.ts.
 //
 // 왜 파일로 남기나: 변경 감지의 기준이자, 연결이 끊긴 채로도 스키마 개요를 그릴 재료다.
@@ -66,8 +66,10 @@ export interface SchemaSnapshot {
   tables: SnapshotTable[];
 }
 
-/** 스키마 폴더 안의 스냅샷 파일명. 점으로 시작해 트리(vaultTree)에 보이지 않는다 */
-export const SNAPSHOT_FILE = ".schema.json";
+/** 스키마 폴더 안의 스냅샷 파일명. 트리(vaultTree)는 .mmd 만 보이므로 여기 뜨지 않는다.
+ *  점으로 시작하지 않는 이유: tauri-plugin-fs 스코프는 `**` 가 dotfile 을 매치하지 않아(requireLiteralLeadingDot)
+ *  `.schema.json` 은 exists/write 가 "forbidden path" 로 거부된다 — 실측. */
+export const SNAPSHOT_FILE = "schema.json";
 
 /** Rust 가 돌려주는 형태 — 지문은 프론트가 계산해 붙인다 */
 export type RawSnapshot = Omit<SchemaSnapshot, "amber" | "fingerprint">;
@@ -113,7 +115,7 @@ export function finalizeSnapshot(raw: RawSnapshot): SchemaSnapshot {
   return { amber: 1, ...raw, fingerprint: fingerprintOf(raw.tables) };
 }
 
-/** `.schema.json` 본문 → 스냅샷. 형태가 어긋나면 null (깨진 파일은 '없는 것'으로 친다) */
+/** `schema.json` 본문 → 스냅샷. 형태가 어긋나면 null (깨진 파일은 '없는 것'으로 친다) */
 export function parseSnapshot(json: string): SchemaSnapshot | null {
   try {
     const v = JSON.parse(json) as Partial<SchemaSnapshot>;
@@ -194,12 +196,14 @@ export function diffIsEmpty(d: SchemaDiff): boolean {
 //
 // 자동 생성 파일의 두 번째 줄(erDiagram 다음)에 남는 출처 표식. 앱은 이 줄로 "DB 연동 파일"을
 // 알아보고(동기화 버튼·변경 배너), 사람은 파일만 봐도 어디서 언제 왔는지 안다.
-//   %% amber:db dev/svc_booking · 2026-09-02 09:41 · 3f9a1c0b2d4e5f
-// 마지막 토막은 생성 당시 스냅샷의 지문 — `.schema.json` 의 지문과 다르면 "DB 가 그 뒤 바뀌었다"는
-// 뜻이라, 연결이 끊긴 채로도 파일이 낡았는지 판정할 수 있다.
+//   %% amber:db dev/svc_booking · 2026-09-02 09:41 · 3f9a1c0b2d4e5f[ · noaud]
+// 지문 토막은 생성 당시 스냅샷의 지문 — `schema.json` 의 지문과 다르면 "DB 가 그 뒤 바뀌었다"는
+// 뜻이라, 연결이 끊긴 채로도 파일이 낡았는지 판정할 수 있다. `noaud` 는 감사 테이블(*_aud·revinfo)을
+// 빼고 그렸다는 표식 — 옵션이 바뀌면 지문이 같아도 파일은 낡은 것이다.
 // 연결 이름엔 공백이 올 수 있어 스키마는 뒤에서 잡는다(스키마 이름엔 공백·슬래시가 없다).
 
-const DB_HEADER_RE = /^\s*%% amber:db (.+)\/([^\s/]+) · (\d{4}-\d{2}-\d{2} \d{2}:\d{2})(?: · ([0-9a-f]+))?\s*$/;
+const DB_HEADER_RE =
+  /^\s*%% amber:db (.+)\/([^\s/]+) · (\d{4}-\d{2}-\d{2} \d{2}:\d{2})(?: · ([0-9a-f]+))?(?: · (noaud))?\s*$/;
 
 export interface DbHeader {
   connection: string;
@@ -207,6 +211,13 @@ export interface DbHeader {
   generatedAt: string;
   /** 생성 당시 스냅샷 지문. 구버전 헤더엔 없다 */
   fingerprint: string | null;
+  /** 감사 테이블(*_aud·revinfo)을 포함해 그렸는가 */
+  audit: boolean;
+}
+
+export interface DbHeaderOptions {
+  /** false 면 ` · noaud` 표식을 붙인다 */
+  audit?: boolean;
 }
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -221,15 +232,24 @@ export function formatDbHeader(
   schema: string,
   at: Date,
   fingerprint: string,
+  opts: DbHeaderOptions = {},
 ): string {
-  return `    %% amber:db ${connection}/${schema} · ${formatHeaderTime(at)} · ${fingerprint}`;
+  const flag = opts.audit === false ? " · noaud" : "";
+  return `    %% amber:db ${connection}/${schema} · ${formatHeaderTime(at)} · ${fingerprint}${flag}`;
 }
 
 /** 소스 앞머리(5줄)에서 연동 헤더를 찾는다. 없으면 null = 손으로 만든 다이어그램 */
 export function parseDbHeader(source: string): DbHeader | null {
   for (const line of source.split("\n", 5)) {
     const m = DB_HEADER_RE.exec(line);
-    if (m) return { connection: m[1], schema: m[2], generatedAt: m[3], fingerprint: m[4] ?? null };
+    if (m)
+      return {
+        connection: m[1],
+        schema: m[2],
+        generatedAt: m[3],
+        fingerprint: m[4] ?? null,
+        audit: m[5] !== "noaud",
+      };
   }
   return null;
 }
