@@ -27,6 +27,9 @@ export interface ErdGenOptions {
   header?: string | null;
   /** 그릴 테이블 부분집합. null = 전부. 짝이 되는 `*_aud` 와 `revinfo` 는 있으면 자동으로 딸려온다 */
   tables?: string[] | null;
+  /** 감사 테이블(`*_aud`·`revinfo`)을 그리는가. 기본 true — 하우스 스타일은 맨 뒤에 축약해 싣는다.
+   *  false 면 도메인 테이블만 남고 `revinfo ||..o{` 관계선도 없다 */
+  audit?: boolean | null;
 }
 
 export interface RefEdge {
@@ -292,11 +295,11 @@ interface Ctx {
   schema: string;
   prefix: string;
   drawn: Set<string>;
-  /** `${from} ${fromColumn}` → 그 컬럼의 관계(정렬 순서상 첫 번째) */
+  /** `${from}\u0000${fromColumn}` → 그 컬럼의 관계(정렬 순서상 첫 번째) */
   edgeOf: Map<string, RefEdge>;
 }
 
-const edgeKey = (table: string, column: string): string => `${table} ${column}`;
+const edgeKey = (table: string, column: string): string => `${table}\u0000${column}`;
 
 const ENC_RE = /암호화|encrypt|enc\b/i;
 const SENSITIVE_NAME_RE = /(name|phone|mobile|email|birth|passport|doc_id|ssn|card_no|address)/i;
@@ -458,6 +461,9 @@ export function generateErd(snapshot: SchemaSnapshot, opts: ErdGenOptions): ErdG
     for (const n of opts.tables) if (byName.has(n)) drawn.add(n);
     for (const n of [...drawn]) if (byName.has(`${n}_aud`)) drawn.add(`${n}_aud`);
     if (revinfoName && [...drawn].some(isAudit)) drawn.add(revinfoName);
+  }
+  if (opts.audit === false) {
+    for (const n of [...drawn]) if (isAudit(n) || isRevinfo(n)) drawn.delete(n);
   }
 
   const edgeOf = new Map<string, RefEdge>();

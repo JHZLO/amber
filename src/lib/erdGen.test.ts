@@ -351,6 +351,26 @@ describe("generateErd — 부분집합", () => {
   });
 });
 
+describe("generateErd — 감사 테이블 제외", () => {
+  it("audit: false 면 *_aud·revinfo 블록과 Envers 관계선이 사라지고 도메인만 남는다", () => {
+    const r = generateErd(snap(FIXTURE), { lang: "ko", audit: false });
+    expect(r.mermaid).not.toContain("_aud");
+    expect(r.mermaid).not.toContain("revinfo");
+    expect(r.mermaid).not.toContain("Envers");
+    expect(r.stats.auditTables).toBe(0);
+    expect(r.stats.tables).toBe(FIXTURE.filter((t) => !t.name.endsWith("_aud") && t.name !== "revinfo").length);
+    // 도메인 관계선과 블록은 그대로
+    expect(r.mermaid).toContain('ts_booking_payment ||--o{ ts_booking_refund : "환불 · 물리 FK"');
+    expect(r.mermaid).toContain("    ts_booking {");
+  });
+
+  it("부분집합과 함께 써도 감사 테이블은 딸려오지 않는다", () => {
+    const r = generateErd(snap(FIXTURE), { lang: "ko", tables: ["ts_booking"], audit: false });
+    expect(r.mermaid).not.toContain("ts_booking_aud");
+    expect(r.stats).toEqual({ tables: 1, auditTables: 0, physicalFk: 0, logicalRefs: 0, unresolvedRefs: 1 });
+  });
+});
+
 describe("inferReferences", () => {
   it("픽스처에서 물리 1 + 논리 4, user_id 는 unresolved", () => {
     const { edges, unresolved } = inferReferences(snap(FIXTURE));
