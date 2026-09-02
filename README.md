@@ -29,7 +29,7 @@
   under docs/assets/ autoplays and loops instead, but is capped at 10 MB too.
 -->
 <p align="center">
-  <img src="docs/assets/hero.png" alt="Amber — markdown notes with inline AI Q&A" width="960" />
+  <img src="docs/assets/hero.png" alt="Amber — a markdown note with an inline AI question thread open" width="960" />
 </p>
 
 ## At a glance
@@ -106,7 +106,7 @@ changed the file while you had it open, Amber tells you before overwriting.
 
 </td>
 <td width="50%">
-  <img src="docs/assets/notes.png" alt="Markdown notes with TOC and mermaid" width="100%" />
+  <img src="docs/assets/notes.png" alt="Markdown note in edit mode with the live preview beside the source" width="100%" />
 </td>
 </tr>
 <tr>
@@ -127,11 +127,11 @@ the column notes.
 
 </td>
 <td width="50%">
-  <img src="docs/assets/diagrams.png" alt="Mermaid diagram canvas" width="100%" />
+  <img src="docs/assets/diagrams.png" alt="ERD on the canvas with one table focused and its column card open" width="100%" />
 </td>
 </tr>
 <tr>
-<td colspan="2" valign="middle">
+<td width="50%" valign="middle">
 
 ### 🗄️ Database → ERD sync
 
@@ -150,6 +150,9 @@ draft you save with `⌘S`; nothing is overwritten silently. Production connecti
 shows as a live green dot in the tree and in *Settings › Databases*.
 
 </td>
+<td width="50%">
+  <img src="docs/assets/db-sync.png" alt="A MySQL connection synced into the diagram tree, with the schema-drift banner over a generated ERD" width="100%" />
+</td>
 </tr>
 <tr>
 <td width="50%" valign="middle">
@@ -167,7 +170,7 @@ the next free slot with one click.
 
 </td>
 <td width="50%">
-  <img src="docs/assets/todo.png" alt="Todos with calendar and timetable" width="100%" />
+  <img src="docs/assets/todo.png" alt="A day of nested to-dos beside the calendar and a time-blocked timetable" width="100%" />
 </td>
 </tr>
 <tr>
