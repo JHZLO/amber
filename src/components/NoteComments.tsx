@@ -113,11 +113,16 @@ export function NoteCommentLayer({
   onCountChange,
   onPromote,
   onEditSpan,
+  active = true,
 }: {
   noteRel: string;
   body: string;
   containerRef: RefObject<HTMLDivElement | null>;
   config: AppConfig | null;
+  /** 필기노트 섹션이 화면에 있는가. 이 레이어는 body 로 portal 되므로 섹션을 숨기는
+   *  `.section-wrap.hidden` 이 닿지 않는다 — 다른 탭 위에 "질문 N" 트리거가 떠 있었다(실측).
+   *  꺼져 있으면 그리지 않되 마운트는 유지해 열어 둔 스레드·목록 상태를 잃지 않는다. */
+  active?: boolean;
   onCountChange?: (n: number) => void;
   /** 선택 영역을 개념으로 승격 (NotesView 가 모달을 연다). 선택 텍스트를 넘긴다 */
   onPromote?: (selection: string) => void;
@@ -701,6 +706,8 @@ export function NoteCommentLayer({
         ...(viewComment.followUps ?? []),
       ]
     : [];
+
+  if (!active) return null;
 
   return createPortal(
     <>

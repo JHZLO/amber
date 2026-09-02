@@ -965,6 +965,7 @@ export function NotesView({
                 {/* 드래그 → 질문(AI 답변) / 개념으로(승격). 본문 밖 사이드카에 저장 */}
                 <NoteCommentLayer
                   key={selected}
+                  active={active}
                   noteRel={selected}
                   body={body}
                   containerRef={mdRef}
