@@ -580,8 +580,10 @@ export function Select<T extends string>({
 
   return (
     <div className={`select ${block ? "block" : ""}`} ref={rootRef}>
+      {/* type="button" — <form> 안에서 쓰이면 기본값(submit)이라 열 때마다 폼이 제출된다(DB 연결 모달에서 실측) */}
       <button
         ref={triggerRef}
+        type="button"
         className={`select-trigger ${cur ? "" : "select-empty"}`}
         role="combobox"
         aria-haspopup="listbox"
@@ -628,6 +630,7 @@ export function Select<T extends string>({
             {options.map((o, i) => (
               <button
                 key={o.value}
+                type="button"
                 role="option"
                 aria-selected={o.value === value}
                 className={`select-item ${o.value === value ? "active" : ""} ${
