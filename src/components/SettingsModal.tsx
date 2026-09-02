@@ -34,6 +34,14 @@ import { Modal, Select, Spinner, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { ReportSettings } from "./ReportSettings";
 import { AiAuthModal } from "./AiAuthModal";
+import { DbSettings } from "./DbSettings";
+import { DbConnectionModal } from "./DbConnectionModal";
+import {
+  dbSecretSet,
+  deleteConnection,
+  notifyConnectionsChanged,
+  type DbConnection,
+} from "../lib/dbconn";
 
 const THEMES: { id: ThemePref; label: string }[] = [
   { id: "system", label: t("settings.theme.system") },
@@ -48,11 +56,12 @@ const LANGS: { id: Lang; label: string }[] = [
 ];
 
 // 설정 카테고리 탭 — 한 화면에 다 쌓지 않고 갈래로 나눈다
-type SetTab = "ai" | "prompts" | "report" | "appearance";
+type SetTab = "ai" | "prompts" | "report" | "databases" | "appearance";
 const SETTING_TABS: { id: SetTab; label: string }[] = [
   { id: "ai", label: t("settings.tab.ai") },
   { id: "prompts", label: t("settings.tab.prompts") },
   { id: "report", label: t("settings.tab.report") },
+  { id: "databases", label: t("settings.tab.databases") },
   { id: "appearance", label: t("settings.tab.appearance") },
 ];
 
@@ -83,6 +92,50 @@ export function SettingsModal({
 
   const [theme, setTheme] = useState<ThemePref>("system");
   const [tab, setTab] = useState<SetTab>("ai");
+
+  // 데이터베이스 탭 — 추가/편집/삭제/비밀번호 모달은 설정 모달의 형제로 띄운다(Modal 은 portal 이 아니다)
+  const [dbModal, setDbModal] = useState<{ open: boolean; connection: DbConnection | null }>({
+    open: false,
+    connection: null,
+  });
+  const [dbDelete, setDbDelete] = useState<DbConnection | null>(null);
+  const [dbPw, setDbPw] = useState<DbConnection | null>(null);
+  const [dbPwValue, setDbPwValue] = useState("");
+  const [dbPwBusy, setDbPwBusy] = useState(false);
+  const [dbPwError, setDbPwError] = useState<string | null>(null);
+  const [dbError, setDbError] = useState<string | null>(null);
+  const [dbRefresh, setDbRefresh] = useState(0);
+
+  async function removeDbConnection() {
+    const c = dbDelete;
+    if (!c) return;
+    try {
+      await deleteConnection(c);
+      notifyConnectionsChanged();
+      setDbRefresh((n) => n + 1);
+      setDbError(null);
+    } catch (e) {
+      setDbError(errText(e));
+    } finally {
+      setDbDelete(null);
+    }
+  }
+
+  async function saveDbPassword() {
+    if (!dbPw || !dbPwValue || dbPwBusy) return;
+    setDbPwBusy(true);
+    setDbPwError(null);
+    try {
+      await dbSecretSet(dbPw.ulid, dbPwValue);
+      notifyConnectionsChanged();
+      setDbRefresh((n) => n + 1);
+      setDbPw(null);
+    } catch (e) {
+      setDbPwError(errText(e));
+    } finally {
+      setDbPwBusy(false);
+    }
+  }
 
   // 언어는 페이지 로드 시 고정(i18n) — 선택 즉시 적용하지 않고 확인 모달을 거쳐
   // setLang 저장 후 창을 다시 불러온다. null = 확인 대기 없음
@@ -566,6 +619,20 @@ export function SettingsModal({
           </section>
           )}
           {tab === "report" && <ReportSettings />}
+          {tab === "databases" && (
+            <DbSettings
+              onAdd={() => setDbModal({ open: true, connection: null })}
+              onEdit={(c) => setDbModal({ open: true, connection: c })}
+              onDelete={setDbDelete}
+              onEnterPassword={(c) => {
+                setDbPw(c);
+                setDbPwValue("");
+                setDbPwError(null);
+              }}
+              refreshKey={dbRefresh}
+              error={dbError}
+            />
+          )}
           {tab === "appearance" && (
           <section className="set-section">
             <div className="set-head">
@@ -672,6 +739,79 @@ export function SettingsModal({
       onClose={() => setAuthOpen(false)}
       onLoggedIn={() => void refreshAuth()}
     />
+
+    {/* DB 연결 추가/편집 — 다이어그램 탭이 DB_CONNECTIONS_EVENT 로 알아채 동기화를 시작한다 */}
+    <DbConnectionModal
+      open={dbModal.open}
+      connection={dbModal.connection}
+      onClose={() => setDbModal({ open: false, connection: null })}
+      onSaved={() => setDbRefresh((n) => n + 1)}
+    />
+
+    {/* 연결 삭제 — 프로필 + 키체인만. 파일은 남는다 */}
+    <Modal
+      open={dbDelete !== null}
+      title={t("settings.db.deleteTitle")}
+      onClose={() => setDbDelete(null)}
+      narrow
+      footer={
+        <>
+          <button className="btn btn-sm" onClick={() => setDbDelete(null)}>
+            {t("common.cancel")}
+          </button>
+          <button className="btn btn-sm btn-danger-ghost" onClick={() => void removeDbConnection()}>
+            {t("common.delete")}
+          </button>
+        </>
+      }
+    >
+      <p style={{ margin: 0 }}>
+        <b>{dbDelete?.name}</b> — {t("settings.db.deleteBody")}
+      </p>
+    </Modal>
+
+    {/* 비밀번호 다시 입력 — 백업을 다른 기기에 복원해 키체인 항목이 없을 때 */}
+    <Modal
+      open={dbPw !== null}
+      title={t("settings.db.passwordTitle", { name: dbPw?.name ?? "" })}
+      onClose={() => setDbPw(null)}
+      narrow
+      footer={
+        <>
+          <button className="btn btn-sm" onClick={() => setDbPw(null)} disabled={dbPwBusy}>
+            {t("common.cancel")}
+          </button>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => void saveDbPassword()}
+            disabled={!dbPwValue || dbPwBusy}
+          >
+            {t("common.save")}
+          </button>
+        </>
+      }
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void saveDbPassword();
+        }}
+      >
+        <div className="field">
+          <label>{t("diagrams.db.field.password")}</label>
+          <input
+            className="input"
+            type="password"
+            autoFocus
+            autoComplete="off"
+            value={dbPwValue}
+            onChange={(e) => setDbPwValue(e.target.value)}
+          />
+          <div className="hint">{t("diagrams.db.hint.password")}</div>
+        </div>
+        {dbPwError && <div className="error-note">{dbPwError}</div>}
+      </form>
+    </Modal>
     </>
   );
 }

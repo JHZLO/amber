@@ -5458,3 +5458,409 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
     transform: none;
   }
 }
+
+/* ==== DB 스키마 연동 (다이어그램 탭 · 설정) ====================================================
+   새 색 없음 — 상태는 점(채움/아웃라인)과 칩(채움/아웃라인), 명암으로만. 토큰은 전부 기존 것.
+   컴포넌트: DbConnectionModal · SchemaOverview · DbSettings · DiagramsView 의 트리/배너. */
+
+/* 작은 칩 — 헤더 제목 옆·트리 보조 표기용. 채움(chip-fill)은 운영 환경 표식 하나에만 쓴다 */
+.chip.chip-sm {
+  height: 20px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  border-color: var(--border-strong);
+  background: transparent;
+}
+.chip.chip-fill {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+  border-color: var(--primary-bg);
+}
+
+/* 연결 상태 점 — 채움=마지막 시도 성공, 아웃라인=실패/미동기화 (DESIGN §3 채움/아웃라인 문법) */
+.db-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-3);
+  background: transparent;
+  flex-shrink: 0;
+}
+.db-dot.on {
+  background: var(--text);
+  border-color: var(--text);
+}
+
+/* --- 연결 모달 --- */
+.db-step-eyebrow {
+  margin: -4px 0 14px;
+}
+.db-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 14px;
+}
+.db-grid.half {
+  grid-template-columns: 1fr 1fr;
+}
+.db-pw-stored {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 0 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.db-kv {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.db-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.db-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.db-panel-foot {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+}
+.db-num-head {
+  width: 56px;
+  text-align: right;
+}
+.db-list {
+  font-size: 12.5px;
+}
+.db-list.scroll {
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
+}
+.db-schema-row {
+  display: grid;
+  grid-template-columns: 20px 1fr 140px 56px;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.db-schema-row:last-child {
+  border-bottom: none;
+}
+.db-schema-row.off .db-row-name {
+  color: var(--text-3);
+}
+.db-schema-row .db-row-name {
+  cursor: pointer;
+}
+.db-label-input {
+  height: 26px;
+  font-size: 12px;
+  padding: 0 8px;
+}
+.db-row-name {
+  color: var(--text);
+  font-weight: 500;
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.db-row-col {
+  color: var(--text-3);
+  font-weight: 400;
+}
+.db-row-sub {
+  font-size: 11.5px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.db-num {
+  font-size: 11.5px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+.db-folder {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 13px;
+}
+.db-folder b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* --- 스키마 개요 pane --- */
+.db-ov-wrap {
+  display: flex;
+  flex-direction: column;
+}
+.db-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.db-ov {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  overflow: hidden;
+}
+.db-ov-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-3);
+  font-size: 13px;
+  text-align: center;
+}
+.db-ov-empty p {
+  margin: 0;
+}
+.db-ov-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 14px;
+}
+.db-ov-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.db-ov-side .db-panel {
+  flex: 1;
+}
+.db-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-3);
+  width: 200px;
+}
+.db-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+}
+.db-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+}
+.db-row.db-row-tight {
+  padding: 4px 12px;
+}
+.db-row.audit .db-row-name {
+  color: var(--text-3);
+  font-weight: 400;
+}
+.db-row-main {
+  min-width: 0;
+}
+.db-row-empty {
+  padding: 18px 12px;
+  color: var(--text-3);
+  font-size: 12.5px;
+  text-align: center;
+}
+.db-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.db-stat {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+}
+.db-stat-l {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+}
+.db-stat-v {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+.db-ov-meta {
+  margin-top: 0;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* --- 변경 감지 배너 (연동 ERD 위) — 정보이지 경고가 아니라 surface-2, 색 없음 --- */
+.db-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.db-banner b {
+  color: var(--text);
+  font-weight: 600;
+}
+.db-banner .spacer {
+  flex: 1;
+}
+
+/* --- 트리 보조 표기: 표시명·테이블 수·상태 점 (row-actions 오버레이가 덮을 수 있는 오른쪽 끝) --- */
+.tree-row .tree-sub {
+  margin-left: 4px;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tree-row .tree-count {
+  margin-left: auto;
+  padding-right: 2px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tree-row.db-syncing .tree-ico {
+  animation: spin 0.9s linear infinite;
+}
+
+/* --- 설정 › 데이터베이스 --- */
+.db-conn-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.db-conn-row {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.db-conn-row.needs-pw {
+  border-style: dashed;
+}
+.db-conn-ico {
+  color: var(--text-2);
+}
+.db-conn-main {
+  min-width: 0;
+}
+.db-conn-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.db-conn-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-3);
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.db-conn-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.db-conn-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.db-conn-actions {
+  display: flex;
+  gap: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tree-row.db-syncing .tree-ico {
+    animation: none;
+  }
+}

@@ -68,7 +68,7 @@ Real folders and files are the source of truth — no DB lock-in, friendly to gi
 
 ### 📊 Mermaid diagram studio
 
-Keep ERDs, flowcharts and sequence diagrams as plain `.mmd` files organized in folders. Pan/zoom canvas (wheel zoom · drag pan · double-click zoom · fit-to-screen shortcuts), live render while editing, and automatic recovery from common mermaid syntax mistakes. Paste raw `CREATE TABLE` DDL and the AI turns it into a house-style ERD — solid lines for real FK constraints, dotted for logical ones, nullability, indexes and enum values carried in the column notes.
+Keep ERDs, flowcharts and sequence diagrams as plain `.mmd` files organized in folders. Pan/zoom canvas (wheel zoom · drag pan · double-click zoom · fit-to-screen shortcuts), live render while editing, and automatic recovery from common mermaid syntax mistakes. Paste raw `CREATE TABLE` DDL and the AI turns it into a house-style ERD — solid lines for real FK constraints, dotted for logical ones, nullability, indexes and enum values carried in the column notes. Or connect a MySQL database directly (DataGrip-style host · port · user; the password lives only in the macOS Keychain): Amber reads `information_schema`, generates the same house-style ERD per schema without any AI, and tells you when the live schema has drifted from the diagram — with a diff, never a silent overwrite.
 
 </td>
 <td width="50%">
@@ -124,7 +124,7 @@ filesystem; only volatile metadata (card status, todos, settings) lives in SQLit
 └── vault/
     ├── concepts/<ulid>/index.md  # concept detail notes
     ├── notes/**/*.md             # notes (+ *.comments.json Q&A sidecars)
-    └── diagrams/**/*.mmd         # mermaid sources
+    └── diagrams/**/*.mmd         # mermaid sources (+ <connection>/<schema>/.schema.json DB snapshots)
 ```
 
 ## Install
