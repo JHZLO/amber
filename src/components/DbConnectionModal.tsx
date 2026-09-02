@@ -6,7 +6,7 @@
 // 트리 행마다 진행을 보여주며 스키마를 순서대로 읽는다 — 모달이 열린 채 기다리게 하지 않는다.
 
 import { useEffect, useState, type ReactNode } from "react";
-import { Checkbox, Modal, Select } from "../ui";
+import { Checkbox, Modal, Select, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
@@ -31,6 +31,49 @@ import {
 } from "../lib/dbconn";
 
 type Step = "form" | "schemas";
+
+/** 비밀번호 입력 + 보기/숨기기 토글. 키체인에만 저장되는 값이라 확인할 길이 이 칸밖에 없다 */
+export function PasswordField({
+  value,
+  show,
+  onToggle,
+  onChange,
+  autoFocus,
+}: {
+  value: string;
+  show: boolean;
+  onToggle: () => void;
+  onChange: (v: string) => void;
+  autoFocus?: boolean;
+}) {
+  return (
+    <div className="db-pw-field">
+      <input
+        className="input"
+        type={show ? "text" : "password"}
+        value={value}
+        autoFocus={autoFocus}
+        autoComplete="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <div className="db-pw-toggle">
+        <Tooltip label={show ? t("diagrams.db.password.hide") : t("diagrams.db.password.show")}>
+          <button
+            type="button"
+            className="icon-btn ghost sm"
+            aria-label={show ? t("diagrams.db.password.hide") : t("diagrams.db.password.show")}
+            aria-pressed={show}
+            onClick={onToggle}
+          >
+            <Icon name={show ? "eye-off" : "eye"} size={14} />
+          </button>
+        </Tooltip>
+      </div>
+    </div>
+  );
+}
 
 const TLS_OPTIONS: { value: DbTls; label: string }[] = [
   { value: "preferred", label: t("diagrams.db.tls.preferred") },
@@ -71,6 +114,8 @@ export function DbConnectionModal({
   const [tls, setTls] = useState<DbTls>("preferred");
   // 편집 모달에서 비밀번호 칸을 열었는가 — 기본은 닫힘("키체인에 저장됨")
   const [changePw, setChangePw] = useState(false);
+  // 입력한 비밀번호를 평문으로 확인 — 열 때마다 숨김으로 돌아간다
+  const [showPw, setShowPw] = useState(false);
   const [testing, setTesting] = useState(false);
   const [test, setTest] = useState<DbTestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +134,7 @@ export function DbConnectionModal({
     setPassword("");
     setTls(connection?.tls ?? "preferred");
     setChangePw(false);
+    setShowPw(false);
     setTesting(false);
     setTest(null);
     setError(null);
@@ -378,12 +424,11 @@ export function DbConnectionModal({
                     </button>
                   </div>
                 ) : (
-                  <input
-                    className="input"
-                    type="password"
+                  <PasswordField
                     value={password}
-                    autoComplete="off"
-                    onChange={(e) => touch(setPassword)(e.target.value)}
+                    show={showPw}
+                    onToggle={() => setShowPw((v) => !v)}
+                    onChange={touch(setPassword)}
                   />
                 )}
                 <div className="hint">{t("diagrams.db.hint.password")}</div>

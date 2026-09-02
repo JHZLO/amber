@@ -5506,6 +5506,19 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
 .db-grid.half {
   grid-template-columns: 1fr 1fr;
 }
+/* 비밀번호 칸 + 보기/숨기기 토글 — 토글은 칸 안 오른쪽 끝(34px 칸에 24px 버튼) */
+.db-pw-field {
+  position: relative;
+}
+.db-pw-field .input {
+  width: 100%;
+  padding-right: 34px;
+}
+.db-pw-toggle {
+  position: absolute;
+  right: 5px;
+  top: 5px;
+}
 .db-pw-stored {
   height: 34px;
   display: flex;

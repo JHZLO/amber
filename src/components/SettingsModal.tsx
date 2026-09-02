@@ -35,7 +35,7 @@ import { Icon } from "../icons";
 import { ReportSettings } from "./ReportSettings";
 import { AiAuthModal } from "./AiAuthModal";
 import { DbSettings } from "./DbSettings";
-import { DbConnectionModal } from "./DbConnectionModal";
+import { DbConnectionModal, PasswordField } from "./DbConnectionModal";
 import {
   dbSecretSet,
   deleteConnection,
@@ -101,6 +101,7 @@ export function SettingsModal({
   const [dbDelete, setDbDelete] = useState<DbConnection | null>(null);
   const [dbPw, setDbPw] = useState<DbConnection | null>(null);
   const [dbPwValue, setDbPwValue] = useState("");
+  const [dbPwShow, setDbPwShow] = useState(false);
   const [dbPwBusy, setDbPwBusy] = useState(false);
   const [dbPwError, setDbPwError] = useState<string | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
@@ -627,6 +628,7 @@ export function SettingsModal({
               onEnterPassword={(c) => {
                 setDbPw(c);
                 setDbPwValue("");
+                setDbPwShow(false);
                 setDbPwError(null);
               }}
               refreshKey={dbRefresh}
@@ -799,13 +801,12 @@ export function SettingsModal({
       >
         <div className="field">
           <label>{t("diagrams.db.field.password")}</label>
-          <input
-            className="input"
-            type="password"
-            autoFocus
-            autoComplete="off"
+          <PasswordField
             value={dbPwValue}
-            onChange={(e) => setDbPwValue(e.target.value)}
+            show={dbPwShow}
+            onToggle={() => setDbPwShow((v) => !v)}
+            onChange={setDbPwValue}
+            autoFocus
           />
           <div className="hint">{t("diagrams.db.hint.password")}</div>
         </div>

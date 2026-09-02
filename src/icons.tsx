@@ -45,7 +45,9 @@ export type IconName =
   | "scissors"
   | "database"
   | "table"
-  | "key";
+  | "key"
+  | "eye"
+  | "eye-off";
 
 const PATHS: Record<IconName, ReactNode> = {
   // DB 연동 — 연결 폴더(database)·스키마 폴더(table)·키체인 표식(key). 폴더 아이콘과 나란히 서므로 획을 단순하게
@@ -66,6 +68,21 @@ const PATHS: Record<IconName, ReactNode> = {
     <>
       <circle cx="7.5" cy="15.5" r="4.5" />
       <path d="m10.5 12.5 9-9M15 6l3 3M18 3l3 3" />
+    </>
+  ),
+  // 비밀번호 보기/숨기기 — 입력 칸 오른쪽 끝의 토글. 한 쌍이라 뜻이 겹치지 않게 사선(off)으로 가른다
+  eye: (
+    <>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  "eye-off": (
+    <>
+      <path d="M17.9 17.9A10.9 10.9 0 0 1 12 19c-6.5 0-10-7-10-7a19 19 0 0 1 4.1-5.1" />
+      <path d="M9.9 4.2A10 10 0 0 1 12 5c6.5 0 10 7 10 7a19 19 0 0 1-2.3 3.3" />
+      <path d="M9.9 9.9a3 3 0 1 0 4.2 4.2" />
+      <path d="m2 2 20 20" />
     </>
   ),
   // 부분만 고쳐 쓰기 — 전문 재작성(sparkles)과 나란히 서므로 아이콘으로 갈라 준다
