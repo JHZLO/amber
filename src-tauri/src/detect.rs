@@ -31,18 +31,24 @@ async fn resolve_path(bin: &str) -> Option<String> {
         let Ok(Ok(out)) = timeout(
             Duration::from_secs(8),
             Command::new(shell)
-                .args(["-lc", &format!("command -v {bin}")])
+                .args(["-ilc", &format!("command -v {bin}")])
+                .stdin(std::process::Stdio::null())
                 .kill_on_drop(true)
-        .output(),
+                .output(),
         )
         .await
         else {
             continue;
         };
         if out.status.success() {
-            let p = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !p.is_empty() && p.starts_with('/') {
-                return Some(p);
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            if let Some(p) = stdout
+                .lines()
+                .rev()
+                .map(str::trim)
+                .find(|l| l.starts_with('/'))
+            {
+                return Some(p.to_string());
             }
         }
     }
