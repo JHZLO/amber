@@ -264,17 +264,28 @@ serves a tarball for each one.
 
 **Requirements**
 
-- macOS
+- macOS with the Xcode Command Line Tools
+- Rust toolchain from [rustup](https://rustup.rs) — it installs `rustc` and `cargo`, which `pnpm tauri` drives under the hood
 - Node.js 20+ · [pnpm](https://pnpm.io)
-- [Rust](https://rustup.rs) (stable)
 - Optional, for AI features: one or more of the CLIs above, installed and logged in
 - Optional, for reports: [`gh`](https://cli.github.com) logged in; for database sync: a MySQL account that can read `information_schema`
+
+**Set up the toolchain** (once)
+
+```bash
+xcode-select --install                                          # Apple build tools (clang, git)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh  # Rust: rustc + cargo, stable channel
+corepack enable && corepack prepare pnpm@latest --activate      # pnpm (or: brew install pnpm)
+```
+
+Open a new terminal afterwards so `cargo` is on your `PATH`. The Tauri CLI is a dev dependency,
+so `pnpm install` brings it in — nothing to install globally.
 
 **Run**
 
 ```bash
 pnpm install
-pnpm tauri dev      # development
+pnpm tauri dev      # development — the first run compiles the Rust side and takes a few minutes
 pnpm tauri build    # production .app
 pnpm test           # vitest + cargo test
 ```
