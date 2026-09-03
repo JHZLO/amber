@@ -203,34 +203,49 @@ export function TagChip({
  *  라벨은 body 로 portal → 사이드바 overflow 에 안 잘린다. 접근성 이름은 자식에 aria-label 로 따로. */
 /** 선택 토글 칩 — AI 모달의 저장 프롬프트·빠른 지시. 누르면 텍스트를 입력칸에 붙이는 대신
  *  '요청에 포함' 상태만 켜고 끈다(합치기는 lib/aiInstruction). 켜짐 = success 채움 + 체크(§3).
- *  `hint` 를 주면 호버 툴팁으로 내용을 미리 보인다 — 이름만으로는 무엇이 들어가는지 모른다. */
+ *  `peek` 를 주면 오른쪽에 칸을 나눈 [내용 보기] 버튼이 붙는다 — 저장 프롬프트처럼 이름만으로
+ *  무엇이 들어가는지 알 수 없을 때. 토글과 보기가 한 칩 안에서 갈리므로 바깥은 span, 안은 버튼 둘이다. */
 export function ChoiceChip({
   label,
   on,
   onToggle,
   icon = "plus",
-  hint,
+  peek,
 }: {
   label: string;
   on: boolean;
   onToggle: () => void;
   /** 꺼져 있을 때의 앞 아이콘 (켜지면 항상 체크) */
   icon?: IconName;
-  hint?: string;
+  /** 내용 보기 버튼 — 툴팁 라벨과 열기 동작 */
+  peek?: { label: string; onOpen: () => void };
 }) {
-  const chip = (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={on}
-      className={`chip chip-choice ${on ? "on" : ""}`}
-      onClick={onToggle}
-    >
-      <Icon name={on ? "check" : icon} size={12} />
-      <span className="chip-label">{label}</span>
-    </button>
+  return (
+    <span className={`chip chip-choice ${on ? "on" : ""}`}>
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={on}
+        className="chip-main"
+        onClick={onToggle}
+      >
+        <Icon name={on ? "check" : icon} size={12} />
+        <span className="chip-label">{label}</span>
+      </button>
+      {peek && (
+        <Tooltip label={peek.label}>
+          <button
+            type="button"
+            className="chip-peek"
+            aria-label={peek.label}
+            onClick={peek.onOpen}
+          >
+            <Icon name="eye" size={12} />
+          </button>
+        </Tooltip>
+      )}
+    </span>
   );
-  return hint ? <Tooltip label={hint}>{chip}</Tooltip> : chip;
 }
 
 export function Tooltip({

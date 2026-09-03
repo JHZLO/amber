@@ -13,8 +13,3 @@ export function composeInstruction(typed: string, extras: readonly string[]): st
     .join("\n\n");
 }
 
-/** 칩 툴팁용 한 줄 미리보기 — 공백·줄바꿈을 한 칸으로 접고 길면 말줄임 */
-export function previewOf(text: string, max = 160): string {
-  const one = text.replace(/\s+/g, " ").trim();
-  return one.length > max ? `${one.slice(0, max - 1)}…` : one;
-}

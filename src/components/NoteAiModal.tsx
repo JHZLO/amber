@@ -8,7 +8,8 @@ import type { AppConfig } from "../lib/config";
 import { aiCancel, aiNoteComposeStream, friendlyError, newCancelKey } from "../lib/ai";
 import { loadPrompts, type SavedPrompt } from "../lib/prompts";
 import { AiThinking, ChoiceChip, Modal } from "../ui";
-import { composeInstruction, previewOf } from "../lib/aiInstruction";
+import { composeInstruction } from "../lib/aiInstruction";
+import { PromptPeekModal } from "./PromptPeekModal";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 
@@ -44,6 +45,8 @@ export function NoteAiModal({
   const [instruction, setInstruction] = useState("");
   // 체크한 저장 프롬프트(`s:<id>`)·빠른 지시(`p:<index>`) — 텍스트는 보낼 때 합친다
   const [chosen, setChosen] = useState<Set<string>>(() => new Set());
+  // 내용 보기 모달에 띄운 저장 프롬프트 (null = 닫힘)
+  const [peek, setPeek] = useState<SavedPrompt | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resultMd, setResultMd] = useState("");
   const [streamText, setStreamText] = useState(""); // 생성 중 실시간 누적 텍스트
@@ -67,6 +70,7 @@ export function NoteAiModal({
     setStep("prompt");
     setInstruction("");
     setChosen(new Set());
+    setPeek(null);
     setError(null);
     setResultMd("");
     setStreamText("");
@@ -205,6 +209,7 @@ export function NoteAiModal({
   }
 
   return (
+    <>
     <Modal open={open} title={t("notes.ai.title")} onClose={onClose} footer={footer} wide>
       {error && (
         <div className="error-note" style={{ marginBottom: 12 }}>
@@ -237,7 +242,7 @@ export function NoteAiModal({
                     on={chosen.has(`s:${p.id}`)}
                     onToggle={() => toggle(`s:${p.id}`)}
                     icon="sparkles"
-                    hint={previewOf(p.text)}
+                    peek={{ label: t("notes.ai.promptPeek.open"), onOpen: () => setPeek(p) }}
                   />
                 ))}
               </div>
@@ -330,5 +335,15 @@ export function NoteAiModal({
         </div>
       )}
     </Modal>
+    {/* 저장 프롬프트 내용 보기 — 작성 모달의 형제로 겹쳐 뜬다(Esc 는 위 것만 닫는다) */}
+    <PromptPeekModal
+      prompt={peek}
+      included={peek ? chosen.has(`s:${peek.id}`) : false}
+      onToggle={() => {
+        if (peek) toggle(`s:${peek.id}`);
+      }}
+      onClose={() => setPeek(null)}
+    />
+    </>
   );
 }

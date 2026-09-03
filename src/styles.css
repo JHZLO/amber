@@ -2302,18 +2302,16 @@ html.widget-root #root {
 /* 선택 토글 칩 (AI 모달의 저장 프롬프트·빠른 지시) — 누르면 텍스트를 입력칸에 붙이지 않고
    '요청에 포함' 상태만 켠다(합치기는 lib/aiInstruction). 켜짐 = success 채움 + 체크(§3):
    primary 필로 칠하면 칩이 버튼처럼 보이고 여러 개가 켜지면 판이 무거워진다 — '들어간다(OK)'는
-   결과 색 계열이 뜻에 맞다. 대비: success-text on success-soft 6.81:1(라이트) · 10.98:1(다크). */
+   결과 색 계열이 뜻에 맞다. 대비: success-text on success-soft 6.81:1(라이트) · 10.98:1(다크).
+   구조: 바깥 span 이 테두리·채움을 갖고, 안의 .chip-main(토글)·.chip-peek(내용 보기)이 칸을 나눈다 —
+   버튼 안에 버튼을 넣을 수 없어서다. press·포커스 링은 :has 로 바깥에 얹는다(안쪽 그림자는 잘린다). */
 .chip.chip-choice {
-  appearance: none;
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.4;
-  gap: 5px;
-  padding: 4px 10px 4px 8px;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
   background: var(--surface);
   border-color: var(--border-strong);
   color: var(--text);
-  cursor: pointer;
   max-width: 100%;
   transition:
     background 0.12s ease,
@@ -2322,25 +2320,61 @@ html.widget-root #root {
     transform 0.16s var(--ease-out);
 }
 .chip.chip-choice:hover {
-  background: var(--surface-2);
   border-color: var(--text-3);
 }
-.chip.chip-choice:active {
+.chip.chip-choice:has(button:active) {
   transform: scale(0.97);
 }
-.chip.chip-choice:focus-visible {
-  outline: none;
+.chip.chip-choice:has(button:focus-visible) {
   box-shadow: var(--focus-ring);
 }
-.chip.chip-choice svg {
+.chip-choice .chip-main,
+.chip-choice .chip-peek {
+  appearance: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.chip-choice .chip-main {
+  gap: 5px;
+  padding: 4px 10px 4px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  min-width: 0;
+}
+.chip-choice .chip-main:hover {
+  background: var(--surface-2);
+}
+.chip-choice svg {
   flex-shrink: 0;
   color: var(--text-3);
 }
-.chip.chip-choice .chip-label {
+.chip-choice .chip-label {
   max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* 내용 보기 칸 — 저장 프롬프트에만 붙는다. 나눔선 하나로 '다른 버튼'임을 말한다 */
+.chip-choice .tip-wrap {
+  display: inline-flex;
+  align-self: stretch;
+}
+.chip-choice .chip-peek {
+  padding: 0 7px;
+  border-left: 1px solid var(--border);
+}
+.chip-choice .chip-peek:hover {
+  background: var(--surface-2);
+}
+.chip-choice .chip-peek:hover svg {
+  color: var(--text);
 }
 .chip.chip-choice.on {
   background: var(--success-soft);
@@ -2350,6 +2384,13 @@ html.widget-root #root {
 .chip.chip-choice.on svg {
   color: var(--success);
 }
+.chip.chip-choice.on .chip-peek {
+  border-left-color: var(--success);
+}
+.chip.chip-choice.on .chip-main:hover,
+.chip.chip-choice.on .chip-peek:hover {
+  background: transparent;
+}
 @media (prefers-reduced-motion: reduce) {
   .chip.chip-choice {
     transition:
@@ -2357,9 +2398,24 @@ html.widget-root #root {
       border-color 0.12s ease,
       color 0.12s ease;
   }
-  .chip.chip-choice:active {
+  .chip.chip-choice:has(button:active) {
     transform: none;
   }
+}
+
+/* 저장 프롬프트 내용 보기 모달의 본문 — 원문 그대로(pre-wrap), 길면 상자 안에서 스크롤 */
+.prompt-peek-text {
+  margin: 0;
+  padding: 12px 14px;
+  font: 13px / 1.6 var(--font);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  max-height: 50vh;
+  overflow: auto;
 }
 
 /* ---- mermaid 다이어그램 ---- */

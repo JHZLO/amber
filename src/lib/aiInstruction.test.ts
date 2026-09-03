@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { composeInstruction, previewOf } from "./aiInstruction";
+import { composeInstruction } from "./aiInstruction";
 
 describe("composeInstruction", () => {
   it("returns the typed text alone when nothing is chosen", () => {
@@ -23,9 +23,3 @@ describe("composeInstruction", () => {
   });
 });
 
-describe("previewOf", () => {
-  it("collapses whitespace and truncates with an ellipsis", () => {
-    expect(previewOf("a\n\n  b   c", 10)).toBe("a b c");
-    expect(previewOf("x".repeat(20), 10)).toBe("xxxxxxxxx…");
-  });
-});
