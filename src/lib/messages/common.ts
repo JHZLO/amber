@@ -106,6 +106,9 @@ const ko = {
   "common.ai.rateLimit": "사용량 한도에 도달했어요. 잠시 후 다시 시도하세요.",
   "common.ai.timeout": "응답이 너무 오래 걸렸어요. 다시 시도해 주세요.",
   "common.ai.badResult": "정리 결과를 해석하지 못했어요. 다시 생성하거나 수동으로 작성하세요.",
+
+  // AI 모달 — 체크한 지시 개수 (입력칸에 붙이지 않는다는 안내 겸)
+  "common.ai.chosenCount": "{n}개 선택 — 입력칸에 붙이지 않고 요청에 함께 보내요.",
 } as const;
 
 const en: Record<keyof typeof ko, string> = {
@@ -207,6 +210,8 @@ const en: Record<keyof typeof ko, string> = {
   "common.ai.rateLimit": "You've hit the usage limit. Try again in a bit.",
   "common.ai.timeout": "The response took too long. Please try again.",
   "common.ai.badResult": "Couldn't parse the result. Regenerate or write it manually.",
+
+  "common.ai.chosenCount": "{n} selected — sent with your request, not pasted into the box.",
 } as const;
 
 export const commonMessages = { ko, en };

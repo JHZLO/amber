@@ -7,7 +7,8 @@ import { DiffView } from "./DiffView";
 import type { AppConfig } from "../lib/config";
 import { aiCancel, aiNoteComposeStream, friendlyError, newCancelKey } from "../lib/ai";
 import { loadPrompts, type SavedPrompt } from "../lib/prompts";
-import { AiThinking, Modal } from "../ui";
+import { AiThinking, ChoiceChip, Modal } from "../ui";
+import { composeInstruction, previewOf } from "../lib/aiInstruction";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 
@@ -41,6 +42,8 @@ export function NoteAiModal({
 }) {
   const [step, setStep] = useState<Step>("prompt");
   const [instruction, setInstruction] = useState("");
+  // 체크한 저장 프롬프트(`s:<id>`)·빠른 지시(`p:<index>`) — 텍스트는 보낼 때 합친다
+  const [chosen, setChosen] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
   const [resultMd, setResultMd] = useState("");
   const [streamText, setStreamText] = useState(""); // 생성 중 실시간 누적 텍스트
@@ -63,6 +66,7 @@ export function NoteAiModal({
     runSeq.current++; // 닫힌 동안 계속 돌던 실행의 델타를 이 세션에서 끊는다
     setStep("prompt");
     setInstruction("");
+    setChosen(new Set());
     setError(null);
     setResultMd("");
     setStreamText("");
@@ -77,12 +81,27 @@ export function NoteAiModal({
     }
   }, [streamText, step]);
 
-  function addPreset(p: string) {
-    setInstruction((prev) => (prev.trim() ? `${prev.trim()} · ${p}` : p));
+  function toggle(key: string) {
+    setChosen((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
+  // 텍스트가 있는 프롬프트만 칩으로 (설정에서 추가만 하고 비워둔 것 제외)
+  const savedUsable = saved.filter((p) => p.text.trim());
+  // 체크한 지시는 입력칸에 붙이지 않고 보낼 때 합친다 — 내가 친 말 → 저장 프롬프트 → 빠른 지시
+  const extras = [
+    ...savedUsable.filter((p) => chosen.has(`s:${p.id}`)).map((p) => p.text),
+    ...PRESETS.filter((_, i) => chosen.has(`p:${i}`)),
+  ];
+  const finalInstruction = composeInstruction(instruction, extras);
+  const tooShort = finalInstruction.length < 2;
+
   async function run() {
-    if (!config || instruction.trim().length < 2) return;
+    if (!config || tooShort) return;
     setError(null);
     setStreamText("");
     setStep("loading");
@@ -94,7 +113,7 @@ export function NoteAiModal({
         {
           title,
           markdown: currentBody,
-          instruction,
+          instruction: finalInstruction,
           model: config.model,
           cliPath: config.cliPath,
           provider: config.provider,
@@ -130,11 +149,6 @@ export function NoteAiModal({
     setStreamText("");
     setStep("prompt");
   }
-
-  // 텍스트가 있는 프롬프트만 칩으로 (설정에서 추가만 하고 비워둔 것 제외)
-  const savedUsable = saved.filter((p) => p.text.trim());
-
-  const tooShort = instruction.trim().length < 2;
 
   // diff 안내 문구 — 언어별 어순이 달라 "{apply}" 자리에 <b>버튼 라벨</b>을 끼워 넣는다
   const diffHint = t("notes.ai.diffHint").split("{apply}");
@@ -215,30 +229,35 @@ export function NoteAiModal({
           {savedUsable.length > 0 && (
             <div className="field">
               <label>{t("notes.ai.savedPrompts")}</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              <div className="chip-row">
                 {savedUsable.map((p) => (
-                  <span
+                  <ChoiceChip
                     key={p.id}
-                    className="chip btn-like chip-saved"
-                    title={p.text}
-                    onClick={() => addPreset(p.text)}
-                  >
-                    <Icon name="sparkles" size={11} />
-                    {p.label.trim() || p.text.slice(0, 20)}
-                  </span>
+                    label={p.label.trim() || p.text.slice(0, 20)}
+                    on={chosen.has(`s:${p.id}`)}
+                    onToggle={() => toggle(`s:${p.id}`)}
+                    icon="sparkles"
+                    hint={previewOf(p.text)}
+                  />
                 ))}
               </div>
             </div>
           )}
           <div className="field">
             <label>{t("notes.ai.presets")}</label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {PRESETS.map((p) => (
-                <span key={p} className="chip btn-like" onClick={() => addPreset(p)}>
-                  + {p}
-                </span>
+            <div className="chip-row">
+              {PRESETS.map((p, i) => (
+                <ChoiceChip
+                  key={p}
+                  label={p}
+                  on={chosen.has(`p:${i}`)}
+                  onToggle={() => toggle(`p:${i}`)}
+                />
               ))}
             </div>
+            {extras.length > 0 && (
+              <div className="hint">{t("common.ai.chosenCount", { n: extras.length })}</div>
+            )}
           </div>
         </>
       )}

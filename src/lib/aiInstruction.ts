@@ -1,0 +1,20 @@
+// AI 모달 공통 — 사용자가 친 지시와 체크한 지시(저장 프롬프트·빠른 지시)를 하나의 지시문으로 합친다.
+//
+// 칩을 누를 때 텍스트를 입력칸에 붙이지 않는 이유: 긴 저장 프롬프트가 칸을 덮어 내가 쓴 말이 묻히고,
+// 한 번 붙으면 빼기도 어렵다. 그래서 선택은 상태(켜짐/꺼짐)로만 두고 보낼 때 여기서 합친다.
+// 순서는 내가 친 말 → 저장 프롬프트 → 빠른 지시. 각 조각은 빈 줄로 나눈다 — 저장 프롬프트는
+// 여러 줄(제목 구조 등)일 수 있어 한 줄 나열(· 구분)로는 깨진다.
+
+/** 빈 조각은 버리고, 나머지를 순서대로 빈 줄로 잇는다 */
+export function composeInstruction(typed: string, extras: readonly string[]): string {
+  return [typed, ...extras]
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .join("\n\n");
+}
+
+/** 칩 툴팁용 한 줄 미리보기 — 공백·줄바꿈을 한 칸으로 접고 길면 말줄임 */
+export function previewOf(text: string, max = 160): string {
+  const one = text.replace(/\s+/g, " ").trim();
+  return one.length > max ? `${one.slice(0, max - 1)}…` : one;
+}

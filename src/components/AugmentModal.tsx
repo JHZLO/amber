@@ -5,7 +5,8 @@ import type { ConceptWithTags } from "../types";
 import { aiAugment, friendlyError } from "../lib/ai";
 import { setConceptTags, updateConceptContent } from "../lib/db";
 import { writeNote } from "../lib/vault";
-import { AiThinking, Modal } from "../ui";
+import { AiThinking, ChoiceChip, Modal } from "../ui";
+import { composeInstruction } from "../lib/aiInstruction";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
@@ -46,6 +47,8 @@ export function AugmentModal({
 }) {
   const [step, setStep] = useState<Step>("prompt");
   const [instruction, setInstruction] = useState("");
+  // 체크한 빠른 지시(index) — 텍스트는 보낼 때 합친다
+  const [chosen, setChosen] = useState<Set<number>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -61,6 +64,7 @@ export function AugmentModal({
     if (!open) return;
     setStep("prompt");
     setInstruction("");
+    setChosen(new Set());
     setError(null);
     setSaving(false);
     setTitle(concept.title);
@@ -71,12 +75,21 @@ export function AugmentModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  function addPreset(p: string) {
-    setInstruction((prev) => (prev.trim() ? `${prev.trim()} · ${p}` : p));
+  function toggle(key: number) {
+    setChosen((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
+  // 체크한 지시는 입력칸에 붙이지 않고 보낼 때 합친다 — 내가 친 말 → 빠른 지시
+  const extras = PRESETS.filter((_, i) => chosen.has(i));
+  const finalInstruction = composeInstruction(instruction, extras);
+
   async function run() {
-    if (!config || instruction.trim().length < 2) return;
+    if (!config || finalInstruction.length < 2) return;
     setError(null);
     setStep("loading");
     try {
@@ -85,7 +98,7 @@ export function AugmentModal({
         summary: concept.summary,
         tags: concept.tags,
         markdown: currentBody,
-        instruction,
+        instruction: finalInstruction,
         model: config.model,
         cliPath: config.cliPath,
         provider: config.provider,
@@ -187,17 +200,14 @@ export function AugmentModal({
           </div>
           <div className="field">
             <label>{t("concepts.augment.presets")}</label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {PRESETS.map((p) => (
-                <span
-                  key={p}
-                  className="chip btn-like"
-                  onClick={() => addPreset(p)}
-                >
-                  + {p}
-                </span>
+            <div className="chip-row">
+              {PRESETS.map((p, i) => (
+                <ChoiceChip key={p} label={p} on={chosen.has(i)} onToggle={() => toggle(i)} />
               ))}
             </div>
+            {extras.length > 0 && (
+              <div className="hint">{t("common.ai.chosenCount", { n: extras.length })}</div>
+            )}
           </div>
         </>
       )}

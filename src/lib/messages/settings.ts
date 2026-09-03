@@ -80,7 +80,7 @@ const ko = {
   "settings.prompts.title": "저장 프롬프트",
   "settings.prompts.desc.pre": "자주 쓰는 지시를 저장해 두면 ",
   "settings.prompts.desc.bold": "AI로 노트 작성",
-  "settings.prompts.desc.post": " 모달에서 칩으로 바로 넣을 수 있어요.",
+  "settings.prompts.desc.post": " 모달에서 체크 한 번으로 요청에 함께 보낼 수 있어요.",
   "settings.prompts.empty": "저장된 프롬프트가 없어요. “새 프롬프트”로 추가하세요.",
   "settings.prompt.new": "새 프롬프트",
   "settings.prompt.editTitle": "프롬프트 편집",
@@ -213,10 +213,9 @@ const en: Record<keyof typeof ko, string> = {
   "settings.model.cliDefault": "CLI default model",
 
   "settings.prompts.title": "Saved prompts",
-  "settings.prompts.desc.pre":
-    "Save instructions you use often and insert them as chips right from the ",
+  "settings.prompts.desc.pre": "Save the instructions you use often and tick them in the ",
   "settings.prompts.desc.bold": "Write note with AI",
-  "settings.prompts.desc.post": " modal.",
+  "settings.prompts.desc.post": " modal — they travel with your request instead of filling the box.",
   "settings.prompts.empty": "No saved prompts yet. Add one with “New prompt”.",
   "settings.prompt.new": "New prompt",
   "settings.prompt.editTitle": "Edit prompt",

@@ -2292,21 +2292,74 @@ html.widget-root #root {
   color: var(--text);
 }
 
-/* 저장 프롬프트 칩 (AI 작성 모달) — 내장 프리셋과 구분되는 톤 */
-.chip.chip-saved {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+/* 칩 줄 — AI 모달의 지시 칩 묶음 */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* 선택 토글 칩 (AI 모달의 저장 프롬프트·빠른 지시) — 누르면 텍스트를 입력칸에 붙이지 않고
+   '요청에 포함' 상태만 켠다(합치기는 lib/aiInstruction). 켜짐 = success 채움 + 체크(§3):
+   primary 필로 칠하면 칩이 버튼처럼 보이고 여러 개가 켜지면 판이 무거워진다 — '들어간다(OK)'는
+   결과 색 계열이 뜻에 맞다. 대비: success-text on success-soft 6.81:1(라이트) · 10.98:1(다크). */
+.chip.chip-choice {
+  appearance: none;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  gap: 5px;
+  padding: 4px 10px 4px 8px;
+  background: var(--surface);
   border-color: var(--border-strong);
   color: var(--text);
-  max-width: 240px;
+  cursor: pointer;
+  max-width: 100%;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease,
+    transform 0.16s var(--ease-out);
+}
+.chip.chip-choice:hover {
+  background: var(--surface-2);
+  border-color: var(--text-3);
+}
+.chip.chip-choice:active {
+  transform: scale(0.97);
+}
+.chip.chip-choice:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.chip.chip-choice svg {
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+.chip.chip-choice .chip-label {
+  max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.chip.chip-saved svg {
-  flex-shrink: 0;
-  color: var(--text-3);
+.chip.chip-choice.on {
+  background: var(--success-soft);
+  border-color: var(--success);
+  color: var(--success-text);
+}
+.chip.chip-choice.on svg {
+  color: var(--success);
+}
+@media (prefers-reduced-motion: reduce) {
+  .chip.chip-choice {
+    transition:
+      background 0.12s ease,
+      border-color 0.12s ease,
+      color 0.12s ease;
+  }
+  .chip.chip-choice:active {
+    transform: none;
+  }
 }
 
 /* ---- mermaid 다이어그램 ---- */
@@ -3280,9 +3333,11 @@ html.widget-root #root {
 
 /* 드래그 선택 시 뜨는 플로팅 "질문" 버튼 */
 /* 선택 툴바(질문 / 개념으로) — 컨테이너가 위치를 잡고 버튼은 나란히 */
+/* 질문 레이어(FAB·목록 트리거·팝오버)는 본문 위(페이지 찾기 30)·모달 오버레이(50) 아래 — 예전 90대는
+   "AI로 작성" 모달 위로 '질문 N' 트리거가 떠 있었다(실측). 툴팁(300)·Select 메뉴(60)는 그대로 위. */
 .cmt-fab-bar {
   position: fixed;
-  z-index: 90;
+  z-index: 40;
   display: inline-flex;
   gap: 4px;
 }
@@ -3311,7 +3366,7 @@ html.widget-root #root {
    left/width 는 JS 가 여백을 실측해 인라인으로 넣고, 여백이 좁으면 아래 right 폴백으로 우측에 뜬다. */
 .cmt-pop {
   position: fixed;
-  z-index: 95;
+  z-index: 45;
   top: 76px;
   right: 16px;
   width: 380px;
@@ -3340,7 +3395,7 @@ html.widget-root #root {
    여백이 좁으면 아래 기본값(우측 상단)으로 폴백한다. */
 .cmt-list-trigger {
   position: fixed;
-  z-index: 93;
+  z-index: 43;
   top: 76px;
   right: 16px;
   display: inline-flex;

@@ -201,6 +201,38 @@ export function TagChip({
 /** 호버 툴팁 — 자식을 감싸면 잠깐 머무를 때 라벨이 뜬다.
  *  네이티브 `title` 은 Tauri macOS WKWebView 에서 안 뜨므로 아이콘 버튼 힌트는 이걸 쓴다.
  *  라벨은 body 로 portal → 사이드바 overflow 에 안 잘린다. 접근성 이름은 자식에 aria-label 로 따로. */
+/** 선택 토글 칩 — AI 모달의 저장 프롬프트·빠른 지시. 누르면 텍스트를 입력칸에 붙이는 대신
+ *  '요청에 포함' 상태만 켜고 끈다(합치기는 lib/aiInstruction). 켜짐 = success 채움 + 체크(§3).
+ *  `hint` 를 주면 호버 툴팁으로 내용을 미리 보인다 — 이름만으로는 무엇이 들어가는지 모른다. */
+export function ChoiceChip({
+  label,
+  on,
+  onToggle,
+  icon = "plus",
+  hint,
+}: {
+  label: string;
+  on: boolean;
+  onToggle: () => void;
+  /** 꺼져 있을 때의 앞 아이콘 (켜지면 항상 체크) */
+  icon?: IconName;
+  hint?: string;
+}) {
+  const chip = (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={on}
+      className={`chip chip-choice ${on ? "on" : ""}`}
+      onClick={onToggle}
+    >
+      <Icon name={on ? "check" : icon} size={12} />
+      <span className="chip-label">{label}</span>
+    </button>
+  );
+  return hint ? <Tooltip label={hint}>{chip}</Tooltip> : chip;
+}
+
 export function Tooltip({
   label,
   children,
