@@ -116,6 +116,14 @@ const AUGMENT_SYSTEM_PROMPT: &str = include_str!("../context/concept-augment.md"
 // 간헐적으로 깨진다 → "raw 마크다운 그 자체"만 받고 봉투 .result 를 그대로 본문으로 쓴다(CLI 가 이스케이프 담당).
 const NOTE_SYSTEM_PROMPT: &str = include_str!("../context/note-compose.md");
 const NOTE_EDIT_SYSTEM_PROMPT: &str = include_str!("../context/note-edit.md");
+// SVG 그래픽 스타일 가이드 — 노트 작성·부분 수정 프롬프트 끝에 항상 덧붙인다(note_prompt). 차트가 앱의
+// 모노톤 판과 한 벌로 보이게: 요청마다 스타일이 달라지면 같은 노트 안 그림들이 다른 제품에서 붙여 온 듯 보인다.
+const SVG_STYLE_PROMPT: &str = include_str!("../context/svg-style.md");
+
+/// 노트 프롬프트 + SVG 스타일 가이드. 언어 지시(sys)는 이 뒤에 붙는다.
+fn note_prompt(base: &str) -> String {
+    format!("{base}\n\n{SVG_STYLE_PROMPT}")
+}
 
 // 필기노트 인라인 질문(노션 댓글식): 드래그한 문장 + 질문 → 짧은 답변.
 // 노트 본문을 불리지 않는 별도 Q&A 라 "간결함"을 프롬프트로 강제한다.
@@ -574,7 +582,7 @@ pub async fn ai_note_compose(
     );
 
     let (result_str, meta) =
-        run_provider_text(kind, program, model, dur, &sys(NOTE_SYSTEM_PROMPT, lang.as_deref()), input)
+        run_provider_text(kind, program, model, dur, &sys(&note_prompt(NOTE_SYSTEM_PROMPT), lang.as_deref()), input)
             .await?;
 
     // 전체를 감싼 코드펜스만 벗기고(본문 내부 코드블록은 보존) 그대로 마크다운 본문으로 사용
@@ -632,7 +640,7 @@ pub async fn ai_note_compose_stream(
         program,
         model,
         dur,
-        &sys(NOTE_SYSTEM_PROMPT, lang.as_deref()),
+        &sys(&note_prompt(NOTE_SYSTEM_PROMPT), lang.as_deref()),
         input,
         &dirs,
         &on_delta,
@@ -711,7 +719,7 @@ pub async fn ai_note_edit_span(
         program,
         model,
         dur,
-        &sys(NOTE_EDIT_SYSTEM_PROMPT, lang.as_deref()),
+        &sys(&note_prompt(NOTE_EDIT_SYSTEM_PROMPT), lang.as_deref()),
         input,
         &dirs,
         &on_delta,
@@ -1702,6 +1710,18 @@ mod tests {
         assert_eq!(codex_event(&serde_json::json!({"type":"thread.started","thread_id":"t"})), CodexEv::Other);
     }
 
+    // 차트 스타일은 요청마다 달라지면 안 된다 — 노트 프롬프트 둘 다 같은 가이드를 끝에 싣고, 언어 지시는 그 뒤다
+    #[test]
+    fn note_prompts_carry_the_svg_style_guide() {
+        for base in [NOTE_SYSTEM_PROMPT, NOTE_EDIT_SYSTEM_PROMPT] {
+            let p = note_prompt(base);
+            assert!(p.starts_with(base), "본문 프롬프트가 앞에 그대로 와야 한다");
+            assert!(p.contains("# SVG graphics style"), "스타일 가이드가 빠졌다");
+        }
+        let s = sys(&note_prompt(NOTE_SYSTEM_PROMPT), Some("en"));
+        assert!(s.rfind("[Output language").unwrap() > s.rfind("# SVG graphics style").unwrap());
+    }
+
     #[test]
     fn sys_appends_directive_after_the_prompt() {
         let out = sys("BODY", Some("en"));
@@ -1757,6 +1777,7 @@ mod tests {
             ("note-compose", NOTE_SYSTEM_PROMPT),
             ("note-edit", NOTE_EDIT_SYSTEM_PROMPT),
             ("note-ask", ASK_SYSTEM_PROMPT),
+            ("svg-style", SVG_STYLE_PROMPT),
         ] {
             assert!(
                 !body.contains("usually Korean"),

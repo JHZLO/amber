@@ -13,6 +13,7 @@ Amber의 AI 기능이 쓰는 시스템 프롬프트 모음이다. 각 파일은 
 | `note-edit.md`        | `ai_note_edit_span` | 필기노트의 **한 조각만** 고쳐 쓰기 (선택 영역 / 절 하나) | 조각을 대신할 raw 텍스트 |
 | `note-ask.md`         | `ai_note_ask` | 노트 인라인 질문에 짧은 답변 | 평문 텍스트 |
 | `diagram-erd.md`      | `ai_erd_generate_stream` | 다이어그램 탭: 스키마 DDL → ERD mermaid | raw mermaid 소스 |
+| `svg-style.md`        | (`note-compose`·`note-edit` 끝에 덧붙임 — `ai.rs` `note_prompt`) | 노트 안 SVG 차트의 스타일 가이드 — 잉크 톤 램프·두 색 예산·직접 라벨링으로 앱의 모노톤 판과 한 벌 | (규칙만, 출력 없음) |
 
 > 데일리 리포트 프롬프트만 예외로 `src-tauri/src/report.rs` 안에 인라인 상수
 > (`REPORT_SYSTEM_PROMPT`)로 있다 — 수집한 활동 데이터 포맷과 강하게 묶여 있어서다.
