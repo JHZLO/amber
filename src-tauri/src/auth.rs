@@ -7,7 +7,7 @@
 // 왜 가능한가: `claude auth login` 은 TTY 를 요구하지 않는다 — stdout 으로 인증 URL 을 뱉고
 // stdin 으로 붙여넣은 코드를 읽는다. 앱이 그 자식 프로세스를 붙들고 있으면
 // (URL → 브라우저, 코드 → stdin) 모달 안에서 흐름이 닫힌다. codex 는 브라우저 콜백으로 스스로
-// 끝나 코드 입력 단계가 없다. gemini 는 대화형 TUI 뿐이라 지원하지 않는다.
+// 끝나 코드 입력 단계가 없다.
 //
 // **자격증명은 만지지 않는다.** 코드는 자식 stdin 으로 흘려보낼 뿐이고 토큰 저장은 CLI 가 제
 // 저장소(macOS 키체인)에 한다 — Amber 의 DB·설정에는 아무것도 남지 않는다.
@@ -90,7 +90,6 @@ fn login_args(kind: ProviderKind) -> Option<&'static [&'static str]> {
         // --claudeai: 구독 로그인(기본값이지만 CLI 가 물어보지 않게 명시한다)
         ProviderKind::Claude => Some(&["auth", "login", "--claudeai"]),
         ProviderKind::Codex => Some(&["login"]),
-        ProviderKind::Gemini => None,
     }
 }
 
@@ -245,13 +244,12 @@ fn cancel_running() {
 mod tests {
     use super::*;
 
-    // gemini 는 대화형 TUI 뿐이라 앱 안 로그인이 없다 — 지원 여부가 한 곳에서만 정해져야
-    // 상태 조회와 로그인 시작이 서로 다른 말을 하지 않는다.
+    // 지원 여부가 한 곳에서만 정해져야 상태 조회와 로그인 시작이 서로 다른 말을 하지 않는다.
+    // (gemini 는 대화형 TUI 뿐이라 여기서 None 이었고, v0.20.10 에서 프로바이더 자체를 뺐다.)
     #[test]
     fn only_clis_with_headless_login_are_supported() {
         assert!(login_args(ProviderKind::Claude).is_some());
         assert!(login_args(ProviderKind::Codex).is_some());
-        assert!(login_args(ProviderKind::Gemini).is_none());
     }
 
     // 프론트(lib/auth.ts)가 읽는 모양 그대로 나가는지 — 태그·키가 어긋나면 타입 검사로는

@@ -1,7 +1,7 @@
 # context — AI 시스템 프롬프트
 
 Amber의 AI 기능이 쓰는 시스템 프롬프트 모음이다. 각 파일은 한 기능에 대해 AI CLI
-(Claude / Codex / Gemini)로 **그대로(verbatim)** 전달되는 프롬프트 본문이다.
+(Claude / Codex)로 **그대로(verbatim)** 전달되는 프롬프트 본문이다.
 `src-tauri/src/ai.rs`에서 `include_str!`로 바이너리에 컴파일해 넣으므로,
 **프롬프트를 고치면 재빌드가 필요하다**(`pnpm tauri dev` / `pnpm tauri build`).
 

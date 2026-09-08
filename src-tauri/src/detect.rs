@@ -9,7 +9,7 @@ use tokio::time::timeout;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DetectedCli {
-    /// 프로바이더 식별자: "claude" | "codex" | "gemini"
+    /// 프로바이더 식별자: "claude" | "codex"
     pub id: String,
     /// 표시용 이름
     pub name: String,
@@ -22,7 +22,6 @@ pub struct DetectedCli {
 const CANDIDATES: &[(&str, &str)] = &[
     ("claude", "Claude Code"),
     ("codex", "OpenAI Codex CLI"),
-    ("gemini", "Gemini CLI"),
 ];
 
 /// 로그인 셸로 바이너리 경로 해석 (zsh 기본, 실패 시 bash 폴백)

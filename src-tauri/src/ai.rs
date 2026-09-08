@@ -1,4 +1,4 @@
-// AI 프로바이더 브리지 (claude/codex/gemini) — headless CLI 로 노트 생성/보강/질문.
+// AI 프로바이더 브리지 (claude/codex) — headless CLI 로 노트 생성/보강/질문.
 // 붙여넣은 AI Q&A 원문 → 로컬 CLI (claude 는 `claude -p --output-format json`) → 요약+상세 노트(JSON).
 // 봉투(envelope) 안의 .result 문자열에 우리 계약 JSON 이 또 들어있어 "이중 파싱"이 필요하다 (PRD §6).
 // stdin 으로 원문을 넘기고 EOF 를 확실히 닫기 위해 tokio::process 를 직접 사용한다.
@@ -159,21 +159,20 @@ fn sys(prompt: &str, lang: Option<&str>) -> String {
 
 // ---- 프로바이더 추상화 ----
 // AI 를 특정 벤더에 묶지 않는다. claude 는 풍부한 경로(JSON 봉투 + 스트리밍)를 쓰고,
-// codex/gemini 는 "stdin 프롬프트 → 최종 텍스트" 공통 경로를 쓴다.
-// (codex: `exec -` 가 stdin 을 프롬프트로 읽고 최종 메시지만 stdout, 진행 로그는 stderr.
-//  gemini: non-TTY stdin 파이프 + --output-format json 의 .response 가 최종 텍스트.)
+// codex 는 "stdin 프롬프트 → 최종 텍스트" 경로(`exec -`: stdin 이 프롬프트, 최종 메시지만 stdout,
+// 진행 로그는 stderr)를 쓴다. gemini 는 v0.20.10 에서 지원을 끝냈다 — 대화형 TUI 뿐이라 앱 안 로그인이
+// 없고 비스트리밍 경로만 남아 새 기능(참고 폴더·진행 표시)마다 반쪽이 됐다.
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ProviderKind {
     Claude,
     Codex,
-    Gemini,
 }
 
 pub(crate) fn provider_kind(p: Option<&str>) -> ProviderKind {
     match p {
         Some("codex") => ProviderKind::Codex,
-        Some("gemini") => ProviderKind::Gemini,
+        // 알 수 없는 값(예전 "gemini" 포함)은 claude 로 본다 — 프론트(config.ts)가 미연결로 걸러 여기까지 오지 않는다
         _ => ProviderKind::Claude,
     }
 }
@@ -182,11 +181,10 @@ pub(crate) fn default_binary(kind: ProviderKind) -> &'static str {
     match kind {
         ProviderKind::Claude => "claude",
         ProviderKind::Codex => "codex",
-        ProviderKind::Gemini => "gemini",
     }
 }
 
-/// 모델 결정: claude 는 기본 모델 폴백, codex/gemini 는 빈 값 = CLI 기본 모델 사용(-m 미전달)
+/// 모델 결정: claude 는 기본 모델 폴백, codex 는 빈 값 = CLI 기본 모델 사용(-m 미전달)
 pub(crate) fn resolve_model(kind: ProviderKind, model: Option<String>) -> String {
     let m = model.filter(|m| !m.is_empty());
     match kind {
@@ -208,26 +206,9 @@ pub(crate) async fn run_provider_text(
         ProviderKind::Claude => {
             spawn_claude_result(program, model, dur, system_prompt, input).await
         }
-        _ => spawn_simple_cli_result(kind, program, model, dur, system_prompt, input, &[]).await,
-    }
-}
-
-/// `run_provider_text` 와 같되 참고 폴더를 넘긴다(비스트리밍 경로 — gemini). claude 는 여기서도
-/// 폴더를 열지 않는다: 노트 경로는 항상 스트리밍(run_note_provider)이라 이 조합은 오지 않는다.
-pub(crate) async fn run_provider_text_with_dirs(
-    kind: ProviderKind,
-    program: String,
-    model: String,
-    dur: Duration,
-    system_prompt: &str,
-    input: String,
-    ref_dirs: &[String],
-) -> Result<(String, MetaOut), AiError> {
-    match kind {
-        ProviderKind::Claude => {
-            spawn_claude_result(program, model, dur, system_prompt, input).await
+        ProviderKind::Codex => {
+            spawn_simple_cli_result(program, model, dur, system_prompt, input).await
         }
-        _ => spawn_simple_cli_result(kind, program, model, dur, system_prompt, input, ref_dirs).await,
     }
 }
 
@@ -257,40 +238,23 @@ fn classify_failure(text: &str) -> (&'static str, &'static str) {
     }
 }
 
-/// codex/gemini 공용: 시스템 프롬프트를 프롬프트 상단에 합쳐(전용 플래그 없음) stdin 으로 전달.
+/// codex(비스트리밍): 시스템 프롬프트를 프롬프트 상단에 합쳐(전용 플래그 없음) stdin 으로 전달.
 async fn spawn_simple_cli_result(
-    kind: ProviderKind,
     program: String,
     model: String,
     dur: Duration,
     system_prompt: &str,
     input: String,
-    // 참고 폴더 — gemini 만 여기서 연다(--include-directories). codex 는 stream_codex_result 가 -C 로 연다.
-    ref_dirs: &[String],
 ) -> Result<(String, MetaOut), AiError> {
     let combined = format!("[지시사항 — 반드시 그대로 따를 것]\n{system_prompt}\n\n{input}");
     let started = std::time::Instant::now();
 
     let mut cmd = Command::new(&program);
-    match kind {
-        ProviderKind::Codex => {
-            // `-` = stdin 프롬프트. --ephemeral: 세션 파일 미저장, --skip-git-repo-check: repo 밖 실행 허용.
-            // exec 기본 샌드박스는 read-only 라 순수 텍스트 변환에 안전.
-            cmd.args(["exec", "-", "--ephemeral", "--skip-git-repo-check"]);
-            if !model.is_empty() {
-                cmd.args(["-m", &model]);
-            }
-        }
-        ProviderKind::Gemini => {
-            cmd.args(["--output-format", "json"]);
-            if !model.is_empty() {
-                cmd.args(["-m", &model]);
-            }
-            if !ref_dirs.is_empty() {
-                cmd.args(["--include-directories", &ref_dirs.join(",")]);
-            }
-        }
-        ProviderKind::Claude => unreachable!("claude 는 spawn_claude_result 경로"),
+    // `-` = stdin 프롬프트. --ephemeral: 세션 파일 미저장, --skip-git-repo-check: repo 밖 실행 허용.
+    // exec 기본 샌드박스는 read-only 라 순수 텍스트 변환에 안전.
+    cmd.args(["exec", "-", "--ephemeral", "--skip-git-repo-check"]);
+    if !model.is_empty() {
+        cmd.args(["-m", &model]);
     }
 
     let mut child = cmd
@@ -339,16 +303,9 @@ async fn spawn_simple_cli_result(
         return Err(AiError::detailed(code, msg, stderr.trim()));
     }
 
+    // codex: 최종 메시지만 stdout 에 나온다
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let text = match kind {
-        // gemini: JSON 봉투의 .response 가 최종 텍스트 (파싱 실패 시 raw 폴백)
-        ProviderKind::Gemini => serde_json::from_str::<serde_json::Value>(stdout.trim())
-            .ok()
-            .and_then(|v| v.get("response").and_then(|r| r.as_str()).map(String::from))
-            .unwrap_or_else(|| stdout.trim().to_string()),
-        // codex: 최종 메시지만 stdout 에 나온다
-        _ => stdout.trim().to_string(),
-    };
+    let text = stdout.trim().to_string();
     if text.is_empty() {
         return Err(AiError::new("AI_ERROR", "빈 응답입니다."));
     }
@@ -885,7 +842,7 @@ pub async fn ai_erd_generate_stream(
         stream_claude_result(program, model, dur, &sys(ERD_SYSTEM_PROMPT, lang.as_deref()), input, &[], &on_delta, cancel_key.as_deref())
             .await?
     } else {
-        // codex/gemini 는 스트리밍 미지원 경로 — 완료 후 전체 텍스트를 한 번에 전송
+        // codex 는 스트리밍 미지원 경로 — 완료 후 전체 텍스트를 한 번에 전송
         let r = run_provider_text(kind, program, model, dur, &sys(ERD_SYSTEM_PROMPT, lang.as_deref()), input)
             .await?;
         let _ = on_delta.send(r.0.clone());
@@ -1189,8 +1146,7 @@ async fn stream_codex_result(
 }
 
 /// 노트 작성·부분 수정 공용 실행 — 참고 폴더가 있으면 읽기 도구만 열어 주고, 진행(도구 호출)을 on_activity 로
-/// 흘린다. claude 는 stream-json, codex 는 `exec --json`(활동만 실시간, 본문은 끝나고 한 번에),
-/// gemini 는 완료 후 한 번에(`--include-directories` 로 폴더만 연다).
+/// 흘린다. claude 는 stream-json, codex 는 `exec --json`(활동만 실시간, 본문은 끝나고 한 번에).
 async fn run_note_provider(
     kind: ProviderKind,
     program: String,
@@ -1232,20 +1188,6 @@ async fn run_note_provider(
                 cancel_key,
             )
             .await
-        }
-        ProviderKind::Gemini => {
-            let r = run_provider_text_with_dirs(
-                kind,
-                program,
-                model,
-                dur,
-                system_prompt,
-                input,
-                ref_dirs,
-            )
-            .await?;
-            let _ = on_delta.send(r.0.clone());
-            Ok(r)
         }
     }
 }

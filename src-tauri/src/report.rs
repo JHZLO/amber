@@ -1351,7 +1351,7 @@ pub async fn report_generate(
     cancel_key: Option<String>,
 ) -> Result<ReportResult, AiError> {
     let kind = provider_kind(provider.as_deref());
-    // MCP 위임은 claude 경로 전용 (codex/gemini 는 later)
+    // MCP 위임은 claude 경로 전용 (codex 는 later)
     let use_mcp = kind == ProviderKind::Claude && !mcp_sources.is_empty();
 
     let has_activity = !todos_digest.trim().is_empty()
@@ -1717,7 +1717,7 @@ fn parse_mcp_list(text: &str) -> Vec<McpServer> {
     out
 }
 
-/// 연결된 claude 프로바이더에 등록된 MCP 서버 목록. codex/gemini 는 빈 목록(호출부에서 미사용).
+/// 연결된 claude 프로바이더에 등록된 MCP 서버 목록. codex 는 빈 목록(호출부에서 미사용).
 #[tauri::command]
 pub async fn report_mcp_servers(cli_path: Option<String>) -> Vec<McpServer> {
     let program = cli_path

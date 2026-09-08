@@ -1,5 +1,5 @@
 // settings 도메인 문자열 — 키는 "settings." 접두어 (충돌 방지). en 은 ko 와 키가 1:1 (누락 = 컴파일 에러).
-// 제품명(Claude Code · OpenAI Codex CLI · Gemini CLI)과 모델명(Opus 5 등)은 번역하지 않는다 —
+// 제품명(Claude Code · OpenAI Codex CLI)과 모델명(Opus 5 등)은 번역하지 않는다 —
 // 모델 라벨은 config.ts 에서 "모델명 (수식어)" 로 조합하고 여기엔 수식어만 둔다.
 // 언어 선택지 라벨(한국어/English)은 자기 표기 그대로라 사전에 넣지 않는다 (SettingsModal 의 LANGS).
 
@@ -30,7 +30,7 @@ const ko = {
   "settings.ai.none": "연결된 AI 가 없어요. 설치된 CLI 를 감지해 연결하세요.",
   "settings.ai.searching": "설치된 AI CLI 를 찾는 중…",
   "settings.ai.notFound":
-    "설치된 AI CLI 를 찾지 못했어요. claude · codex · gemini 중 하나를 설치하고 로그인한 뒤 다시 감지하세요.",
+    "설치된 AI CLI 를 찾지 못했어요. claude · codex 중 하나를 설치하고 로그인한 뒤 다시 감지하세요.",
   "settings.ai.pathLabel": "{name} 경로",
   "settings.ai.test": "연결 테스트",
   "settings.ai.testOk": "연결 성공 — {version}",
@@ -109,7 +109,7 @@ const ko = {
   "settings.onb.lead.pre": "Amber 의 AI 기능(개념 정리·노트 작성·인라인 질문)은 ",
   "settings.onb.lead.bold": "이미 쓰고 있는 AI CLI 의 로그인 세션",
   "settings.onb.lead.post": "을 그대로 사용해요. API 키를 따로 저장하지 않습니다.",
-  "settings.onb.searchHint": "로그인 셸 PATH 에서 claude · codex · gemini 를 확인해요",
+  "settings.onb.searchHint": "로그인 셸 PATH 에서 claude · codex 를 확인해요",
   "settings.onb.emptyTitle": "설치된 AI CLI 를 찾지 못했어요.",
   "settings.onb.emptyBody":
     "아래 중 하나를 설치·로그인한 뒤 설정(⚙)에서 다시 감지할 수 있어요.",
@@ -167,7 +167,7 @@ const en: Record<keyof typeof ko, string> = {
   "settings.ai.none": "No AI connected. Detect an installed CLI to connect one.",
   "settings.ai.searching": "Looking for installed AI CLIs…",
   "settings.ai.notFound":
-    "Couldn't find an installed AI CLI. Install and log in to one of claude · codex · gemini, then detect again.",
+    "Couldn't find an installed AI CLI. Install and log in to one of claude · codex, then detect again.",
   "settings.ai.pathLabel": "{name} path",
   "settings.ai.test": "Test connection",
   "settings.ai.testOk": "Connected — {version}",
@@ -243,7 +243,7 @@ const en: Record<keyof typeof ko, string> = {
     "Amber's AI features (concept summaries, note writing, inline questions) reuse ",
   "settings.onb.lead.bold": "the login session of the AI CLI you already use",
   "settings.onb.lead.post": ". No API key is stored.",
-  "settings.onb.searchHint": "Checks your login shell PATH for claude · codex · gemini",
+  "settings.onb.searchHint": "Checks your login shell PATH for claude · codex",
   "settings.onb.emptyTitle": "Couldn't find an installed AI CLI.",
   "settings.onb.emptyBody":
     "Install and log in to one below, then detect again in Settings (⚙).",

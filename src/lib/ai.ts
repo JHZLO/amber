@@ -320,7 +320,7 @@ export async function aiHealth(cliPath?: string | null): Promise<string> {
 // ---- AI CLI 자동 감지 (온보딩/설정) ----
 
 export interface DetectedCli {
-  id: "claude" | "codex" | "gemini";
+  id: "claude" | "codex";
   name: string;
   path: string;
   version: string;

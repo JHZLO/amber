@@ -1,17 +1,18 @@
 // 앱 설정 (settings 테이블에 key/value 로 저장).
-// AI 는 특정 벤더에 묶지 않는다 — 온보딩/설정에서 감지·연결한 프로바이더(claude/codex/gemini)를
+// AI 는 특정 벤더에 묶지 않는다 — 온보딩/설정에서 감지·연결한 프로바이더(claude/codex)를
 // ai_provider 로 저장하고, 경로/모델은 프로바이더별 키로 보관한다.
 
 import { getSetting, setSetting } from "./db";
 import { setAiLangSetting, t, type AiLang } from "./i18n";
 
-export type AiProvider = "claude" | "codex" | "gemini";
+// gemini 는 v0.20.10 에서 지원을 끝냈다 — 대화형 TUI 뿐이라 앱 안 로그인이 없고, 비스트리밍 경로만 남아
+// 참고 폴더·진행 표시 같은 기능이 매번 반쪽이 됐다. 저장돼 있던 "gemini" 는 isProvider 가 걸러 미연결로 돌아간다.
+export type AiProvider = "claude" | "codex";
 
 // 제품명 — 번역하지 않는다 (고유명사)
 export const PROVIDER_LABELS: Record<AiProvider, string> = {
   claude: "Claude Code",
   codex: "OpenAI Codex CLI",
-  gemini: "Gemini CLI",
 };
 
 /** 프로바이더별 모델 선택지. 빈 id = CLI 기본 모델 사용(설정 파일의 model 값을 따름).
@@ -31,7 +32,6 @@ export const PROVIDER_MODELS: Record<AiProvider, { id: string; label: string }[]
     { id: "gpt-5.5", label: "GPT-5.5" },
     { id: "", label: t("settings.model.cliDefault") },
   ],
-  gemini: [{ id: "", label: t("settings.model.cliDefault") }],
 };
 
 export interface AppConfig {
@@ -50,7 +50,7 @@ export interface AppConfig {
 const DEFAULT_CLAUDE_MODEL = "claude-opus-4-8";
 
 const isProvider = (v: string | null): v is AiProvider =>
-  v === "claude" || v === "codex" || v === "gemini";
+  v === "claude" || v === "codex";
 
 const pathKey = (p: AiProvider) => `ai_path_${p}`;
 const modelKey = (p: AiProvider) => `ai_model_${p}`;

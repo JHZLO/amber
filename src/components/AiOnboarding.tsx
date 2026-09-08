@@ -19,7 +19,6 @@ import { Icon } from "../icons";
 const INSTALL_LINKS: Record<AiProvider, string> = {
   claude: "https://claude.com/claude-code",
   codex: "https://developers.openai.com/codex",
-  gemini: "https://github.com/google-gemini/gemini-cli",
 };
 
 export function AiOnboarding({
