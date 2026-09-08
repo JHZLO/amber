@@ -24,6 +24,8 @@ export interface InvocationMeta {
   input_tokens: number | null;
   output_tokens: number | null;
   duration_ms: number | null;
+  /** 출력 토큰 상한에서 잘렸는가 — 끝부분이 끊겨 있을 수 있다 */
+  truncated: boolean;
 }
 
 export interface GenerateResult {

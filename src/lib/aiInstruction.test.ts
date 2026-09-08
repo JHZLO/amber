@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { composeInstruction } from "./aiInstruction";
+import { composeInstruction, tailSpan } from "./aiInstruction";
 
 describe("composeInstruction", () => {
   it("returns the typed text alone when nothing is chosen", () => {
@@ -23,3 +23,21 @@ describe("composeInstruction", () => {
   });
 });
 
+
+describe("tailSpan", () => {
+  it("returns the whole text when it is short", () => {
+    expect(tailSpan("short", 700)).toBe("short");
+  });
+
+  it("starts the tail at a line boundary before the size limit", () => {
+    const body = "line one\nline two\nline three\nline four";
+    const tail = tailSpan(body, 12);
+    expect(tail).toBe("line three\nline four");
+    expect(body.endsWith(tail)).toBe(true);
+  });
+
+  it("falls back to a hard cut when there is no earlier line break", () => {
+    const one = "x".repeat(50);
+    expect(tailSpan(one, 10)).toBe("x".repeat(10));
+  });
+});

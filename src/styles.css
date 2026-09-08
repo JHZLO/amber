@@ -1193,7 +1193,8 @@ body.resizing-col .pane-resizer::after {
 /* 결과 알림: 좌측 바 + 옅은 배경. 방금 누른 것의 답이라 성공·실패 둘 다 색을 갖는다(§2 결과 색).
    기본형(무채색)은 결과가 아닌 알림용으로 남겨 둔다 — 색은 .ok-note/.error-note 가 얹는다. */
 .error-note,
-.ok-note {
+.ok-note,
+.warn-note {
   background: var(--surface-2);
   color: var(--text);
   border-left: 3px solid var(--text);
@@ -1207,6 +1208,20 @@ body.resizing-col .pane-resizer::after {
   background: var(--success-soft);
   color: var(--success-text);
   border-left-color: var(--success);
+}
+/* 경고 — 실패도 성공도 아닌 "확인해 볼 것"(예: AI 출력이 상한에서 잘림). 바탕은 무채색 그대로 두고
+   좌측 바만 --warning: 배경까지 칠하면 실패(error-note)와 같은 무게로 읽힌다 */
+.warn-note {
+  border-left-color: var(--warning);
+}
+/* 잘림 경고 + [이어서 쓰기] 한 줄 — 버튼은 문장과 같은 줄 오른쪽 끝(§3: 멈출·이을 대상과 같은 줄) */
+.ai-truncated {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ai-truncated > span {
+  flex: 1;
 }
 .error-note {
   background: var(--danger-soft);

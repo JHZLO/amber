@@ -323,6 +323,7 @@ async fn spawn_simple_cli_result(
         input_tokens: None,
         output_tokens: None,
         duration_ms: Some(started.elapsed().as_millis() as i64),
+        truncated: false,
     };
     Ok((text, meta))
 }
@@ -352,6 +353,9 @@ pub struct MetaOut {
     pub input_tokens: Option<i64>,
     pub output_tokens: Option<i64>,
     pub duration_ms: Option<i64>,
+    /// 출력 토큰 상한에 닿아 문장 중간에서 끊겼는가(claude `stop_reason == max_tokens`). 조용히 완료로 두면
+    /// 잘린 노트가 정상처럼 diff 에 올라온다.
+    pub truncated: bool,
 }
 
 /// 필기노트 작성 결과 = 마크다운 본문 + 메타 (JSON 계약 없이 raw 마크다운)
@@ -428,6 +432,8 @@ struct Envelope {
     #[serde(default)]
     is_error: bool,
     subtype: Option<String>,
+    /// `max_tokens` 면 출력이 상한에서 잘린 것 — 프론트가 경고와 '이어서 쓰기'를 띄운다
+    stop_reason: Option<String>,
     result: Option<String>,
     session_id: Option<String>,
     total_cost_usd: Option<f64>,
@@ -1156,6 +1162,7 @@ async fn stream_codex_result(
             input_tokens: usage.0,
             output_tokens: usage.1,
             duration_ms: Some(started.elapsed().as_millis() as i64),
+        truncated: false,
         },
     ))
 }
@@ -1465,8 +1472,14 @@ pub(crate) async fn stream_claude_result_ext(
         input_tokens: usage.as_ref().and_then(|u| u.input_tokens),
         output_tokens: usage.as_ref().and_then(|u| u.output_tokens),
         duration_ms: envelope.duration_ms,
+        truncated: is_truncated(envelope.stop_reason.as_deref()),
     };
     Ok((result_str, meta))
+}
+
+/// 결과 봉투의 stop_reason 이 출력 상한(max_tokens)인가. end_turn·stop_sequence·없음은 정상 종료로 본다
+fn is_truncated(stop_reason: Option<&str>) -> bool {
+    stop_reason == Some("max_tokens")
 }
 
 /// stdout 이 훅/경고 텍스트로 오염됐을 때를 대비해 최외곽 JSON 객체만 도려내 재시도한다.
@@ -1587,6 +1600,7 @@ async fn spawn_claude_result(
         input_tokens: usage.as_ref().and_then(|u| u.input_tokens),
         output_tokens: usage.as_ref().and_then(|u| u.output_tokens),
         duration_ms: envelope.duration_ms,
+        truncated: is_truncated(envelope.stop_reason.as_deref()),
     };
     Ok((result_str, meta))
 }
@@ -1778,6 +1792,14 @@ mod tests {
         assert_eq!(resolve_model(ProviderKind::Claude, Some("claude-fable-5-1".into())), "claude-fable-5-1");
     }
 
+    // 상한에서 잘린 응답만 잘림으로 — end_turn 을 잘림으로 보면 모든 결과에 경고가 뜬다
+    #[test]
+    fn only_max_tokens_counts_as_truncated() {
+        assert!(is_truncated(Some("max_tokens")));
+        assert!(!is_truncated(Some("end_turn")));
+        assert!(!is_truncated(None));
+    }
+
     #[test]
     fn sys_appends_directive_after_the_prompt() {
         let out = sys("BODY", Some("en"));
@@ -1805,6 +1827,7 @@ mod tests {
         let with_result = Envelope {
             is_error: true,
             subtype: Some("error_during_execution".into()),
+            stop_reason: None,
             result: Some("  boom  ".into()),
             session_id: None,
             total_cost_usd: None,

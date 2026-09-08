@@ -5,10 +5,17 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Markdown } from "./Markdown";
 import { DiffView } from "./DiffView";
 import type { AppConfig } from "../lib/config";
-import { aiCancel, aiNoteComposeStream, friendlyError, newCancelKey, type AiActivity } from "../lib/ai";
+import {
+  aiCancel,
+  aiNoteComposeStream,
+  aiNoteEditSpanStream,
+  friendlyError,
+  newCancelKey,
+  type AiActivity,
+} from "../lib/ai";
 import { loadPrompts, type SavedPrompt } from "../lib/prompts";
 import { AiThinking, ChoiceChip, DiscardAiModal, Modal, Tooltip } from "../ui";
-import { composeInstruction } from "../lib/aiInstruction";
+import { CONTINUE_INSTRUCTION, composeInstruction, tailSpan } from "../lib/aiInstruction";
 import { PromptPeekModal } from "./PromptPeekModal";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { loadRecentRefDirs, refDirName, rememberRefDir } from "../lib/refDirs";
@@ -60,6 +67,9 @@ export function NoteAiModal({
   const [confirmClose, setConfirmClose] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultMd, setResultMd] = useState("");
+  // 결과가 출력 상한에서 잘렸는가 — 경고와 [이어서 쓰기] 를 띄운다. 이어 쓴 결과도 다시 잘릴 수 있어 매번 갱신
+  const [truncated, setTruncated] = useState(false);
+  const [continuing, setContinuing] = useState(false);
   const [streamText, setStreamText] = useState(""); // 생성 중 실시간 누적 텍스트
   const [viewMode, setViewMode] = useState<ViewMode>("preview");
   const [saved, setSaved] = useState<SavedPrompt[]>([]);
@@ -89,6 +99,8 @@ export function NoteAiModal({
     setConfirmClose(false);
     setError(null);
     setResultMd("");
+    setTruncated(false);
+    setContinuing(false);
     setStreamText("");
     setViewMode("preview");
     loadPrompts().then(setSaved);
@@ -174,7 +186,7 @@ export function NoteAiModal({
     cancelKey.current = key;
     const my = ++runSeq.current;
     try {
-      const { markdown } = await aiNoteComposeStream(
+      const { markdown, meta } = await aiNoteComposeStream(
         {
           title,
           markdown: currentBody,
@@ -197,6 +209,7 @@ export function NoteAiModal({
       );
       if (my !== runSeq.current) return; // 중단·재실행됨 — 이 결과로 화면을 덮지 않는다
       setResultMd(markdown);
+      setTruncated(meta.truncated);
       // 기존 노트 편집이면 변경점(diff)을 먼저 보여주고, 새 작성이면 미리보기
       setViewMode(hasExisting ? "diff" : "preview");
       setStep("preview");
@@ -207,6 +220,58 @@ export function NoteAiModal({
       setStep("prompt");
     } finally {
       if (my === runSeq.current) cancelKey.current = null;
+    }
+  }
+
+  /** 잘린 결과 이어 쓰기 — 끝 조각(~700자)을 span 으로 넘겨 "조각 + 이어질 내용"을 받아 그 자리에 되끼운다.
+   *  전문을 다시 받지 않으니 상한에 다시 걸릴 일이 없고, 앞부분은 한 글자도 바뀌지 않는다. */
+  async function continueWriting() {
+    if (!config || !resultMd) return;
+    const tail = tailSpan(resultMd);
+    setError(null);
+    setStreamText("");
+    setActivity(null);
+    setStartedAt(Date.now());
+    setContinuing(true);
+    setStep("loading");
+    const key = newCancelKey();
+    cancelKey.current = key;
+    const my = ++runSeq.current;
+    try {
+      const { text, meta } = await aiNoteEditSpanStream(
+        {
+          title,
+          markdown: resultMd,
+          span: tail,
+          instruction: CONTINUE_INSTRUCTION,
+          spanKind: "selection",
+          model: config.model,
+          cliPath: config.cliPath,
+          provider: config.provider,
+          cancelKey: key,
+          refDirs: chosenDirs,
+        },
+        (delta) => {
+          if (my !== runSeq.current) return;
+          setStreamText((prev) => prev + delta);
+        },
+        (a) => {
+          if (my !== runSeq.current) return;
+          setActivity(a);
+          setActivityAt(Date.now());
+        },
+      );
+      if (my !== runSeq.current) return;
+      setResultMd(resultMd.slice(0, resultMd.length - tail.length) + text);
+      setTruncated(meta.truncated);
+      setStep("preview");
+    } catch (e) {
+      if (my !== runSeq.current) return;
+      setError(friendlyError(e));
+      setStep("preview"); // 잘린 결과라도 남겨 둔다 — 실패했다고 이미 받은 것을 버리지 않는다
+    } finally {
+      if (my === runSeq.current) cancelKey.current = null;
+      setContinuing(false);
     }
   }
 
@@ -358,7 +423,7 @@ export function NoteAiModal({
         <div className="note-stream">
           <AiThinking
             compact={!!streamText}
-            label={t("notes.ai.writing")}
+            label={continuing ? t("notes.ai.continuing") : t("notes.ai.writing")}
             activity={waitLine ?? undefined}
           />
           {streamText && (
@@ -370,6 +435,15 @@ export function NoteAiModal({
         </div>
       )}
 
+      {step === "preview" && truncated && (
+        <div className="warn-note ai-truncated" style={{ marginBottom: 12 }}>
+          <span>{t("notes.ai.truncated")}</span>
+          <button className="btn btn-sm" onClick={() => void continueWriting()}>
+            <Icon name="sparkles" size={13} />
+            {t("notes.ai.continue")}
+          </button>
+        </div>
+      )}
       {step === "preview" && (
         <div className="field">
           <label style={{ display: "flex", alignItems: "center" }}>

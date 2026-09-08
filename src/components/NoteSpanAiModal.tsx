@@ -70,6 +70,8 @@ export function NoteSpanAiModal({
   const [activityAt, setActivityAt] = useState(0);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
+  // 묶음 중 하나라도 출력 상한에서 잘렸는가 — 조각은 짧아 드물지만 조용히 넘기지 않는다
+  const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<string[]>([]);
   const [streamText, setStreamText] = useState("");
@@ -93,6 +95,7 @@ export function NoteSpanAiModal({
     setActivity(null);
     setStartedAt(null);
     setConfirmClose(false);
+    setTruncated(false);
     setError(null);
     setResults([]);
     setStreamText("");
@@ -206,6 +209,7 @@ export function NoteSpanAiModal({
     setStep("loading");
     const my = ++runSeq.current;
     const out: string[] = [];
+    let truncatedAny = false;
     try {
       // 묶음마다 한 번씩. 순차로 도는 이유는 화면이다 — 스트림 박스가 하나라 동시에 흘리면
       // 두 덩어리의 글자가 섞여 무엇을 보고 있는지 알 수 없게 된다.
@@ -215,7 +219,7 @@ export function NoteSpanAiModal({
         setStreamText("");
         const key = newCancelKey();
         cancelKey.current = key;
-        const { text } = await aiNoteEditSpanStream(
+        const { text, meta } = await aiNoteEditSpanStream(
           {
             title,
             markdown: body,
@@ -240,8 +244,10 @@ export function NoteSpanAiModal({
         );
         if (my !== runSeq.current) return;
         out.push(text);
+        if (meta.truncated) truncatedAny = true;
       }
       setResults(out);
+      setTruncated(truncatedAny);
       setViewMode("diff");
       setStep("preview");
     } catch (e) {
@@ -520,6 +526,11 @@ export function NoteSpanAiModal({
         </div>
       )}
 
+      {step === "preview" && truncated && (
+        <div className="warn-note" style={{ marginBottom: 12 }}>
+          {t("notes.ai.truncated")}
+        </div>
+      )}
       {step === "preview" && (
         <div className="field">
           <label style={{ display: "flex", alignItems: "center" }}>
