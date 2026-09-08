@@ -429,6 +429,7 @@ pub fn run() {
             auth::ai_auth_code,
             auth::ai_auth_cancel,
             detect::detect_ai_clis,
+            detect::codex_models,
             report::report_collect,
             report::report_generate,
             report::report_generate_weekly,

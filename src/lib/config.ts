@@ -15,17 +15,20 @@ export const PROVIDER_LABELS: Record<AiProvider, string> = {
   codex: "OpenAI Codex CLI",
 };
 
-/** 프로바이더별 모델 선택지. 빈 id = CLI 기본 모델 사용(설정 파일의 model 값을 따름).
- *  모델명(Opus 5 등)은 고유명사라 그대로 두고 괄호 수식어만 언어를 따른다. */
+/** 프로바이더별 **큐레이션** 모델 선택지. 빈 id = CLI 기본 모델(--model 미전달).
+ *  Claude 는 CLI 가 모델 카탈로그를 내주지 않아 이 목록이 전부고, Codex 는 자기 카탈로그(Rust `codex_models`)가
+ *  있으면 그쪽이 이 목록을 대체한다(lib/modelOptions.ts). 여기 없는 id 는 설정의 '직접 입력'으로 쓴다 —
+ *  새 모델이 나왔다고 앱을 고칠 필요가 없게. 모델명은 고유명사라 그대로 두고 괄호 수식어만 언어를 따른다. */
 export const PROVIDER_MODELS: Record<AiProvider, { id: string; label: string }[]> = {
   claude: [
-    { id: "claude-opus-5", label: `Opus 5 (${t("settings.model.latestQuality")})` },
-    { id: "claude-opus-4-8", label: `Opus 4.8 (${t("settings.model.quality")})` },
+    { id: "claude-fable-5-1", label: `Fable 5.1 (${t("settings.model.latestQuality")})` },
+    { id: "claude-opus-5", label: `Opus 5 (${t("settings.model.quality")})` },
     { id: "claude-sonnet-5", label: `Sonnet 5 (${t("settings.model.balanced")})` },
     {
       id: "claude-haiku-4-5-20251001",
       label: `Haiku 4.5 (${t("settings.model.fast")})`,
     },
+    { id: "", label: t("settings.model.cliDefault") },
   ],
   codex: [
     { id: "gpt-5.6-sol", label: `GPT-5.6 (${t("settings.model.latest")})` },
@@ -46,8 +49,6 @@ export interface AppConfig {
   /** AI 응답 언어. 'auto' = UI 언어를 따른다 */
   aiLang: AiLang;
 }
-
-const DEFAULT_CLAUDE_MODEL = "claude-opus-4-8";
 
 const isProvider = (v: string | null): v is AiProvider =>
   v === "claude" || v === "codex";
@@ -94,9 +95,8 @@ export async function loadConfig(): Promise<AppConfig> {
   }
 
   const cliPath = (await getSetting(pathKey(provider))) ?? "";
-  const model =
-    (await getSetting(modelKey(provider))) ??
-    (provider === "claude" ? DEFAULT_CLAUDE_MODEL : "");
+  // 저장된 값이 없으면 빈 문자열 = CLI 기본 모델. 앱이 특정 모델을 폴백으로 박지 않는다(옛 모델로 굳는다)
+  const model = (await getSetting(modelKey(provider))) ?? "";
   return { provider, onboarded, cliPath, model, aiLang };
 }
 

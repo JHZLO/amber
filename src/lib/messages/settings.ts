@@ -75,6 +75,9 @@ const ko = {
   "settings.model.fast": "속도·비용 절약",
   "settings.model.latest": "최신",
   "settings.model.cliDefault": "CLI 기본 모델",
+  "settings.model.custom": "직접 입력…",
+  "settings.model.customPh": "예: claude-fable-5-1",
+  "settings.model.customHint": "CLI 가 받는 모델 id 를 그대로 적어요. 비워 두면 CLI 기본 모델을 써요.",
 
   // 저장 프롬프트
   "settings.prompts.title": "저장 프롬프트",
@@ -211,6 +214,9 @@ const en: Record<keyof typeof ko, string> = {
   "settings.model.fast": "fast · lower cost",
   "settings.model.latest": "latest",
   "settings.model.cliDefault": "CLI default model",
+  "settings.model.custom": "Custom model id…",
+  "settings.model.customPh": "e.g. claude-fable-5-1",
+  "settings.model.customHint": "Type the id exactly as the CLI accepts it. Leave it empty to use the CLI's default model.",
 
   "settings.prompts.title": "Saved prompts",
   "settings.prompts.desc.pre": "Save the instructions you use often and tick them in the ",

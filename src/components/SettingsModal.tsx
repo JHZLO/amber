@@ -12,7 +12,8 @@ import {
   loadConfig,
   saveConfig,
 } from "../lib/config";
-import { aiHealth, detectAiClis, type DetectedCli } from "../lib/ai";
+import { aiHealth, codexModels, detectAiClis, type DetectedCli } from "../lib/ai";
+import { CUSTOM_MODEL, mergeModelOptions, type ModelOption } from "../lib/modelOptions";
 import { aiAuthStatus, type AuthStatus } from "../lib/auth";
 import {
   loadPrompts,
@@ -77,6 +78,10 @@ export function SettingsModal({
   const [provider, setProvider] = useState<AiProvider | null>(null);
   const [path, setPath] = useState("");
   const [model, setModel] = useState("");
+  // Codex 는 자기 카탈로그(models_cache.json)에서 모델 목록을 읽는다 — null 이면 큐레이션 목록
+  const [codexList, setCodexList] = useState<ModelOption[] | null>(null);
+  // '직접 입력…' 을 고른 상태 — 목록에 없는 모델 id 를 그대로 적는다
+  const [customModel, setCustomModel] = useState(false);
   // AI 응답 언어 — 'auto' 는 UI 언어를 따른다(lib/i18n.aiOutputLang)
   const [aiLang, setAiLang] = useState<AiLang>("auto");
   const [detected, setDetected] = useState<DetectedCli[] | null>(null);
@@ -181,6 +186,10 @@ export function SettingsModal({
         setAiLang(c.aiLang);
         setTestResult(null);
       });
+      codexModels()
+        .then((l) => setCodexList(l.length ? l : null))
+        .catch(() => setCodexList(null));
+      setCustomModel(false);
       setDetected(null);
       void redetect(); // 열자마자 설치된 CLI 를 감지해 카드로 보여준다
       loadPrompts().then(setPrompts);
@@ -298,9 +307,23 @@ export function SettingsModal({
   function pickDetected(d: DetectedCli) {
     setProvider(d.id as AiProvider);
     setPath(d.path);
-    setModel(PROVIDER_MODELS[d.id as AiProvider][0]?.id ?? "");
+    setModel(optionsFor(d.id as AiProvider)[0]?.id ?? "");
+    setCustomModel(false);
     setTestResult(null);
   }
+
+  /** 프로바이더의 모델 선택지 — Codex 는 카탈로그가 있으면 그것, 아니면 큐레이션 */
+  function optionsFor(p: AiProvider) {
+    return mergeModelOptions(
+      PROVIDER_MODELS[p],
+      p === "codex" ? codexList : null,
+      t("settings.model.cliDefault"),
+    );
+  }
+  const modelOptions = provider ? optionsFor(provider) : [];
+  const modelKnown = modelOptions.some((m) => m.id === model);
+  // 목록에 없는 id 가 저장돼 있으면(예: 앱 목록 갱신 전에 직접 적은 새 모델) 직접 입력 칸으로 보인다
+  const showCustom = customModel || !modelKnown;
 
   async function backup() {
     if (backupLock.current) return;
@@ -584,15 +607,33 @@ export function SettingsModal({
                   <label>{t("settings.ai.modelLabel")}</label>
                   <Select
                     block
-                    value={model}
-                    options={PROVIDER_MODELS[provider].map((m) => ({
-                      value: m.id,
-                      label: m.label,
-                    }))}
-                    onChange={setModel}
+                    value={showCustom ? CUSTOM_MODEL : model}
+                    options={[
+                      ...modelOptions.map((m) => ({ value: m.id, label: m.label })),
+                      { value: CUSTOM_MODEL, label: t("settings.model.custom") },
+                    ]}
+                    onChange={(v) => {
+                      if (v === CUSTOM_MODEL) {
+                        setCustomModel(true);
+                        if (modelKnown) setModel("");
+                      } else {
+                        setCustomModel(false);
+                        setModel(v);
+                      }
+                    }}
                   />
+                  {showCustom && (
+                    <input
+                      className="input"
+                      style={{ marginTop: 8, fontFamily: "var(--mono)" }}
+                      value={model}
+                      onChange={(e) => setModel(e.target.value.trim())}
+                      placeholder={t("settings.model.customPh")}
+                      spellCheck={false}
+                    />
+                  )}
                   <div className="hint" style={{ marginTop: 6 }}>
-                    {t("settings.ai.creditHint")}
+                    {showCustom ? t("settings.model.customHint") : t("settings.ai.creditHint")}
                   </div>
                 </div>
 

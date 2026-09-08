@@ -2,6 +2,7 @@
 // Tauri v2 는 JS camelCase 인자를 Rust snake_case 로 자동 변환한다 (claudePath → claude_path).
 
 import { invoke, Channel } from "@tauri-apps/api/core";
+import type { ModelOption } from "./modelOptions";
 import { ulid } from "ulid";
 import type { Confidence } from "../types";
 import { aiOutputLang } from "./i18n";
@@ -318,6 +319,11 @@ export async function aiHealth(cliPath?: string | null): Promise<string> {
 }
 
 // ---- AI CLI 자동 감지 (온보딩/설정) ----
+
+/** Codex 가 서버에서 받아 둔 모델 카탈로그(Rust `codex_models`). 없으면 빈 배열 → 설정은 큐레이션 목록으로 */
+export function codexModels(): Promise<ModelOption[]> {
+  return invoke<ModelOption[]>("codex_models");
+}
 
 export interface DetectedCli {
   id: "claude" | "codex";

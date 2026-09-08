@@ -91,7 +91,6 @@ impl LiveGuard {
     }
 }
 
-const DEFAULT_MODEL: &str = "claude-opus-4-8";
 // 참고 폴더를 훑고 긴 노트를 쓰면 5분을 넘긴다 — 폴더 유무로 갈라 두었다가 15분을 기본으로 올렸다(v0.20.13).
 // 타임아웃은 멈춘 실행을 끊는 안전장치라, 길어도 정상 실행에는 비용이 없다.
 const DEFAULT_TIMEOUT_SECS: u64 = 900;
@@ -193,13 +192,11 @@ pub(crate) fn default_binary(kind: ProviderKind) -> &'static str {
     }
 }
 
-/// 모델 결정: claude 는 기본 모델 폴백, codex 는 빈 값 = CLI 기본 모델 사용(-m 미전달)
-pub(crate) fn resolve_model(kind: ProviderKind, model: Option<String>) -> String {
-    let m = model.filter(|m| !m.is_empty());
-    match kind {
-        ProviderKind::Claude => m.unwrap_or_else(|| DEFAULT_MODEL.to_string()),
-        _ => m.unwrap_or_default(),
-    }
+/// 모델 결정: 빈 값 = CLI 기본 모델(`--model`/`-m` 미전달). 앱이 모델 id 를 하드코딩해 강제하지 않는다 —
+/// 최신 모델은 CLI 가 알고, 목록은 설정(큐레이션 + 카탈로그 + 직접 입력)이 맡는다. 예전엔 claude 만 opus-4-8 로
+/// 고정 폴백했는데, 그러면 CLI 를 올려도 앱은 옛 모델을 부른다.
+pub(crate) fn resolve_model(_kind: ProviderKind, model: Option<String>) -> String {
+    model.filter(|m| !m.is_empty()).unwrap_or_default()
 }
 
 /// 프로바이더 공용 실행: 시스템 프롬프트 + 입력 → 최종 텍스트(.result 상당) + 메타
@@ -1251,12 +1248,15 @@ pub(crate) async fn stream_claude_result_ext(
     on_activity: Option<&Channel<Activity>>,
     cancel_key: Option<&str>,
 ) -> Result<(String, MetaOut), AiError> {
-    let mut child = Command::new(&program)
-        .arg("-p")
+    let mut cmd = Command::new(&program);
+    cmd.arg("-p")
         .args(["--output-format", "stream-json"])
         .arg("--include-partial-messages")
-        .arg("--verbose")
-        .args(["--model", &model])
+        .arg("--verbose");
+    if !model.is_empty() {
+        cmd.args(["--model", &model]);
+    }
+    let mut child = cmd
         .args(["--append-system-prompt", system_prompt])
         .args(extra_args)
         .stdin(Stdio::piped())
@@ -1512,10 +1512,12 @@ async fn spawn_claude_result(
     system_prompt: &str,
     input: String,
 ) -> Result<(String, MetaOut), AiError> {
-    let mut child = Command::new(&program)
-        .arg("-p")
-        .args(["--output-format", "json"])
-        .args(["--model", &model])
+    let mut cmd = Command::new(&program);
+    cmd.arg("-p").args(["--output-format", "json"]);
+    if !model.is_empty() {
+        cmd.args(["--model", &model]);
+    }
+    let mut child = cmd
         .args(["--append-system-prompt", system_prompt])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -1765,6 +1767,15 @@ mod tests {
         }
         let s = sys(&note_prompt(NOTE_SYSTEM_PROMPT), Some("en"));
         assert!(s.rfind("[Output language").unwrap() > s.rfind("# SVG graphics style").unwrap());
+    }
+
+    // 빈 모델은 두 공급자 모두 "CLI 기본" — 앱이 옛 모델 id 를 폴백으로 박아 두면 CLI 를 올려도 옛 모델을 부른다
+    #[test]
+    fn resolve_model_leaves_empty_for_cli_default() {
+        assert_eq!(resolve_model(ProviderKind::Claude, None), "");
+        assert_eq!(resolve_model(ProviderKind::Claude, Some(String::new())), "");
+        assert_eq!(resolve_model(ProviderKind::Codex, Some("gpt-5.5".into())), "gpt-5.5");
+        assert_eq!(resolve_model(ProviderKind::Claude, Some("claude-fable-5-1".into())), "claude-fable-5-1");
     }
 
     #[test]
