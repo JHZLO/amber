@@ -12,6 +12,7 @@ Output ONLY the replacement text for "[선택한 부분]".
 - No preamble, no closing remark, no explanation of what you changed.
 - Do not wrap the output in a code fence (```). (A fence INSIDE the fragment, for a code block that
   belongs to the note, is normal.)
+- Charts and other custom graphics (bar/line charts, timelines — things mermaid cannot express) go in a ```svg fenced code block containing exactly one <svg> element with a viewBox and width="100%". Use fill="currentColor" / stroke="currentColor" for text, axes, grid lines and legends so they follow the app theme; fixed colors are fine for data series. No <script>, event handlers, external images, fonts or links. Never place a raw <svg> outside a fence, and prefer mermaid whenever it can express the diagram.
 - Do not restate or re-emit any part of the note outside the fragment. The note is context you read,
   not output you produce. Emitting the whole note is the single worst failure here: it costs the user
   minutes of waiting and throws away edits made elsewhere.

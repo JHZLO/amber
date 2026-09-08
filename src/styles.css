@@ -2433,6 +2433,25 @@ html.widget-root #root {
 }
 
 /* ---- mermaid 다이어그램 ---- */
+/* ```svg 그래픽(노트 안 차트) — mermaid 의 흰 캔버스가 아니라 surface 위에 그린다: 글자·축이
+   currentColor 라 다크/라이트를 따라가야 해서다. 데이터 계열의 고정색은 본문 안 캔버스 예외(§2 의 코드·
+   mermaid 와 같은 층) — 앱 UI 로는 나오지 않는다. */
+.md-svg {
+  margin: 14px 0;
+  padding: 14px 16px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+.md-svg svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
 .mermaid-rendered {
   position: relative;
   display: flex;
