@@ -121,6 +121,19 @@ const ko = {
   "common.ai.activity.list": "{target} 살펴보는 중",
   "common.ai.activity.run": "실행 중 · {target}",
   "common.ai.activity.tool": "{tool} 사용 중",
+  "common.ai.activity.files": "파일을 살펴보고 있어요",
+  // AI 대기 문구 — 첫 글자가 오기 전 4초마다 바뀐다. 단계는 스트림의 실제 신호(생각 시작/끝·쓰기 시작)다
+  "common.ai.wait.connect1": "AI 를 깨우고 있어요…",
+  "common.ai.wait.connect2": "요청을 전달했어요 — 첫 응답을 기다려요",
+  "common.ai.wait.think1": "요청을 읽고 무엇을 먼저 말할지 고르고 있어요",
+  "common.ai.wait.think2": "글의 뼈대를 세우고 있어요",
+  "common.ai.wait.think3": "예시와 근거를 고르고 있어요",
+  "common.ai.wait.think4": "문장을 다듬으며 정리하고 있어요",
+  "common.ai.wait.thought": "거의 다 생각했어요 — 쓰기 시작해요",
+  "common.ai.wait.write": "본문을 쓰고 있어요",
+  "common.ai.wait.long": "긴 글은 몇 분 걸릴 수 있어요",
+  "common.ai.wait.longer": "아직 진행 중이에요 — 끝나면 여기서 바로 이어져요",
+  "common.ai.wait.longerRef": "참고 폴더가 크면 더 걸려요 — 아직 진행 중이에요",
 } as const;
 
 const en: Record<keyof typeof ko, string> = {
@@ -234,6 +247,18 @@ const en: Record<keyof typeof ko, string> = {
   "common.ai.activity.list": "Listing {target}",
   "common.ai.activity.run": "Running · {target}",
   "common.ai.activity.tool": "Using {tool}",
+  "common.ai.activity.files": "Looking through the files",
+  "common.ai.wait.connect1": "Waking the AI up…",
+  "common.ai.wait.connect2": "Request sent — waiting for the first response",
+  "common.ai.wait.think1": "Reading the request and choosing what to say first",
+  "common.ai.wait.think2": "Building the outline",
+  "common.ai.wait.think3": "Picking examples and evidence",
+  "common.ai.wait.think4": "Refining the wording",
+  "common.ai.wait.thought": "Almost done thinking — starting to write",
+  "common.ai.wait.write": "Writing the body",
+  "common.ai.wait.long": "Long notes can take a few minutes",
+  "common.ai.wait.longer": "Still working — it will continue right here when done",
+  "common.ai.wait.longerRef": "Large reference folders take longer — still working",
 } as const;
 
 export const commonMessages = { ko, en };

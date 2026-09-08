@@ -92,8 +92,9 @@ impl LiveGuard {
 }
 
 const DEFAULT_MODEL: &str = "claude-opus-4-8";
-// 상세 노트 생성(특히 sonnet 다중 턴 + mermaid)이 오래 걸려 넉넉하게 5분.
-const DEFAULT_TIMEOUT_SECS: u64 = 300;
+// 참고 폴더를 훑고 긴 노트를 쓰면 5분을 넘긴다 — 폴더 유무로 갈라 두었다가 15분을 기본으로 올렸다(v0.20.13).
+// 타임아웃은 멈춘 실행을 끊는 안전장치라, 길어도 정상 실행에는 비용이 없다.
+const DEFAULT_TIMEOUT_SECS: u64 = 900;
 const MIN_INPUT_CHARS: usize = 20;
 // `--version` 헬스체크 상한 — detect.rs 의 probe_version 과 같은 값(설정 모달 스피너가 멈추지 않게).
 const HEALTH_TIMEOUT_SECS: u64 = 8;
@@ -991,6 +992,15 @@ fn codex_event(v: &serde_json::Value) -> CodexEv {
                     tool: "search".into(),
                     target: s("query"),
                 }),
+                // 추론 블록의 시작/끝 = 생각 중 / 생각 끝 (claude 의 thinking 블록과 같은 뜻)
+                ("item.started", "reasoning") => CodexEv::Activity(Activity {
+                    tool: "thinking".into(),
+                    target: None,
+                }),
+                ("item.completed", "reasoning") => CodexEv::Activity(Activity {
+                    tool: "thought".into(),
+                    target: None,
+                }),
                 ("item.started", "mcp_tool_call") => CodexEv::Activity(Activity {
                     tool: s("tool").unwrap_or_else(|| "mcp".into()),
                     target: s("server"),
@@ -1296,6 +1306,8 @@ pub(crate) async fn stream_claude_result_ext(
     const DELTA_FLUSH: Duration = Duration::from_millis(80);
     let mut delta_buf = String::new();
     let mut last_flush = std::time::Instant::now();
+    // 지금 열려 있는 콘텐츠 블록의 종류(thinking/text/tool_use) — 닫힐 때 "생각 끝" 신호를 내기 위해
+    let mut current_block = String::new();
 
     let read_loop = async {
         while let Some(line) = lines
@@ -1313,23 +1325,54 @@ pub(crate) async fn stream_claude_result_ext(
             match v.get("type").and_then(|t| t.as_str()) {
                 Some("stream_event") => {
                     let ev = v.get("event");
-                    let is_delta = ev.and_then(|e| e.get("type")).and_then(|t| t.as_str())
-                        == Some("content_block_delta");
-                    if is_delta {
-                        if let Some(text) = ev
-                            .and_then(|e| e.get("delta"))
-                            .filter(|d| {
-                                d.get("type").and_then(|t| t.as_str()) == Some("text_delta")
-                            })
-                            .and_then(|d| d.get("text"))
-                            .and_then(|t| t.as_str())
-                        {
-                            delta_buf.push_str(text);
-                            if last_flush.elapsed() >= DELTA_FLUSH {
-                                let _ = on_delta.send(std::mem::take(&mut delta_buf));
-                                last_flush = std::time::Instant::now();
+                    match ev.and_then(|e| e.get("type")).and_then(|t| t.as_str()) {
+                        // 단계 신호 — 대기 문구가 "생각 중 / 생각 끝 / 쓰기 시작 / 도구" 로 바뀐다(lib/aiWait.ts).
+                        // 실제 블록 경계라 추측이 아니다: "거의 다 생각했어요" 는 thinking 블록이 닫힐 때만 나간다.
+                        Some("content_block_start") => {
+                            let block = ev.and_then(|e| e.get("content_block"));
+                            let bt = block.and_then(|b| b.get("type")).and_then(|t| t.as_str()).unwrap_or("");
+                            current_block = bt.to_string();
+                            if let Some(act) = on_activity {
+                                let phase = match bt {
+                                    "thinking" => Some("thinking".to_string()),
+                                    "text" => Some("writing".to_string()),
+                                    // 도구 이름은 지금 알고 입력은 아직 — 대상은 뒤의 assistant 메시지가 채운다
+                                    "tool_use" => block
+                                        .and_then(|b| b.get("name"))
+                                        .and_then(|n| n.as_str())
+                                        .map(String::from),
+                                    _ => None,
+                                };
+                                if let Some(tool) = phase {
+                                    let _ = act.send(Activity { tool, target: None });
+                                }
                             }
                         }
+                        Some("content_block_stop") => {
+                            if current_block == "thinking" {
+                                if let Some(act) = on_activity {
+                                    let _ = act.send(Activity { tool: "thought".into(), target: None });
+                                }
+                            }
+                            current_block.clear();
+                        }
+                        Some("content_block_delta") => {
+                            if let Some(text) = ev
+                                .and_then(|e| e.get("delta"))
+                                .filter(|d| {
+                                    d.get("type").and_then(|t| t.as_str()) == Some("text_delta")
+                                })
+                                .and_then(|d| d.get("text"))
+                                .and_then(|t| t.as_str())
+                            {
+                                delta_buf.push_str(text);
+                                if last_flush.elapsed() >= DELTA_FLUSH {
+                                    let _ = on_delta.send(std::mem::take(&mut delta_buf));
+                                    last_flush = std::time::Instant::now();
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
                 Some("assistant") => {
@@ -1708,6 +1751,8 @@ mod tests {
         let done = serde_json::json!({"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":0,"output_tokens":3}});
         assert_eq!(codex_event(&done), CodexEv::Usage { input: Some(10), output: Some(3) });
         assert_eq!(codex_event(&serde_json::json!({"type":"thread.started","thread_id":"t"})), CodexEv::Other);
+        let reasoning = serde_json::json!({"type":"item.completed","item":{"id":"r1","type":"reasoning","text":"…"}});
+        assert_eq!(codex_event(&reasoning), CodexEv::Activity(Activity { tool: "thought".into(), target: None }));
     }
 
     // 차트 스타일은 요청마다 달라지면 안 된다 — 노트 프롬프트 둘 다 같은 가이드를 끝에 싣고, 언어 지시는 그 뒤다

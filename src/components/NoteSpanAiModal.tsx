@@ -14,12 +14,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { DiffView } from "./DiffView";
 import type { AppConfig } from "../lib/config";
-import { aiCancel, aiNoteEditSpanStream, friendlyError, newCancelKey } from "../lib/ai";
+import { aiCancel, aiNoteEditSpanStream, friendlyError, newCancelKey, type AiActivity } from "../lib/ai";
 import { mergeRuns, splitSections, spliceSpan } from "../lib/mdSections";
 import { AiThinking, ChoiceChip, DiscardAiModal, Modal, Tooltip } from "../ui";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { REF_DIR_TIMEOUT_SECS, loadRecentRefDirs, refDirName, rememberRefDir } from "../lib/refDirs";
-import { describeActivity } from "../lib/aiActivity";
+import { loadRecentRefDirs, refDirName, rememberRefDir } from "../lib/refDirs";
+import { useAiWaitLine } from "../lib/aiWait";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 
@@ -65,8 +65,10 @@ export function NoteSpanAiModal({
   // 참고 폴더 — 최근 목록(칩)과 그중 이번 요청에 붙일 것. AI 가 읽기 전용으로 살펴본다
   const [refDirs, setRefDirs] = useState<string[]>([]);
   const [refOn, setRefOn] = useState<Set<string>>(() => new Set());
-  // 진행 중 도구 호출 한 줄 — 참고 폴더를 훑는 동안 멈춘 것처럼 보이지 않게
-  const [activity, setActivity] = useState<string | null>(null);
+  // 진행 신호 — CLI 스트림의 단계(생각·쓰기·도구 호출)와 그 시각. 대기 문구(useAiWaitLine)가 이걸로 바뀐다
+  const [activity, setActivity] = useState<AiActivity | null>(null);
+  const [activityAt, setActivityAt] = useState(0);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<string[]>([]);
@@ -89,6 +91,7 @@ export function NoteSpanAiModal({
     setRefDirs(loadRecentRefDirs());
     setRefOn(new Set());
     setActivity(null);
+    setStartedAt(null);
     setConfirmClose(false);
     setError(null);
     setResults([]);
@@ -169,6 +172,13 @@ export function NoteSpanAiModal({
     });
   }
   const chosenDirs = refDirs.filter((d) => refOn.has(d));
+  const waitLine = useAiWaitLine({
+    running: step === "loading",
+    startedAt,
+    activity,
+    activityAt,
+    hasRefDirs: chosenDirs.length > 0,
+  });
 
   const hasResult = results.length > 0;
   // 닫기 — 결과가 있거나 생성 중이면 한 번 묻는다. 몇 분 걸린 생성물이 X 한 번에 사라지면 안 된다
@@ -191,6 +201,7 @@ export function NoteSpanAiModal({
     setResults([]);
     setStreamText("");
     setActivity(null);
+    setStartedAt(Date.now());
     setRunAt(0);
     setStep("loading");
     const my = ++runSeq.current;
@@ -216,7 +227,6 @@ export function NoteSpanAiModal({
             provider: config.provider,
             cancelKey: key,
             refDirs: chosenDirs,
-            timeoutSecs: chosenDirs.length > 0 ? REF_DIR_TIMEOUT_SECS : null,
           },
           (delta) => {
             if (my !== runSeq.current) return;
@@ -224,7 +234,8 @@ export function NoteSpanAiModal({
           },
           (a) => {
             if (my !== runSeq.current) return;
-            setActivity(describeActivity(a));
+            setActivity(a);
+            setActivityAt(Date.now());
           },
         );
         if (my !== runSeq.current) return;
@@ -436,7 +447,7 @@ export function NoteSpanAiModal({
               {step === "loading" && i === runAt && (
                 <div className="note-stream" style={{ marginTop: 8 }}>
                   <AiThinking
-                    activity={activity ?? undefined}
+                    activity={waitLine ?? undefined}
                     compact={!!streamText}
                     label={
                       runs.length > 1
@@ -446,7 +457,6 @@ export function NoteSpanAiModal({
                           })
                         : t("notes.spanAi.editing")
                     }
-                    hint={streamText ? undefined : t("notes.ai.waiting")}
                   />
                   {streamText && (
                     <pre className="note-stream-body" ref={streamRef}>

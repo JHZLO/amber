@@ -5,14 +5,14 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Markdown } from "./Markdown";
 import { DiffView } from "./DiffView";
 import type { AppConfig } from "../lib/config";
-import { aiCancel, aiNoteComposeStream, friendlyError, newCancelKey } from "../lib/ai";
+import { aiCancel, aiNoteComposeStream, friendlyError, newCancelKey, type AiActivity } from "../lib/ai";
 import { loadPrompts, type SavedPrompt } from "../lib/prompts";
 import { AiThinking, ChoiceChip, DiscardAiModal, Modal, Tooltip } from "../ui";
 import { composeInstruction } from "../lib/aiInstruction";
 import { PromptPeekModal } from "./PromptPeekModal";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { REF_DIR_TIMEOUT_SECS, loadRecentRefDirs, refDirName, rememberRefDir } from "../lib/refDirs";
-import { describeActivity } from "../lib/aiActivity";
+import { loadRecentRefDirs, refDirName, rememberRefDir } from "../lib/refDirs";
+import { useAiWaitLine } from "../lib/aiWait";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 
@@ -53,8 +53,10 @@ export function NoteAiModal({
   // 참고 폴더 — 최근 목록(칩)과 그중 이번 요청에 붙일 것. AI 가 읽기 전용으로 살펴본다
   const [refDirs, setRefDirs] = useState<string[]>([]);
   const [refOn, setRefOn] = useState<Set<string>>(() => new Set());
-  // 진행 중 도구 호출 한 줄 — 참고 폴더를 훑는 동안 멈춘 것처럼 보이지 않게
-  const [activity, setActivity] = useState<string | null>(null);
+  // 진행 신호 — CLI 스트림의 단계(생각·쓰기·도구 호출)와 그 시각. 대기 문구(useAiWaitLine)가 이걸로 바뀐다
+  const [activity, setActivity] = useState<AiActivity | null>(null);
+  const [activityAt, setActivityAt] = useState(0);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultMd, setResultMd] = useState("");
@@ -83,6 +85,7 @@ export function NoteAiModal({
     setRefDirs(loadRecentRefDirs());
     setRefOn(new Set());
     setActivity(null);
+    setStartedAt(null);
     setConfirmClose(false);
     setError(null);
     setResultMd("");
@@ -127,6 +130,13 @@ export function NoteAiModal({
     });
   }
   const chosenDirs = refDirs.filter((d) => refOn.has(d));
+  const waitLine = useAiWaitLine({
+    running: step === "loading",
+    startedAt,
+    activity,
+    activityAt,
+    hasRefDirs: chosenDirs.length > 0,
+  });
 
   // 텍스트가 있는 프롬프트만 칩으로 (설정에서 추가만 하고 비워둔 것 제외)
   const savedUsable = saved.filter((p) => p.text.trim());
@@ -158,6 +168,7 @@ export function NoteAiModal({
     setError(null);
     setStreamText("");
     setActivity(null);
+    setStartedAt(Date.now());
     setStep("loading");
     const key = newCancelKey();
     cancelKey.current = key;
@@ -173,8 +184,6 @@ export function NoteAiModal({
           provider: config.provider,
           cancelKey: key,
           refDirs: chosenDirs,
-          // 폴더를 훑고 쓰면 기본 5분을 넘긴다 — 폴더가 붙은 요청만 길게
-          timeoutSecs: chosenDirs.length > 0 ? REF_DIR_TIMEOUT_SECS : null,
         },
         (delta) => {
           if (my !== runSeq.current) return; // 버려진 실행의 잔여 델타
@@ -182,7 +191,8 @@ export function NoteAiModal({
         },
         (a) => {
           if (my !== runSeq.current) return;
-          setActivity(describeActivity(a));
+          setActivity(a);
+          setActivityAt(Date.now());
         },
       );
       if (my !== runSeq.current) return; // 중단·재실행됨 — 이 결과로 화면을 덮지 않는다
@@ -349,8 +359,7 @@ export function NoteAiModal({
           <AiThinking
             compact={!!streamText}
             label={t("notes.ai.writing")}
-            hint={streamText ? undefined : t("notes.ai.waiting")}
-            activity={activity ?? undefined}
+            activity={waitLine ?? undefined}
           />
           {streamText && (
             <pre className="note-stream-body" ref={streamRef}>

@@ -16,6 +16,8 @@ export function shortTarget(target: string, keep = 2): string {
 
 export function describeActivity(a: AiActivity): string {
   const target = a.target ? shortTarget(a.target) : "";
+  // 도구 시작 신호는 대상보다 먼저 온다(입력이 아직 스트리밍 중) — 그때는 무엇을 하는지만 말한다
+  if (!target && ["Read", "Glob", "Grep", "LS"].includes(a.tool)) return t("common.ai.activity.files");
   switch (a.tool) {
     case "Read":
       return t("common.ai.activity.read", { target });

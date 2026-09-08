@@ -6,9 +6,6 @@
 const KEY = "amber.ai.refDirs";
 const MAX = 6;
 
-/** 참고 폴더가 붙은 요청의 타임아웃(초). 코드베이스를 훑고 긴 글을 쓰면 기본 5분을 넘긴다 */
-export const REF_DIR_TIMEOUT_SECS = 900;
-
 /** 최근 목록 맨 앞에 끼운다(이미 있으면 앞으로 당김) — 순수 함수 */
 export function pushRecent(list: readonly string[], dir: string, max = MAX): string[] {
   const d = dir.trim();
