@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
@@ -119,6 +120,9 @@ const NOTE_EDIT_SYSTEM_PROMPT: &str = include_str!("../context/note-edit.md");
 // SVG 그래픽 스타일 가이드 — 노트 작성·부분 수정 프롬프트 끝에 항상 덧붙인다(note_prompt). 차트가 앱의
 // 모노톤 판과 한 벌로 보이게: 요청마다 스타일이 달라지면 같은 노트 안 그림들이 다른 제품에서 붙여 온 듯 보인다.
 const SVG_STYLE_PROMPT: &str = include_str!("../context/svg-style.md");
+// 전문 작성(ai_note_compose_stream)만: 노트를 stdout 이 아니라 초안 폴더의 절 파일들로 받는다 — 한 응답의 출력
+// 상한(32k 토큰)에 긴 노트가 잘리던 문제의 구조적 해법. 부분 수정은 조각이 짧아 스트리밍을 그대로 쓴다.
+const NOTE_DRAFT_FILES_PROMPT: &str = include_str!("../context/note-draft-files.md");
 
 /// 노트 프롬프트 + SVG 스타일 가이드. 언어 지시(sys)는 이 뒤에 붙는다.
 fn note_prompt(base: &str) -> String {
@@ -621,6 +625,8 @@ pub async fn ai_note_compose_stream(
     on_delta: Channel<String>,
     // 도구 호출(파일 읽기·검색) 진행 — 긴 실행이 멈춘 것처럼 보이지 않게 프론트가 한 줄로 보인다
     on_activity: Channel<Activity>,
+    // 초안 폴더의 현재 내용(절 파일들을 이어 붙인 전문) — 파일이 늘어날 때마다 통째로 보낸다(교체 의미)
+    on_draft: Channel<String>,
     cancel_key: Option<String>,
 ) -> Result<NoteComposeResult, AiError> {
     let instr = instruction.trim();
@@ -637,26 +643,64 @@ pub async fn ai_note_compose_stream(
     let body = markdown.trim();
     let body = if body.is_empty() { "(비어 있음)" } else { body };
     let dirs = clean_ref_dirs(ref_dirs);
+
+    // 전문은 파일로 받는다 — 절마다 한 파일. 한 응답의 출력 상한에 긴 노트가 잘리던 문제의 구조적 해법
+    // (context/note-draft-files.md). 폴더는 이 실행에서만 쓰고 결과를 읽은 뒤 바로 지운다.
+    let draft = make_draft_dir()?;
+    let draft_str = draft.to_string_lossy().to_string();
     let input = format!(
-        "[작성 요청]\n{instr}\n\n[현재 노트]\n제목: {title}\n\n[현재 본문 (Markdown)]\n{body}{}",
+        "[작성 요청]\n{instr}\n\n[현재 노트]\n제목: {title}\n\n[현재 본문 (Markdown)]\n{body}{}\n\n[초안 폴더]\n{draft_str}",
         ref_dirs_section(&dirs)
     );
+    let system = format!("{}\n\n{NOTE_DRAFT_FILES_PROMPT}", note_prompt(NOTE_SYSTEM_PROMPT));
 
-    let (result_str, meta) = run_note_provider(
+    // 파일이 늘어나는 동안 전문 스냅샷을 흘린다 — 스트림 텍스트 대신 이것이 실시간 미리보기다
+    let poll_dir = draft.clone();
+    let poll_ch = on_draft.clone();
+    let poller = tokio::spawn(async move {
+        let mut last = String::new();
+        loop {
+            tokio::time::sleep(Duration::from_millis(800)).await;
+            if let Some(t) = read_draft_files(&poll_dir).await {
+                if t != last {
+                    let _ = poll_ch.send(t.clone());
+                    last = t;
+                }
+            }
+        }
+    });
+
+    let run = run_note_provider(
         kind,
         program,
         model,
         dur,
-        &sys(&note_prompt(NOTE_SYSTEM_PROMPT), lang.as_deref()),
+        &sys(&system, lang.as_deref()),
         input,
         &dirs,
+        Some(&draft_str),
         &on_delta,
         &on_activity,
         cancel_key.as_deref(),
     )
-    .await?;
+    .await;
+    poller.abort();
 
-    let md = strip_outer_fence(&result_str).trim().to_string();
+    let files = read_draft_files(&draft).await;
+    let _ = tokio::fs::remove_dir_all(&draft).await;
+    let (reply, mut meta) = run?;
+
+    let md = match files {
+        Some(text) => {
+            let _ = on_draft.send(text.clone());
+            // 파일은 응답 상한과 무관하다. 대신 마무리 신호(DONE)가 없으면 다 쓰지 못한 것으로 보고 경고를 띄운다
+            meta.truncated = !reply.contains("DONE");
+            meta.continued = false;
+            text
+        }
+        // 모델이 파일 지시를 따르지 않고 본문을 그대로 출력한 경우 — 예전 경로로 받아 준다
+        None => strip_outer_fence(&reply).trim().to_string(),
+    };
     if md.is_empty() {
         return Err(AiError::new(
             "AI_BAD_CONTRACT",
@@ -729,6 +773,7 @@ pub async fn ai_note_edit_span(
         &sys(&note_prompt(NOTE_EDIT_SYSTEM_PROMPT), lang.as_deref()),
         input,
         &dirs,
+        None,
         &on_delta,
         &on_activity,
         cancel_key.as_deref(),
@@ -909,31 +954,105 @@ fn ref_dirs_section(dirs: &[String]) -> String {
     format!("\n\n[참고 폴더]\n{}", list.join("\n"))
 }
 
-/// 참고 폴더가 붙은 claude 실행의 인자 — 폴더를 열어 주되 **읽기 도구만** 허용하고 나머지는 묻지 않고
-/// 거부한다. Bash 는 cat 으로 읽을 수도 있지만 쓸 수도 있어 통째로 막는다(읽기는 Read/Glob/Grep 으로 충분).
-/// 폴더가 없으면 빈 벡터 — 기존 실행과 한 글자도 다르지 않게.
-fn claude_ref_dir_args(dirs: &[String]) -> Vec<String> {
-    if dirs.is_empty() {
+/// 참고 폴더·초안 폴더가 붙은 claude 실행의 인자. 읽기 도구(Read/Glob/Grep)는 열고, 쓰기는 **초안 폴더 한 곳**에만
+/// `Edit(//경로/**)`·`Write(//경로/**)` 규칙으로 연다 — 규칙의 `//` 는 파일시스템 루트 기준 절대경로다(실측: 폴더 안은
+/// 써지고 밖은 permission_denials 로 막힌다). Bash·웹·노트북은 묻지 않고 거부(dontAsk); 초안 폴더가 없으면 Edit/Write 도
+/// 거부한다. 폴더가 하나도 없으면 빈 벡터 — 기존 실행과 한 글자도 다르지 않게.
+fn claude_tool_args(ref_dirs: &[String], write_dir: Option<&str>) -> Vec<String> {
+    if ref_dirs.is_empty() && write_dir.is_none() {
         return Vec::new();
     }
     let mut v: Vec<String> = Vec::new();
-    for d in dirs {
+    for d in ref_dirs.iter().map(String::as_str).chain(write_dir) {
         v.push("--add-dir".into());
-        v.push(d.clone());
+        v.push(d.to_string());
     }
-    v.extend(
-        [
-            "--allowedTools",
-            "Read,Glob,Grep",
-            "--disallowedTools",
-            "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch",
-            "--permission-mode",
-            "dontAsk",
-        ]
-        .into_iter()
-        .map(String::from),
-    );
+    let mut allowed: Vec<String> = vec!["Read".into(), "Glob".into(), "Grep".into()];
+    let mut denied: Vec<&str> = vec!["Bash", "WebFetch", "WebSearch", "NotebookEdit"];
+    match write_dir {
+        Some(dir) => {
+            let pat = format!("/{}/**", dir.trim_end_matches('/'));
+            allowed.push(format!("Edit({pat})"));
+            allowed.push(format!("Write({pat})"));
+        }
+        None => {
+            denied.push("Edit");
+            denied.push("Write");
+        }
+    }
+    v.push("--allowedTools".into());
+    v.push(allowed.join(","));
+    v.push("--disallowedTools".into());
+    v.push(denied.join(","));
+    v.push("--permission-mode".into());
+    v.push("dontAsk".into());
     v
+}
+
+/// 참고 폴더만 붙은 실행(부분 수정 등) — 읽기 전용
+fn claude_ref_dir_args(dirs: &[String]) -> Vec<String> {
+    claude_tool_args(dirs, None)
+}
+
+/// 초안 폴더: `$TMPDIR/amber-ai/draft-<pid>-<nanos>`. realpath 로 확정한다 — 권한 규칙은 CLI 가 정규화한 경로와
+/// 비교하므로 macOS 의 /var → /private/var 링크를 풀어 둬야 맞는다. 하루 지난 초안(비정상 종료 잔재)은 이때 치운다.
+fn make_draft_dir() -> Result<PathBuf, AiError> {
+    let base = std::env::temp_dir().join("amber-ai");
+    sweep_old_drafts(&base);
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let dir = base.join(format!("draft-{}-{stamp}", std::process::id()));
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| AiError::detailed("DRAFT_DIR", "초안 폴더를 만들 수 없습니다.", e.to_string()))?;
+    std::fs::canonicalize(&dir)
+        .map_err(|e| AiError::detailed("DRAFT_DIR", "초안 폴더 경로를 확정할 수 없습니다.", e.to_string()))
+}
+
+fn sweep_old_drafts(base: &Path) {
+    let Ok(entries) = std::fs::read_dir(base) else { return };
+    let day = Duration::from_secs(24 * 3600);
+    for e in entries.flatten() {
+        let old = e
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .map(|age| age > day)
+            .unwrap_or(false);
+        if old {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
+}
+
+/// 초안 폴더의 `*.md` 를 이름순으로 이어 붙인다(00.md, 01.md, 03a.md, 03b.md …). 없거나 전부 비었으면 None
+async fn read_draft_files(dir: &Path) -> Option<String> {
+    let mut rd = tokio::fs::read_dir(dir).await.ok()?;
+    let mut parts: Vec<(String, String)> = Vec::new();
+    while let Ok(Some(e)) = rd.next_entry().await {
+        let name = e.file_name().to_string_lossy().to_string();
+        if !name.ends_with(".md") {
+            continue;
+        }
+        if let Ok(text) = tokio::fs::read_to_string(e.path()).await {
+            parts.push((name, text));
+        }
+    }
+    let joined = join_drafts(parts);
+    if joined.is_empty() { None } else { Some(joined) }
+}
+
+/// 이름순 정렬 + 빈 파일 제외 + 빈 줄로 연결 (순수 — 정렬 규칙이 곧 문서 순서라 테스트한다)
+fn join_drafts(mut parts: Vec<(String, String)>) -> String {
+    parts.sort_by(|a, b| a.0.cmp(&b.0));
+    parts
+        .into_iter()
+        .map(|(_, c)| c.trim().to_string())
+        .filter(|c| !c.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 /// claude `assistant` 메시지의 tool_use 블록 → Activity. 대상은 도구마다 다른 입력 키에서 고른다
@@ -1033,6 +1152,8 @@ async fn stream_codex_result(
     system_prompt: &str,
     input: String,
     ref_dirs: &[String],
+    // 초안 폴더(전문 작성) — 있으면 그곳이 작업 루트가 되고 샌드박스는 workspace-write(그 폴더만 쓰기)
+    write_dir: Option<&str>,
     on_delta: &Channel<String>,
     on_activity: &Channel<Activity>,
     cancel_key: Option<&str>,
@@ -1041,17 +1162,19 @@ async fn stream_codex_result(
     let started = std::time::Instant::now();
 
     let mut cmd = Command::new(&program);
-    cmd.args([
-        "exec",
-        "-",
-        "--json",
-        "--ephemeral",
-        "--skip-git-repo-check",
-        "--sandbox",
-        "read-only",
-    ]);
-    if let Some(root) = ref_dirs.first() {
-        cmd.args(["-C", root]);
+    cmd.args(["exec", "-", "--json", "--ephemeral", "--skip-git-repo-check", "--sandbox"]);
+    match write_dir {
+        // 초안 폴더가 작업 루트: 그 안만 쓸 수 있고 읽기는 어디든(참고 폴더는 프롬프트의 [참고 폴더] 로 알린다)
+        Some(dir) => {
+            cmd.arg("workspace-write");
+            cmd.args(["-C", dir]);
+        }
+        None => {
+            cmd.arg("read-only");
+            if let Some(root) = ref_dirs.first() {
+                cmd.args(["-C", root]);
+            }
+        }
     }
     if !model.is_empty() {
         cmd.args(["-m", &model]);
@@ -1181,13 +1304,15 @@ async fn run_note_provider(
     system_prompt: &str,
     input: String,
     ref_dirs: &[String],
+    // 초안 폴더(전문 작성만) — 쓰기 권한을 이 폴더 한 곳에만 연다
+    write_dir: Option<&str>,
     on_delta: &Channel<String>,
     on_activity: &Channel<Activity>,
     cancel_key: Option<&str>,
 ) -> Result<(String, MetaOut), AiError> {
     match kind {
         ProviderKind::Claude => {
-            let extra = claude_ref_dir_args(ref_dirs);
+            let extra = claude_tool_args(ref_dirs, write_dir);
             stream_claude_result_ext(
                 program,
                 model,
@@ -1209,6 +1334,7 @@ async fn run_note_provider(
                 system_prompt,
                 input,
                 ref_dirs,
+                write_dir,
                 on_delta,
                 on_activity,
                 cancel_key,
@@ -1795,6 +1921,33 @@ mod tests {
         assert!(joined.contains("--allowedTools Read,Glob,Grep"));
         assert!(joined.contains("--disallowedTools Bash,"));
         assert!(joined.contains("--permission-mode dontAsk"));
+    }
+
+    // 초안 폴더가 있으면 그 폴더에만 쓰기를 열고(// 절대경로 규칙), 없으면 Edit/Write 를 명시적으로 막는다
+    #[test]
+    fn claude_tool_args_open_writes_only_inside_the_draft_dir() {
+        let args = claude_tool_args(&[], Some("/private/tmp/amber-ai/draft-1")).join(" ");
+        assert!(args.contains("--add-dir /private/tmp/amber-ai/draft-1"));
+        assert!(args.contains("Edit(//private/tmp/amber-ai/draft-1/**)"));
+        assert!(args.contains("Write(//private/tmp/amber-ai/draft-1/**)"));
+        assert!(!args.contains("NotebookEdit,Edit"), "초안 폴더가 있으면 Edit 를 막지 않는다");
+        let ro = claude_tool_args(&["/repo".to_string()], None).join(" ");
+        assert!(ro.contains("--disallowedTools Bash,WebFetch,WebSearch,NotebookEdit,Edit,Write"));
+        assert!(claude_tool_args(&[], None).is_empty());
+    }
+
+    // 절 파일은 이름순이 곧 문서 순서 — 00, 01, 03a, 03b, 10 이 그 순서로 붙어야 한다
+    #[test]
+    fn join_drafts_orders_by_name_and_skips_empty_files() {
+        let parts = vec![
+            ("10.md".to_string(), "ten".to_string()),
+            ("03b.md".to_string(), "three-b".to_string()),
+            ("00.md".to_string(), "# Title\n".to_string()),
+            ("03a.md".to_string(), " three-a ".to_string()),
+            ("02.md".to_string(), "   ".to_string()),
+        ];
+        assert_eq!(join_drafts(parts), "# Title\n\nthree-a\n\nthree-b\n\nten");
+        assert_eq!(join_drafts(vec![]), "");
     }
 
     #[test]

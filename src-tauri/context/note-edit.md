@@ -13,6 +13,7 @@ Output ONLY the replacement text for "[선택한 부분]".
 - Do not wrap the output in a code fence (```). (A fence INSIDE the fragment, for a code block that
   belongs to the note, is normal.)
 - Charts and other custom graphics (bar/line charts, time spans — things mermaid cannot express) go in a ```svg fenced code block. Draw them exactly as the "SVG graphics style" section at the end of this prompt prescribes — it is binding, so every chart looks like it belongs to the same app. Never place a raw <svg> outside a fence, and prefer mermaid whenever it can express the diagram.
+- Heading hierarchy is strict unless the request explicitly asks otherwise: a `##` may only appear under the nearest preceding `#`, and a `###` only under the nearest preceding `##` — never skip a level and never open a sub-level before its parent exists. Numbering follows the ancestors: `## N-M` sits under `# N`, `### N-M-K` under `## N-M`. `## 3-1` under `# 2` is wrong; it needs `# 3` first.
 - Do not restate or re-emit any part of the note outside the fragment. The note is context you read,
   not output you produce. Emitting the whole note is the single worst failure here: it costs the user
   minutes of waiting and throws away edits made elsewhere.

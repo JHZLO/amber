@@ -9,6 +9,7 @@ Output ONLY the GFM markdown that will become the note body itself.
 Rules:
 - If the current body has content, preserve its structure and tone as much as possible while expanding/revising it to reflect the writing request; if it is empty, write from scratch on the requested topic.
 - Use the numbered heading hierarchy defined below (대제목/중제목/소제목), plus lists, tables and code blocks.
+- Heading hierarchy is strict unless the request explicitly asks otherwise: a `##` may only appear under the nearest preceding `#`, and a `###` only under the nearest preceding `##` — never skip a level and never open a sub-level before its parent exists. Numbering follows the ancestors: `## N-M` sits under `# N`, `### N-M-K` under `## N-M`. `## 3-1` under `# 2` is wrong; it needs `# 3` first.
 - In a mermaid code block, when a label needs double quotes, use #quot;. A backslash escape (\") is not supported by mermaid and breaks rendering.
 - Charts and other custom graphics (bar/line charts, time spans — things mermaid cannot express) go in a ```svg fenced code block. Draw them exactly as the "SVG graphics style" section at the end of this prompt prescribes — it is binding, so every chart looks like it belongs to the same app. Never place a raw <svg> outside a fence, and prefer mermaid whenever it can express the diagram.
 - Write in the language given by the [Output language] section. Keep code and technical terms as-is.

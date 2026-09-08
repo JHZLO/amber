@@ -82,6 +82,8 @@ export function NoteAiModal({
   // 취소는 비동기라 프로세스가 죽기 전 조각이 더 오고, 그게 새 실행 텍스트와 뒤엉키면
   // "## Met# 서비스 조adata" 처럼 두 생성이 한 글자씩 섞인 결과가 나온다.
   const runSeq = useRef(0);
+  // 초안 스냅샷이 한 번 오면 텍스트 델타는 무시한다 — 파일 모드의 델타는 "DONE 5" 같은 마무리 한 줄뿐이다
+  const draftSeen = useRef(false);
 
   // 편집(기존 내용 있음) vs 새로 작성 구분 — diff 는 기존 내용이 있을 때만 의미
   const hasExisting = currentBody.trim().length > 0;
@@ -185,6 +187,7 @@ export function NoteAiModal({
     setActivity(null);
     setStartedAt(Date.now());
     setStep("loading");
+    draftSeen.current = false;
     const key = newCancelKey();
     cancelKey.current = key;
     const my = ++runSeq.current;
@@ -201,13 +204,18 @@ export function NoteAiModal({
           refDirs: chosenDirs,
         },
         (delta) => {
-          if (my !== runSeq.current) return; // 버려진 실행의 잔여 델타
+          if (my !== runSeq.current || draftSeen.current) return; // 버려진 실행·파일 모드의 잔여 델타
           setStreamText((prev) => prev + delta);
         },
         (a) => {
           if (my !== runSeq.current) return;
           setActivity(a);
           setActivityAt(Date.now());
+        },
+        (full) => {
+          if (my !== runSeq.current) return;
+          draftSeen.current = true;
+          setStreamText(full);
         },
       );
       if (my !== runSeq.current) return; // 중단·재실행됨 — 이 결과로 화면을 덮지 않는다

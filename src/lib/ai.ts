@@ -157,11 +157,15 @@ export async function aiNoteComposeStream(
   },
   onDelta: (text: string) => void,
   onActivity?: (a: AiActivity) => void,
+  /** 초안 폴더의 전문 스냅샷(교체 의미) — 전문은 파일로 받으므로 이것이 실시간 미리보기다 */
+  onDraft?: (full: string) => void,
 ): Promise<NoteComposeResult> {
   const channel = new Channel<string>();
   channel.onmessage = onDelta;
   const activity = new Channel<AiActivity>();
   activity.onmessage = (a) => onActivity?.(a);
+  const draft = new Channel<string>();
+  draft.onmessage = (full) => onDraft?.(full);
   return aiInvoke<NoteComposeResult>("ai_note_compose_stream", {
     title: params.title,
     markdown: params.markdown,
@@ -174,6 +178,7 @@ export async function aiNoteComposeStream(
     refDirs: params.refDirs ?? [],
     onDelta: channel,
     onActivity: activity,
+    onDraft: draft,
     // 이 줄이 빠지면 Rust 가 cancel_key=None 으로 받아 LiveGuard 가 pid 를 등록하지
     // 않는다 — 중단 버튼이 죽일 대상을 못 찾아 조용히 아무 일도 안 한다
     cancelKey: params.cancelKey ?? null,

@@ -20,6 +20,10 @@ describe("describeActivity", () => {
     expect(describeActivity({ tool: "Grep", target: "getDb" })).toContain("getDb");
   });
 
+  it("describes file writes with the shortened path", () => {
+    expect(describeActivity({ tool: "Write", target: "/tmp/amber-ai/draft-1/02.md" })).toContain("…/draft-1/02.md");
+  });
+
   it("falls back to the tool name for unknown tools", () => {
     expect(describeActivity({ tool: "mcp__x", target: null })).toContain("mcp__x");
     expect(describeActivity({ tool: "Weird", target: "thing" })).toBe("Weird · thing");

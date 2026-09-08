@@ -33,6 +33,7 @@ export const CODE_KEY: Record<string, MsgKey> = {
   SPAWN_ERROR: "common.err.ai.spawn",
   STDIN_ERROR: "common.err.ai.stdin",
   WAIT_ERROR: "common.err.ai.wait",
+  DRAFT_DIR: "common.err.ai.draftDir",
   // 입력 검증 (코드가 곧 어느 입력이 비었는지)
   EMPTY_TRANSCRIPT: "common.err.empty.transcript",
   EMPTY_INSTRUCTION: "common.err.empty.instruction",

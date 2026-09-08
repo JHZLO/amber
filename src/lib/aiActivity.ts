@@ -27,6 +27,9 @@ export function describeActivity(a: AiActivity): string {
       return t("common.ai.activity.search", { target });
     case "LS":
       return t("common.ai.activity.list", { target });
+    case "Write":
+    case "Edit":
+      return t("common.ai.activity.write", { target });
     case "command":
     case "Bash":
       return t("common.ai.activity.run", { target });

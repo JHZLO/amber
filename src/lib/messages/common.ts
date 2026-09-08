@@ -52,6 +52,7 @@ const ko = {
   "common.err.ai.noLoginSession": "진행 중인 로그인이 없어요. 로그인을 다시 시작하세요.",
   "common.err.ai.rateLimit": "사용량 한도에 도달했어요. 잠시 후 다시 시도하세요.",
   "common.err.ai.timeout": "{detail}초 안에 응답이 없었어요. 다시 시도해 주세요.",
+  "common.err.ai.draftDir": "초안 폴더를 만들 수 없어요 — {detail}",
   "common.err.ai.badEnvelope":
     "CLI 응답을 해석하지 못했어요. CLI 버전을 확인해 보세요. {detail}",
   "common.err.ai.badResult": "생성 결과가 비어 있어요. 다시 시도해 주세요.",
@@ -121,6 +122,7 @@ const ko = {
   "common.ai.activity.list": "{target} 살펴보는 중",
   "common.ai.activity.run": "실행 중 · {target}",
   "common.ai.activity.tool": "{tool} 사용 중",
+  "common.ai.activity.write": "{target} 쓰는 중",
   "common.ai.activity.files": "파일을 살펴보고 있어요",
   // AI 대기 문구 — 첫 글자가 오기 전 4초마다 바뀐다. 단계는 스트림의 실제 신호(생각 시작/끝·쓰기 시작)다
   "common.ai.wait.connect1": "AI 를 깨우고 있어요…",
@@ -184,6 +186,7 @@ const en: Record<keyof typeof ko, string> = {
   "common.err.ai.noLoginSession": "No sign-in is in progress. Start it again.",
   "common.err.ai.rateLimit": "You've hit the usage limit. Try again in a bit.",
   "common.err.ai.timeout": "No response within {detail}s. Please try again.",
+  "common.err.ai.draftDir": "Couldn't create the draft folder — {detail}",
   "common.err.ai.badEnvelope":
     "Couldn't parse the CLI response. Check your CLI version. {detail}",
   "common.err.ai.badResult": "The generated result was empty. Please try again.",
@@ -247,6 +250,7 @@ const en: Record<keyof typeof ko, string> = {
   "common.ai.activity.list": "Listing {target}",
   "common.ai.activity.run": "Running · {target}",
   "common.ai.activity.tool": "Using {tool}",
+  "common.ai.activity.write": "Writing {target}",
   "common.ai.activity.files": "Looking through the files",
   "common.ai.wait.connect1": "Waking the AI up…",
   "common.ai.wait.connect2": "Request sent — waiting for the first response",
