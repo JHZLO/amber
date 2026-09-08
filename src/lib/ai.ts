@@ -147,11 +147,16 @@ export async function aiNoteComposeStream(
     timeoutSecs?: number | null;
     /** 중단 버튼이 aiCancel 에 넘길 키. 생략하면 취소 불가 */
     cancelKey?: string | null;
+    /** 참고 폴더 — AI 가 읽기 전용으로 살펴보고 쓴다. 있으면 timeoutSecs 도 늘려 보내라 */
+    refDirs?: string[];
   },
   onDelta: (text: string) => void,
+  onActivity?: (a: AiActivity) => void,
 ): Promise<NoteComposeResult> {
   const channel = new Channel<string>();
   channel.onmessage = onDelta;
+  const activity = new Channel<AiActivity>();
+  activity.onmessage = (a) => onActivity?.(a);
   return aiInvoke<NoteComposeResult>("ai_note_compose_stream", {
     title: params.title,
     markdown: params.markdown,
@@ -161,11 +166,19 @@ export async function aiNoteComposeStream(
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
     lang: aiOutputLang(),
+    refDirs: params.refDirs ?? [],
     onDelta: channel,
+    onActivity: activity,
     // 이 줄이 빠지면 Rust 가 cancel_key=None 으로 받아 LiveGuard 가 pid 를 등록하지
     // 않는다 — 중단 버튼이 죽일 대상을 못 찾아 조용히 아무 일도 안 한다
     cancelKey: params.cancelKey ?? null,
   });
+}
+
+/** 실행 중 도구 호출 한 건(Rust ai.rs 의 Activity) — 참고 폴더를 읽는 동안 진행을 보이는 용도 */
+export interface AiActivity {
+  tool: string;
+  target: string | null;
 }
 
 export interface NoteEditResult {
@@ -192,11 +205,15 @@ export async function aiNoteEditSpanStream(
     provider?: string | null;
     timeoutSecs?: number | null;
     cancelKey?: string | null;
+    refDirs?: string[];
   },
   onDelta: (text: string) => void,
+  onActivity?: (a: AiActivity) => void,
 ): Promise<NoteEditResult> {
   const channel = new Channel<string>();
   channel.onmessage = onDelta;
+  const activity = new Channel<AiActivity>();
+  activity.onmessage = (a) => onActivity?.(a);
   return aiInvoke<NoteEditResult>("ai_note_edit_span", {
     title: params.title,
     markdown: params.markdown,
@@ -208,7 +225,9 @@ export async function aiNoteEditSpanStream(
     provider: params.provider ?? null,
     timeoutSecs: params.timeoutSecs ?? null,
     lang: aiOutputLang(),
+    refDirs: params.refDirs ?? [],
     onDelta: channel,
+    onActivity: activity,
     cancelKey: params.cancelKey ?? null,
   });
 }

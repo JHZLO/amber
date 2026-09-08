@@ -160,6 +160,12 @@ const ko = {
   "notes.ai.promptPeek.include": "이 요청에 포함",
   "notes.ai.promptPeek.exclude": "요청에서 빼기",
   "notes.ai.promptPeek.editHint": "내용을 고치거나 이름을 바꾸는 건 설정 › 프롬프트에서 해요.",
+  // 참고 폴더 — AI 가 읽기 전용으로 훑어보고 쓰는 로컬 폴더 (작성·부분 수정 모달 공용)
+  "notes.ai.refDirs.label": "참고 폴더",
+  "notes.ai.refDirs.add": "폴더 첨부…",
+  "notes.ai.refDirs.dialogTitle": "참고 폴더 선택",
+  "notes.ai.refDirs.hint":
+    "체크한 폴더의 파일을 AI 가 읽기 전용으로 살펴본 뒤 써요. 폴더가 붙으면 오래 걸릴 수 있어 최대 15분까지 기다려요.",
   "notes.ai.writing": "Claude가 작성하는 중…",
   "notes.ai.waiting": "응답을 기다리는 중…",
   "notes.ai.resultEdited": "AI 편집 결과",
@@ -317,6 +323,11 @@ const en: Record<keyof typeof ko, string> = {
   "notes.ai.promptPeek.include": "Include in this request",
   "notes.ai.promptPeek.exclude": "Remove from request",
   "notes.ai.promptPeek.editHint": "Edit or rename it in Settings › Prompts.",
+  "notes.ai.refDirs.label": "Reference folders",
+  "notes.ai.refDirs.add": "Attach folder…",
+  "notes.ai.refDirs.dialogTitle": "Choose a reference folder",
+  "notes.ai.refDirs.hint":
+    "The AI reads the checked folders (read-only) before writing. With a folder attached this can take a while — up to 15 minutes.",
   "notes.ai.writing": "Claude is writing…",
   "notes.ai.waiting": "Waiting for a response…",
   "notes.ai.resultEdited": "AI edit result",

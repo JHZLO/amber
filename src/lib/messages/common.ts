@@ -109,6 +109,12 @@ const ko = {
 
   // AI 모달 — 체크한 지시 개수 (입력칸에 붙이지 않는다는 안내 겸)
   "common.ai.chosenCount": "{n}개 선택 — 입력칸에 붙이지 않고 요청에 함께 보내요.",
+  // AI 진행 활동 한 줄 (도구 호출 → 문구)
+  "common.ai.activity.read": "{target} 읽는 중",
+  "common.ai.activity.search": "{target} 찾는 중",
+  "common.ai.activity.list": "{target} 살펴보는 중",
+  "common.ai.activity.run": "실행 중 · {target}",
+  "common.ai.activity.tool": "{tool} 사용 중",
 } as const;
 
 const en: Record<keyof typeof ko, string> = {
@@ -212,6 +218,11 @@ const en: Record<keyof typeof ko, string> = {
   "common.ai.badResult": "Couldn't parse the result. Regenerate or write it manually.",
 
   "common.ai.chosenCount": "{n} selected — sent with your request, not pasted into the box.",
+  "common.ai.activity.read": "Reading {target}",
+  "common.ai.activity.search": "Searching {target}",
+  "common.ai.activity.list": "Listing {target}",
+  "common.ai.activity.run": "Running · {target}",
+  "common.ai.activity.tool": "Using {tool}",
 } as const;
 
 export const commonMessages = { ko, en };

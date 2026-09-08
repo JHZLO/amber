@@ -7,9 +7,12 @@ import { DiffView } from "./DiffView";
 import type { AppConfig } from "../lib/config";
 import { aiCancel, aiNoteComposeStream, friendlyError, newCancelKey } from "../lib/ai";
 import { loadPrompts, type SavedPrompt } from "../lib/prompts";
-import { AiThinking, ChoiceChip, Modal } from "../ui";
+import { AiThinking, ChoiceChip, Modal, Tooltip } from "../ui";
 import { composeInstruction } from "../lib/aiInstruction";
 import { PromptPeekModal } from "./PromptPeekModal";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { REF_DIR_TIMEOUT_SECS, loadRecentRefDirs, refDirName, rememberRefDir } from "../lib/refDirs";
+import { describeActivity } from "../lib/aiActivity";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 
@@ -47,6 +50,11 @@ export function NoteAiModal({
   const [chosen, setChosen] = useState<Set<string>>(() => new Set());
   // 내용 보기 모달에 띄운 저장 프롬프트 (null = 닫힘)
   const [peek, setPeek] = useState<SavedPrompt | null>(null);
+  // 참고 폴더 — 최근 목록(칩)과 그중 이번 요청에 붙일 것. AI 가 읽기 전용으로 살펴본다
+  const [refDirs, setRefDirs] = useState<string[]>([]);
+  const [refOn, setRefOn] = useState<Set<string>>(() => new Set());
+  // 진행 중 도구 호출 한 줄 — 참고 폴더를 훑는 동안 멈춘 것처럼 보이지 않게
+  const [activity, setActivity] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resultMd, setResultMd] = useState("");
   const [streamText, setStreamText] = useState(""); // 생성 중 실시간 누적 텍스트
@@ -71,6 +79,9 @@ export function NoteAiModal({
     setInstruction("");
     setChosen(new Set());
     setPeek(null);
+    setRefDirs(loadRecentRefDirs());
+    setRefOn(new Set());
+    setActivity(null);
     setError(null);
     setResultMd("");
     setStreamText("");
@@ -94,6 +105,27 @@ export function NoteAiModal({
     });
   }
 
+  async function pickRefDir() {
+    // 워크스페이스 루트 전환기와 같은 네이티브 폴더 다이얼로그
+    const dir = await openDialog({
+      directory: true,
+      multiple: false,
+      title: t("notes.ai.refDirs.dialogTitle"),
+    });
+    if (typeof dir !== "string" || !dir) return;
+    setRefDirs(rememberRefDir(dir));
+    setRefOn((prev) => new Set(prev).add(dir));
+  }
+  function toggleRef(dir: string) {
+    setRefOn((prev) => {
+      const next = new Set(prev);
+      if (next.has(dir)) next.delete(dir);
+      else next.add(dir);
+      return next;
+    });
+  }
+  const chosenDirs = refDirs.filter((d) => refOn.has(d));
+
   // 텍스트가 있는 프롬프트만 칩으로 (설정에서 추가만 하고 비워둔 것 제외)
   const savedUsable = saved.filter((p) => p.text.trim());
   // 체크한 지시는 입력칸에 붙이지 않고 보낼 때 합친다 — 내가 친 말 → 저장 프롬프트 → 빠른 지시
@@ -108,6 +140,7 @@ export function NoteAiModal({
     if (!config || tooShort) return;
     setError(null);
     setStreamText("");
+    setActivity(null);
     setStep("loading");
     const key = newCancelKey();
     cancelKey.current = key;
@@ -122,10 +155,17 @@ export function NoteAiModal({
           cliPath: config.cliPath,
           provider: config.provider,
           cancelKey: key,
+          refDirs: chosenDirs,
+          // 폴더를 훑고 쓰면 기본 5분을 넘긴다 — 폴더가 붙은 요청만 길게
+          timeoutSecs: chosenDirs.length > 0 ? REF_DIR_TIMEOUT_SECS : null,
         },
         (delta) => {
           if (my !== runSeq.current) return; // 버려진 실행의 잔여 델타
           setStreamText((prev) => prev + delta);
+        },
+        (a) => {
+          if (my !== runSeq.current) return;
+          setActivity(describeActivity(a));
         },
       );
       if (my !== runSeq.current) return; // 중단·재실행됨 — 이 결과로 화면을 덮지 않는다
@@ -264,6 +304,26 @@ export function NoteAiModal({
               <div className="hint">{t("common.ai.chosenCount", { n: extras.length })}</div>
             )}
           </div>
+          <div className="field">
+            <label>{t("notes.ai.refDirs.label")}</label>
+            <div className="chip-row">
+              <button type="button" className="btn btn-sm" onClick={() => void pickRefDir()}>
+                <Icon name="folder-plus" size={13} />
+                {t("notes.ai.refDirs.add")}
+              </button>
+              {refDirs.map((d) => (
+                <Tooltip key={d} label={d}>
+                  <ChoiceChip
+                    label={refDirName(d)}
+                    icon="folder"
+                    on={refOn.has(d)}
+                    onToggle={() => toggleRef(d)}
+                  />
+                </Tooltip>
+              ))}
+            </div>
+            <div className="hint">{t("notes.ai.refDirs.hint")}</div>
+          </div>
         </>
       )}
 
@@ -273,6 +333,7 @@ export function NoteAiModal({
             compact={!!streamText}
             label={t("notes.ai.writing")}
             hint={streamText ? undefined : t("notes.ai.waiting")}
+            activity={activity ?? undefined}
           />
           {streamText && (
             <pre className="note-stream-body" ref={streamRef}>

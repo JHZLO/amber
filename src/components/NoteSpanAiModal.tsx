@@ -16,7 +16,10 @@ import { DiffView } from "./DiffView";
 import type { AppConfig } from "../lib/config";
 import { aiCancel, aiNoteEditSpanStream, friendlyError, newCancelKey } from "../lib/ai";
 import { mergeRuns, splitSections, spliceSpan } from "../lib/mdSections";
-import { AiThinking, Modal } from "../ui";
+import { AiThinking, ChoiceChip, Modal, Tooltip } from "../ui";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { REF_DIR_TIMEOUT_SECS, loadRecentRefDirs, refDirName, rememberRefDir } from "../lib/refDirs";
+import { describeActivity } from "../lib/aiActivity";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 
@@ -59,6 +62,11 @@ export function NoteSpanAiModal({
   /** 고른 절의 인덱스 (splitSections 결과 기준) */
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [instruction, setInstruction] = useState("");
+  // 참고 폴더 — 최근 목록(칩)과 그중 이번 요청에 붙일 것. AI 가 읽기 전용으로 살펴본다
+  const [refDirs, setRefDirs] = useState<string[]>([]);
+  const [refOn, setRefOn] = useState<Set<string>>(() => new Set());
+  // 진행 중 도구 호출 한 줄 — 참고 폴더를 훑는 동안 멈춘 것처럼 보이지 않게
+  const [activity, setActivity] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<string[]>([]);
   const [streamText, setStreamText] = useState("");
@@ -77,6 +85,9 @@ export function NoteSpanAiModal({
     if (!open) return;
     runSeq.current++;
     setInstruction("");
+    setRefDirs(loadRecentRefDirs());
+    setRefOn(new Set());
+    setActivity(null);
     setError(null);
     setResults([]);
     setStreamText("");
@@ -136,11 +147,33 @@ export function NoteSpanAiModal({
 
   const totalChars = runs.reduce((sum, r) => sum + (r.end - r.start), 0);
 
+  async function pickRefDir() {
+    // 워크스페이스 루트 전환기와 같은 네이티브 폴더 다이얼로그
+    const dir = await openDialog({
+      directory: true,
+      multiple: false,
+      title: t("notes.ai.refDirs.dialogTitle"),
+    });
+    if (typeof dir !== "string" || !dir) return;
+    setRefDirs(rememberRefDir(dir));
+    setRefOn((prev) => new Set(prev).add(dir));
+  }
+  function toggleRef(dir: string) {
+    setRefOn((prev) => {
+      const next = new Set(prev);
+      if (next.has(dir)) next.delete(dir);
+      else next.add(dir);
+      return next;
+    });
+  }
+  const chosenDirs = refDirs.filter((d) => refOn.has(d));
+
   async function run() {
     if (!config || runs.length === 0 || instruction.trim().length < 2) return;
     setError(null);
     setResults([]);
     setStreamText("");
+    setActivity(null);
     setRunAt(0);
     setStep("loading");
     const my = ++runSeq.current;
@@ -165,10 +198,16 @@ export function NoteSpanAiModal({
             cliPath: config.cliPath,
             provider: config.provider,
             cancelKey: key,
+            refDirs: chosenDirs,
+            timeoutSecs: chosenDirs.length > 0 ? REF_DIR_TIMEOUT_SECS : null,
           },
           (delta) => {
             if (my !== runSeq.current) return;
             setStreamText((prev) => prev + delta);
+          },
+          (a) => {
+            if (my !== runSeq.current) return;
+            setActivity(describeActivity(a));
           },
         );
         if (my !== runSeq.current) return;
@@ -379,6 +418,7 @@ export function NoteSpanAiModal({
               {step === "loading" && i === runAt && (
                 <div className="note-stream" style={{ marginTop: 8 }}>
                   <AiThinking
+                    activity={activity ?? undefined}
                     compact={!!streamText}
                     label={
                       runs.length > 1
@@ -426,6 +466,29 @@ export function NoteSpanAiModal({
             }}
           />
           <div className="hint">{t("notes.spanAi.hint")}</div>
+        </div>
+      )}
+
+      {step === "prompt" && (
+        <div className="field">
+          <label>{t("notes.ai.refDirs.label")}</label>
+          <div className="chip-row">
+            <button type="button" className="btn btn-sm" onClick={() => void pickRefDir()}>
+              <Icon name="folder-plus" size={13} />
+              {t("notes.ai.refDirs.add")}
+            </button>
+            {refDirs.map((d) => (
+              <Tooltip key={d} label={d}>
+                <ChoiceChip
+                  label={refDirName(d)}
+                  icon="folder"
+                  on={refOn.has(d)}
+                  onToggle={() => toggleRef(d)}
+                />
+              </Tooltip>
+            ))}
+          </div>
+          <div className="hint">{t("notes.ai.refDirs.hint")}</div>
         </div>
       )}
 

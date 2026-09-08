@@ -95,11 +95,14 @@ export function AiThinking({
   hint,
   compact,
   indicator = "bar",
+  activity,
 }: {
   label: string;
   hint?: string;
   compact?: boolean;
   indicator?: "bar" | "ring";
+  /** 지금 하고 있는 도구 호출 한 줄(파일 읽기·검색). 모션이 아니라 글자 교체라 '모션은 하나' 규칙과 충돌하지 않는다 */
+  activity?: string;
 }) {
   const ring = indicator === "ring";
   return (
@@ -121,6 +124,7 @@ export function AiThinking({
           <span key={compact ? "wide" : "narrow"} className="ai-progress-bar" />
         </div>
       )}
+      {activity && <div className="ai-thinking-activity">{activity}</div>}
       {hint && <div className="hint ai-thinking-hint">{hint}</div>}
     </div>
   );

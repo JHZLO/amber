@@ -208,7 +208,26 @@ pub(crate) async fn run_provider_text(
         ProviderKind::Claude => {
             spawn_claude_result(program, model, dur, system_prompt, input).await
         }
-        _ => spawn_simple_cli_result(kind, program, model, dur, system_prompt, input).await,
+        _ => spawn_simple_cli_result(kind, program, model, dur, system_prompt, input, &[]).await,
+    }
+}
+
+/// `run_provider_text` 와 같되 참고 폴더를 넘긴다(비스트리밍 경로 — gemini). claude 는 여기서도
+/// 폴더를 열지 않는다: 노트 경로는 항상 스트리밍(run_note_provider)이라 이 조합은 오지 않는다.
+pub(crate) async fn run_provider_text_with_dirs(
+    kind: ProviderKind,
+    program: String,
+    model: String,
+    dur: Duration,
+    system_prompt: &str,
+    input: String,
+    ref_dirs: &[String],
+) -> Result<(String, MetaOut), AiError> {
+    match kind {
+        ProviderKind::Claude => {
+            spawn_claude_result(program, model, dur, system_prompt, input).await
+        }
+        _ => spawn_simple_cli_result(kind, program, model, dur, system_prompt, input, ref_dirs).await,
     }
 }
 
@@ -246,6 +265,8 @@ async fn spawn_simple_cli_result(
     dur: Duration,
     system_prompt: &str,
     input: String,
+    // 참고 폴더 — gemini 만 여기서 연다(--include-directories). codex 는 stream_codex_result 가 -C 로 연다.
+    ref_dirs: &[String],
 ) -> Result<(String, MetaOut), AiError> {
     let combined = format!("[지시사항 — 반드시 그대로 따를 것]\n{system_prompt}\n\n{input}");
     let started = std::time::Instant::now();
@@ -264,6 +285,9 @@ async fn spawn_simple_cli_result(
             cmd.args(["--output-format", "json"]);
             if !model.is_empty() {
                 cmd.args(["-m", &model]);
+            }
+            if !ref_dirs.is_empty() {
+                cmd.args(["--include-directories", &ref_dirs.join(",")]);
             }
         }
         ProviderKind::Claude => unreachable!("claude 는 spawn_claude_result 경로"),
@@ -620,7 +644,11 @@ pub async fn ai_note_compose_stream(
     provider: Option<String>,
     timeout_secs: Option<u64>,
     lang: Option<String>,
+    // 참고 폴더 — AI 가 읽기 전용으로 살펴보고 쓴다. 프론트는 폴더가 있으면 timeout_secs 도 늘려 보낸다.
+    ref_dirs: Option<Vec<String>>,
     on_delta: Channel<String>,
+    // 도구 호출(파일 읽기·검색) 진행 — 긴 실행이 멈춘 것처럼 보이지 않게 프론트가 한 줄로 보인다
+    on_activity: Channel<Activity>,
     cancel_key: Option<String>,
 ) -> Result<NoteComposeResult, AiError> {
     let instr = instruction.trim();
@@ -636,20 +664,25 @@ pub async fn ai_note_compose_stream(
 
     let body = markdown.trim();
     let body = if body.is_empty() { "(비어 있음)" } else { body };
+    let dirs = clean_ref_dirs(ref_dirs);
     let input = format!(
-        "[작성 요청]\n{instr}\n\n[현재 노트]\n제목: {title}\n\n[현재 본문 (Markdown)]\n{body}"
+        "[작성 요청]\n{instr}\n\n[현재 노트]\n제목: {title}\n\n[현재 본문 (Markdown)]\n{body}{}",
+        ref_dirs_section(&dirs)
     );
 
-    let (result_str, meta) = if kind == ProviderKind::Claude {
-        stream_claude_result(program, model, dur, &sys(NOTE_SYSTEM_PROMPT, lang.as_deref()), input, &[], &on_delta, cancel_key.as_deref())
-            .await?
-    } else {
-        // codex/gemini 는 스트리밍 미지원 경로 — 완료 후 전체 텍스트를 한 번에 전송
-        let r = run_provider_text(kind, program, model, dur, &sys(NOTE_SYSTEM_PROMPT, lang.as_deref()), input)
-            .await?;
-        let _ = on_delta.send(r.0.clone());
-        r
-    };
+    let (result_str, meta) = run_note_provider(
+        kind,
+        program,
+        model,
+        dur,
+        &sys(NOTE_SYSTEM_PROMPT, lang.as_deref()),
+        input,
+        &dirs,
+        &on_delta,
+        &on_activity,
+        cancel_key.as_deref(),
+    )
+    .await?;
 
     let md = strip_outer_fence(&result_str).trim().to_string();
     if md.is_empty() {
@@ -682,7 +715,9 @@ pub async fn ai_note_edit_span(
     provider: Option<String>,
     timeout_secs: Option<u64>,
     lang: Option<String>,
+    ref_dirs: Option<Vec<String>>,
     on_delta: Channel<String>,
+    on_activity: Channel<Activity>,
     cancel_key: Option<String>,
 ) -> Result<NoteEditResult, AiError> {
     let instr = instruction.trim();
@@ -707,20 +742,26 @@ pub async fn ai_note_edit_span(
     };
     let body = markdown.trim();
     let body = if body.is_empty() { "(비어 있음)" } else { body };
+    let dirs = clean_ref_dirs(ref_dirs);
     let input = format!(
         "[수정 지시]\n{instr}\n\n[대상 종류]\n{span_kind}\n\n[선택한 부분]\n{span}\n\n\
-         [노트 전체]\n제목: {title}\n\n{body}"
+         [노트 전체]\n제목: {title}\n\n{body}{}",
+        ref_dirs_section(&dirs)
     );
 
-    let (result_str, meta) = if kind == ProviderKind::Claude {
-        stream_claude_result(program, model, dur, &sys(NOTE_EDIT_SYSTEM_PROMPT, lang.as_deref()), input, &[], &on_delta, cancel_key.as_deref())
-            .await?
-    } else {
-        let r = run_provider_text(kind, program, model, dur, &sys(NOTE_EDIT_SYSTEM_PROMPT, lang.as_deref()), input)
-            .await?;
-        let _ = on_delta.send(r.0.clone());
-        r
-    };
+    let (result_str, meta) = run_note_provider(
+        kind,
+        program,
+        model,
+        dur,
+        &sys(NOTE_EDIT_SYSTEM_PROMPT, lang.as_deref()),
+        input,
+        &dirs,
+        &on_delta,
+        &on_activity,
+        cancel_key.as_deref(),
+    )
+    .await?;
 
     let text = strip_outer_fence(&result_str).trim().to_string();
     if text.is_empty() {
@@ -863,6 +904,352 @@ pub async fn ai_erd_generate_stream(
     Ok(ErdResult { mermaid, meta })
 }
 
+// ---- 참고 폴더 · 진행(활동) ----
+
+/// 진행 중 도구 호출 한 건 — 프론트가 "무엇을 읽고 있나"로 바꿔 보여 준다. 참고 폴더를 훑는 실행은
+/// 몇 분씩 걸리는데, 텍스트 델타가 오기 전까지는 화면이 멈춘 것처럼 보였다.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Activity {
+    /// 도구 이름 — claude: Read/Glob/Grep…, codex: "command"(셸 실행)·"search"(웹 검색)·MCP 도구명
+    pub tool: String,
+    /// 대상 — 파일 경로·검색 패턴·명령 등. 도구마다 입력 키가 달라 있는 것을 고른다
+    pub target: Option<String>,
+}
+
+/// 참고 폴더 목록 정리 — 공백 제거, 빈 값·중복 제거(순서 유지)
+fn clean_ref_dirs(dirs: Option<Vec<String>>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for d in dirs.unwrap_or_default() {
+        let t = d.trim();
+        if !t.is_empty() && !out.iter().any(|x| x == t) {
+            out.push(t.to_string());
+        }
+    }
+    out
+}
+
+/// stdin 입력 끝에 붙는 참고 폴더 절 — 접근 권한은 CLI 인자가 주고, 여기는 모델에게 "어디를 보라"를 말한다
+fn ref_dirs_section(dirs: &[String]) -> String {
+    if dirs.is_empty() {
+        return String::new();
+    }
+    let list: Vec<String> = dirs.iter().map(|d| format!("- {d}")).collect();
+    format!("\n\n[참고 폴더]\n{}", list.join("\n"))
+}
+
+/// 참고 폴더가 붙은 claude 실행의 인자 — 폴더를 열어 주되 **읽기 도구만** 허용하고 나머지는 묻지 않고
+/// 거부한다. Bash 는 cat 으로 읽을 수도 있지만 쓸 수도 있어 통째로 막는다(읽기는 Read/Glob/Grep 으로 충분).
+/// 폴더가 없으면 빈 벡터 — 기존 실행과 한 글자도 다르지 않게.
+fn claude_ref_dir_args(dirs: &[String]) -> Vec<String> {
+    if dirs.is_empty() {
+        return Vec::new();
+    }
+    let mut v: Vec<String> = Vec::new();
+    for d in dirs {
+        v.push("--add-dir".into());
+        v.push(d.clone());
+    }
+    v.extend(
+        [
+            "--allowedTools",
+            "Read,Glob,Grep",
+            "--disallowedTools",
+            "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch",
+            "--permission-mode",
+            "dontAsk",
+        ]
+        .into_iter()
+        .map(String::from),
+    );
+    v
+}
+
+/// claude `assistant` 메시지의 tool_use 블록 → Activity. 대상은 도구마다 다른 입력 키에서 고른다
+/// (Read=file_path · Glob/Grep=pattern · Bash=command · WebFetch=url · LS=path).
+fn activity_from_tool_use(block: &serde_json::Value) -> Option<Activity> {
+    if block.get("type").and_then(|t| t.as_str()) != Some("tool_use") {
+        return None;
+    }
+    let tool = block.get("name").and_then(|n| n.as_str())?.to_string();
+    let input = block.get("input");
+    let target = ["file_path", "pattern", "command", "query", "url", "path", "notebook_path"]
+        .iter()
+        .find_map(|k| {
+            input
+                .and_then(|i| i.get(*k))
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        });
+    Some(Activity { tool, target })
+}
+
+/// codex `exec --json` 의 한 줄을 앱이 알아야 할 것으로만 줄인다
+#[derive(Debug, PartialEq)]
+enum CodexEv {
+    Activity(Activity),
+    /// 최종 답변(agent_message). 여러 개면 마지막 것이 답이다
+    Message(String),
+    Error(String),
+    Usage { input: Option<i64>, output: Option<i64> },
+    Other,
+}
+
+fn codex_event(v: &serde_json::Value) -> CodexEv {
+    let ty = v.get("type").and_then(|t| t.as_str()).unwrap_or("");
+    match ty {
+        "error" => CodexEv::Error(
+            v.get("message").and_then(|m| m.as_str()).unwrap_or("").to_string(),
+        ),
+        "turn.failed" => CodexEv::Error(
+            v.pointer("/error/message")
+                .and_then(|m| m.as_str())
+                .unwrap_or("turn failed")
+                .to_string(),
+        ),
+        "turn.completed" => CodexEv::Usage {
+            input: v.pointer("/usage/input_tokens").and_then(|n| n.as_i64()),
+            output: v.pointer("/usage/output_tokens").and_then(|n| n.as_i64()),
+        },
+        "item.started" | "item.completed" => {
+            let Some(item) = v.get("item") else {
+                return CodexEv::Other;
+            };
+            let kind = item.get("type").and_then(|t| t.as_str()).unwrap_or("");
+            let s = |k: &str| item.get(k).and_then(|x| x.as_str()).map(String::from);
+            match (ty, kind) {
+                // 명령·검색은 시작 시점에 보이는 게 목적이지만, 버전에 따라 completed 만 올 수 있어 둘 다 받는다
+                (_, "command_execution") => CodexEv::Activity(Activity {
+                    tool: "command".into(),
+                    target: s("command"),
+                }),
+                (_, "web_search") => CodexEv::Activity(Activity {
+                    tool: "search".into(),
+                    target: s("query"),
+                }),
+                ("item.started", "mcp_tool_call") => CodexEv::Activity(Activity {
+                    tool: s("tool").unwrap_or_else(|| "mcp".into()),
+                    target: s("server"),
+                }),
+                ("item.completed", "agent_message") => {
+                    s("text").map(CodexEv::Message).unwrap_or(CodexEv::Other)
+                }
+                ("item.completed", "error") => CodexEv::Error(s("message").unwrap_or_default()),
+                _ => CodexEv::Other,
+            }
+        }
+        _ => CodexEv::Other,
+    }
+}
+
+/// codex `exec --json`: 이벤트 JSONL 을 줄 단위로 읽어 셸 실행 등은 on_activity 로, 최종 agent_message 는
+/// 끝나고 한 번에 on_delta 로 보낸다(codex 는 본문 토큰 스트리밍이 없다). 샌드박스는 read-only 로 고정 —
+/// 참고 폴더는 읽기만 한다. 첫 폴더가 작업 루트(-C)가 되고 나머지는 프롬프트의 [참고 폴더] 로만 알린다
+/// (`--add-dir` 는 codex 에선 쓰기 허용이라 쓰지 않는다).
+async fn stream_codex_result(
+    program: String,
+    model: String,
+    dur: Duration,
+    system_prompt: &str,
+    input: String,
+    ref_dirs: &[String],
+    on_delta: &Channel<String>,
+    on_activity: &Channel<Activity>,
+    cancel_key: Option<&str>,
+) -> Result<(String, MetaOut), AiError> {
+    let combined = format!("[지시사항 — 반드시 그대로 따를 것]\n{system_prompt}\n\n{input}");
+    let started = std::time::Instant::now();
+
+    let mut cmd = Command::new(&program);
+    cmd.args([
+        "exec",
+        "-",
+        "--json",
+        "--ephemeral",
+        "--skip-git-repo-check",
+        "--sandbox",
+        "read-only",
+    ]);
+    if let Some(root) = ref_dirs.first() {
+        cmd.args(["-C", root]);
+    }
+    if !model.is_empty() {
+        cmd.args(["-m", &model]);
+    }
+    let mut child = cmd
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                AiError::detailed(
+                    "AI_NOT_FOUND",
+                    format!("AI CLI 를 찾을 수 없습니다: {program}"),
+                    program.clone(),
+                )
+            } else {
+                AiError::detailed("SPAWN_ERROR", e.to_string(), e.to_string())
+            }
+        })?;
+    let _live = LiveGuard::new(cancel_key, child.id());
+
+    {
+        let mut stdin = child.stdin.take().expect("stdin piped");
+        stdin
+            .write_all(combined.as_bytes())
+            .await
+            .map_err(|e| AiError::detailed("STDIN_ERROR", e.to_string(), e.to_string()))?;
+        let _ = stdin.shutdown().await;
+    }
+    let stderr = child.stderr.take().expect("stderr piped");
+    let mut stderr_task = tokio::spawn(async move {
+        let mut buf = String::new();
+        let _ = BufReader::new(stderr).read_to_string(&mut buf).await;
+        buf
+    });
+
+    let stdout = child.stdout.take().expect("stdout piped");
+    let mut lines = BufReader::new(stdout).lines();
+    let mut message: Option<String> = None;
+    let mut failure: Option<String> = None;
+    let mut usage: (Option<i64>, Option<i64>) = (None, None);
+
+    let read_loop = async {
+        while let Some(line) = lines
+            .next_line()
+            .await
+            .map_err(|e| AiError::detailed("WAIT_ERROR", e.to_string(), e.to_string()))?
+        {
+            let v: serde_json::Value = match serde_json::from_str(line.trim()) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            match codex_event(&v) {
+                CodexEv::Activity(a) => {
+                    let _ = on_activity.send(a);
+                }
+                CodexEv::Message(t) => message = Some(t),
+                CodexEv::Error(m) => failure = Some(m),
+                CodexEv::Usage { input, output } => usage = (input, output),
+                CodexEv::Other => {}
+            }
+        }
+        Ok::<(), AiError>(())
+    };
+    match timeout(dur, read_loop).await {
+        Err(_) => {
+            let _ = child.start_kill();
+            return Err(AiError::detailed(
+                "AI_TIMEOUT",
+                format!("{}초 안에 응답이 없습니다.", dur.as_secs()),
+                dur.as_secs().to_string(),
+            ));
+        }
+        Ok(r) => r?,
+    }
+    let post = Duration::from_secs(POST_STREAM_WAIT_SECS);
+    if timeout(post, child.wait()).await.is_err() {
+        let _ = child.start_kill();
+    }
+    let errbuf = match timeout(post, &mut stderr_task).await {
+        Ok(r) => r.unwrap_or_default(),
+        Err(_) => {
+            stderr_task.abort();
+            String::new()
+        }
+    };
+
+    let text = match (message, failure) {
+        (Some(t), _) if !t.trim().is_empty() => t,
+        (_, Some(reason)) => {
+            let (code, msg) = classify_failure(&reason);
+            return Err(AiError::detailed(code, msg, reason));
+        }
+        _ => {
+            let (code, msg) = match classify_failure(&errbuf) {
+                ("AI_ERROR", _) => ("AI_BAD_ENVELOPE", "스트림에서 결과를 받지 못했습니다."),
+                hit => hit,
+            };
+            return Err(AiError::detailed(code, msg, errbuf.trim()));
+        }
+    };
+    let _ = on_delta.send(text.clone());
+    Ok((
+        text,
+        MetaOut {
+            model,
+            session_id: None,
+            cost_usd: None,
+            input_tokens: usage.0,
+            output_tokens: usage.1,
+            duration_ms: Some(started.elapsed().as_millis() as i64),
+        },
+    ))
+}
+
+/// 노트 작성·부분 수정 공용 실행 — 참고 폴더가 있으면 읽기 도구만 열어 주고, 진행(도구 호출)을 on_activity 로
+/// 흘린다. claude 는 stream-json, codex 는 `exec --json`(활동만 실시간, 본문은 끝나고 한 번에),
+/// gemini 는 완료 후 한 번에(`--include-directories` 로 폴더만 연다).
+async fn run_note_provider(
+    kind: ProviderKind,
+    program: String,
+    model: String,
+    dur: Duration,
+    system_prompt: &str,
+    input: String,
+    ref_dirs: &[String],
+    on_delta: &Channel<String>,
+    on_activity: &Channel<Activity>,
+    cancel_key: Option<&str>,
+) -> Result<(String, MetaOut), AiError> {
+    match kind {
+        ProviderKind::Claude => {
+            let extra = claude_ref_dir_args(ref_dirs);
+            stream_claude_result_ext(
+                program,
+                model,
+                dur,
+                system_prompt,
+                input,
+                &extra,
+                on_delta,
+                Some(on_activity),
+                cancel_key,
+            )
+            .await
+        }
+        ProviderKind::Codex => {
+            stream_codex_result(
+                program,
+                model,
+                dur,
+                system_prompt,
+                input,
+                ref_dirs,
+                on_delta,
+                on_activity,
+                cancel_key,
+            )
+            .await
+        }
+        ProviderKind::Gemini => {
+            let r = run_provider_text_with_dirs(
+                kind,
+                program,
+                model,
+                dur,
+                system_prompt,
+                input,
+                ref_dirs,
+            )
+            .await?;
+            let _ = on_delta.send(r.0.clone());
+            Ok(r)
+        }
+    }
+}
+
 /// stream-json 실행: 줄 단위로 읽어 text_delta 를 on_delta 로 흘리고,
 /// 마지막 `result` 봉투에서 최종 .result + 메타를 확정해 돌려준다.
 pub(crate) async fn stream_claude_result(
@@ -875,6 +1262,33 @@ pub(crate) async fn stream_claude_result(
     extra_args: &[String],
     on_delta: &Channel<String>,
     // 취소 키 — 프론트가 실행마다 새로 만들어 넘기고, 중단 버튼이 같은 키로 ai_cancel 을 부른다.
+    cancel_key: Option<&str>,
+) -> Result<(String, MetaOut), AiError> {
+    stream_claude_result_ext(
+        program,
+        model,
+        dur,
+        system_prompt,
+        input,
+        extra_args,
+        on_delta,
+        None,
+        cancel_key,
+    )
+    .await
+}
+
+/// 위와 같되 도구 호출(`assistant` 메시지의 tool_use)을 `on_activity` 로도 흘린다 —
+/// 참고 폴더를 읽는 긴 실행에서 "지금 무엇을 하고 있나"를 보이기 위해.
+pub(crate) async fn stream_claude_result_ext(
+    program: String,
+    model: String,
+    dur: Duration,
+    system_prompt: &str,
+    input: String,
+    extra_args: &[String],
+    on_delta: &Channel<String>,
+    on_activity: Option<&Channel<Activity>>,
     cancel_key: Option<&str>,
 ) -> Result<(String, MetaOut), AiError> {
     let mut child = Command::new(&program)
@@ -964,6 +1378,20 @@ pub(crate) async fn stream_claude_result(
                             if last_flush.elapsed() >= DELTA_FLUSH {
                                 let _ = on_delta.send(std::mem::take(&mut delta_buf));
                                 last_flush = std::time::Instant::now();
+                            }
+                        }
+                    }
+                }
+                Some("assistant") => {
+                    // 턴이 끝난 메시지 — tool_use 블록에 도구 이름과 완성된 입력이 들어 있다
+                    if let Some(act) = on_activity {
+                        if let Some(blocks) =
+                            v.pointer("/message/content").and_then(|c| c.as_array())
+                        {
+                            for b in blocks {
+                                if let Some(a) = activity_from_tool_use(b) {
+                                    let _ = act.send(a);
+                                }
                             }
                         }
                     }
@@ -1282,6 +1710,54 @@ mod tests {
             );
             assert!(d.contains("NOT negotiable"), "강제 문구가 있어야 한다");
         }
+    }
+
+    // 활동 줄은 도구별로 다른 입력 키에서 대상을 고른다 — 키를 잘못 잡으면 "Read" 만 뜨고 무엇을 읽는지 안 보인다
+    #[test]
+    fn activity_from_tool_use_picks_the_right_input_key() {
+        let read = serde_json::json!({"type":"tool_use","name":"Read","input":{"file_path":"/a/b.ts"}});
+        let a = activity_from_tool_use(&read).unwrap();
+        assert_eq!((a.tool.as_str(), a.target.as_deref()), ("Read", Some("/a/b.ts")));
+        let glob = serde_json::json!({"type":"tool_use","name":"Glob","input":{"pattern":"**/*.rs","path":"/repo"}});
+        assert_eq!(activity_from_tool_use(&glob).unwrap().target.as_deref(), Some("**/*.rs"));
+        assert!(activity_from_tool_use(&serde_json::json!({"type":"text","text":"hi"})).is_none());
+    }
+
+    // 참고 폴더는 열되 읽기 도구만 — 쓰기·셸이 열리면 "읽기 전용" 약속이 깨진다
+    #[test]
+    fn claude_ref_dir_args_open_dirs_but_only_read_tools() {
+        assert!(claude_ref_dir_args(&[]).is_empty());
+        let args = claude_ref_dir_args(&["/repo".to_string(), "/docs".to_string()]);
+        let joined = args.join(" ");
+        assert!(joined.contains("--add-dir /repo") && joined.contains("--add-dir /docs"));
+        assert!(joined.contains("--allowedTools Read,Glob,Grep"));
+        assert!(joined.contains("--disallowedTools Bash,"));
+        assert!(joined.contains("--permission-mode dontAsk"));
+    }
+
+    #[test]
+    fn ref_dirs_are_cleaned_and_listed_for_the_prompt() {
+        let dirs = clean_ref_dirs(Some(vec![" /a ".into(), "".into(), "/a".into(), "/b".into()]));
+        assert_eq!(dirs, vec!["/a".to_string(), "/b".to_string()]);
+        assert_eq!(ref_dirs_section(&dirs), "\n\n[참고 폴더]\n- /a\n- /b");
+        assert_eq!(ref_dirs_section(&[]), "");
+    }
+
+    // codex exec --json 의 줄 → 활동/최종 답/실패/사용량 (형태는 codex-rs exec_events.rs 기준)
+    #[test]
+    fn codex_event_maps_jsonl_lines() {
+        let started = serde_json::json!({"type":"item.started","item":{"id":"i1","type":"command_execution","command":"ls -la","aggregated_output":"","exit_code":null,"status":"in_progress"}});
+        assert_eq!(
+            codex_event(&started),
+            CodexEv::Activity(Activity { tool: "command".into(), target: Some("ls -la".into()) })
+        );
+        let msg = serde_json::json!({"type":"item.completed","item":{"id":"i2","type":"agent_message","text":"# Note"}});
+        assert_eq!(codex_event(&msg), CodexEv::Message("# Note".into()));
+        let failed = serde_json::json!({"type":"turn.failed","error":{"message":"boom"}});
+        assert_eq!(codex_event(&failed), CodexEv::Error("boom".into()));
+        let done = serde_json::json!({"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":0,"output_tokens":3}});
+        assert_eq!(codex_event(&done), CodexEv::Usage { input: Some(10), output: Some(3) });
+        assert_eq!(codex_event(&serde_json::json!({"type":"thread.started","thread_id":"t"})), CodexEv::Other);
     }
 
     #[test]

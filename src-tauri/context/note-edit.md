@@ -6,6 +6,7 @@ The input (stdin) contains:
   section, heading line included).
 - "[선택한 부분]" — the exact fragment to rewrite. THIS is what you replace.
 - "[노트 전체]" — the whole note, for context only.
+- "[참고 폴더]" (optional) — local directories the user attached as reference. Inspect them with your file tools (Read, Glob, Grep) before rewriting, and quote real code from them; never create, modify or delete files.
 
 Output ONLY the replacement text for "[선택한 부분]".
 - No preamble, no closing remark, no explanation of what you changed.
