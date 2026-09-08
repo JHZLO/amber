@@ -7,7 +7,7 @@ import { DiffView } from "./DiffView";
 import type { AppConfig } from "../lib/config";
 import { aiCancel, aiNoteComposeStream, friendlyError, newCancelKey } from "../lib/ai";
 import { loadPrompts, type SavedPrompt } from "../lib/prompts";
-import { AiThinking, ChoiceChip, Modal, Tooltip } from "../ui";
+import { AiThinking, ChoiceChip, DiscardAiModal, Modal, Tooltip } from "../ui";
 import { composeInstruction } from "../lib/aiInstruction";
 import { PromptPeekModal } from "./PromptPeekModal";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -55,6 +55,7 @@ export function NoteAiModal({
   const [refOn, setRefOn] = useState<Set<string>>(() => new Set());
   // 진행 중 도구 호출 한 줄 — 참고 폴더를 훑는 동안 멈춘 것처럼 보이지 않게
   const [activity, setActivity] = useState<string | null>(null);
+  const [confirmClose, setConfirmClose] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultMd, setResultMd] = useState("");
   const [streamText, setStreamText] = useState(""); // 생성 중 실시간 누적 텍스트
@@ -82,6 +83,7 @@ export function NoteAiModal({
     setRefDirs(loadRecentRefDirs());
     setRefOn(new Set());
     setActivity(null);
+    setConfirmClose(false);
     setError(null);
     setResultMd("");
     setStreamText("");
@@ -135,6 +137,21 @@ export function NoteAiModal({
   ];
   const finalInstruction = composeInstruction(instruction, extras);
   const tooShort = finalInstruction.length < 2;
+
+  const hasResult = resultMd.trim().length > 0;
+  // 닫기 — 결과가 있거나 생성 중이면 한 번 묻는다. 몇 분 걸린 생성물이 X 한 번에 사라지면 안 된다
+  function requestClose() {
+    if (step === "loading" || step === "preview" || hasResult) {
+      setConfirmClose(true);
+      return;
+    }
+    onClose();
+  }
+  function discardAndClose() {
+    if (step === "loading") stop();
+    setConfirmClose(false);
+    onClose();
+  }
 
   async function run() {
     if (!config || tooShort) return;
@@ -201,7 +218,7 @@ export function NoteAiModal({
   if (step === "prompt") {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={onClose}>
+        <button className="btn btn-sm" onClick={requestClose}>
           {t("common.cancel")}
         </button>
         <button
@@ -231,7 +248,7 @@ export function NoteAiModal({
           {t("notes.ai.back")}
         </button>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={onClose}>
+        <button className="btn btn-sm" onClick={requestClose}>
           {t("common.cancel")}
         </button>
         <button
@@ -250,7 +267,7 @@ export function NoteAiModal({
 
   return (
     <>
-    <Modal open={open} title={t("notes.ai.title")} onClose={onClose} footer={footer} wide>
+    <Modal open={open} title={t("notes.ai.title")} onClose={requestClose} footer={footer} wide>
       {error && (
         <div className="error-note" style={{ marginBottom: 12 }}>
           {error}
@@ -404,6 +421,12 @@ export function NoteAiModal({
         if (peek) toggle(`s:${peek.id}`);
       }}
       onClose={() => setPeek(null)}
+    />
+    <DiscardAiModal
+      open={confirmClose}
+      running={step === "loading"}
+      onKeep={() => setConfirmClose(false)}
+      onDiscard={discardAndClose}
     />
     </>
   );

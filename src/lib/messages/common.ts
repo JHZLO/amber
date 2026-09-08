@@ -14,6 +14,12 @@ const ko = {
   "common.unsaved.body": "저장하지 않은 변경이 있어요. 버리고 이동할까요?",
   "common.unsaved.keep": "계속 편집",
   "common.unsaved.discard": "버리고 이동",
+  // AI 결과 버리기 확인 — 결과가 떠 있거나 생성 중인 AI 모달을 닫을 때
+  "common.aiDiscard.title": "AI 결과를 버릴까요?",
+  "common.aiDiscard.body": "지금 닫으면 AI 가 쓴 내용이 사라져요. 남기려면 먼저 반영하세요.",
+  "common.aiDiscard.bodyRunning": "AI 가 아직 쓰고 있어요. 닫으면 생성을 중단하고 지금까지 쓴 내용도 사라져요.",
+  "common.aiDiscard.keep": "계속 보기",
+  "common.aiDiscard.discard": "버리고 닫기",
 
   // 렌더 중 예외 — ErrorBoundary(main.tsx). 창이 백지가 되는 대신 이 화면이 뜬다
   "common.crash.title": "화면을 그리다 문제가 생겼어요",
@@ -129,6 +135,11 @@ const en: Record<keyof typeof ko, string> = {
   "common.unsaved.body": "There are unsaved changes. Discard them and switch?",
   "common.unsaved.keep": "Keep editing",
   "common.unsaved.discard": "Discard & switch",
+  "common.aiDiscard.title": "Discard the AI result?",
+  "common.aiDiscard.body": "Closing now throws away what the AI wrote. Apply it first if you want to keep it.",
+  "common.aiDiscard.bodyRunning": "The AI is still writing. Closing stops it and throws away what it has written so far.",
+  "common.aiDiscard.keep": "Keep reviewing",
+  "common.aiDiscard.discard": "Discard & close",
 
   "common.crash.title": "Something broke while rendering",
   "common.crash.hint":

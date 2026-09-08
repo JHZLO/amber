@@ -7,7 +7,7 @@ import { Mermaid } from "./Mermaid";
 import { DiffView } from "./DiffView";
 import type { AppConfig } from "../lib/config";
 import { aiCancel, aiErdGenerateStream, friendlyError, newCancelKey } from "../lib/ai";
-import { AiThinking, ChoiceChip, Modal } from "../ui";
+import { AiThinking, ChoiceChip, DiscardAiModal, Modal } from "../ui";
 import { composeInstruction } from "../lib/aiInstruction";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
@@ -42,6 +42,7 @@ export function DiagramAiModal({
   const [instruction, setInstruction] = useState("");
   // 체크한 빠른 지시(index) — 텍스트는 보낼 때 합친다
   const [chosen, setChosen] = useState<Set<number>>(() => new Set());
+  const [confirmClose, setConfirmClose] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState("");
   const [streamText, setStreamText] = useState(""); // 생성 중 실시간 누적 텍스트
@@ -63,6 +64,7 @@ export function DiagramAiModal({
     setDdl("");
     setInstruction("");
     setChosen(new Set());
+    setConfirmClose(false);
     setError(null);
     setResult("");
     setStreamText("");
@@ -88,6 +90,21 @@ export function DiagramAiModal({
   // 체크한 지시는 입력칸에 붙이지 않고 보낼 때 합친다 — 내가 친 말 → 빠른 지시
   const extras = PRESETS.filter((_, i) => chosen.has(i));
   const finalInstruction = composeInstruction(instruction, extras);
+
+  const hasResult = result.trim().length > 0;
+  // 닫기 — 결과가 있거나 생성 중이면 한 번 묻는다. 몇 분 걸린 생성물이 X 한 번에 사라지면 안 된다
+  function requestClose() {
+    if (step === "loading" || step === "preview" || hasResult) {
+      setConfirmClose(true);
+      return;
+    }
+    onClose();
+  }
+  function discardAndClose() {
+    if (step === "loading") stop();
+    setConfirmClose(false);
+    onClose();
+  }
 
   async function run() {
     if (!config || ddl.trim().length < 20) return;
@@ -142,7 +159,7 @@ export function DiagramAiModal({
   if (step === "prompt") {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={onClose}>
+        <button className="btn btn-sm" onClick={requestClose}>
           {t("common.cancel")}
         </button>
         <button
@@ -171,7 +188,7 @@ export function DiagramAiModal({
           {t("diagrams.ai.back")}
         </button>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={onClose}>
+        <button className="btn btn-sm" onClick={requestClose}>
           {t("common.cancel")}
         </button>
         <button
@@ -189,10 +206,11 @@ export function DiagramAiModal({
   }
 
   return (
+    <>
     <Modal
       open={open}
       title={t("diagrams.ai.title")}
-      onClose={onClose}
+      onClose={requestClose}
       footer={footer}
       wide
       fixedHeight
@@ -312,5 +330,12 @@ export function DiagramAiModal({
         </div>
       )}
     </Modal>
+    <DiscardAiModal
+      open={confirmClose}
+      running={step === "loading"}
+      onKeep={() => setConfirmClose(false)}
+      onDiscard={discardAndClose}
+    />
+    </>
   );
 }

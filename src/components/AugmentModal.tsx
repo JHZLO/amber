@@ -5,7 +5,7 @@ import type { ConceptWithTags } from "../types";
 import { aiAugment, friendlyError } from "../lib/ai";
 import { setConceptTags, updateConceptContent } from "../lib/db";
 import { writeNote } from "../lib/vault";
-import { AiThinking, ChoiceChip, Modal } from "../ui";
+import { AiThinking, ChoiceChip, DiscardAiModal, Modal } from "../ui";
 import { composeInstruction } from "../lib/aiInstruction";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
@@ -49,6 +49,7 @@ export function AugmentModal({
   const [instruction, setInstruction] = useState("");
   // 체크한 빠른 지시(index) — 텍스트는 보낼 때 합친다
   const [chosen, setChosen] = useState<Set<number>>(() => new Set());
+  const [confirmClose, setConfirmClose] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -65,6 +66,7 @@ export function AugmentModal({
     setStep("prompt");
     setInstruction("");
     setChosen(new Set());
+    setConfirmClose(false);
     setError(null);
     setSaving(false);
     setTitle(concept.title);
@@ -87,6 +89,19 @@ export function AugmentModal({
   // 체크한 지시는 입력칸에 붙이지 않고 보낼 때 합친다 — 내가 친 말 → 빠른 지시
   const extras = PRESETS.filter((_, i) => chosen.has(i));
   const finalInstruction = composeInstruction(instruction, extras);
+
+  // 닫기 — 결과가 떠 있거나 생성 중이면 한 번 묻는다(생성은 비스트리밍이라 중단은 없다)
+  function requestClose() {
+    if (step === "loading" || step === "preview") {
+      setConfirmClose(true);
+      return;
+    }
+    onClose();
+  }
+  function discardAndClose() {
+    setConfirmClose(false);
+    onClose();
+  }
 
   async function run() {
     if (!config || finalInstruction.length < 2) return;
@@ -144,7 +159,7 @@ export function AugmentModal({
   if (step === "prompt") {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={onClose}>
+        <button className="btn btn-sm" onClick={requestClose}>
           {t("common.cancel")}
         </button>
         <button
@@ -166,7 +181,7 @@ export function AugmentModal({
           {t("concepts.augment.again")}
         </button>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={onClose} disabled={saving}>
+        <button className="btn btn-sm" onClick={requestClose} disabled={saving}>
           {t("common.cancel")}
         </button>
         <button className="btn btn-primary" onClick={apply} disabled={saving}>
@@ -177,7 +192,8 @@ export function AugmentModal({
   }
 
   return (
-    <Modal open={open} title={t("concepts.augment.title")} onClose={onClose} footer={footer} wide>
+    <>
+    <Modal open={open} title={t("concepts.augment.title")} onClose={requestClose} footer={footer} wide>
       {error && (
         <div className="error-note" style={{ marginBottom: 12 }}>
           {error}
@@ -274,5 +290,12 @@ export function AugmentModal({
         </>
       )}
     </Modal>
+    <DiscardAiModal
+      open={confirmClose}
+      running={step === "loading"}
+      onKeep={() => setConfirmClose(false)}
+      onDiscard={discardAndClose}
+    />
+    </>
   );
 }

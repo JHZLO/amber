@@ -471,6 +471,45 @@ export function UnsavedModal({
   );
 }
 
+/** AI 결과 버리기 확인 — 결과가 떠 있거나 아직 쓰는 중인 AI 모달을 닫을 때. 몇 분 걸리고 크레딧을 쓴
+ *  생성물이 X 한 번에 사라지면 안 된다(§8 삭제 정책: 복구 가치가 큰 대상만 확인). UnsavedModal 과 같은 구조 —
+ *  첫 버튼이 '계속 보기'라 초기 포커스·Enter 가 안전한 쪽으로 간다. */
+export function DiscardAiModal({
+  open,
+  running,
+  onKeep,
+  onDiscard,
+}: {
+  open: boolean;
+  /** 아직 생성 중이면 문구가 "중단하고 버린다"로 바뀐다 */
+  running?: boolean;
+  onKeep: () => void;
+  onDiscard: () => void;
+}) {
+  return (
+    <Modal
+      open={open}
+      title={t("common.aiDiscard.title")}
+      narrow
+      onClose={onKeep}
+      footer={
+        <>
+          <button className="btn btn-sm" onClick={onKeep}>
+            {t("common.aiDiscard.keep")}
+          </button>
+          <button className="btn btn-sm btn-danger-ghost" onClick={onDiscard}>
+            {t("common.aiDiscard.discard")}
+          </button>
+        </>
+      }
+    >
+      <p style={{ margin: 0 }}>
+        {running ? t("common.aiDiscard.bodyRunning") : t("common.aiDiscard.body")}
+      </p>
+    </Modal>
+  );
+}
+
 export function timeAgo(ms: number): string {
   const diff = Date.now() - ms;
   const m = Math.floor(diff / 60000);

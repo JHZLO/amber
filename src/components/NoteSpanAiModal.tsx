@@ -16,7 +16,7 @@ import { DiffView } from "./DiffView";
 import type { AppConfig } from "../lib/config";
 import { aiCancel, aiNoteEditSpanStream, friendlyError, newCancelKey } from "../lib/ai";
 import { mergeRuns, splitSections, spliceSpan } from "../lib/mdSections";
-import { AiThinking, ChoiceChip, Modal, Tooltip } from "../ui";
+import { AiThinking, ChoiceChip, DiscardAiModal, Modal, Tooltip } from "../ui";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { REF_DIR_TIMEOUT_SECS, loadRecentRefDirs, refDirName, rememberRefDir } from "../lib/refDirs";
 import { describeActivity } from "../lib/aiActivity";
@@ -67,6 +67,7 @@ export function NoteSpanAiModal({
   const [refOn, setRefOn] = useState<Set<string>>(() => new Set());
   // 진행 중 도구 호출 한 줄 — 참고 폴더를 훑는 동안 멈춘 것처럼 보이지 않게
   const [activity, setActivity] = useState<string | null>(null);
+  const [confirmClose, setConfirmClose] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<string[]>([]);
   const [streamText, setStreamText] = useState("");
@@ -88,6 +89,7 @@ export function NoteSpanAiModal({
     setRefDirs(loadRecentRefDirs());
     setRefOn(new Set());
     setActivity(null);
+    setConfirmClose(false);
     setError(null);
     setResults([]);
     setStreamText("");
@@ -167,6 +169,21 @@ export function NoteSpanAiModal({
     });
   }
   const chosenDirs = refDirs.filter((d) => refOn.has(d));
+
+  const hasResult = results.length > 0;
+  // 닫기 — 결과가 있거나 생성 중이면 한 번 묻는다. 몇 분 걸린 생성물이 X 한 번에 사라지면 안 된다
+  function requestClose() {
+    if (step === "loading" || step === "preview" || hasResult) {
+      setConfirmClose(true);
+      return;
+    }
+    onClose();
+  }
+  function discardAndClose() {
+    if (step === "loading") stop();
+    setConfirmClose(false);
+    onClose();
+  }
 
   async function run() {
     if (!config || runs.length === 0 || instruction.trim().length < 2) return;
@@ -254,7 +271,7 @@ export function NoteSpanAiModal({
     footer = (
       <>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={onClose}>
+        <button className="btn btn-sm" onClick={requestClose}>
           {t("common.cancel")}
         </button>
         <button
@@ -280,7 +297,7 @@ export function NoteSpanAiModal({
           </button>
         )}
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={onClose}>
+        <button className="btn btn-sm" onClick={requestClose}>
           {t("common.cancel")}
         </button>
         <button
@@ -309,7 +326,7 @@ export function NoteSpanAiModal({
           {t("notes.ai.back")}
         </button>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={onClose}>
+        <button className="btn btn-sm" onClick={requestClose}>
           {t("common.cancel")}
         </button>
         <button
@@ -325,10 +342,11 @@ export function NoteSpanAiModal({
   }
 
   return (
+    <>
     <Modal
       open={open}
       title={t("notes.spanAi.title")}
-      onClose={onClose}
+      onClose={requestClose}
       footer={footer}
       wide
     >
@@ -545,5 +563,12 @@ export function NoteSpanAiModal({
         </div>
       )}
     </Modal>
+    <DiscardAiModal
+      open={confirmClose}
+      running={step === "loading"}
+      onKeep={() => setConfirmClose(false)}
+      onDiscard={discardAndClose}
+    />
+    </>
   );
 }
