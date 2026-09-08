@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/github/v/tag/JHZLO/amber?label=version&color=18181b" alt="version" />
   <img src="https://img.shields.io/badge/Tauri-v2-FFC131?logo=tauri&logoColor=white" alt="tauri" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="react" />
-  <img src="https://img.shields.io/badge/AI-BYO%20(Claude·Codex·Gemini)-8b5cf6" alt="byo-ai" />
+  <img src="https://img.shields.io/badge/AI-BYO%20(Claude·Codex)-8b5cf6" alt="byo-ai" />
   <img src="https://img.shields.io/badge/license-MIT-3da639" alt="license" />
 </p>
 
@@ -235,7 +235,6 @@ app.**
 |---|---|---|---|
 | [Claude Code](https://claude.com/claude-code) | ✓ | ✓ | Required for Slack / Notion report sources (uses its MCP servers) |
 | [OpenAI Codex CLI](https://developers.openai.com/codex) | ✓ | ✓ (browser callback) | |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | ✓ | terminal only | |
 
 ## How your data is stored
 
