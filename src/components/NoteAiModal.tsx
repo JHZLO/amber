@@ -69,6 +69,8 @@ export function NoteAiModal({
   const [resultMd, setResultMd] = useState("");
   // 결과가 출력 상한에서 잘렸는가 — 경고와 [이어서 쓰기] 를 띄운다. 이어 쓴 결과도 다시 잘릴 수 있어 매번 갱신
   const [truncated, setTruncated] = useState(false);
+  // CLI 가 상한에서 두 턴으로 나눠 쓴 걸 앱이 이어 붙였는가 — 이음새를 확인하라는 안내만 띄운다
+  const [continued, setContinued] = useState(false);
   const [continuing, setContinuing] = useState(false);
   const [streamText, setStreamText] = useState(""); // 생성 중 실시간 누적 텍스트
   const [viewMode, setViewMode] = useState<ViewMode>("preview");
@@ -100,6 +102,7 @@ export function NoteAiModal({
     setError(null);
     setResultMd("");
     setTruncated(false);
+    setContinued(false);
     setContinuing(false);
     setStreamText("");
     setViewMode("preview");
@@ -210,6 +213,7 @@ export function NoteAiModal({
       if (my !== runSeq.current) return; // 중단·재실행됨 — 이 결과로 화면을 덮지 않는다
       setResultMd(markdown);
       setTruncated(meta.truncated);
+      setContinued(meta.continued);
       // 기존 노트 편집이면 변경점(diff)을 먼저 보여주고, 새 작성이면 미리보기
       setViewMode(hasExisting ? "diff" : "preview");
       setStep("preview");
@@ -442,6 +446,11 @@ export function NoteAiModal({
             <Icon name="sparkles" size={13} />
             {t("notes.ai.continue")}
           </button>
+        </div>
+      )}
+      {step === "preview" && continued && !truncated && (
+        <div className="warn-note" style={{ marginBottom: 12 }}>
+          {t("notes.ai.continued")}
         </div>
       )}
       {step === "preview" && (

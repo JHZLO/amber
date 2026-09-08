@@ -324,6 +324,7 @@ async fn spawn_simple_cli_result(
         output_tokens: None,
         duration_ms: Some(started.elapsed().as_millis() as i64),
         truncated: false,
+        continued: false,
     };
     Ok((text, meta))
 }
@@ -356,6 +357,8 @@ pub struct MetaOut {
     /// 출력 토큰 상한에 닿아 문장 중간에서 끊겼는가(claude `stop_reason == max_tokens`). 조용히 완료로 두면
     /// 잘린 노트가 정상처럼 diff 에 올라온다.
     pub truncated: bool,
+    /// 출력이 상한에 닿아 CLI 가 새 턴으로 이어 썼고, 앱이 끊긴 턴들을 앞에 붙여 복원했는가 — 이음새 확인용
+    pub continued: bool,
 }
 
 /// 필기노트 작성 결과 = 마크다운 본문 + 메타 (JSON 계약 없이 raw 마크다운)
@@ -1163,6 +1166,7 @@ async fn stream_codex_result(
             output_tokens: usage.1,
             duration_ms: Some(started.elapsed().as_millis() as i64),
         truncated: false,
+        continued: false,
         },
     ))
 }
@@ -1315,6 +1319,7 @@ pub(crate) async fn stream_claude_result_ext(
     let mut last_flush = std::time::Instant::now();
     // 지금 열려 있는 콘텐츠 블록의 종류(thinking/text/tool_use) — 닫힐 때 "생각 끝" 신호를 내기 위해
     let mut current_block = String::new();
+    let mut turns = TurnTracker::default();
 
     let read_loop = async {
         while let Some(line) = lines
@@ -1333,6 +1338,11 @@ pub(crate) async fn stream_claude_result_ext(
                 Some("stream_event") => {
                     let ev = v.get("event");
                     match ev.and_then(|e| e.get("type")).and_then(|t| t.as_str()) {
+                        Some("message_start") => turns.start(),
+                        // 턴이 끝난 이유 — max_tokens 면 이 턴의 텍스트를 보관해 두고 다음 턴 앞에 붙인다
+                        Some("message_delta") => turns.stop(
+                            ev.and_then(|e| e.pointer("/delta/stop_reason")).and_then(|r| r.as_str()),
+                        ),
                         // 단계 신호 — 대기 문구가 "생각 중 / 생각 끝 / 쓰기 시작 / 도구" 로 바뀐다(lib/aiWait.ts).
                         // 실제 블록 경계라 추측이 아니다: "거의 다 생각했어요" 는 thinking 블록이 닫힐 때만 나간다.
                         Some("content_block_start") => {
@@ -1373,6 +1383,7 @@ pub(crate) async fn stream_claude_result_ext(
                                 .and_then(|t| t.as_str())
                             {
                                 delta_buf.push_str(text);
+                                turns.text(text);
                                 if last_flush.elapsed() >= DELTA_FLUSH {
                                     let _ = on_delta.send(std::mem::take(&mut delta_buf));
                                     last_flush = std::time::Instant::now();
@@ -1459,10 +1470,12 @@ pub(crate) async fn stream_claude_result_ext(
         let (code, msg) = classify_failure(&reason);
         return Err(AiError::detailed(code, msg, reason));
     }
-    let result_str = envelope
+    let last = envelope
         .result
         .clone()
         .ok_or_else(|| AiError::new("AI_ERROR", "빈 응답입니다."))?;
+    // 상한에서 끊겨 CLI 가 이어 쓴 경우 .result 는 마지막 턴뿐 — 앞 턴들을 복원한다
+    let result_str = turns.assemble(&last);
 
     let usage = envelope.usage;
     let meta = MetaOut {
@@ -1473,8 +1486,47 @@ pub(crate) async fn stream_claude_result_ext(
         output_tokens: usage.as_ref().and_then(|u| u.output_tokens),
         duration_ms: envelope.duration_ms,
         truncated: is_truncated(envelope.stop_reason.as_deref()),
+        continued: turns.continued,
     };
     Ok((result_str, meta))
+}
+
+/// 스트림의 턴 경계 추적. 한 턴이 max_tokens 로 끊기면 CLI 가 새 턴으로 이어 쓰는데, 결과 봉투의 `.result` 는
+/// **마지막 턴의 텍스트만** 담는다 — 실측으로 앞부분이 통째로 사라지고 SVG 속성 중간부터 시작하는 노트가 왔다.
+/// 그래서 끊긴 턴의 텍스트를 모아 두고 마지막에 앞에 붙인다. tool_use 로 끝난 턴의 텍스트("먼저 폴더를 볼게요" 같은
+/// 서두)는 본문이 아니라 버린다. 델타 흐름(on_delta)은 이와 별개로 화면에 그대로 흘린다.
+#[derive(Default)]
+struct TurnTracker {
+    turn: String,
+    carried: String,
+    continued: bool,
+}
+
+impl TurnTracker {
+    fn start(&mut self) {
+        self.turn.clear();
+    }
+    fn text(&mut self, t: &str) {
+        self.turn.push_str(t);
+    }
+    fn stop(&mut self, reason: Option<&str>) {
+        if reason == Some("max_tokens") {
+            self.carried.push_str(&self.turn);
+            self.continued = true;
+        }
+        self.turn.clear();
+    }
+    /// 봉투 `.result`(마지막 턴) 앞에 끊긴 턴들을 붙인다. CLI 가 이미 합쳐 준 결과면 그대로 둔다
+    fn assemble(&self, last: &str) -> String {
+        if self.carried.is_empty() {
+            return last.to_string();
+        }
+        let probe: String = self.carried.chars().take(64).collect();
+        if last.starts_with(&probe) {
+            return last.to_string();
+        }
+        format!("{}{last}", self.carried)
+    }
 }
 
 /// 결과 봉투의 stop_reason 이 출력 상한(max_tokens)인가. end_turn·stop_sequence·없음은 정상 종료로 본다
@@ -1601,6 +1653,7 @@ async fn spawn_claude_result(
         output_tokens: usage.as_ref().and_then(|u| u.output_tokens),
         duration_ms: envelope.duration_ms,
         truncated: is_truncated(envelope.stop_reason.as_deref()),
+        continued: false,
     };
     Ok((result_str, meta))
 }
@@ -1793,6 +1846,32 @@ mod tests {
     }
 
     // 상한에서 잘린 응답만 잘림으로 — end_turn 을 잘림으로 보면 모든 결과에 경고가 뜬다
+    // max_tokens 로 끊긴 턴은 앞에 붙이고, tool_use 서두는 버리고, CLI 가 이미 합친 결과는 두 번 붙이지 않는다
+    #[test]
+    fn turn_tracker_restores_text_lost_to_auto_continue() {
+        let mut t = TurnTracker::default();
+        t.start();
+        t.text("I'll look at the folder first.");
+        t.stop(Some("tool_use"));
+        t.start();
+        t.text("# Title\n\nfirst half ");
+        t.stop(Some("max_tokens"));
+        t.start();
+        t.text("second half");
+        t.stop(Some("end_turn"));
+        assert!(t.continued);
+        assert_eq!(t.assemble("second half"), "# Title\n\nfirst half second half");
+        // CLI 가 이미 합쳐 준 .result 면 그대로
+        assert_eq!(t.assemble("# Title\n\nfirst half second half"), "# Title\n\nfirst half second half");
+
+        let mut plain = TurnTracker::default();
+        plain.start();
+        plain.text("whole");
+        plain.stop(Some("end_turn"));
+        assert!(!plain.continued);
+        assert_eq!(plain.assemble("whole"), "whole");
+    }
+
     #[test]
     fn only_max_tokens_counts_as_truncated() {
         assert!(is_truncated(Some("max_tokens")));

@@ -26,6 +26,8 @@ export interface InvocationMeta {
   duration_ms: number | null;
   /** 출력 토큰 상한에서 잘렸는가 — 끝부분이 끊겨 있을 수 있다 */
   truncated: boolean;
+  /** 상한에 닿아 CLI 가 두 턴에 나눠 썼고 앱이 앞부분을 복원했는가 — 이음새 확인용 */
+  continued: boolean;
 }
 
 export interface GenerateResult {
