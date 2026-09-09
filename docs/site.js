@@ -168,6 +168,15 @@ if (term) {
     obs.disconnect();
     for (const l of lines) await typeLine(l);
   }, { threshold: 0.35 }).observe(term);
+  const all = $("#copyall");
+  if (all) {
+    const script = () => $$(".line:not(.done) .cmd", term).map((c) => c.dataset.cmd).join("\n");
+    all.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(script()); all.textContent = "Copied"; all.classList.add("did"); }
+      catch { all.textContent = "Select and copy"; }
+      setTimeout(() => { all.textContent = "Copy all"; all.classList.remove("did"); }, 1600);
+    });
+  }
   for (const b of $$(".copy", term)) {
     b.addEventListener("click", async () => {
       try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "copied"; b.classList.add("did"); }
