@@ -1,10 +1,29 @@
-// Amber landing — the amber drop (WebGL), pointer glow, scroll reveals, a pinned horizontal track,
-// a changelog axis that draws itself, a typewriter terminal, and the latest tag from GitHub.
+// Amber landing — one frame loop drives everything scroll-linked from a smoothed scroll value, so the
+// pinned track, the changelog axis and the hero drop glide instead of stepping with each wheel notch.
+// Lenis (loaded before this module, optional) gives the page itself inertia; without it the effects
+// still ease toward the native scroll position.
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const lerp = (a, b, t) => a + (b - a) * t;
+const desktop = () => innerWidth > 900;
+
+/* ---- smooth scroll (Lenis) — native scroll position, eased each frame; sticky keeps working ---- */
+let lenis = null;
+if (!reduce && typeof Lenis !== "undefined") {
+  lenis = new Lenis({ lerp: 0.085, smoothWheel: true, wheelMultiplier: 0.9, touchMultiplier: 1.3 });
+}
+for (const a of $$('a[href^="#"]')) {
+  a.addEventListener("click", (e) => {
+    const id = a.getAttribute("href");
+    const el = id.length > 1 ? document.querySelector(id) : document.body;
+    if (!el) return;
+    e.preventDefault();
+    if (lenis) lenis.scrollTo(el, { offset: -72, duration: 1.4 });
+    else el.scrollIntoView({ behavior: reduce ? "auto" : "smooth" });
+  });
+}
 
 /* ---- headline: split into words so each rises on its own ---- */
 for (const h of $$("[data-split]")) {
@@ -22,11 +41,6 @@ for (const h of $$("[data-split]")) {
   });
 }
 
-/* ---- nav ---- */
-const nav = $("#nav");
-const onNav = () => nav.classList.toggle("scrolled", scrollY > 24);
-onNav();
-
 /* ---- reveals ---- */
 const io = new IntersectionObserver(
   (entries) => {
@@ -36,12 +50,10 @@ const io = new IntersectionObserver(
 );
 $$(".reveal").forEach((el) => io.observe(el));
 
-/* ---- hero: pointer glow + magnetic button ---- */
-const hero = $("#hero");
-let gx = innerWidth / 2, gy = innerHeight / 2, tx = gx, ty = gy;
-addEventListener("pointermove", (e) => { tx = e.clientX; ty = e.clientY; }, { passive: true });
-const magnets = $$(".magnetic");
-for (const m of magnets) {
+/* ---- pointer: one source for the hero glow, the magnetic button and the drop ---- */
+let px = innerWidth / 2, py = innerHeight / 2, gx = px, gy = py;
+addEventListener("pointermove", (e) => { px = e.clientX; py = e.clientY; }, { passive: true });
+for (const m of $$(".magnetic")) {
   m.addEventListener("pointermove", (e) => {
     const r = m.getBoundingClientRect();
     const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
@@ -55,11 +67,11 @@ const card = $("#card3d");
 if (card) {
   card.addEventListener("pointermove", (e) => {
     const r = card.getBoundingClientRect();
-    const px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
-    card.style.setProperty("--ry", `${(px - 0.5) * 22}deg`);
-    card.style.setProperty("--rx", `${(0.5 - py) * 16}deg`);
-    card.style.setProperty("--gx", `${px * 100}%`);
-    card.style.setProperty("--gy", `${py * 100}%`);
+    const u = (e.clientX - r.left) / r.width, v = (e.clientY - r.top) / r.height;
+    card.style.setProperty("--ry", `${(u - 0.5) * 22}deg`);
+    card.style.setProperty("--rx", `${(0.5 - v) * 16}deg`);
+    card.style.setProperty("--gx", `${u * 100}%`);
+    card.style.setProperty("--gy", `${v * 100}%`);
     card.style.setProperty("--sheen", "1");
   });
   card.addEventListener("pointerleave", () => {
@@ -74,14 +86,27 @@ if (card) {
   }, { threshold: 0.6 }).observe(card);
 }
 
-/* ---- horizontal track: vertical scroll drives translateX while the section is pinned ---- */
+/* ---- scroll-linked pieces, all fed from `sy` (smoothed scroll) in the frame loop ---- */
+const nav = $("#nav");
+const hero = $("#hero"), gemHost = $("#gem");
 const hs = $("#features"), track = $("#track"), hprog = $("#hprog"), hidx = $("#hidx");
 const shots = $$(".panel-shot", track);
-function horizontal() {
-  if (!hs || innerWidth <= 900) return;
-  const rect = hs.getBoundingClientRect();
-  const total = hs.offsetHeight - innerHeight;
-  const p = clamp(-rect.top / total, 0, 1);
+const layers = $(".layers"), axisfill = $("#axisfill");
+let heroP = 0; // 0 = hero fully on screen, 1 = scrolled past
+
+// the pinned section is exactly as tall as the sideways distance plus one viewport: 1:1, no rush
+function fitHorizontal() {
+  if (!hs) return;
+  if (!desktop()) { hs.style.height = ""; track.style.transform = ""; return; }
+  hs.style.height = `${innerHeight + (track.scrollWidth - innerWidth)}px`;
+}
+fitHorizontal();
+addEventListener("resize", fitHorizontal);
+
+function horizontal(sy) {
+  if (!hs || !desktop()) return;
+  const top = hs.offsetTop, total = hs.offsetHeight - innerHeight;
+  const p = clamp((sy - top) / total, 0, 1);
   const dist = track.scrollWidth - innerWidth;
   track.style.transform = `translate3d(${-p * dist}px, 0, 0)`;
   hprog.style.width = `${p * 100}%`;
@@ -90,34 +115,37 @@ function horizontal() {
   // screenshots drift a little slower than their copy — depth without a library
   shots.forEach((s, i) => { const local = p * (n - 1) - i; s.style.transform = `translate3d(${clamp(local, -1, 1) * 40}px, 0, 0)`; });
 }
-
-/* ---- strata: the axis fills as the list scrolls through the viewport ---- */
-const layers = $(".layers"), axisfill = $("#axisfill");
-function strata() {
+function strata(sy) {
   if (!layers) return;
   const r = layers.getBoundingClientRect();
-  const p = clamp((innerHeight * 0.85 - r.top) / r.height, 0, 1);
+  const docTop = r.top + scrollY; // document position, independent of the eased value
+  const p = clamp((sy + innerHeight * 0.85 - docTop) / r.height, 0, 1);
   axisfill.style.transform = `scaleY(${p})`;
 }
-
-/* ---- hero gem: settle upward and fade as the hero leaves ---- */
-const gemHost = $("#gem");
-function heroScroll() {
+function heroScroll(sy) {
+  heroP = clamp(sy / (innerHeight * 0.9), 0, 1);
   if (!gemHost) return;
-  const p = clamp(scrollY / (innerHeight * 0.9), 0, 1);
-  gemHost.style.transform = `translate3d(0, ${-p * 80}px, 0) scale(${1 - p * 0.18})`;
-  gemHost.style.opacity = String(1 - p * 1.1);
+  gemHost.style.transform = `translate3d(0, ${-heroP * 80}px, 0) scale(${1 - heroP * 0.18})`;
+  gemHost.style.opacity = String(clamp(1 - heroP * 1.1, 0, 1));
 }
 
-let ticking = false;
-function onScroll() {
-  if (ticking) return;
-  ticking = true;
-  requestAnimationFrame(() => { onNav(); horizontal(); strata(); heroScroll(); ticking = false; });
+let sy = scrollY, renderGem = null;
+function frame(t) {
+  requestAnimationFrame(frame);
+  if (lenis) lenis.raf(t);
+  // with Lenis the native position is already eased; without it, ease the effects ourselves
+  sy = lenis ? scrollY : lerp(sy, scrollY, 0.12);
+  if (Math.abs(sy - scrollY) < 0.5) sy = scrollY;
+  nav.classList.toggle("scrolled", sy > 24);
+  heroScroll(sy);
+  horizontal(sy);
+  strata(sy);
+  // glow eases toward the pointer
+  gx = lerp(gx, px, 0.12); gy = lerp(gy, py, 0.12);
+  hero.style.setProperty("--mx", `${gx}px`); hero.style.setProperty("--my", `${gy + scrollY}px`);
+  if (renderGem) renderGem(t);
 }
-addEventListener("scroll", onScroll, { passive: true });
-addEventListener("resize", onScroll);
-onScroll();
+requestAnimationFrame(frame);
 
 /* ---- terminal: type the commands when the block comes into view ---- */
 const term = $("#terminal");
@@ -169,8 +197,8 @@ if (term) {
 (async () => {
   if (!gemHost) return;
   const fallback = () => gemHost.classList.add("fallback");
-  const canvas = document.createElement("canvas");
-  if (!canvas.getContext("webgl2") && !canvas.getContext("webgl")) { fallback(); return; }
+  const probe = document.createElement("canvas");
+  if (!probe.getContext("webgl2") && !probe.getContext("webgl")) { fallback(); return; }
   let THREE, RoomEnvironment;
   try {
     THREE = await import("https://cdn.jsdelivr.net/npm/three@0.160.0/+esm");
@@ -178,7 +206,9 @@ if (term) {
   } catch { fallback(); return; }
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  // glass is rendered twice (transmission pass); keep the pixel budget modest so scrolling stays at 60fps on Retina
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  if ("transmissionResolutionScale" in renderer) renderer.transmissionResolutionScale = 0.6;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.15;
@@ -195,7 +225,7 @@ if (term) {
     [0, 1.42], [0.09, 1.24], [0.2, 1.02], [0.34, 0.76], [0.5, 0.46], [0.66, 0.14], [0.78, -0.18],
     [0.85, -0.5], [0.84, -0.78], [0.74, -1.0], [0.55, -1.17], [0.3, -1.27], [0.1, -1.31], [0, -1.32],
   ].map(([r, y]) => new THREE.Vector2(r, y));
-  const geo = new THREE.LatheGeometry(profile, 128);
+  const geo = new THREE.LatheGeometry(profile, 96);
   geo.computeVertexNormals();
   // honey, not chocolate: on a dark page a transmissive body reads dark, so the glass itself carries warmth
   // (light attenuation stays long) and a backlight glows through it.
@@ -238,34 +268,21 @@ if (term) {
   const back = new THREE.PointLight(0xffb356, 26, 9, 2); back.position.set(0.4, 0.3, -1.8); scene.add(back);
   const fill = new THREE.PointLight(0xffd27a, 6, 8, 2); fill.position.set(-2.2, 1.2, 2.4); scene.add(fill);
 
-  // size to the host
   const fit = () => {
     const w = gemHost.clientWidth || 1, h = gemHost.clientHeight || 1;
     renderer.setSize(w, h, false);
     camera.aspect = w / h; camera.updateProjectionMatrix();
-    gem.scale.setScalar(Math.min(1, w / 520) * (innerWidth <= 900 ? 0.86 : 1));
+    gem.scale.setScalar(Math.min(1, w / 520) * (desktop() ? 1 : 0.86));
   };
   fit();
   new ResizeObserver(fit).observe(gemHost);
 
-  // pointer → tilt, light and glow follow with easing
-  let nx = 0, ny = 0, cx = 0, cy = 0, near = 0;
-  addEventListener("pointermove", (e) => {
-    nx = (e.clientX / innerWidth) * 2 - 1; ny = -((e.clientY / innerHeight) * 2 - 1);
-  }, { passive: true });
-
-  let visible = true;
-  new IntersectionObserver((es) => { visible = es[0].isIntersecting; }).observe(gemHost);
-  document.addEventListener("visibilitychange", () => { visible = !document.hidden && visible; });
-
-  let t = 0;
-  const loop = () => {
-    requestAnimationFrame(loop);
-    // page glow follows the pointer even when the gem is idle
-    gx = lerp(gx, tx, 0.12); gy = lerp(gy, ty, 0.12);
-    hero.style.setProperty("--mx", `${gx}px`); hero.style.setProperty("--my", `${gy + scrollY}px`);
-    if (!visible) return;
+  let cx = 0, cy = 0, near = 0, t = 0;
+  renderGem = () => {
+    // nothing to draw once the hero has scrolled away or the tab is hidden
+    if (document.hidden || heroP > 0.92) return;
     t += 0.016;
+    const nx = (px / innerWidth) * 2 - 1, ny = -((py / innerHeight) * 2 - 1);
     cx = lerp(cx, nx, 0.06); cy = lerp(cy, ny, 0.06);
     gem.rotation.y += reduce ? 0 : 0.0035;
     gem.rotation.x = lerp(gem.rotation.x, -cy * 0.38, 0.08);
@@ -274,12 +291,11 @@ if (term) {
     key.position.set(2.5 + cx * 1.6, 3 + cy * 1.2, 2.2);
     // motes glimmer, more when the pointer sits on the drop
     const r = gemHost.getBoundingClientRect();
-    const hx = ((tx - r.left) / r.width) * 2 - 1, hy = ((ty - r.top) / r.height) * 2 - 1;
+    const hx = ((px - r.left) / r.width) * 2 - 1, hy = ((py - r.top) / r.height) * 2 - 1;
     near = lerp(near, clamp(1 - Math.hypot(hx, hy) / 1.1, 0, 1), 0.08);
     moteMat.opacity = 0.32 + 0.18 * Math.sin(t * 2.1) + near * 0.35;
     moteMat.size = 0.03 + near * 0.025;
     back.intensity = 22 + near * 14;
     renderer.render(scene, camera);
   };
-  loop();
 })();
