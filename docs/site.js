@@ -177,22 +177,6 @@ if (term) {
   }
 }
 
-/* ---- latest tag from GitHub (falls back to the baked-in version) ---- */
-(async () => {
-  try {
-    const res = await fetch("https://api.github.com/repos/JHZLO/amber/tags?per_page=100", { headers: { Accept: "application/vnd.github+json" } });
-    if (!res.ok) return;
-    const tags = await res.json();
-    const latest = tags[0]?.name;
-    if (!latest) return;
-    $$("[data-latest]").forEach((el) => { el.textContent = latest; });
-    $$("[data-tarball]").forEach((a) => { a.href = `https://github.com/JHZLO/amber/archive/refs/tags/${latest}.tar.gz`; });
-    const more = /rel="next"/.test(res.headers.get("Link") || "");
-    const line = $("#tagline");
-    if (line) line.firstChild.textContent = `${more ? "100+" : tags.length} tags since 2026-07-16 · `;
-  } catch { /* offline or rate-limited: the page already carries a real version */ }
-})();
-
 /* ---- the drop: a lathe of the logo's teardrop, amber glass with inclusions, tilting to the pointer ---- */
 (async () => {
   if (!gemHost) return;

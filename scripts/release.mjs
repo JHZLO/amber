@@ -22,6 +22,8 @@
 // 슬래시 커맨드에 검증을 넣어도 다른 기기·다른 에이전트에는 존재하지 않는다.
 //
 // 버전이 박힌 4개 파일을 함께 갱신: package.json · tauri.conf.json · Cargo.toml · Cargo.lock
+// 그리고 랜딩 페이지(docs/index.html)의 버전 표기·변경 기록을 site-sync.mjs 로 다시 쓴다 — 같은 bump 커밋에 실려
+// 태그를 푸시하면 GitHub Pages 가 재배포되고 사이트가 저절로 최신이 된다(GitHub API 호출 없음).
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -209,6 +211,13 @@ for (const t of targets) {
   }
   writeFileSync(p, after);
   console.log(`  ✓ ${t.file}`);
+}
+
+// 랜딩 페이지의 정적 정보(버전·tarball·변경 기록·태그 수)도 같은 커밋에 — 다음 태그는 아직 없으니 --next 로 넘긴다
+try {
+  execFileSync("node", ["scripts/site-sync.mjs", "--next", `v${next}`], { cwd: root, stdio: "inherit" });
+} catch {
+  die("docs/index.html 갱신 실패 — scripts/site-sync.mjs 를 직접 실행해 보세요.");
 }
 
 // GitHub Release 는 만들지 않는다 — 배포 단위는 태그뿐이다(AGENTS.md "배포 정책").
