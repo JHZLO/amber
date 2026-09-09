@@ -20,6 +20,8 @@ const ko = {
   "common.aiDiscard.bodyRunning": "AI 가 아직 쓰고 있어요. 닫으면 생성을 중단하고 지금까지 쓴 내용도 사라져요.",
   "common.aiDiscard.keep": "계속 보기",
   "common.aiDiscard.discard": "버리고 닫기",
+  "common.aiDiscard.bodyDiscard": "AI 초안이 사라져요. 남기려면 먼저 적용하세요.",
+  "common.aiDiscard.discardOnly": "버리기",
 
   // 렌더 중 예외 — ErrorBoundary(main.tsx). 창이 백지가 되는 대신 이 화면이 뜬다
   "common.crash.title": "화면을 그리다 문제가 생겼어요",
@@ -155,6 +157,8 @@ const en: Record<keyof typeof ko, string> = {
   "common.aiDiscard.bodyRunning": "The AI is still writing. Closing stops it and throws away what it has written so far.",
   "common.aiDiscard.keep": "Keep reviewing",
   "common.aiDiscard.discard": "Discard & close",
+  "common.aiDiscard.bodyDiscard": "This throws away the AI draft. Apply it first if you want to keep it.",
+  "common.aiDiscard.discardOnly": "Discard",
 
   "common.crash.title": "Something broke while rendering",
   "common.crash.hint":

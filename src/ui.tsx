@@ -477,12 +477,16 @@ export function UnsavedModal({
 export function DiscardAiModal({
   open,
   running,
+  mode = "close",
   onKeep,
   onDiscard,
 }: {
   open: boolean;
   /** 아직 생성 중이면 문구가 "중단하고 버린다"로 바뀐다 */
   running?: boolean;
+  /** "discard" = 닫기가 아니라 **버리기 버튼**에서 왔다 — 노트 전문 작성처럼 닫아도 결과가 남는 흐름.
+   *  문구가 "닫으면 사라져요" 대신 "초안이 사라져요" 가 되고 실행 버튼은 "버리기" 다 */
+  mode?: "close" | "discard";
   onKeep: () => void;
   onDiscard: () => void;
 }) {
@@ -498,13 +502,17 @@ export function DiscardAiModal({
             {t("common.aiDiscard.keep")}
           </button>
           <button className="btn btn-sm btn-danger-ghost" onClick={onDiscard}>
-            {t("common.aiDiscard.discard")}
+            {mode === "discard" ? t("common.aiDiscard.discardOnly") : t("common.aiDiscard.discard")}
           </button>
         </>
       }
     >
       <p style={{ margin: 0 }}>
-        {running ? t("common.aiDiscard.bodyRunning") : t("common.aiDiscard.body")}
+        {running
+          ? t("common.aiDiscard.bodyRunning")
+          : mode === "discard"
+            ? t("common.aiDiscard.bodyDiscard")
+            : t("common.aiDiscard.body")}
       </p>
     </Modal>
   );

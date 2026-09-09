@@ -1,25 +1,28 @@
-// 필기노트 AI 작성 모달: 지시 → claude_note_compose → 프리뷰 → 에디터 초안으로 적용.
-// 파일에 바로 저장하지 않는다 — 적용 후 사용자가 라이브 프리뷰로 확인하고 ⌘S 로 저장 (AI 출력은 초안).
+// 필기노트 AI 작성 모달: 지시 → 백그라운드 실행(lib/noteAiRun) → 프리뷰 → 에디터 초안으로 적용.
+// 실행 상태는 이 컴포넌트가 아니라 스토어에 있다 — X·Esc·닫기는 중단이 아니라 **숨기기**이고, 결과는 노트에
+// 매달려 검토를 기다린다(노트 위 배너·트리 점·레일 점이 되돌아갈 길). 그래서 닫을 때 확인을 묻지 않는다 —
+// 잃는 것이 없다. 파일에 바로 저장하지 않는다 — 적용 후 사용자가 라이브 프리뷰로 확인하고 ⌘S 로 저장 (AI 출력은 초안).
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Markdown } from "./Markdown";
 import { DiffView } from "./DiffView";
 import type { AppConfig } from "../lib/config";
-import {
-  aiCancel,
-  aiNoteComposeStream,
-  aiNoteEditSpanStream,
-  friendlyError,
-  newCancelKey,
-  type AiActivity,
-} from "../lib/ai";
 import { loadPrompts, type SavedPrompt } from "../lib/prompts";
 import { AiThinking, ChoiceChip, DiscardAiModal, Modal, Tooltip } from "../ui";
-import { CONTINUE_INSTRUCTION, composeInstruction, tailSpan } from "../lib/aiInstruction";
+import { composeInstruction } from "../lib/aiInstruction";
 import { PromptPeekModal } from "./PromptPeekModal";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { loadRecentRefDirs, refDirName, rememberRefDir } from "../lib/refDirs";
 import { useAiWaitLine } from "../lib/aiWait";
+import {
+  continueNoteAi,
+  dismissNoteAi,
+  getNoteAiRun,
+  setNoteAiResult,
+  startNoteAi,
+  stopNoteAi,
+  useNoteAiRun,
+} from "../lib/noteAiRun";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 
@@ -38,6 +41,7 @@ const PRESETS = [
 
 export function NoteAiModal({
   open,
+  path,
   title,
   currentBody,
   config,
@@ -45,13 +49,16 @@ export function NoteAiModal({
   onApplied,
 }: {
   open: boolean;
+  /** vault 상대 경로 — 실행 스토어의 키 */
+  path: string;
   title: string;
   currentBody: string;
   config: AppConfig | null;
   onClose: () => void;
   onApplied: (markdown: string) => void;
 }) {
-  const [step, setStep] = useState<Step>("prompt");
+  // 이 노트의 실행(없으면 undefined). 진행·결과·실패 전부 여기서 온다
+  const run = useNoteAiRun(path);
   const [instruction, setInstruction] = useState("");
   // 체크한 저장 프롬프트(`s:<id>`)·빠른 지시(`p:<index>`) — 텍스트는 보낼 때 합친다
   const [chosen, setChosen] = useState<Set<string>>(() => new Set());
@@ -60,56 +67,53 @@ export function NoteAiModal({
   // 참고 폴더 — 최근 목록(칩)과 그중 이번 요청에 붙일 것. AI 가 읽기 전용으로 살펴본다
   const [refDirs, setRefDirs] = useState<string[]>([]);
   const [refOn, setRefOn] = useState<Set<string>>(() => new Set());
-  // 진행 신호 — CLI 스트림의 단계(생각·쓰기·도구 호출)와 그 시각. 대기 문구(useAiWaitLine)가 이걸로 바뀐다
-  const [activity, setActivity] = useState<AiActivity | null>(null);
-  const [activityAt, setActivityAt] = useState(0);
-  const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [confirmClose, setConfirmClose] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [resultMd, setResultMd] = useState("");
-  // 결과가 출력 상한에서 잘렸는가 — 경고와 [이어서 쓰기] 를 띄운다. 이어 쓴 결과도 다시 잘릴 수 있어 매번 갱신
-  const [truncated, setTruncated] = useState(false);
-  // CLI 가 상한에서 두 턴으로 나눠 쓴 걸 앱이 이어 붙였는가 — 이음새를 확인하라는 안내만 띄운다
-  const [continued, setContinued] = useState(false);
-  const [continuing, setContinuing] = useState(false);
-  const [streamText, setStreamText] = useState(""); // 생성 중 실시간 누적 텍스트
+  // "다시 지시" — 결과가 있어도 지시 화면을 보인다. 결과는 새 결과가 올 때까지 스토어에 남는다
+  const [revise, setRevise] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("preview");
   const [saved, setSaved] = useState<SavedPrompt[]>([]);
   const streamRef = useRef<HTMLPreElement>(null);
-  // 진행 중인 실행의 취소 키 — 중단 버튼이 이걸로 CLI 를 끝낸다
-  const cancelKey = useRef<string | null>(null);
-  // 실행 세대. 중단·재실행으로 버려진 실행의 델타가 새 버퍼에 섞여 들어가지 않게 한다 —
-  // 취소는 비동기라 프로세스가 죽기 전 조각이 더 오고, 그게 새 실행 텍스트와 뒤엉키면
-  // "## Met# 서비스 조adata" 처럼 두 생성이 한 글자씩 섞인 결과가 나온다.
-  const runSeq = useRef(0);
-  // 초안 스냅샷이 한 번 오면 텍스트 델타는 무시한다 — 파일 모드의 델타는 "DONE 5" 같은 마무리 한 줄뿐이다
-  const draftSeen = useRef(false);
 
   // 편집(기존 내용 있음) vs 새로 작성 구분 — diff 는 기존 내용이 있을 때만 의미
   const hasExisting = currentBody.trim().length > 0;
+  const hasExistingRef = useRef(hasExisting);
+  hasExistingRef.current = hasExisting;
 
-  // 열 때마다 초기화 (닫혀 있는 동안의 stale 상태 방지) + 저장 프롬프트 최신 로드
+  // 화면 단계는 스토어 상태에서 나온다. 실패했어도 이전 결과가 있으면 그 결과 위에 에러를 얹어 보인다
+  const step: Step =
+    !run || revise
+      ? "prompt"
+      : run.phase === "running"
+        ? "loading"
+        : run.phase === "done" || run.result
+          ? "preview"
+          : "prompt";
+  const error = run && !revise && run.phase === "error" ? run.error : null;
+  const resultMd = run?.result ?? "";
+  const streamText = run?.stream ?? "";
+
+  // 열 때마다 지시 화면을 되살린다 — 이 노트에 실행이 있으면 그때 보낸 지시·칩·폴더를, 없으면 빈칸.
+  // 저장 프롬프트는 최신으로 다시 읽는다
   useEffect(() => {
     if (!open) return;
-    runSeq.current++; // 닫힌 동안 계속 돌던 실행의 델타를 이 세션에서 끊는다
-    setStep("prompt");
-    setInstruction("");
-    setChosen(new Set());
+    const cur = getNoteAiRun(path);
+    setRevise(false);
     setPeek(null);
+    setConfirmDiscard(false);
     setRefDirs(loadRecentRefDirs());
-    setRefOn(new Set());
-    setActivity(null);
-    setStartedAt(null);
-    setConfirmClose(false);
-    setError(null);
-    setResultMd("");
-    setTruncated(false);
-    setContinued(false);
-    setContinuing(false);
-    setStreamText("");
-    setViewMode("preview");
+    setInstruction(cur?.typed ?? "");
+    setChosen(new Set(cur?.chosen ?? []));
+    setRefOn(new Set(cur?.refDirs ?? []));
+    setViewMode(cur?.result && hasExistingRef.current ? "diff" : "preview");
     loadPrompts().then(setSaved);
-  }, [open]);
+  }, [open, path]);
+
+  // 결과가 도착하면(모달이 떠 있든 아니든) 기존 노트면 변경점(diff)부터, 새 작성이면 미리보기
+  const finishedAt = run?.finishedAt ?? null;
+  const phase = run?.phase;
+  useEffect(() => {
+    if (phase === "done") setViewMode(hasExistingRef.current ? "diff" : "preview");
+  }, [finishedAt, phase]);
 
   // 생성 중 새 텍스트가 오면 스트림 박스를 맨 아래로 자동 스크롤
   useEffect(() => {
@@ -149,10 +153,10 @@ export function NoteAiModal({
   const chosenDirs = refDirs.filter((d) => refOn.has(d));
   const waitLine = useAiWaitLine({
     running: step === "loading",
-    startedAt,
-    activity,
-    activityAt,
-    hasRefDirs: chosenDirs.length > 0,
+    startedAt: run?.startedAt ?? null,
+    activity: run?.activity ?? null,
+    activityAt: run?.activityAt ?? 0,
+    hasRefDirs: (run?.refDirs.length ?? 0) > 0,
   });
 
   // 텍스트가 있는 프롬프트만 칩으로 (설정에서 추가만 하고 비워둔 것 제외)
@@ -165,137 +169,32 @@ export function NoteAiModal({
   const finalInstruction = composeInstruction(instruction, extras);
   const tooShort = finalInstruction.length < 2;
 
-  const hasResult = resultMd.trim().length > 0;
-  // 닫기 — 결과가 있거나 생성 중이면 한 번 묻는다. 몇 분 걸린 생성물이 X 한 번에 사라지면 안 된다
-  function requestClose() {
-    if (step === "loading" || step === "preview" || hasResult) {
-      setConfirmClose(true);
-      return;
-    }
-    onClose();
-  }
-  function discardAndClose() {
-    if (step === "loading") stop();
-    setConfirmClose(false);
-    onClose();
-  }
+  // 실행을 시작한 뒤 노트가 바뀌었나 — 변경점은 지금 내용과 비교하니 그 사실만 알린다
+  const baseChanged = !!run?.result && run.baseMarkdown.trim() !== currentBody.trim();
 
-  async function run() {
+  function runAi() {
     if (!config || tooShort) return;
-    setError(null);
-    setStreamText("");
-    setActivity(null);
-    setStartedAt(Date.now());
-    setStep("loading");
-    draftSeen.current = false;
-    const key = newCancelKey();
-    cancelKey.current = key;
-    const my = ++runSeq.current;
-    try {
-      const { markdown, meta } = await aiNoteComposeStream(
-        {
-          title,
-          markdown: currentBody,
-          instruction: finalInstruction,
-          model: config.model,
-          cliPath: config.cliPath,
-          provider: config.provider,
-          cancelKey: key,
-          refDirs: chosenDirs,
-        },
-        (delta) => {
-          if (my !== runSeq.current || draftSeen.current) return; // 버려진 실행·파일 모드의 잔여 델타
-          setStreamText((prev) => prev + delta);
-        },
-        (a) => {
-          if (my !== runSeq.current) return;
-          setActivity(a);
-          setActivityAt(Date.now());
-        },
-        (full) => {
-          if (my !== runSeq.current) return;
-          draftSeen.current = true;
-          setStreamText(full);
-        },
-      );
-      if (my !== runSeq.current) return; // 중단·재실행됨 — 이 결과로 화면을 덮지 않는다
-      setResultMd(markdown);
-      setTruncated(meta.truncated);
-      setContinued(meta.continued);
-      // 기존 노트 편집이면 변경점(diff)을 먼저 보여주고, 새 작성이면 미리보기
-      setViewMode(hasExisting ? "diff" : "preview");
-      setStep("preview");
-    } catch (e) {
-      // 사용자가 직접 끊은 실행은 에러가 아니다 — 죽은 CLI 의 비명을 노트에 띄우지 않는다
-      if (my !== runSeq.current) return;
-      setError(friendlyError(e));
-      setStep("prompt");
-    } finally {
-      if (my === runSeq.current) cancelKey.current = null;
-    }
+    setRevise(false);
+    void startNoteAi({
+      path,
+      title,
+      markdown: currentBody,
+      typed: instruction,
+      chosen: [...chosen],
+      refDirs: chosenDirs,
+      instruction: finalInstruction,
+      config,
+    });
   }
-
-  /** 잘린 결과 이어 쓰기 — 끝 조각(~700자)을 span 으로 넘겨 "조각 + 이어질 내용"을 받아 그 자리에 되끼운다.
-   *  전문을 다시 받지 않으니 상한에 다시 걸릴 일이 없고, 앞부분은 한 글자도 바뀌지 않는다. */
-  async function continueWriting() {
-    if (!config || !resultMd) return;
-    const tail = tailSpan(resultMd);
-    setError(null);
-    setStreamText("");
-    setActivity(null);
-    setStartedAt(Date.now());
-    setContinuing(true);
-    setStep("loading");
-    const key = newCancelKey();
-    cancelKey.current = key;
-    const my = ++runSeq.current;
-    try {
-      const { text, meta } = await aiNoteEditSpanStream(
-        {
-          title,
-          markdown: resultMd,
-          span: tail,
-          instruction: CONTINUE_INSTRUCTION,
-          spanKind: "selection",
-          model: config.model,
-          cliPath: config.cliPath,
-          provider: config.provider,
-          cancelKey: key,
-          refDirs: chosenDirs,
-        },
-        (delta) => {
-          if (my !== runSeq.current) return;
-          setStreamText((prev) => prev + delta);
-        },
-        (a) => {
-          if (my !== runSeq.current) return;
-          setActivity(a);
-          setActivityAt(Date.now());
-        },
-      );
-      if (my !== runSeq.current) return;
-      setResultMd(resultMd.slice(0, resultMd.length - tail.length) + text);
-      setTruncated(meta.truncated);
-      setStep("preview");
-    } catch (e) {
-      if (my !== runSeq.current) return;
-      setError(friendlyError(e));
-      setStep("preview"); // 잘린 결과라도 남겨 둔다 — 실패했다고 이미 받은 것을 버리지 않는다
-    } finally {
-      if (my === runSeq.current) cancelKey.current = null;
-      setContinuing(false);
-    }
+  function apply() {
+    if (!run?.result) return;
+    onApplied(run.result);
+    dismissNoteAi(path); // 에디터로 들어갔으니 대기 중 결과는 끝
+    onClose();
   }
-
-  /** 중단 — CLI 를 죽이고 **기다리지 않고** 바로 지시 화면으로 돌아간다.
-   *  프로세스가 실제로 끝나는 걸 기다리면 누른 뒤에도 몇 초간 글자가 계속 흘러 안 먹은 듯 보인다. */
-  function stop() {
-    const k = cancelKey.current;
-    runSeq.current++; // 이 시점 이후 도착하는 델타·결과·에러는 전부 무효
-    cancelKey.current = null;
-    if (k) void aiCancel(k);
-    setStreamText("");
-    setStep("prompt");
+  function discard() {
+    dismissNoteAi(path); // run 이 사라져 지시 화면으로 돌아간다
+    setConfirmDiscard(false);
   }
 
   // diff 안내 문구 — 언어별 어순이 달라 "{apply}" 자리에 <b>버튼 라벨</b>을 끼워 넣는다
@@ -305,12 +204,19 @@ export function NoteAiModal({
   if (step === "prompt") {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={requestClose}>
+        {revise && run?.result && (
+          <button className="btn btn-sm" onClick={() => setRevise(false)}>
+            <Icon name="chevron-left" size={14} />
+            {t("notes.ai.backToResult")}
+          </button>
+        )}
+        <span className="spacer" />
+        <button className="btn btn-sm" onClick={onClose}>
           {t("common.cancel")}
         </button>
         <button
           className="btn btn-primary"
-          onClick={run}
+          onClick={runAi}
           disabled={tooShort || !config?.provider}
           title={!config ? t("notes.ai.configLoading") : undefined}
         >
@@ -320,31 +226,34 @@ export function NoteAiModal({
       </>
     );
   } else if (step === "loading") {
-    // 5분짜리 실행에 탈출구가 없으면 앱을 끄는 것 말고 방법이 없다
     footer = (
-      <button className="btn btn-sm btn-danger-ghost" onClick={stop}>
-        <Icon name="x" size={14} />
-        {t("notes.ai.stop")}
-      </button>
+      <>
+        {/* 5분짜리 실행에 탈출구가 없으면 앱을 끄는 것 말고 방법이 없다 */}
+        <button className="btn btn-sm btn-danger-ghost" onClick={() => stopNoteAi(path)}>
+          <Icon name="x" size={14} />
+          {t("notes.ai.stop")}
+        </button>
+        <span className="spacer" />
+        <button className="btn btn-sm" onClick={onClose}>
+          {t("notes.ai.bg.keep")}
+        </button>
+      </>
     );
   } else if (step === "preview") {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={() => setStep("prompt")}>
+        <button className="btn btn-sm" onClick={() => setRevise(true)}>
           <Icon name="chevron-left" size={14} />
           {t("notes.ai.back")}
         </button>
-        <span className="spacer" />
-        <button className="btn btn-sm" onClick={requestClose}>
-          {t("common.cancel")}
+        <button className="btn btn-sm btn-danger-ghost" onClick={() => setConfirmDiscard(true)}>
+          {t("notes.ai.discard")}
         </button>
-        <button
-          className="btn btn-primary"
-          onClick={() => {
-            onApplied(resultMd);
-            onClose();
-          }}
-        >
+        <span className="spacer" />
+        <button className="btn btn-sm" onClick={onClose}>
+          {t("common.close")}
+        </button>
+        <button className="btn btn-primary" onClick={apply} disabled={!run?.result}>
           <Icon name="check" size={15} />
           {hasExisting ? t("notes.ai.applyDiff") : t("notes.ai.applyNew")}
         </button>
@@ -354,7 +263,7 @@ export function NoteAiModal({
 
   return (
     <>
-    <Modal open={open} title={t("notes.ai.title")} onClose={requestClose} footer={footer} wide>
+    <Modal open={open} title={t("notes.ai.title")} onClose={onClose} footer={footer} wide>
       {error && (
         <div className="error-note" style={{ marginBottom: 12 }}>
           {error}
@@ -435,7 +344,7 @@ export function NoteAiModal({
         <div className="note-stream">
           <AiThinking
             compact={!!streamText}
-            label={continuing ? t("notes.ai.continuing") : t("notes.ai.writing")}
+            label={run?.continuing ? t("notes.ai.continuing") : t("notes.ai.writing")}
             activity={waitLine ?? undefined}
           />
           {streamText && (
@@ -444,21 +353,34 @@ export function NoteAiModal({
               <span className="stream-caret" />
             </pre>
           )}
+          {/* 닫아도 계속 쓴다는 걸 여기서 말해 둔다 — 닫기 버튼 라벨만으로는 "취소" 로 읽힌다 */}
+          <div className="hint">{t("notes.ai.bg.hint")}</div>
         </div>
       )}
 
-      {step === "preview" && truncated && (
+      {step === "preview" && run?.truncated && (
         <div className="warn-note ai-truncated" style={{ marginBottom: 12 }}>
           <span>{t("notes.ai.truncated")}</span>
-          <button className="btn btn-sm" onClick={() => void continueWriting()}>
+          <button
+            className="btn btn-sm"
+            onClick={() => {
+              if (config) void continueNoteAi(path, config);
+            }}
+            disabled={!config}
+          >
             <Icon name="sparkles" size={13} />
             {t("notes.ai.continue")}
           </button>
         </div>
       )}
-      {step === "preview" && continued && !truncated && (
+      {step === "preview" && run?.continued && !run.truncated && (
         <div className="warn-note" style={{ marginBottom: 12 }}>
           {t("notes.ai.continued")}
+        </div>
+      )}
+      {step === "preview" && baseChanged && (
+        <div className="warn-note" style={{ marginBottom: 12 }}>
+          {t("notes.ai.baseChanged")}
         </div>
       )}
       {step === "preview" && (
@@ -494,7 +416,7 @@ export function NoteAiModal({
               className="textarea"
               rows={18}
               value={resultMd}
-              onChange={(e) => setResultMd(e.target.value)}
+              onChange={(e) => setNoteAiResult(path, e.target.value)}
             />
           ) : viewMode === "diff" ? (
             <DiffView oldText={currentBody} newText={resultMd} />
@@ -522,11 +444,12 @@ export function NoteAiModal({
       }}
       onClose={() => setPeek(null)}
     />
+    {/* 버리기만 확인한다 — 닫기는 아무것도 잃지 않으니 묻지 않는다 */}
     <DiscardAiModal
-      open={confirmClose}
-      running={step === "loading"}
-      onKeep={() => setConfirmClose(false)}
-      onDiscard={discardAndClose}
+      open={confirmDiscard}
+      mode="discard"
+      onKeep={() => setConfirmDiscard(false)}
+      onDiscard={discard}
     />
     </>
   );

@@ -6,6 +6,7 @@ import type { AppConfig } from "./lib/config";
 import { loadConfig } from "./lib/config";
 import { setAuthRequiredHandler } from "./lib/ai";
 import { useAnyReportGenerating } from "./lib/reportRun";
+import { useAnyNoteAiRunning } from "./lib/noteAiRun";
 import type {
   ConceptFilter,
   ConceptSort,
@@ -119,6 +120,7 @@ function App() {
   const [searchOpen, setSearchOpen] = useState(false);
   // 리포트가 백그라운드로 생성 중이면 어느 탭에 있든 할 일 레일에 표시(진행이 안 끊김을 알림)
   const reportBusy = useAnyReportGenerating();
+  const noteAiBusy = useAnyNoteAiRunning();
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -313,24 +315,27 @@ function App() {
           <AmberMark size={30} />
           <span>Amber</span>
         </div>
-        {RAIL.map((r) => (
-          <button
-            key={r.id}
-            className={`rail-item ${section === r.id ? "active" : ""}`}
-            onClick={() => setSection(r.id)}
-            title={
-              r.id === "todo" && reportBusy
-                ? `${r.label} · ${t("app.rail.reportBusy")}`
-                : r.label
-            }
-          >
-            <Icon name={r.icon} size={20} />
-            <span>{r.label}</span>
-            {r.id === "todo" && reportBusy && (
-              <span className="rail-busy" aria-label={t("app.rail.reportBusyAria")} />
-            )}
-          </button>
-        ))}
+        {RAIL.map((r) => {
+          // 백그라운드 실행 표시 — 할 일은 리포트 생성, 노트는 AI 전문 작성. 어느 탭에서든 점이 보인다
+          const busy =
+            r.id === "todo" && reportBusy
+              ? { title: t("app.rail.reportBusy"), aria: t("app.rail.reportBusyAria") }
+              : r.id === "notes" && noteAiBusy
+                ? { title: t("app.rail.noteAiBusy"), aria: t("app.rail.noteAiBusyAria") }
+                : null;
+          return (
+            <button
+              key={r.id}
+              className={`rail-item ${section === r.id ? "active" : ""}`}
+              onClick={() => setSection(r.id)}
+              title={busy ? `${r.label} · ${busy.title}` : r.label}
+            >
+              <Icon name={r.icon} size={20} />
+              <span>{r.label}</span>
+              {busy && <span className="rail-busy" aria-label={busy.aria} />}
+            </button>
+          );
+        })}
         <span className="rail-spacer" />
         <button
           className="rail-item"

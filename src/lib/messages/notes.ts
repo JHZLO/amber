@@ -180,6 +180,21 @@ const ko = {
   // "{apply}" 자리에 <b>변경 적용</b> 버튼 라벨이 들어간다 (호출부에서 split)
   "notes.ai.diffHint":
     "현재 노트와 비교한 변경점이에요. {apply}을 누르면 결과가 에디터 초안으로 들어가고, 저장(⌘S) 전까지 파일은 그대로예요.",
+  "notes.ai.discard": "버리기",
+  "notes.ai.backToResult": "결과로 돌아가기",
+  "notes.ai.baseChanged": "실행을 시작한 뒤 노트가 바뀌었어요. 변경사항은 지금 내용과 비교해 보여 드려요.",
+  "notes.ai.bg.keep": "닫고 계속 쓰기",
+  "notes.ai.bg.hint": "닫아도 계속 써요. 끝나면 노트 위에 알려 드릴게요.",
+  "notes.ai.bg.running": "AI 가 이 노트를 쓰고 있어요",
+  "notes.ai.bg.open": "보기",
+  "notes.ai.bg.ready": "AI 초안이 준비됐어요",
+  "notes.ai.bg.readyAt": "{when} 완료",
+  "notes.ai.bg.review": "검토",
+  "notes.ai.bg.failed": "AI 작성이 실패했어요.",
+  "notes.ai.bg.retry": "다시 시도",
+  "notes.ai.bg.dotRunning": "AI 작성 중",
+  "notes.ai.bg.dotReady": "AI 초안 준비됨 · 열어서 검토",
+  "notes.ai.bg.dotError": "AI 작성 실패",
 } as const;
 
 const en: Record<keyof typeof ko, string> = {
@@ -344,6 +359,21 @@ const en: Record<keyof typeof ko, string> = {
   "notes.ai.tabSource": "Source",
   "notes.ai.diffHint":
     "Changes compared to the current note. Press {apply} to load the result into the editor as a draft — the file stays as is until you save (⌘S).",
+  "notes.ai.discard": "Discard",
+  "notes.ai.backToResult": "Back to result",
+  "notes.ai.baseChanged": "The note changed after this run started. Changes are compared against the current content.",
+  "notes.ai.bg.keep": "Keep writing in background",
+  "notes.ai.bg.hint": "Closing keeps it running. The note will show a notice when it's ready.",
+  "notes.ai.bg.running": "AI is writing this note",
+  "notes.ai.bg.open": "Open",
+  "notes.ai.bg.ready": "Your AI draft is ready",
+  "notes.ai.bg.readyAt": "finished {when}",
+  "notes.ai.bg.review": "Review",
+  "notes.ai.bg.failed": "AI writing failed.",
+  "notes.ai.bg.retry": "Try again",
+  "notes.ai.bg.dotRunning": "AI writing",
+  "notes.ai.bg.dotReady": "AI draft ready · open to review",
+  "notes.ai.bg.dotError": "AI writing failed",
 } as const;
 
 export const notesMessages = { ko, en };

@@ -1223,6 +1223,68 @@ body.resizing-col .pane-resizer::after {
 .ai-truncated > span {
   flex: 1;
 }
+
+/* ---- 노트 AI 백그라운드 실행 표시 (lib/noteAiRun) ---- */
+/* 트리 행의 실행 점 — 쓰는 중 = 맥동(레일 busy 점과 같은 리듬), 초안 준비됨 = 멈춘 필(§3 채움 = '여기 무언가 있다'),
+   실패 = danger 링(연결 점 .db-dot 의 문법). 정확한 단어는 Tooltip 이 갖는다 — 점 하나가 유일한 채널이면 안 된다 */
+.ai-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text);
+  flex-shrink: 0;
+  margin: 0 4px 0 6px;
+}
+.ai-dot.run {
+  animation: rail-busy-pulse 1.1s ease-in-out infinite;
+}
+.ai-dot.bad {
+  background: transparent;
+  border: 1.5px solid var(--danger);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-dot.run {
+    animation: none;
+    opacity: 0.85;
+  }
+}
+/* 노트 위 배너 — 한 줄: 문장이 남는 폭을 갖고 버튼은 같은 줄 오른쪽 끝(§3 멈출·이을 대상과 같은 줄).
+   쓰는 중은 정보라 무채색(surface-2), 준비됨·실패는 기다리던 결과라 .ok-note/.error-note 의 색을 그대로 얹는다 */
+.ai-bg-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: -6px 0 18px;
+}
+.ai-bg-bar:not(.ok-note):not(.error-note) {
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 6px 12px;
+  animation: note-in 0.18s var(--ease-out);
+}
+.ai-bg-bar .ai-thinking.compact {
+  flex: 1;
+  min-width: 0;
+}
+.ai-bg-text {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: normal;
+}
+.ai-bg-when {
+  opacity: 0.75;
+  font-size: 12px;
+}
+.ai-bg-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
 .error-note {
   background: var(--danger-soft);
   color: var(--danger-text);

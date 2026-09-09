@@ -40,6 +40,13 @@ import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
 import type { AppConfig } from "../lib/config";
 import { NoteAiModal } from "./NoteAiModal";
+import { NoteAiBanner } from "./NoteAiBanner";
+import {
+  dropNoteAiUnder,
+  remapNoteAiPaths,
+  useNoteAiPhases,
+  useNoteAiRun,
+} from "../lib/noteAiRun";
 import { NoteSpanAiModal } from "./NoteSpanAiModal";
 import { RootPicker } from "./RootPicker";
 import { rootDisplayName, WORKSPACE_EVENT } from "../lib/workspace";
@@ -129,6 +136,9 @@ export function NotesView({
   const [pendingOpen, setPendingOpen] = useState<string | null>(null);
   const [pendingRoot, setPendingRoot] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  // 백그라운드 AI 전문 작성 — 이 노트의 실행(배너)과, 트리 점용 경로→단계 스냅샷
+  const aiRun = useNoteAiRun(selected);
+  const aiPhases = useNoteAiPhases();
   // 부분만 고쳐 쓰기 — 편집 모드 선택 영역(selection) 또는 절 하나(section).
   // 선택 구간은 textarea 의 selectionStart/End = **마크다운 소스 좌표**라 되끼울 위치를 안 찾는다.
   const [spanAi, setSpanAi] = useState<"selection" | "section" | null>(null);
@@ -496,6 +506,7 @@ export function NotesView({
       if (m.kind === "rename") {
         const t = m.target;
         const newRel = await renameEntry(t.path, name, t.isDir);
+        remapNoteAiPaths(t.path, newRel, t.isDir); // 대기 중 AI 결과가 고아가 되지 않게
         if (t.isDir) remapPrefix(t.path, newRel);
         else if (selected === t.path) {
           setSelected(newRel);
@@ -529,6 +540,7 @@ export function NotesView({
     setBusy(true);
     try {
       await deleteEntry(t.path);
+      dropNoteAiUnder(t.path); // 지운 노트의 AI 실행은 끊고 잊는다
       if (
         selected &&
         (selected === t.path || selected.startsWith(`${t.path}/`))
@@ -552,6 +564,7 @@ export function NotesView({
   const dnd = useTreeDnd({
     move: moveEntry,
     onMoved: (fromPath, newPath, isDir) => {
+      remapNoteAiPaths(fromPath, newPath, isDir);
       if (isDir) remapPrefix(fromPath, newPath);
       else if (selected === fromPath) setSelected(newPath);
       expandTo(parentOf(newPath)); // 옮겨간 위치를 펼쳐 보여준다
@@ -604,6 +617,28 @@ export function NotesView({
                 <span className="label" title={n.name}>
                   {n.name}
                 </span>
+                {/* 백그라운드 AI 실행 점 — 맥동 = 쓰는 중, 멈춘 필 = 초안 준비됨, danger 링 = 실패. 단어는 툴팁이 */}
+                {!n.isDir && aiPhases.has(n.path) && (
+                  <Tooltip
+                    label={t(
+                      aiPhases.get(n.path) === "running"
+                        ? "notes.ai.bg.dotRunning"
+                        : aiPhases.get(n.path) === "done"
+                          ? "notes.ai.bg.dotReady"
+                          : "notes.ai.bg.dotError",
+                    )}
+                  >
+                    <span
+                      className={`ai-dot ${
+                        aiPhases.get(n.path) === "running"
+                          ? "run"
+                          : aiPhases.get(n.path) === "error"
+                            ? "bad"
+                            : ""
+                      }`}
+                    />
+                  </Tooltip>
+                )}
                 <span
                   className="row-actions"
                   onClick={(e) => e.stopPropagation()}
@@ -926,6 +961,9 @@ export function NotesView({
               </div>
             </div>
 
+            {/* 백그라운드 AI 실행 — 모달을 닫아도 여기서 진행·결과·실패를 보고 되돌아간다 */}
+            {aiRun && <NoteAiBanner run={aiRun} onOpen={() => setAiOpen(true)} />}
+
             {loadingBody ? (
               <Spinner />
             ) : readError ? null : editing ? (
@@ -1205,6 +1243,7 @@ export function NotesView({
       {selected && (
         <NoteAiModal
           open={aiOpen}
+          path={selected}
           title={fileName}
           currentBody={editing ? draft : body}
           config={config}
