@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amber — keep what you learn</title>
+<meta name="description" content="Concept flashcards, markdown notes, mermaid diagrams, a day planner and AI-written daily reports in one local-first macOS app, powered by the Claude Code and Codex CLIs you already pay for.">
+<meta property="og:title" content="Amber — keep what you learn">
+<meta property="og:description" content="A local-first study desk for engineers. Cards, notes, diagrams, planner and daily reports on your Mac, written with the AI CLIs you already have.">
+<meta property="og:image" content="https://jhzlo.github.io/amber/assets/hero.png">
+<meta name="theme-color" content="#0e0e10">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="nav" id="nav">
+  <a class="brand" href="#top" aria-label="Amber">
+    <svg width="26" height="26" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="0.5" y="0.5" width="31" height="31" rx="7.2" fill="#18181b" stroke="#3a3a40"/><path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z" fill="#D08A2A"/><circle cx="16" cy="18.2" r="1.15" fill="#f4f4f5"/></svg>
+    <span>Amber</span>
+  </a>
+  <nav aria-label="Sections">
+    <a href="#cards">Cards</a>
+    <a href="#features">Workspaces</a>
+    <a href="#strata">Changelog</a>
+    <a href="#install">Install</a>
+    <a href="https://github.com/JHZLO/amber" target="_blank" rel="noopener">GitHub</a>
+  </nav>
+</header>
+
+<main id="top">
+  <!-- 01 · hero: the drop -->
+  <section class="hero" id="hero">
+    <div class="glow" aria-hidden="true"></div>
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow mono rise" style="--i:0">Local-first · macOS · MIT · <span data-latest>v0.20.18</span></p>
+        <h1 class="display headline" data-split>Keep what you learn.</h1>
+        <p class="lede rise" style="--i:5">Concept flashcards, markdown notes, mermaid diagrams, a day planner and AI-written daily reports in one local-first macOS app, powered by the Claude Code and Codex CLIs you already pay for.</p>
+        <div class="cta rise" style="--i:6">
+          <a class="btn btn-primary magnetic" data-tarball href="https://github.com/JHZLO/amber/archive/refs/tags/v0.20.18.tar.gz">Get the source <span class="mono ver" data-latest>v0.20.18</span></a>
+          <a class="btn btn-ghost" href="#install">How to build</a>
+        </div>
+        <p class="fine mono rise" style="--i:7">No server. No accounts. No stored API keys.</p>
+      </div>
+      <div class="hero-gem" id="gem" aria-hidden="true">
+        <div class="gem-fallback">
+          <svg viewBox="0 0 32 32" fill="none"><path d="M 16 6 C 12.6 10.4 9.2 15.7 9.2 21.6 C 9.2 25.3 12.2 28.3 16 28.3 C 19.8 28.3 22.8 25.3 22.8 21.6 C 22.8 15.7 19.4 10.4 16 6 Z" fill="url(#g)"/><circle cx="16" cy="21" r="1.4" fill="#f4f4f5" opacity=".9"/><defs><radialGradient id="g" cx="38%" cy="36%" r="70%"><stop offset="0" stop-color="#E8B45A"/><stop offset=".55" stop-color="#D08A2A"/><stop offset="1" stop-color="#8F5314"/></radialGradient></defs></svg>
+        </div>
+      </div>
+    </div>
+    <div class="scroll-cue mono" aria-hidden="true"><span>Scroll</span><i></i></div>
+  </section>
+
+  <!-- 02 · one chat becomes one card -->
+  <section class="cards" id="cards">
+    <div class="cards-copy">
+      <p class="eyebrow mono reveal">01 — Concept cards</p>
+      <h2 class="display reveal">One chat becomes one card.</h2>
+      <p class="reveal">Paste an AI transcript and Amber turns it into a flashcard with a detail note. Three confidence dots and a “learned” state keep the deck down to what you haven't internalized yet. An always-on-top widget cycles the weakest cards first.</p>
+      <p class="hint mono reveal">Move your pointer over the card · click to flip</p>
+    </div>
+    <div class="card3d reveal" id="card3d" tabindex="0" role="button" aria-label="Flip the sample card">
+      <div class="card-inner">
+        <div class="face front">
+          <div class="mono small">Concept · Kafka</div>
+          <h3>What triggers a consumer group rebalance?</h3>
+          <div class="dots" aria-hidden="true"><i class="on"></i><i></i><i></i></div>
+          <div class="mono small dim">Confidence 1 / 3</div>
+        </div>
+        <div class="face back">
+          <div class="mono small">Answer</div>
+          <ul>
+            <li>A member joins, leaves, or misses heartbeats past <code>session.timeout.ms</code></li>
+            <li>The subscription changes</li>
+            <li>A topic gains partitions</li>
+          </ul>
+          <div class="badge">Learned</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 · workspaces, horizontal on scroll -->
+  <section class="hscroll" id="features" style="--panels: 5">
+    <div class="hscroll-sticky">
+      <div class="hbar">
+        <span class="mono">02 — Workspaces</span>
+        <div class="rail" aria-hidden="true"><i id="hprog"></i></div>
+        <span class="mono"><b id="hidx">1</b> / 5</span>
+      </div>
+      <div class="track" id="track">
+        <article class="panel">
+          <div class="panel-copy">
+            <p class="eyebrow mono">Notes and AI</p>
+            <h2 class="display">Real markdown files. AI you review as a diff.</h2>
+            <p>Live preview and a scroll-spy outline. AI edits scoped to a sentence, a section or the whole note always arrive as a reviewable diff, and whole-note drafts write in the background while you do something else.</p>
+          </div>
+          <figure class="panel-shot"><img src="assets/notes.png" alt="Notes workspace: source and live preview side by side, outline on the right" loading="lazy"></figure>
+        </article>
+        <article class="panel">
+          <div class="panel-copy">
+            <p class="eyebrow mono">Diagrams and databases</p>
+            <h2 class="display">Paste DDL, get an ERD. Connect MySQL, get every schema drawn.</h2>
+            <p>Mermaid .mmd files on a pan/zoom canvas with table search and focus mode. Connect a database and Amber draws one deterministic ERD per schema without AI, then shows a diff when the live schema drifts.</p>
+          </div>
+          <figure class="panel-shot"><img src="assets/diagrams.png" alt="Diagram studio: a mermaid ERD on the pan/zoom canvas" loading="lazy"></figure>
+        </article>
+        <article class="panel">
+          <div class="panel-copy">
+            <p class="eyebrow mono">Desktop widget</p>
+            <h2 class="display">A sticker that quizzes you between tasks.</h2>
+            <p>An always-on-top card in the corner of your screen cycles through what you're still learning, weakest first. Arrow keys raise or lower confidence; Enter marks it learned.</p>
+          </div>
+          <figure class="panel-shot small"><img src="assets/widget.png" alt="The always-on-top desktop widget showing a concept card" loading="lazy"></figure>
+        </article>
+        <article class="panel">
+          <div class="panel-copy">
+            <p class="eyebrow mono">To-dos and timetable</p>
+            <h2 class="display">Plan the day in blocks, not lists.</h2>
+            <p>Nested checklists per day or per week next to a calendar-style time-blocking grid, with Korean public holidays and time-off marks built in.</p>
+          </div>
+          <figure class="panel-shot"><img src="assets/todo.png" alt="To-dos with the day timetable" loading="lazy"></figure>
+        </article>
+        <article class="panel">
+          <div class="panel-copy">
+            <p class="eyebrow mono">Daily and weekly reports</p>
+            <h2 class="display">Your day, written as problem → fix.</h2>
+            <p>At the end of the day the AI reads your to-dos, GitHub activity and local Claude Code or Codex sessions and writes the report. Weekly rolls the dailies up into Notion-ready text.</p>
+          </div>
+          <figure class="panel-shot report">
+            <div class="report-card">
+              <div class="mono small">Sample · daily report</div>
+              <h4>Whole-note AI drafts kept getting cut off</h4>
+              <p><b>Problem</b> — long notes hit the per-reply output cap and the tail went missing.</p>
+              <p><b>Fix</b> — the model now writes the note as files into a scoped temp folder; the app joins them and streams a preview.</p>
+              <div class="mono small dim">Sources · to-dos · GitHub · Claude Code sessions</div>
+            </div>
+          </figure>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 · strata -->
+  <section class="strata" id="strata">
+    <div class="strata-head">
+      <p class="eyebrow mono reveal">03 — Changelog</p>
+      <h2 class="display reveal">Every tag is a release.</h2>
+      <p class="reveal" id="tagline">Tags since 2026-07-16 · <a href="https://github.com/JHZLO/amber/tags" target="_blank" rel="noopener">all tags</a></p>
+    </div>
+    <div class="layers">
+      <div class="axis" aria-hidden="true"><i id="axisfill"></i></div>
+      <ol>
+        <li class="layer reveal now"><span class="mono tag">v0.20.18</span><time datetime="2026-09-09">2026-09-09</time><p>Whole-note AI writing runs in the background; the draft lands on the note when it's ready.</p><a class="mono" href="https://github.com/JHZLO/amber/archive/refs/tags/v0.20.18.tar.gz">tar.gz</a></li>
+        <li class="layer reveal"><span class="mono tag">v0.20.17</span><time datetime="2026-09-08">2026-09-08</time><p>Whole-note drafts arrive as files in a scoped temp folder, sidestepping the per-reply output cap.</p><a class="mono" href="https://github.com/JHZLO/amber/archive/refs/tags/v0.20.17.tar.gz">tar.gz</a></li>
+        <li class="layer reveal"><span class="mono tag">v0.20.16</span><time datetime="2026-09-08">2026-09-08</time><p>Keep the first half when the CLI continues a cut-off answer.</p><a class="mono" href="https://github.com/JHZLO/amber/archive/refs/tags/v0.20.16.tar.gz">tar.gz</a></li>
+        <li class="layer reveal"><span class="mono tag">v0.20.15</span><time datetime="2026-09-08">2026-09-08</time><p>Flag truncated AI output and continue writing from the cut; lane layout and line pictograms for SVG charts.</p><a class="mono" href="https://github.com/JHZLO/amber/archive/refs/tags/v0.20.15.tar.gz">tar.gz</a></li>
+        <li class="layer reveal"><span class="mono tag">v0.20.14</span><time datetime="2026-09-08">2026-09-08</time><p>Model list read from the CLI catalog; any model id accepted.</p><a class="mono" href="https://github.com/JHZLO/amber/archive/refs/tags/v0.20.14.tar.gz">tar.gz</a></li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 05 · install -->
+  <section class="install" id="install">
+    <div class="install-copy">
+      <p class="eyebrow mono reveal">04 — Install</p>
+      <h2 class="display reveal">Distributed as source.<br>Built in one sitting.</h2>
+      <ul class="reqs reveal">
+        <li>macOS with the Xcode Command Line Tools</li>
+        <li>Rust toolchain via rustup</li>
+        <li>Node.js 20+ and pnpm</li>
+        <li class="opt">Optional: Claude Code or Codex CLI for AI features, <code>gh</code> for reports, a MySQL account for database sync</li>
+      </ul>
+      <p class="reveal dim">The first build compiles the Rust side and takes a few minutes. First launch detects the AI CLIs you have signed in.</p>
+    </div>
+    <div class="terminal reveal" id="terminal">
+      <div class="term-bar"><i></i><i></i><i></i><span class="mono">zsh — amber</span></div>
+      <div class="term-body mono">
+        <div class="line"><span class="p">❯</span><span class="cmd" data-cmd="xcode-select --install"></span><button class="copy" type="button" data-copy="xcode-select --install">copy</button></div>
+        <div class="line"><span class="p">❯</span><span class="cmd" data-cmd="curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"></span><button class="copy" type="button" data-copy="curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh">copy</button></div>
+        <div class="line"><span class="p">❯</span><span class="cmd" data-cmd="corepack enable && corepack prepare pnpm@latest --activate"></span><button class="copy" type="button" data-copy="corepack enable && corepack prepare pnpm@latest --activate">copy</button></div>
+        <div class="line"><span class="p">❯</span><span class="cmd" data-cmd="git clone https://github.com/JHZLO/amber && cd amber"></span><button class="copy" type="button" data-copy="git clone https://github.com/JHZLO/amber && cd amber">copy</button></div>
+        <div class="line"><span class="p">❯</span><span class="cmd" data-cmd="pnpm install && pnpm tauri build"></span><button class="copy" type="button" data-copy="pnpm install && pnpm tauri build">copy</button></div>
+        <div class="line done"><span class="p ok">✓</span><span class="cmd" data-cmd="src-tauri/target/release/bundle/macos/Amber.app"></span></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="foot-brand">
+    <svg width="20" height="20" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="0.5" y="0.5" width="31" height="31" rx="7.2" fill="#18181b" stroke="#3a3a40"/><path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z" fill="#D08A2A"/><circle cx="16" cy="18.2" r="1.15" fill="#f4f4f5"/></svg>
+    <span>Amber</span>
+  </div>
+  <div class="mono">MIT · source distribution · <a href="https://github.com/JHZLO/amber" target="_blank" rel="noopener">github.com/JHZLO/amber</a></div>
+</footer>
+
+<script type="module" src="site.js"></script>
+</body>
+</html>
