@@ -92,9 +92,10 @@ impl LiveGuard {
     }
 }
 
-// 참고 폴더를 훑고 긴 노트를 쓰면 5분을 넘긴다 — 폴더 유무로 갈라 두었다가 15분을 기본으로 올렸다(v0.20.13).
+// 참고 폴더를 훑고 긴 노트를 쓰면 5분을 넘긴다 — 폴더 유무로 갈라 두었다가 15분(v0.20.13), 다시 60분으로 올렸다(v0.20.20).
+// 전문 작성이 백그라운드로 돌고 중단 버튼이 있으니 타임아웃은 진행 제한이 아니라 죽은 프로세스를 거두는 마지막 안전망이다.
 // 타임아웃은 멈춘 실행을 끊는 안전장치라, 길어도 정상 실행에는 비용이 없다.
-const DEFAULT_TIMEOUT_SECS: u64 = 900;
+const DEFAULT_TIMEOUT_SECS: u64 = 3600;
 const MIN_INPUT_CHARS: usize = 20;
 // `--version` 헬스체크 상한 — detect.rs 의 probe_version 과 같은 값(설정 모달 스피너가 멈추지 않게).
 const HEALTH_TIMEOUT_SECS: u64 = 8;
