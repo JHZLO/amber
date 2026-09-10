@@ -224,5 +224,7 @@ try {
 console.log(
   `\n다음 단계:\n` +
     `  git commit -am "build: Bump version to v${next}"\n` +
-    `  git tag -a v${next} -m "Amber v${next}" && git push origin main --tags`,
+    `  git tag -a v${next} -m "Amber v${next}" && git push origin main --tags\n` +
+    // 푸시만으로는 Pages 재배포가 걸리지 않는 일이 잦다(v0.20.19·v0.20.20 모두). 빌드를 직접 요청하면 20~30초 만에 반영된다.
+    `  gh api -X POST repos/JHZLO/amber/pages/builds   # 사이트(jhzlo.github.io/amber) 재배포 요청`,
 );
