@@ -12,6 +12,11 @@ describe("looksLikeSvg", () => {
 });
 
 describe("isSafeHref / styleIsSafe / isDangerousAttr", () => {
+  // 스타일 가이드의 불투명 텍스트 판(plate)은 이 문법에 기댄다 — 여기서 막히면 노트가 선을 뚫고 보인다
+  it("keeps the theme-following plate fill the SVG style guide relies on", () => {
+    expect(styleIsSafe("fill: var(--surface, #ffffff)")).toBe(true);
+    expect(isDangerousAttr("style", "fill: var(--surface, #ffffff)")).toBe(false);
+  });
   it("allows fragment, http(s) and data images only", () => {
     expect(isSafeHref("#grad")).toBe(true);
     expect(isSafeHref("https://example.com")).toBe(true);
