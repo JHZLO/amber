@@ -82,8 +82,9 @@ const TLS_OPTIONS: { value: DbTls; label: string }[] = [
   { value: "disabled", label: t("diagrams.db.tls.disabled") },
 ];
 
-// P1 은 MySQL 만. 목록이 하나라도 Select 로 두는 이유: Postgres 가 붙으면 자리만 늘리면 된다
-const KIND_OPTIONS = [{ value: "mysql", label: "MySQL" }];
+// P1 은 MySQL 만이라 종류 컨트롤을 두지 않는다 — 고를 수 없는 Select 는 자리만 차지하고 아무것도
+// 답해 주지 않는다. 대신 단계 라벨에 "MySQL" 을 적어 무엇에 붙는지는 말해 준다.
+// (Postgres 가 붙으면 그때 호스트 줄 앞에 Select 를 되살린다 — 포트 기본값도 함께 바뀌어야 한다.)
 
 function portOf(s: string): number | null {
   if (!/^\d{1,5}$/.test(s.trim())) return null;
@@ -118,6 +119,8 @@ export function DbConnectionModal({
   // 입력한 비밀번호를 평문으로 확인 — 열 때마다 숨김으로 돌아간다
   const [showPw, setShowPw] = useState(false);
   const [testing, setTesting] = useState(false);
+  // 확인 실패는 저장 실패와 자리가 다르다(확인 칸 안) — 상태를 나눠 둔다
+  const [testError, setTestError] = useState<string | null>(null);
   const [test, setTest] = useState<DbTestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [prefs, setPrefs] = useState<DbSchemaPref[]>([]);
@@ -142,6 +145,7 @@ export function DbConnectionModal({
     setShowPw(false);
     setTesting(false);
     setTest(null);
+    setTestError(null);
     setError(null);
     setPrefs(connection?.schemas ?? []);
     setIncludeAudit(!(connection && connection.schemas.length > 0 && connection.schemas.every((p) => p.audit === false)));
@@ -155,6 +159,7 @@ export function DbConnectionModal({
     return (v: T) => {
       set(v);
       setTest(null);
+      setTestError(null);
     };
   }
 
@@ -170,7 +175,7 @@ export function DbConnectionModal({
   async function runTest() {
     if (!fieldsValid || testing) return;
     setTesting(true);
-    setError(null);
+    setTestError(null);
     try {
       const r = await dbTest(
         {
@@ -194,7 +199,7 @@ export function DbConnectionModal({
         }),
       );
     } catch (e) {
-      setError(errText(e));
+      setTestError(errText(e));
     } finally {
       setTesting(false);
     }
@@ -301,9 +306,6 @@ export function DbConnectionModal({
   if (step === "form") {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={() => void runTest()} disabled={!fieldsValid || testing || busy}>
-          {testing ? t("diagrams.db.testing") : t("diagrams.db.test")}
-        </button>
         <span className="spacer" />
         <button className="btn btn-sm" onClick={onClose} disabled={busy}>
           {t("common.cancel")}
@@ -368,6 +370,7 @@ export function DbConnectionModal({
           <span className="set-eyebrow">
             {step === "form" ? t("diagrams.db.modal.step1") : t("diagrams.db.modal.step2")}
           </span>
+          {step === "form" && <span className="set-eyebrow db-kind">MySQL</span>}
         </div>
 
         {error && (
@@ -376,6 +379,7 @@ export function DbConnectionModal({
           </div>
         )}
 
+
         {step === "form" && (
           <form
             onSubmit={(e) => {
@@ -383,8 +387,11 @@ export function DbConnectionModal({
               void runTest();
             }}
           >
-            <div className="db-grid">
-              <div className="field">
+            {/* 칸은 **하나의 6열 격자** 위에 올린다 — 예전에는 2fr1fr 격자와 1fr1fr 격자가 섞여
+                폼 중간에서 열 경계가 밀렸다. 종류(Kind)는 MySQL 하나뿐이라 고를 수 없는 컨트롤 대신
+                단계 라벨에 적어 둔다. */}
+            <div className="db-form">
+              <div className="field sp4">
                 <label>{t("diagrams.db.field.name")}</label>
                 <input
                   className="input"
@@ -394,13 +401,12 @@ export function DbConnectionModal({
                   onChange={(e) => setName(e.target.value)}
                 />
               </div>
-              <div className="field">
+              <div className="field sp2">
                 <label>{t("diagrams.db.field.env")}</label>
                 <Select value={env} options={envOptions} onChange={setEnv} block />
               </div>
-            </div>
-            <div className="db-grid">
-              <div className="field">
+
+              <div className="field sp3">
                 <label>{t("diagrams.db.field.host")}</label>
                 <input
                   className="input"
@@ -408,9 +414,8 @@ export function DbConnectionModal({
                   spellCheck={false}
                   onChange={(e) => touch(setHost)(e.target.value)}
                 />
-                <div className="hint">{t("diagrams.db.hint.host")}</div>
               </div>
-              <div className="field">
+              <div className="field sp1">
                 <label>{t("diagrams.db.field.port")}</label>
                 <input
                   className="input"
@@ -419,9 +424,14 @@ export function DbConnectionModal({
                   onChange={(e) => touch(setPort)(e.target.value)}
                 />
               </div>
-            </div>
-            <div className="db-grid half">
-              <div className="field">
+              {/* TLS 는 '어디로 붙는가'에 속한다 — 호스트·포트와 같은 줄에 두면 계정 줄이 깨끗해진다 */}
+              <div className="field sp2">
+                <label>{t("diagrams.db.field.tls")}</label>
+                <Select value={tls} options={TLS_OPTIONS} onChange={touch(setTls)} block />
+              </div>
+              <div className="hint sp6 db-form-hint">{t("diagrams.db.hint.host")}</div>
+
+              <div className="field sp3">
                 <label>{t("diagrams.db.field.user")}</label>
                 <input
                   className="input"
@@ -431,7 +441,7 @@ export function DbConnectionModal({
                   onChange={(e) => touch(setUsername)(e.target.value)}
                 />
               </div>
-              <div className="field">
+              <div className="field sp3">
                 <label>{t("diagrams.db.field.password")}</label>
                 {editing && !changePw ? (
                   <div className="db-pw-stored">
@@ -450,31 +460,53 @@ export function DbConnectionModal({
                     onChange={touch(setPassword)}
                   />
                 )}
-                <div className="hint">{t("diagrams.db.hint.password")}</div>
               </div>
+              {/* 계정 한 줄에 걸리는 두 가지(키체인 저장·읽기 전용 권장)를 한 줄로 모은다 —
+                  칸마다 힌트를 달면 줄 높이가 제각각이 되고 끝에 뜬 힌트는 무엇의 설명인지 흐려진다 */}
+              <div className="hint sp6 db-form-hint">{t("diagrams.db.hint.account")}</div>
             </div>
-            <div className="db-grid half">
-              <div className="field">
-                <label>{t("diagrams.db.field.kind")}</label>
-                <Select value="mysql" options={KIND_OPTIONS} onChange={() => {}} block />
+
+            {/* 연결 확인 — 예전에는 푸터 왼쪽의 외딴 버튼이었고, 성공해야 [다음]이 열린다는 걸
+                아무도 말해 주지 않았다. 확인을 본문의 한 칸으로 올려 상태를 그 자리에서 보인다.
+                단계마다 높이가 다른 고정 높이 모달(§7)의 남는 아래 공간도 이것이 채운다. */}
+            <div className={`db-test ${test ? "ok" : testError ? "bad" : ""}`}>
+              <div className="db-test-text">
+                {testing ? (
+                  <b>{t("diagrams.db.test.testing")}</b>
+                ) : test ? (
+                  <>
+                    <b>{t("diagrams.db.test.ok")}</b>
+                    {t("diagrams.db.testOk", {
+                      server: test.server,
+                      n: test.schemas.length,
+                      ms: test.latency_ms,
+                    })}
+                  </>
+                ) : testError ? (
+                  <>
+                    <b>{t("diagrams.db.test.failed")}</b>
+                    {testError}
+                  </>
+                ) : (
+                  <>
+                    <b>{t("diagrams.db.test.idle")}</b>
+                    {t("diagrams.db.test.idleHint")}
+                  </>
+                )}
               </div>
-              <div className="field">
-                <label>{t("diagrams.db.field.tls")}</label>
-                <Select value={tls} options={TLS_OPTIONS} onChange={touch(setTls)} block />
-              </div>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => void runTest()}
+                disabled={!fieldsValid || testing || busy}
+              >
+                {testing
+                  ? t("diagrams.db.testing")
+                  : test || testError
+                    ? t("diagrams.db.test.again")
+                    : t("diagrams.db.test")}
+              </button>
             </div>
-            <div className="hint" style={{ marginBottom: 12 }}>
-              {t("diagrams.db.hint.readonly")}
-            </div>
-            {test && (
-              <div className="ok-note">
-                {t("diagrams.db.testOk", {
-                  server: test.server,
-                  n: test.schemas.length,
-                  ms: test.latency_ms,
-                })}
-              </div>
-            )}
             {/* Enter 로 테스트가 돌게 하는 보이지 않는 submit */}
             <button type="submit" hidden />
           </form>
