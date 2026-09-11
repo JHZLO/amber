@@ -104,3 +104,73 @@ describe("mergeRuns", () => {
     expect(mergeRuns([])).toEqual([]);
   });
 });
+
+describe("splitSections — 펜스 경계", () => {
+  // 마크다운 예시를 싣는 노트의 흔한 형태: ````md 안에 ```bash 가 들어간다.
+  // 여는 펜스의 길이를 버리고 3개로 접으면 안쪽 ``` 가 바깥을 닫아버려, 코드블록 **안**의
+  // `# ...` 줄이 절로 잡힌다. 그 절을 AI 로 고치면 닫는 펜스와 뒤 단락이 함께 사라진다.
+  const NESTED = [
+    "# 1. 설치 가이드",
+    "",
+    "````md",
+    "```bash",
+    "# 설치 명령",
+    "brew install amber",
+    "```",
+    "````",
+    "",
+    "본문 끝.",
+    "",
+    "# 2. 다음 절",
+    "내용",
+    "",
+  ].join("\n");
+
+  it("중첩 펜스 안의 # 는 절이 아니다", () => {
+    const secs = splitSections(NESTED);
+    expect(secs.map((s) => s.title)).toEqual(["1. 설치 가이드", "2. 다음 절"]);
+  });
+
+  it("첫 절의 끝이 코드블록을 통째로 품는다", () => {
+    const [first] = splitSections(NESTED);
+    const span = NESTED.slice(first.start, first.end);
+    expect(span).toContain("brew install amber");
+    expect(span).toContain("````"); // 닫는 펜스까지
+    expect(span).toContain("본문 끝.");
+  });
+
+  it("정보 문자열이 붙은 같은 길이 펜스는 닫기가 아니다", () => {
+    const md = ["# A", "```", "# 코드 주석", "```js", "# 또 다른 주석", "```", "# B"].join("\n");
+    // 여는 ``` → `# 코드 주석` 은 코드. ```js 는 정보 문자열이 있어 닫기가 아니다.
+    // 마지막 ``` 가 닫고, 그 뒤 `# B` 만 절이 된다.
+    expect(splitSections(md).map((s) => s.title)).toEqual(["A", "B"]);
+  });
+
+  it("~~~ 와 ``` 는 서로를 닫지 않는다", () => {
+    const md = ["# A", "~~~", "```", "# 안쪽", "```", "~~~", "# B"].join("\n");
+    expect(splitSections(md).map((s) => s.title)).toEqual(["A", "B"]);
+  });
+});
+
+describe("splitSections — 줄바꿈 형식", () => {
+  it("CRLF 노트도 절이 잡힌다", () => {
+    // 외부 편집기(Windows·일부 동기화 도구)에서 온 노트. \r 가 남으면 HEADING 의 $ 에 막혀
+    // 절이 0개가 되고 '절 골라 고치기' 목록이 오류 없이 텅 빈다.
+    const md = "# 1. 제목\r\n\r\n본문\r\n\r\n# 2. 둘째\r\n내용\r\n";
+    const secs = splitSections(md);
+    expect(secs.map((s) => s.title)).toEqual(["1. 제목", "2. 둘째"]);
+  });
+
+  it("CRLF 에서도 오프셋이 소스 좌표다", () => {
+    const md = "# 1. 제목\r\n\r\n본문\r\n\r\n# 2. 둘째\r\n내용\r\n";
+    const secs = splitSections(md);
+    // start/end 로 잘라낸 조각이 실제 그 절이어야 되끼우기(spliceSpan)가 맞는다
+    expect(md.slice(secs[0].start, secs[0].end)).toBe("# 1. 제목\r\n\r\n본문\r\n\r\n");
+    expect(md.slice(secs[1].start, secs[1].end)).toBe("# 2. 둘째\r\n내용\r\n");
+  });
+
+  it("CR 단독 줄바꿈(구 Mac)도 센다", () => {
+    const secs = splitSections("# A\r본문\r# B\r");
+    expect(secs.map((s) => s.title)).toEqual(["A", "B"]);
+  });
+});

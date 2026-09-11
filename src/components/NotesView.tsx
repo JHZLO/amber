@@ -399,23 +399,35 @@ export function NotesView({
 
   async function save(opts?: { force?: boolean }) {
     if (!editing || !selected || busy || readError) return;
+    // doOpen 과 같은 세대 규약을 따른다. setEditing(false) 가 반영되는 순간 dirty 가 풀려
+    // openNote 의 가드가 열리므로, 뒤이은 await 동안 다른 노트를 열 수 있다. 그때 늦게 온
+    // setMtime 이 새 노트의 mtime 을 **방금 쓴 파일의 것**으로 덮으면(거의 항상 더 새롭다)
+    // `cur > mtime` 이 영구히 거짓이 되어 외부 편집 덮어쓰기 감지가 조용히 꺼진다.
+    const seq = openSeq.current;
+    const stale = () => seq !== openSeq.current;
     setBusy(true);
     try {
       // 열 때 잡아둔 mtime 보다 디스크가 새로우면 외부(Obsidian/vim/git)가 먼저 고친 것 —
       // 조용히 덮지 않고 사용자에게 선택을 넘긴다
       if (!opts?.force) {
         const cur = await noteMtime(selected);
+        if (stale()) return;
         if (cur !== null && mtime !== null && cur > mtime) {
           setConflict({ path: selected, diskMtime: cur });
           return;
         }
       }
+      // 쓰기 자체는 끝까지 한다(사용자가 ⌘S 를 눌렀다) — 버리는 건 화면 상태 갱신뿐이다
       await writeNoteFile(selected, draft);
+      if (stale()) return;
       setBody(draft);
       setEditing(false);
-      setMtime((await noteMtime(selected)) ?? Date.now());
+      const next = (await noteMtime(selected)) ?? Date.now();
+      if (stale()) return;
+      setMtime(next);
       setOpError(null);
     } catch (e) {
+      if (stale()) return;
       setOpError(errMsg(e));
     } finally {
       setBusy(false);

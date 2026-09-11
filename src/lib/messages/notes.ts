@@ -93,6 +93,8 @@ const ko = {
   "notes.cmt.followUpPh": "이어서 질문하기…",
   "notes.cmt.followUpSend": "후속 질문 보내기",
   "notes.cmt.deleteThread": "질문 스레드 삭제",
+  "notes.cmt.sidecarBroken":
+    "이 노트의 질문 파일을 읽을 수 없어 저장을 멈췄습니다. 덮어쓰면 기존 문답이 사라집니다.",
 
   // 글 단위 질문 목록 — 문장을 클릭하는 길과 별도로, 이 노트의 질문을 모아 본다
   "notes.qlist.btn": "질문 {n}",
@@ -280,6 +282,8 @@ const en: Record<keyof typeof ko, string> = {
   "notes.cmt.followUpPh": "Ask a follow-up…",
   "notes.cmt.followUpSend": "Send follow-up",
   "notes.cmt.deleteThread": "Delete this thread",
+  "notes.cmt.sidecarBroken":
+    "Stopped saving: this note's question file could not be read, and overwriting it would lose the existing threads.",
 
   "notes.qlist.btn": "{n} questions",
   "notes.qlist.title": "{n} questions in this note",

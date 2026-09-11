@@ -18,26 +18,41 @@ export interface MdSection {
 
 // 코드블록 안의 `#` 주석을 제목으로 착각하지 않으려면 펜스를 세어야 한다.
 // (```bash 안의 `# 설치` 가 제목으로 잡히면 절 경계가 코드 한복판에서 갈린다)
-const FENCE = /^(\s*)(```+|~~~+)/;
+// 마커의 **길이**와 정보 문자열까지 잡는다 — 아래 닫기 판정에 둘 다 필요하다.
+const FENCE = /^(\s*)(`{3,}|~{3,})(.*)$/;
 const HEADING = /^(#{1,3}) +(\S.*)$/;
 
 /** 제목(`#`~`###`) 기준으로 절을 나눈다. 첫 제목 앞의 서문은 절이 아니라 포함되지 않는다 */
 export function splitSections(md: string): MdSection[] {
-  const lines = md.split("\n");
+  // 개행을 캡처해 함께 쪼갠다(홀수 인덱스 = 구분자). `split("\n")` 만 쓰면 CRLF 노트에서
+  // 줄 끝에 `\r` 가 남아 HEADING 의 `$` 에 걸려 **절이 하나도 안 잡힌다**(외부 편집기에서 온
+  // 노트가 그렇다). 오프셋은 소스 좌표여야 하므로 구분자의 실제 길이를 더한다.
+  const parts = md.split(/(\r\n|\r|\n)/);
   const heads: { level: number; title: string; start: number }[] = [];
   let offset = 0;
-  let fence: string | null = null;
-  for (const line of lines) {
+  // 여는 펜스의 문자와 길이를 같이 들고 있어야 한다. CommonMark 에서 닫는 펜스는 여는 것보다
+  // 짧을 수 없는데, 길이를 버리고 3개로 접으면 ````md 안의 ``` 가 바깥 펜스를 닫아버려
+  // 절 경계가 코드블록 한복판으로 들어온다 — 그 절을 AI 로 고치면 닫는 펜스와 뒤 단락이 날아간다.
+  let fence: { char: string; len: number } | null = null;
+  for (let i = 0; i < parts.length; i += 2) {
+    const line = parts[i] ?? "";
     const f = FENCE.exec(line);
     if (f) {
-      const marker = f[2][0].repeat(3);
-      if (!fence) fence = marker;
-      else if (marker === fence) fence = null;
+      const marker = f[2];
+      if (!fence) {
+        fence = { char: marker[0], len: marker.length };
+      } else if (
+        marker[0] === fence.char &&
+        marker.length >= fence.len &&
+        f[3].trim() === "" // 닫는 펜스에는 정보 문자열이 없다 (```bash 는 닫기가 아니다)
+      ) {
+        fence = null;
+      }
     } else if (!fence) {
       const h = HEADING.exec(line);
       if (h) heads.push({ level: h[1].length, title: h[2].trim(), start: offset });
     }
-    offset += line.length + 1; // +1 = split 으로 사라진 개행
+    offset += line.length + (parts[i + 1]?.length ?? 0);
   }
   return heads.map((h, i) => ({
     sec: headingSection(h.title),

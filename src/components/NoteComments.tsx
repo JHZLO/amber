@@ -20,8 +20,8 @@ import type { AppConfig } from "../lib/config";
 import { aiNoteAsk, friendlyError } from "../lib/ai";
 import {
   loadComments,
+  mutateComments,
   newCommentId,
-  saveComments,
   type AskTurn,
   type NoteComment,
 } from "../lib/comments";
@@ -525,10 +525,10 @@ export function NoteCommentLayer({
         createdAt: Date.now(),
         model: meta.model,
       };
-      // 항상 디스크 기준으로 병합-저장 (요청 중 노트를 이동했어도 원래 노트에 안전히 저장)
-      const list = await loadComments(rel);
-      const next = [...list, cm];
-      await saveComments(rel, next);
+      // 항상 디스크 기준으로 병합-저장 (요청 중 노트를 이동했어도 원래 노트에 안전히 저장).
+      // mutateComments 는 사이드카를 못 읽으면 쓰지 않고 던진다 — 빈 목록으로 접어 덮으면
+      // 그 노트의 기존 문답이 전부 사라진다.
+      const next = await mutateComments(rel, (list) => [...list, cm]);
       if (relRef.current === rel) {
         setComments(next);
         notifyCount(next);
@@ -583,13 +583,13 @@ export function NoteCommentLayer({
         model: meta.model,
       };
       // 디스크 기준 병합 — 요청 중 다른 저장이 있었어도 해당 스레드에만 덧붙인다
-      const list = await loadComments(rel);
-      const next = list.map((c) =>
-        c.id === target.id
-          ? { ...c, followUps: [...(c.followUps ?? []), turn] }
-          : c,
+      const next = await mutateComments(rel, (list) =>
+        list.map((c) =>
+          c.id === target.id
+            ? { ...c, followUps: [...(c.followUps ?? []), turn] }
+            : c,
+        ),
       );
-      await saveComments(rel, next);
       if (relRef.current === rel) {
         setComments(next);
         notifyCount(next);
@@ -632,16 +632,16 @@ export function NoteCommentLayer({
         provider: config.provider,
       });
       // 디스크 기준 병합 — 요청 중 다른 저장이 있었어도 이 답변만 갈아끼운다
-      const list = await loadComments(rel);
-      const next = list.map((c) => {
-        if (c.id !== target.id) return c;
-        if (turn === 0) return { ...c, answer, model: meta.model };
-        const ups = [...(c.followUps ?? [])];
-        if (!ups[turn - 1]) return c;
-        ups[turn - 1] = { ...ups[turn - 1], answer, model: meta.model };
-        return { ...c, followUps: ups };
-      });
-      await saveComments(rel, next);
+      const next = await mutateComments(rel, (list) =>
+        list.map((c) => {
+          if (c.id !== target.id) return c;
+          if (turn === 0) return { ...c, answer, model: meta.model };
+          const ups = [...(c.followUps ?? [])];
+          if (!ups[turn - 1]) return c;
+          ups[turn - 1] = { ...ups[turn - 1], answer, model: meta.model };
+          return { ...c, followUps: ups };
+        }),
+      );
       if (relRef.current === rel) {
         setComments(next);
         setRevising(null);
@@ -655,11 +655,19 @@ export function NoteCommentLayer({
   }
 
   async function deleteComment(id: string) {
-    const next = comments.filter((c) => c.id !== id);
-    await saveComments(noteRel, next);
-    setComments(next);
-    notifyCount(next);
-    setPop(null);
+    const rel = noteRel;
+    try {
+      const next = await mutateComments(rel, (list) =>
+        list.filter((c) => c.id !== id),
+      );
+      if (relRef.current !== rel) return;
+      setComments(next);
+      notifyCount(next);
+      setPop(null);
+    } catch (e) {
+      // 예전에는 여기서 던지고 끝이라 삭제 실패가 "버튼이 안 먹는다"로만 보였다
+      setAskError(friendlyError(e));
+    }
   }
 
   // ---- 렌더 (플로팅 요소는 transform 있는 조상 이슈를 피해 body 로 포탈) ----

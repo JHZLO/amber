@@ -10,6 +10,7 @@ import {
   remove,
 } from "@tauri-apps/plugin-fs";
 import { writeAtomic } from "./vaultTree";
+import { t } from "./i18n";
 import { getRoot } from "./workspace";
 
 const BASE = BaseDirectory.AppData;
@@ -52,13 +53,22 @@ export function newCommentId(): string {
   }
 }
 
-/** 노트의 질문 목록 (없거나 깨졌으면 빈 배열) */
-export async function loadComments(noteRel: string): Promise<NoteComment[]> {
+/** 사이드카 읽기 결과. **"파일 없음"과 "못 읽었다"를 구분하는 것이 핵심이다** —
+ *  둘을 빈 배열로 뭉개면, 손상된 사이드카를 가진 노트에 질문을 하나 추가하는 순간
+ *  `saveComments` 가 파일을 통째로 교체해 기존 문답이 전부 사라진다.
+ *  `writeAtomic` 이라 휴지통도 `.bak` 도 남지 않는다. */
+export type CommentsRead =
+  | { ok: true; comments: NoteComment[] }
+  | { ok: false };
+
+/** 노트의 질문 목록 — 읽기 실패를 그대로 알린다. 쓰기 전에는 반드시 이걸 쓴다. */
+export async function readComments(noteRel: string): Promise<CommentsRead> {
   try {
     const p = full(commentsPathFor(noteRel));
-    if (!(await exists(p, { baseDir: BASE }))) return [];
+    // 파일이 없는 것은 실패가 아니다 — 질문이 없는 노트다
+    if (!(await exists(p, { baseDir: BASE }))) return { ok: true, comments: [] };
     const d = JSON.parse(await readTextFile(p, { baseDir: BASE }));
-    if (!Array.isArray(d?.comments)) return [];
+    if (!Array.isArray(d?.comments)) return { ok: false };
     const valid = d.comments.filter(
       (c: unknown): c is NoteComment =>
         !!c &&
@@ -78,10 +88,31 @@ export async function loadComments(noteRel: string): Promise<NoteComment[]> {
         );
       }
     }
-    return valid;
+    return { ok: true, comments: valid };
   } catch {
-    return [];
+    return { ok: false };
   }
+}
+
+/** 표시용 — 못 읽으면 빈 목록. **읽기만 하는 화면에서만** 쓴다(그리면 그만이니 안전하다). */
+export async function loadComments(noteRel: string): Promise<NoteComment[]> {
+  const r = await readComments(noteRel);
+  return r.ok ? r.comments : [];
+}
+
+/** 디스크를 정본으로 읽어 목록을 고친 뒤 저장한다 — 질문 추가·수정·삭제는 모두 이걸 쓴다.
+ *  읽기가 실패하면 **아무것도 쓰지 않고 throw** 한다. 그게 이 헬퍼의 존재 이유다:
+ *  예전에는 세 곳이 각자 `loadComments` → 병합 → `saveComments` 를 직접 했고,
+ *  읽기가 빈 배열로 접히면 그 병합이 곧 전체 삭제였다. */
+export async function mutateComments(
+  noteRel: string,
+  edit: (list: NoteComment[]) => NoteComment[],
+): Promise<NoteComment[]> {
+  const r = await readComments(noteRel);
+  if (!r.ok) throw new Error(t("notes.cmt.sidecarBroken"));
+  const next = edit(r.comments);
+  await saveComments(noteRel, next);
+  return next;
 }
 
 /** 저장. 목록이 비면 사이드카 파일 자체를 지워 잔여물을 남기지 않는다 */

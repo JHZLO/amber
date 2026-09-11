@@ -603,23 +603,32 @@ export function DiagramsView({
 
   async function save(opts?: { force?: boolean }) {
     if (!editing || !selected || busy || readError) return;
+    // doOpen 과 같은 세대 규약 — 저장 도중 다른 파일을 열면 늦게 온 setMtime 이 그 파일의
+    // mtime 을 덮어써 외부 편집 감지가 조용히 꺼진다(NotesView.save 와 같은 이유).
+    const seq = openSeq.current;
+    const stale = () => seq !== openSeq.current;
     setBusy(true);
     try {
       // 열 때 잡아둔 mtime 보다 디스크가 새로우면 외부(Finder/vim/git)가 먼저 고친 것 —
       // 조용히 덮지 않고 사용자에게 선택을 넘긴다
       if (!opts?.force) {
         const cur = await diagramMtime(selected);
+        if (stale()) return;
         if (cur !== null && mtime !== null && cur > mtime) {
           setConflict({ path: selected, diskMtime: cur });
           return;
         }
       }
       await writeDiagramFile(selected, draft);
+      if (stale()) return;
       setBody(draft);
       setEditing(false);
-      setMtime((await diagramMtime(selected)) ?? Date.now());
+      const next = (await diagramMtime(selected)) ?? Date.now();
+      if (stale()) return;
+      setMtime(next);
       setOpError(null);
     } catch (e) {
+      if (stale()) return;
       setOpError(errMsg(e));
     } finally {
       setBusy(false);

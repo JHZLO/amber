@@ -5,7 +5,7 @@ mod detect;
 mod report;
 
 use ai::AiError;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
@@ -104,8 +104,7 @@ async fn create_backup(
 
     // 같은 폴더에 여러 번 백업해도 덮어쓰지 않게 하위 폴더로 나눈다
     // (VACUUM INTO 는 대상 파일이 이미 있으면 실패한다).
-    let root = dest.join(format!("amber-backup-{}", local_stamp(tz_offset_min)));
-    std::fs::create_dir_all(&root)
+    let root = make_backup_dir(&dest, &local_stamp(tz_offset_min))
         .map_err(|e| AiError::detailed("BACKUP_MKDIR", e.to_string(), e.to_string()))?;
 
     let roots = extra_roots.unwrap_or_default();
@@ -121,9 +120,11 @@ async fn create_backup(
                 .map_err(|e| e.to_string())??;
         }
         // 커스텀 작업 폴더는 roots/<섹션>/ 아래로. 어디서 왔는지는 manifest.json 에 남긴다.
-        let mut manifest = String::from("{\n  \"version\": 1,\n  \"roots\": {");
-        for (i, (section, path)) in roots.iter().enumerate() {
-            let src = std::path::PathBuf::from(path);
+        // 실제로 복사한 것만 모아 마지막에 한 번 직렬화한다 — JSON 을 손으로 이어 붙이면
+        // 건너뛴 항목이 쉼표 자리를 어긋내고(첫 루트가 빠지면 `{,` 가 된다) 섹션 이름 이스케이프도 빠진다.
+        let mut copied = serde_json::Map::new();
+        for (section, path) in roots.iter() {
+            let src = PathBuf::from(path);
             if !src.is_dir() {
                 continue;
             }
@@ -139,16 +140,12 @@ async fn create_backup(
             tokio::task::spawn_blocking(move || copy_dir(&src, &to))
                 .await
                 .map_err(|e| e.to_string())??;
-            manifest.push_str(&format!(
-                "{}\n    \"{}\": \"{}\"",
-                if i == 0 { "" } else { "," },
-                section,
-                path.replace('\\', "\\\\").replace('"', "\\\"")
-            ));
+            copied.insert(section.clone(), serde_json::Value::String(path.clone()));
         }
-        manifest.push_str("\n  }\n}\n");
         if !roots.is_empty() {
-            std::fs::write(root.join("manifest.json"), manifest).map_err(|e| e.to_string())?;
+            let manifest = serde_json::json!({ "version": 1, "roots": copied });
+            let body = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
+            std::fs::write(root.join("manifest.json"), body + "\n").map_err(|e| e.to_string())?;
         }
         Ok::<(), String>(())
     };
@@ -160,6 +157,33 @@ async fn create_backup(
         return Err(AiError::detailed("BACKUP_WRITE", e.clone(), e));
     }
     Ok(root.to_string_lossy().into_owned())
+}
+
+/// 백업 폴더를 **새로** 만든다. 이름이 이미 있으면 `-2`, `-3` … 으로 비켜 간다.
+///
+/// `create_dir_all` 을 쓰면 안 된다 — 이미 있는 폴더에도 `Ok` 를 준다. 그래서 같은 초에 두 번
+/// 백업하면 앞선 백업 폴더를 그대로 재사용하고, `VACUUM INTO` 가 "대상 파일이 이미 있다"로 실패한 뒤
+/// 실패 정리(`remove_dir_all`)가 **먼저 성공한 남의 백업을 통째로 지운다**. 서버가 없는 앱에서
+/// 백업은 유일한 복구 수단이라, 그걸 지우는 경로는 남겨둘 수 없다.
+/// 반환된 경로는 이 호출이 직접 만든 것이므로 실패 시 지워도 안전하다.
+fn make_backup_dir(dest: &Path, stamp: &str) -> std::io::Result<PathBuf> {
+    for n in 1..=99 {
+        let name = if n == 1 {
+            format!("amber-backup-{stamp}")
+        } else {
+            format!("amber-backup-{stamp}-{n}")
+        };
+        let p = dest.join(name);
+        match std::fs::create_dir(&p) {
+            Ok(()) => return Ok(p),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "같은 시각의 백업 폴더가 너무 많습니다.",
+    ))
 }
 
 /// DB 스냅샷. journal_mode 가 WAL 이라 amber.db 파일 복사는 최근 쓰기를 놓치므로,
@@ -218,11 +242,17 @@ fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
 /// 백업 폴더 이름용 로컬 타임스탬프(YYYYMMDD-HHMMSS). chrono 없이 epoch 초에서 직접 환산.
 /// tz_offset_min = JS getTimezoneOffset()(UTC 기준 분, KST=-540) — report.rs fmt_hhmm 과 동일 산술.
 fn local_stamp(tz_offset_min: i32) -> String {
-    let secs = std::time::SystemTime::now()
+    let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
-        - i64::from(tz_offset_min) * 60;
+        .unwrap_or(0);
+    stamp_from(now, tz_offset_min)
+}
+
+/// 시계를 뺀 순수부 — 이 이름이 백업 폴더를 가리므로 월말·윤년·타임존 경계가 어긋나면
+/// 백업을 식별할 수 없게 되고, 최악의 경우 이름이 반복 충돌한다. 그래서 따로 테스트한다.
+fn stamp_from(epoch_secs: i64, tz_offset_min: i32) -> String {
+    let secs = epoch_secs - i64::from(tz_offset_min) * 60;
     let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
     // 3월을 연초로 두는 민력(civil) 역산 — 윤년 분기를 한 번에 처리한다
     let z = days + 719_468;
@@ -449,4 +479,47 @@ pub fn run() {
                 ai::kill_all();
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 백업 폴더 이름은 초 단위라 같은 초에 두 번 누르면 충돌한다. 그때 **기존 폴더를
+    /// 재사용하면 안 된다** — 재사용은 VACUUM INTO 실패 → 실패 정리 → 남의 백업 삭제로 이어졌다.
+    #[test]
+    fn make_backup_dir_never_reuses_an_existing_folder() {
+        let dest = std::env::temp_dir().join(format!("amber-mkdir-{}", std::process::id()));
+        std::fs::create_dir_all(&dest).unwrap();
+
+        let a = make_backup_dir(&dest, "20260911-160000").unwrap();
+        let b = make_backup_dir(&dest, "20260911-160000").unwrap();
+        assert_ne!(a, b, "같은 스탬프인데 같은 폴더를 돌려줬다");
+        assert!(a.ends_with("amber-backup-20260911-160000"));
+        assert!(b.ends_with("amber-backup-20260911-160000-2"));
+        assert!(a.is_dir() && b.is_dir());
+
+        std::fs::remove_dir_all(&dest).unwrap();
+    }
+
+    #[test]
+    fn stamp_from_applies_timezone_offset() {
+        // KST = UTC+9 → getTimezoneOffset() 은 -540 (report.rs fmt_hhmm 과 같은 부호 규약)
+        assert_eq!(stamp_from(1_767_193_200, -540), "20260101-000000");
+        assert_eq!(stamp_from(1_767_193_200, 0), "20251231-150000");
+    }
+
+    #[test]
+    fn stamp_from_crosses_leap_day_and_year_end() {
+        // 2024-02-29T15:00:00Z + KST → 2024-03-01 00:00 (윤년 2월 29일 다음날)
+        assert_eq!(stamp_from(1_709_218_800, -540), "20240301-000000");
+        // 2026-12-31T15:00:00Z + KST → 2027-01-01 00:00 (연 경계)
+        assert_eq!(stamp_from(1_798_729_200, -540), "20270101-000000");
+    }
+
+    #[test]
+    fn stamp_from_is_zero_padded() {
+        // 1970-01-02T03:04:05Z, UTC — 한 자리 월/일/시가 두 자리로 채워져야 정렬이 유지된다
+        assert_eq!(stamp_from(97_445, 0), "19700102-030405");
+    }
 }
