@@ -12,6 +12,7 @@ const ko = {
   "diagrams.tooltip.refresh": "새로고침 · Finder 변경 반영",
   "diagrams.tree.group.mine": "내 다이어그램",
   "diagrams.tree.group.db": "데이터베이스",
+  "diagrams.db.emptySection": "연결된 데이터베이스가 없어요.",
   "diagrams.tree.newFileHere": "이 폴더에 새 다이어그램",
   "diagrams.tree.newFolderHere": "이 폴더에 새 폴더",
 
@@ -269,6 +270,7 @@ const en: Record<keyof typeof ko, string> = {
   "diagrams.tooltip.refresh": "Refresh · pick up Finder changes",
   "diagrams.tree.group.mine": "My diagrams",
   "diagrams.tree.group.db": "Databases",
+  "diagrams.db.emptySection": "No database connected yet.",
   "diagrams.tree.newFileHere": "New diagram in this folder",
   "diagrams.tree.newFolderHere": "New folder in this folder",
 

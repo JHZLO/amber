@@ -1109,33 +1109,7 @@ export function DiagramsView({
         <div className="notes-tree-head">
           <RootPicker section="diagrams" />
           <span className="spacer" />
-          <Tooltip label={t("diagrams.db.tooltip.add")}>
-            <button
-              className="icon-btn sm"
-              aria-label={t("diagrams.db.addConnection")}
-              onClick={() => setDbModal({ open: true, connection: null })}
-            >
-              <Icon name="database" size={15} />
-            </button>
-          </Tooltip>
-          <Tooltip label={t("diagrams.tooltip.newFileAt", { dir: encodeDir(activeDir) })}>
-            <button
-              className="icon-btn sm"
-              aria-label={t("diagrams.newFile")}
-              onClick={() => openNameModal("new-file")}
-            >
-              <Icon name="file-plus" size={15} />
-            </button>
-          </Tooltip>
-          <Tooltip label={t("diagrams.tooltip.newFolderAt", { dir: encodeDir(activeDir) })}>
-            <button
-              className="icon-btn sm"
-              aria-label={t("diagrams.newFolder")}
-              onClick={() => openNameModal("new-folder")}
-            >
-              <Icon name="folder-plus" size={15} />
-            </button>
-          </Tooltip>
+          {/* 헤더에는 트리 전체에 걸리는 것만 남긴다 — 만드는 동작은 각자 구역 머리로 내려갔다(§7) */}
           <Tooltip label={t("diagrams.tooltip.refresh")}>
             <button
               className="icon-btn sm"
@@ -1153,7 +1127,7 @@ export function DiagramsView({
           </div>
         )}
         {tree === null && !treeError && <Spinner />}
-        {tree && tree.length === 0 && (
+        {tree && tree.length === 0 && connections.length === 0 && (
           <div className="tree-empty">
             <p>
               {t("diagrams.empty.tree1")}
@@ -1169,7 +1143,7 @@ export function DiagramsView({
             </button>
           </div>
         )}
-        {tree && tree.length > 0 && (
+        {tree && (tree.length > 0 || connections.length > 0) && (
           <div
             className={`tree ${dnd.treeClass}`}
             onMouseDown={(e) => {
@@ -1177,16 +1151,49 @@ export function DiagramsView({
             }}
           >
             {/* 두 구역 — 내가 그린 것과 DB 가 채우는 것은 성격이 다르다(다른 동사, 다른 규칙).
-                연결이 하나도 없으면 라벨 없이 예전 그대로 한 목록으로 보인다. */}
-            {dbRoots.length > 0 && mine.length > 0 && (
-              <div className="tree-group">{t("diagrams.tree.group.mine")}</div>
-            )}
+                구역 머리가 곧 "여기에 만든다" 자리다: 만드는 버튼을 전역 헤더가 아니라 여기 둔다.
+                연결이 없어도 데이터베이스 구역은 남는다 — 첫 연결을 추가할 자리가 사라지면 안 된다. */}
+            <div className="tree-group">
+              <span>{t("diagrams.tree.group.mine")}</span>
+              <span className="spacer" />
+              <Tooltip label={t("diagrams.tooltip.newFileAt", { dir: encodeDir(activeDir) })}>
+                <button
+                  className="icon-btn sm"
+                  aria-label={t("diagrams.newFile")}
+                  onClick={() => openNameModal("new-file")}
+                >
+                  <Icon name="file-plus" size={14} />
+                </button>
+              </Tooltip>
+              <Tooltip label={t("diagrams.tooltip.newFolderAt", { dir: encodeDir(activeDir) })}>
+                <button
+                  className="icon-btn sm"
+                  aria-label={t("diagrams.newFolder")}
+                  onClick={() => openNameModal("new-folder")}
+                >
+                  <Icon name="folder-plus" size={14} />
+                </button>
+              </Tooltip>
+            </div>
             {renderRows(mine, 0)}
-            {dbRoots.length > 0 && (
-              <>
-                <div className="tree-group">{t("diagrams.tree.group.db")}</div>
-                {renderRows(dbRoots, 0)}
-              </>
+            <div className="tree-group">
+              <span>{t("diagrams.tree.group.db")}</span>
+              <span className="spacer" />
+              {/* 구역 이름이 이미 '데이터베이스'라 아이콘은 종류가 아니라 '더한다'를 말한다 */}
+              <Tooltip label={t("diagrams.db.tooltip.add")}>
+                <button
+                  className="icon-btn sm"
+                  aria-label={t("diagrams.db.addConnection")}
+                  onClick={() => setDbModal({ open: true, connection: null })}
+                >
+                  <Icon name="plus" size={14} />
+                </button>
+              </Tooltip>
+            </div>
+            {dbRoots.length > 0 ? (
+              renderRows(dbRoots, 0)
+            ) : (
+              <div className="tree-group-empty">{t("diagrams.db.emptySection")}</div>
             )}
           </div>
         )}
