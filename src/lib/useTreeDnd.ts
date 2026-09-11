@@ -64,6 +64,9 @@ export function useTreeDnd(opts: {
   move: (fromPath: string, toDir: string) => Promise<string>;
   onMoved: (fromPath: string, newPath: string, isDir: boolean) => void;
   onError: (msg: string) => void;
+  /** 이 경로는 외부가 관리한다 — 끌어내지도, 안으로 떨어뜨리지도 못한다.
+   *  (다이어그램 탭의 DB 연결 하위: 폴더 구조가 곧 연결 설정이라 손으로 옮기면 연결이 깨진다) */
+  locked?: (path: string) => boolean;
 }): TreeDnd {
   const [dragPath, setDragPath] = useState<string | null>(null);
   const [dropDir, setDropDir] = useState<string | null>(null);
@@ -100,6 +103,7 @@ export function useTreeDnd(opts: {
   // 이동 불가면 null: 같은 폴더(no-op) / 폴더를 자기 자신·하위로
   function validTarget(from: DndTargetNode, dir: string | null): string | null {
     if (dir == null) return null;
+    if (opts.locked?.(dir)) return null;
     if (dir === parentOf(from.path)) return null;
     if (from.isDir && (dir === from.path || dir.startsWith(`${from.path}/`)))
       return null;
@@ -108,6 +112,7 @@ export function useTreeDnd(opts: {
 
   function onRowMouseDown(e: ReactMouseEvent, node: DndTargetNode) {
     if (e.button !== 0) return; // 좌클릭만
+    if (opts.locked?.(node.path)) return; // 외부가 관리하는 항목은 들리지 않는다
     if ((e.target as Element).closest(".row-actions")) return; // 행 안 버튼은 드래그 아님
     e.preventDefault(); // 네이티브 텍스트 선택/드래그 방지 (안 하면 글자가 선택된다)
 

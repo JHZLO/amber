@@ -12,6 +12,7 @@ import {
   remapPath,
   remapPaths,
   searchFiles,
+  splitDbRoots,
   type VaultNode,
 } from "./vaultTree";
 
@@ -195,6 +196,36 @@ describe("ancestorPaths", () => {
 
   it("양끝·연속 슬래시를 흘리지 않는다", () => {
     expect(ancestorPaths("/CS//네트워크/")).toEqual(["CS", "CS/네트워크"]);
+  });
+});
+
+describe("splitDbRoots", () => {
+  type N = { path: string; isDir: boolean; children?: N[] };
+  const tree: N[] = [
+    { path: "ERD", isDir: true, children: [{ path: "ERD/a.mmd", isDir: false }] },
+    { path: "MySQL", isDir: true, children: [{ path: "MySQL/svc", isDir: true }] },
+    { path: "temp.mmd", isDir: false },
+  ];
+
+  it("lifts connection folders out of the tree and leaves the rest untouched", () => {
+    const { mine, dbRoots } = splitDbRoots(tree, (p) => p === "MySQL");
+    expect(mine.map((n) => n.path)).toEqual(["ERD", "temp.mmd"]);
+    expect(dbRoots.map((n) => n.path)).toEqual(["MySQL"]);
+    // 뽑힌 연결은 하위를 그대로 들고 간다
+    expect(dbRoots[0].children?.[0].path).toBe("MySQL/svc");
+  });
+
+  it("lifts a nested connection folder to the top of its own section", () => {
+    const nested: N[] = [{ path: "db", isDir: true, children: [{ path: "db/prod", isDir: true }] }];
+    const { mine, dbRoots } = splitDbRoots(nested, (p) => p === "db/prod");
+    expect(dbRoots.map((n) => n.path)).toEqual(["db/prod"]);
+    expect(mine[0].children).toEqual([]);
+  });
+
+  it("returns the same array when there is nothing to lift", () => {
+    const { mine, dbRoots } = splitDbRoots(tree, () => false);
+    expect(mine).toBe(tree); // 참조 보존 — 연결이 없으면 리렌더가 트리를 흔들지 않는다
+    expect(dbRoots).toEqual([]);
   });
 });
 
