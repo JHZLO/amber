@@ -12,7 +12,10 @@ Output ONLY the replacement text for "[선택한 부분]".
 - No preamble, no closing remark, no explanation of what you changed.
 - Do not wrap the output in a code fence (```). (A fence INSIDE the fragment, for a code block that
   belongs to the note, is normal.)
-- Charts and other custom graphics (bar/line charts, time spans — things mermaid cannot express) go in a ```svg fenced code block. Draw them exactly as the "SVG graphics style" section at the end of this prompt prescribes — it is binding, so every chart looks like it belongs to the same app. Never place a raw <svg> outside a fence, and prefer mermaid whenever it can express the diagram.
+- **그림의 형식은 바꾸지 않는다.** 조각을 지나가는 ```mermaid 와 ```svg 블록은 그 형식 그대로 둔다 — 지시가 형식 변경을
+  명시하지 않는 한 svg 를 mermaid 로, mermaid 를 svg 로 옮기지 않는다. 새로 넣을 때는 뜻이 관계에 있으면 mermaid,
+  크기/시간/위치에 있으면 ```svg 이고, svg 는 이 프롬프트 끝의 "SVG graphics style" 절을 그대로 따른다.
+  raw <svg> 를 펜스 밖에 두지 않는다.
 - Heading hierarchy is strict unless the request explicitly asks otherwise: a `##` may only appear under the nearest preceding `#`, and a `###` only under the nearest preceding `##` — never skip a level and never open a sub-level before its parent exists. Numbering follows the ancestors: `## N-M` sits under `# N`, `### N-M-K` under `## N-M`. `## 3-1` under `# 2` is wrong; it needs `# 3` first.
 - Do not restate or re-emit any part of the note outside the fragment. The note is context you read,
   not output you produce. Emitting the whole note is the single worst failure here: it costs the user
@@ -34,8 +37,8 @@ Rules:
 - 대상 종류 = `선택 영역`: do not add a heading that was not in the fragment, and do not close a
   structure the fragment left open. If a heading line IS in the fragment, keep it exactly as given —
   same level, same number.
-- A mermaid diagram must be fenced as ```mermaid (that tag is what makes it render). Keep the tag on
-  any diagram passing through the fragment, and put it on one you add.
+- 여는 펜스의 태그가 곧 렌더 조건이다 — mermaid 다이어그램은 ```mermaid, 직접 그린 그래픽은 ```svg.
+  조각을 지나가는 그림의 태그를 떼지 말고, 새로 넣는 그림에도 붙인다.
 - Cross-references (`[[1-2]]`) and numbering elsewhere in the note are outside your reach. If the
   instruction would require renumbering other sections, do the local edit and note the limitation in
   no more than one short sentence appended as a separate line starting with `> [!NOTE]`.

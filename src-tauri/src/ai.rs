@@ -1979,6 +1979,19 @@ mod tests {
     }
 
     // 차트 스타일은 요청마다 달라지면 안 된다 — 노트 프롬프트 둘 다 같은 가이드를 끝에 싣고, 언어 지시는 그 뒤다
+    // 사용자가 직접 그린 ```svg 를 "다듬어 달라" 한 마디에 mermaid 로 갈아엎던 사고(v0.20.20 이전)의 재발 방지.
+    // 두 프롬프트 모두 형식 보존을 말하고, 예전의 "prefer mermaid" 지시는 남아 있지 않아야 한다.
+    #[test]
+    fn note_prompts_keep_a_figure_in_the_format_it_was_drawn_in() {
+        for base in [NOTE_SYSTEM_PROMPT, NOTE_EDIT_SYSTEM_PROMPT] {
+            assert!(base.contains("그림의 형식은 바꾸지 않는다"), "형식 보존 규칙이 빠졌다");
+            assert!(
+                !base.to_lowercase().contains("prefer mermaid"),
+                "mermaid 를 기본으로 삼는 지시가 남아 있으면 svg 가 다시 변환된다"
+            );
+        }
+    }
+
     #[test]
     fn note_prompts_carry_the_svg_style_guide() {
         for base in [NOTE_SYSTEM_PROMPT, NOTE_EDIT_SYSTEM_PROMPT] {
