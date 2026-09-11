@@ -701,7 +701,11 @@ export function TodoView({
   // 밀린 목록도 본문처럼 계층으로 — 부모가 빠질 수 있는 부분 집합이라 flattenSubset
   // 렌더 본문에서 계산하면 빠른 추가 입력의 키 입력마다 재계산된다 (overdue 는 안 바뀌는데도)
   const overdueRows = useMemo(() => flattenSubset(overdue), [overdue]);
-  const overdueById = new Map(overdue.map((o) => [o.id, o]));
+  // 렌더마다 Map 을 새로 만들면 밀린 항목이 수천 개 쌓인 날 키 입력마다 그 비용을 낸다
+  const overdueById = useMemo(
+    () => new Map(overdue.map((o) => [o.id, o])),
+    [overdue],
+  );
 
   // 파라미터를 todo 로 둔다 — t 로 줄이면 i18n 의 t() 를 가려서(shadowing) 번역 호출이 깨진다
   function renderRow(todo: Todo, opts?: { overdue?: boolean }) {

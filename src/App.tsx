@@ -36,10 +36,17 @@ import { SearchModal, type SearchHit } from "./components/SearchModal";
 import { THEME_EVENT, resolvedTheme, toggleTheme } from "./lib/theme";
 import { OPEN_CONCEPT, OPEN_NOTE, openDiagramInApp, openNoteInApp } from "./lib/nav";
 import { t } from "./lib/i18n";
+import { errText } from "./lib/errors";
 import { usePaneResize } from "./lib/usePaneResize";
 
 type StatusTab = ConceptStatus | "all";
 type Section = "til" | "notes" | "diagrams" | "todo";
+
+/** 모달이 떠 있는가 — 전역 단축키(⌘K·⌘,·⌘1~4)는 그때 양보한다.
+ *  열린 모달 state 를 열거하면 새 모달이 생길 때마다 빠뜨리므로 DOM 을 본다
+ *  (PageFind 가 ⌘F 에 쓰는 것과 같은 선택자). Modal 은 body 로 portal 된다. */
+const shielded = (): boolean =>
+  document.querySelector(".overlay, .mmd-zoom-overlay") !== null;
 
 const SORTS: { id: ConceptSort; label: string }[] = [
   { id: "canonical", label: t("app.sort.canonical") },
@@ -133,7 +140,9 @@ function App() {
   }, []);
 
   useEffect(() => {
-    loadConfig().then(setConfig).catch((e) => setLoadError(String(e)));
+    // String(e) 는 Rust 의 코드화 에러 봉투({code,message,detail})를 [object Object] 로 만든다.
+    // 여기는 앱이 처음 띄우는 에러 화면이라 판독 불가 문자열이 나가면 안 된다.
+    loadConfig().then(setConfig).catch((e) => setLoadError(errText(e)));
   }, []);
 
   // 개념 상세에 미저장 초안이 있는지 — 필터/선택 변경이 ConceptDetail 을 언마운트해
@@ -179,7 +188,7 @@ function App() {
       setLoadError(null);
     } catch (e) {
       if (seq !== reloadSeq.current) return;
-      setLoadError(String(e));
+      setLoadError(errText(e));
     }
   }
 
@@ -246,11 +255,9 @@ function App() {
 
   // ⌘K 빠른 검색 · ⌘1~4 레일 전환. 섹션 단축키(⌘S)와 달리 앱 전역이라 activeRef 대신
   // "모달이 떠 있으면 양보" 로 가린다 — 안 보이는 화면이 뒤에서 바뀌지 않게.
-  const shieldedRef = useRef(false);
-  shieldedRef.current = addOpen || settingsOpen || searchOpen;
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if (shieldedRef.current) return;
+      if (shielded()) return;
       if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
       const k = e.key.toLowerCase();
       if (k === "k") {

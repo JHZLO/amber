@@ -201,6 +201,8 @@ export function AiAuthModal({
                 placeholder={t("settings.auth.codePlaceholder")}
                 onChange={(e) => setCode(e.target.value)}
                 onKeyDown={(e) => {
+                  // 한글 IME: 조합 확정 Enter 가 제출로 새면 잘린 코드가 나가고 CLI 세션이 소모된다
+                  if (e.nativeEvent.isComposing) return;
                   if (e.key === "Enter") void submit();
                 }}
               />

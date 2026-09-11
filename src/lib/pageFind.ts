@@ -3,7 +3,12 @@
 // (NoteComments 의 질문 하이라이트와 같은 방식) 마크다운 렌더 결과를 건드릴 필요가 없다.
 // 본문을 감싸면 React 가 다시 그릴 때 검색 흔적이 남거나 스크롤이 튄다.
 
-/** 컨테이너 안에서 검색어가 나오는 모든 자리를 Range 로. 대소문자는 무시한다. */
+/** 한 번에 칠할 히트 상한. 긴 노트에서 흔한 한 글자를 치면 히트가 수만 개까지 가는데,
+ *  그만큼의 Range 객체를 만드는 비용도 크고 `new Highlight(...ranges)` 스프레드가
+ *  엔진 인자 상한에 걸려 RangeError 로 터질 수 있다. 넘는 만큼은 개수만 알려준다. */
+export const FIND_LIMIT = 500;
+
+/** 컨테이너 안에서 검색어가 나오는 자리를 Range 로 (최대 FIND_LIMIT 개). 대소문자는 무시한다. */
 export function findRanges(root: HTMLElement, query: string): Range[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
@@ -11,19 +16,24 @@ export function findRanges(root: HTMLElement, query: string): Range[] {
   const out: Range[] = [];
   let node: Node | null;
   while ((node = walker.nextNode())) {
+    if (out.length >= FIND_LIMIT) break;
     const text = node as Text;
     // 화면에 없는 글자는 찾아도 갈 곳이 없다(접힌 섹션·display:none)
     if (!text.parentElement?.offsetParent && text.parentElement?.tagName !== "BODY") {
       if (!isRendered(text.parentElement)) continue;
     }
     const hay = text.data.toLowerCase();
-    let i = hay.indexOf(q);
-    while (i !== -1) {
+    // toLowerCase 가 길이를 바꾸는 글자(예: "İ")가 있으면 hay 기준 오프셋이 원문과 어긋나
+    // 하이라이트가 밀리거나 setEnd 가 IndexSizeError 를 던진다 — 그럴 때만 원문 기준으로 찾는다.
+    const src = hay.length === text.data.length ? hay : text.data;
+    const needle = src === hay ? q : query.trim();
+    let i = src.indexOf(needle);
+    while (i !== -1 && out.length < FIND_LIMIT) {
       const r = document.createRange();
       r.setStart(text, i);
-      r.setEnd(text, i + q.length);
+      r.setEnd(text, Math.min(i + needle.length, text.data.length));
       out.push(r);
-      i = hay.indexOf(q, i + q.length);
+      i = src.indexOf(needle, i + needle.length);
     }
   }
   return out;
@@ -56,8 +66,13 @@ export function paint(key: string, ranges: Range[]): void {
     reg.delete(key);
     return;
   }
-  const HL = (window as unknown as { Highlight: new (...r: Range[]) => unknown }).Highlight;
-  reg.set(key, new HL(...ranges));
+  // 스프레드(new HL(...ranges)) 대신 add() 루프 — 인자 개수가 엔진 상한에 걸리지 않는다
+  const HL = (window as unknown as {
+    Highlight: new () => { add: (r: Range) => void };
+  }).Highlight;
+  const h = new HL();
+  for (const r of ranges) h.add(r);
+  reg.set(key, h);
 }
 
 /** 하이라이트 지우기 */

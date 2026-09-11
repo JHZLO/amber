@@ -408,7 +408,10 @@ export function Modal({
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  // body 로 portal — 호출한 자리에 그리면 `.section-wrap.hidden { display: none }` 에 걸려,
+  // ⌘1~4 로 섹션을 바꾸는 순간 모달이 **화면에서만 사라지고 state 는 열린 채** 남는다.
+  // 다른 오버레이 primitive(Tooltip·Select·TreeDragOverlay·MermaidZoom)와 규약도 맞춰진다.
+  return createPortal(
     <div
       className="overlay"
       onMouseDown={(e) => {
@@ -434,7 +437,8 @@ export function Modal({
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-foot">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

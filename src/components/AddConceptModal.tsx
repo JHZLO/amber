@@ -6,7 +6,7 @@ import type { Confidence } from "../types";
 import { aiGenerate, friendlyError } from "../lib/ai";
 import { createConcept, deleteConcept, getSetting, setSetting } from "../lib/db";
 import { detailPathFor, writeNote } from "../lib/vault";
-import { AiThinking, Modal } from "../ui";
+import { AiThinking, DiscardAiModal, Modal } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
@@ -43,6 +43,7 @@ export function AddConceptModal({
   const [confidence, setConfidence] = useState<Confidence>(1);
   const [bodyMd, setBodyMd] = useState("");
   const [showPreview, setShowPreview] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
 
   // 저장된 기본 지시문을 모달 열 때 불러옴 (한 번 써두면 계속 유지)
   useEffect(() => {
@@ -61,8 +62,19 @@ export function AddConceptModal({
     setShowPreview(false);
   }
   function close() {
+    setConfirmClose(false);
     reset();
     onClose();
+  }
+
+  /** 닫기 — AI 결과가 떠 있거나 생성 중이면 한 번 묻는다(§8: AI 결과도 파괴 대상이다).
+   *  Esc·배경 클릭·취소가 전부 여기로 온다 — 그래야 한 경로만 확인을 건너뛰는 일이 없다. */
+  function requestClose() {
+    if (step === "loading" || step === "preview") {
+      setConfirmClose(true);
+      return;
+    }
+    close();
   }
 
   async function generate() {
@@ -160,7 +172,7 @@ export function AddConceptModal({
           {t("concepts.add.backToSource")}
         </button>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={close}>
+        <button className="btn btn-sm" onClick={requestClose}>
           {t("common.cancel")}
         </button>
         <button className="btn btn-primary" onClick={save} disabled={saving}>
@@ -171,7 +183,8 @@ export function AddConceptModal({
   }
 
   return (
-    <Modal open={open} title={t("concepts.add.title")} onClose={close} footer={footer} wide>
+    <>
+    <Modal open={open} title={t("concepts.add.title")} onClose={requestClose} footer={footer} wide>
       {error && <div className="error-note" style={{ marginBottom: 12 }}>{error}</div>}
 
       {step === "paste" && (
@@ -285,5 +298,12 @@ export function AddConceptModal({
         </>
       )}
     </Modal>
+    <DiscardAiModal
+      open={confirmClose}
+      running={step === "loading"}
+      onKeep={() => setConfirmClose(false)}
+      onDiscard={close}
+    />
+    </>
   );
 }

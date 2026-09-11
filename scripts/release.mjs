@@ -157,7 +157,9 @@ if (dirty) die(`워킹트리에 커밋되지 않은 변경이 있습니다:\n${d
 // SKIP_VERIFY=1 로 건너뛸 수 있다(이미 방금 돌린 경우).
 if (!process.env.SKIP_VERIFY) {
   const checks = [
-    ["pnpm", ["exec", "tsc", "--noEmit"]],
+    // `pnpm build` = tsc && vite build. tsc 만 돌리면 "타입은 맞는데 번들이 안 나오는" 태그가
+    // 나갈 수 있다 — 배포 단위가 소스라 빌드 가능성 자체가 배포물의 품질이다.
+    ["pnpm", ["build"]],
     ["pnpm", ["test:ts"]],
     ["cargo", ["test", "--manifest-path", "src-tauri/Cargo.toml"]],
     // SQL 은 어디서도 컴파일되지 않는다 — 태그 전에 한 번은 실제로 실행해 본다

@@ -290,21 +290,29 @@ export function createVaultTree(cfg: VaultTreeConfig) {
 
   async function readTree(rel: string): Promise<VaultNode[]> {
     const entries = await readDir(full(rel), { baseDir: BASE });
-    const nodes: VaultNode[] = [];
-    for (const e of entries) {
-      if (e.name.startsWith(".")) continue; // .DS_Store 등
-      const childRel = rel ? `${rel}/${e.name}` : e.name;
-      if (e.isDirectory) {
-        nodes.push({
-          name: e.name,
-          path: childRel,
-          isDir: true,
-          children: await readTree(childRel),
-        });
-      } else if (e.isFile && hasExt(e.name)) {
-        nodes.push({ name: stripExt(e.name), path: childRel, isDir: false });
-      }
-    }
+    // 하위 폴더를 순차 await 하면 폴더 수만큼 IPC 왕복이 **직렬로** 쌓인다 — 이 함수는
+    // 탭 진입·창 포커스 복귀·⌘K 검색마다 전체를 다시 훑으므로 폴더가 늘수록 사이드바가 굳는다.
+    // 순서는 아래 sortNodes 가 잡으니 병렬로 받아도 결과가 같다.
+    const nodes = await Promise.all(
+      entries
+        .filter(
+          (e) =>
+            !e.name.startsWith(".") && // .DS_Store 등
+            (e.isDirectory || (e.isFile && hasExt(e.name))),
+        )
+        .map(async (e): Promise<VaultNode> => {
+          const childRel = rel ? `${rel}/${e.name}` : e.name;
+          if (e.isDirectory) {
+            return {
+              name: e.name,
+              path: childRel,
+              isDir: true,
+              children: await readTree(childRel),
+            };
+          }
+          return { name: stripExt(e.name), path: childRel, isDir: false };
+        }),
+    );
     return sortNodes(nodes);
   }
 

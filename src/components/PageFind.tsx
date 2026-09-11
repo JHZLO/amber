@@ -5,10 +5,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
-import { clearPaint, findRanges, paint } from "../lib/pageFind";
+import { FIND_LIMIT, clearPaint, findRanges, paint } from "../lib/pageFind";
 
 const KEY_ALL = "page-find";
 const KEY_CUR = "page-find-cur";
+/** 검색 디바운스 — 매 글자마다 전체 DOM 을 훑으면 긴 노트에서 타이핑이 밀린다 */
+const FIND_DEBOUNCE_MS = 120;
 
 export function PageFind({
   containerRef,
@@ -25,15 +27,24 @@ export function PageFind({
   const [count, setCount] = useState(0);
   const hitsRef = useRef<Range[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const timerRef = useRef<number | null>(null);
+
+  const cancelPending = useCallback(() => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
 
   const close = useCallback(() => {
+    cancelPending();
     setOpen(false);
     setQuery("");
     setCount(0);
     setIdx(0);
     hitsRef.current = [];
     clearPaint(KEY_ALL, KEY_CUR);
-  }, []);
+  }, [cancelPending]);
 
   /** 현재 결과를 화면 안으로. Range 는 스크롤이 안 되므로 그 글자를 품은 요소를 쓴다. */
   const focusHit = useCallback((hits: Range[], i: number) => {
@@ -60,6 +71,18 @@ export function PageFind({
       else clearPaint(KEY_CUR);
     },
     [containerRef, focusHit],
+  );
+
+  /** 타이핑 중에는 미룬다 — 마지막 입력 뒤 한 번만 훑는다 */
+  const runSoon = useCallback(
+    (q: string) => {
+      cancelPending();
+      timerRef.current = window.setTimeout(() => {
+        timerRef.current = null;
+        run(q);
+      }, FIND_DEBOUNCE_MS);
+    },
+    [cancelPending, run],
   );
 
   const step = useCallback(
@@ -95,7 +118,13 @@ export function PageFind({
   useEffect(() => {
     if (!active) close();
   }, [active, close]);
-  useEffect(() => () => clearPaint(KEY_ALL, KEY_CUR), []);
+  useEffect(
+    () => () => {
+      cancelPending();
+      clearPaint(KEY_ALL, KEY_CUR);
+    },
+    [cancelPending],
+  );
 
   if (!open) return null;
   return (
@@ -109,7 +138,7 @@ export function PageFind({
         value={query}
         onChange={(e) => {
           setQuery(e.target.value);
-          run(e.target.value);
+          runSoon(e.target.value);
         }}
         onKeyDown={(e) => {
           if (e.nativeEvent.isComposing) return;
@@ -118,7 +147,12 @@ export function PageFind({
         }}
       />
       <span className="page-find-count">
-        {count ? `${idx + 1}/${count}` : query.trim() ? "0" : ""}
+        {/* 상한에 닿으면 "500+" — 그 뒤는 찾지 않았다는 뜻이다 */}
+        {count
+          ? `${idx + 1}/${count}${count >= FIND_LIMIT ? "+" : ""}`
+          : query.trim()
+            ? "0"
+            : ""}
       </span>
       <button
         className="page-find-nav"

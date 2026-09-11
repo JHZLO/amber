@@ -12,7 +12,7 @@ import { createConcept, deleteConcept } from "../lib/db";
 import { detailPathFor, writeNote } from "../lib/vault";
 import { addNoteConcept } from "../lib/noteConcepts";
 import { getRoot } from "../lib/workspace";
-import { AiThinking, Modal } from "../ui";
+import { AiThinking, DiscardAiModal, Modal } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
@@ -50,6 +50,18 @@ export function PromoteConceptModal({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showSource, setShowSource] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+
+  /** 닫기 — AI 결과가 떠 있거나 생성 중이면 한 번 묻는다(§8: AI 결과도 파괴 대상이다).
+   *  Esc·배경 클릭·취소가 전부 여기로 온다. */
+  function requestClose() {
+    if (saving) return; // 저장 중에는 닫지 않는다
+    setConfirmClose(true);
+  }
+  function discardAndClose() {
+    setConfirmClose(false);
+    onClose();
+  }
 
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
@@ -167,7 +179,7 @@ export function PromoteConceptModal({
   if (step === "preview") {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={onClose} disabled={saving}>
+        <button className="btn btn-sm" onClick={requestClose} disabled={saving}>
           {t("common.cancel")}
         </button>
         <button className="btn btn-primary" onClick={() => void save()} disabled={saving}>
@@ -179,7 +191,8 @@ export function PromoteConceptModal({
   }
 
   return (
-    <Modal open={open} title={t("concepts.promote.title")} onClose={onClose} footer={footer} wide>
+    <>
+    <Modal open={open} title={t("concepts.promote.title")} onClose={requestClose} footer={footer} wide>
       {step === "loading" && (
         <AiThinking
           label={t("concepts.promote.thinking")}
@@ -247,5 +260,12 @@ export function PromoteConceptModal({
         </>
       )}
     </Modal>
+    <DiscardAiModal
+      open={confirmClose}
+      running={step === "loading"}
+      onKeep={() => setConfirmClose(false)}
+      onDiscard={discardAndClose}
+    />
+    </>
   );
 }

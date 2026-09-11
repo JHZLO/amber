@@ -60,6 +60,32 @@ export function getMermaid(): Promise<MermaidApi> {
 
 let seq = 0;
 
+// 렌더 결과 캐시. 노트를 바꾸면 본문 문자열이 바뀌어 Markdown 이 새 트리를 만들고 Mermaid 가
+// 사실상 재마운트되므로, 캐시가 없으면 **같은 그림을 열 때마다 처음부터 다시 그린다**
+// (ERD·시퀀스는 한 장에 수백 ms → 그림 여러 장 노트는 열 때마다 칸마다 "렌더 중…"이 뜬다).
+// 키에 layout 을 넣는 이유: 엔진(elk/dagre)을 바꾸면 같은 소스가 다른 그림이 된다.
+const SVG_CACHE_MAX = 200;
+const svgCache = new Map<string, string>();
+function cacheKey(layout: DiagramLayout, chart: string): string {
+  return `${layout}\n${chart}`;
+}
+function cacheGet(key: string): string | undefined {
+  const hit = svgCache.get(key);
+  if (hit !== undefined) {
+    svgCache.delete(key); // 최근 쓴 것을 뒤로 — Map 은 삽입 순서를 유지하므로 이게 LRU 다
+    svgCache.set(key, hit);
+  }
+  return hit;
+}
+function cacheSet(key: string, svg: string): void {
+  svgCache.delete(key);
+  svgCache.set(key, svg);
+  if (svgCache.size > SVG_CACHE_MAX) {
+    const oldest = svgCache.keys().next().value;
+    if (oldest !== undefined) svgCache.delete(oldest);
+  }
+}
+
 /** LLM/외부 도구가 자주 쓰는 잘못된 mermaid 패턴 자동 복구.
  *  mermaid 는 라벨 안 큰따옴표의 백슬래시 이스케이프(\")를 지원하지 않는다 → #quot; 로 치환. */
 export function repairMermaid(chart: string): string {
@@ -83,18 +109,27 @@ export async function renderMermaid(
 }
 
 export function Mermaid({ chart }: { chart: string }) {
-  const [svg, setSvg] = useState("");
+  const layout = useDiagramLayout(); // 엔진을 바꾸면 노트 안 다이어그램도 다시 그린다
+  // 마운트 시 캐시 적중이면 "렌더 중…" 플래시 없이 곧바로 그림이 뜬다
+  const [svg, setSvg] = useState(() => cacheGet(cacheKey(layout, chart)) ?? "");
   const [failed, setFailed] = useState(false);
   const [errMsg, setErrMsg] = useState("");
   const [zoom, setZoom] = useState(false);
-  const layout = useDiagramLayout(); // 엔진을 바꾸면 노트 안 다이어그램도 다시 그린다
 
   useEffect(() => {
+    const key = cacheKey(layout, chart);
+    const cached = cacheGet(key);
+    if (cached !== undefined) {
+      setSvg(cached);
+      setFailed(false);
+      return;
+    }
     let alive = true;
     // 렌더마다 고유 id — 빠른 연속 렌더(라이브 프리뷰)에서 mermaid 내부 임시 노드 충돌 방지
     const id = `mmd-${(seq += 1)}`;
     renderMermaid(id, chart)
       .then(({ svg }) => {
+        cacheSet(key, svg); // 언마운트됐어도 캐시에는 남긴다 — 다음에 열 때가 빨라야 하니까
         if (alive) {
           setSvg(svg); // 성공 시에만 교체 → 편집 중 문법이 잠깐 깨져도 마지막 정상 렌더 유지
           setFailed(false);
