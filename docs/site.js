@@ -209,7 +209,6 @@ if (term) {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
-  camera.position.set(0, 0.1, 4.8);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
@@ -261,11 +260,23 @@ if (term) {
   const back = new THREE.PointLight(0xffb356, 26, 9, 2); back.position.set(0.4, 0.3, -1.8); scene.add(back);
   const fill = new THREE.PointLight(0xffd27a, 6, 8, 2); fill.position.set(-2.2, 1.2, 2.4); scene.add(fill);
 
+  // 물방울을 감싸는 경계 '구' — 회전 불변이라 어떻게 돌아가도 이 안에 들어온다
+  const yMid = (Math.min(...profile.map((p) => p.y)) + Math.max(...profile.map((p) => p.y))) / 2;
+  const gemRadius = Math.max(...profile.map((p) => Math.hypot(p.x, p.y - yMid)));
+  const FIT_MARGIN = 1.14; // 숨쉬는 여백 + 위아래로 흔들리는 진폭(0.06)까지 덮는다
+  camera.position.set(0, yMid, 5);
+
   const fit = () => {
     const w = gemHost.clientWidth || 1, h = gemHost.clientHeight || 1;
     renderer.setSize(w, h, false);
-    camera.aspect = w / h; camera.updateProjectionMatrix();
-    gem.scale.setScalar(Math.min(1, w / 520) * (desktop() ? 1 : 0.86));
+    camera.aspect = w / h;
+    // 카메라를 물방울에 맞춘다 — 거리를 4.8 로 박아 두니 세로 화각이 물방울보다 좁아 아래가 잘렸다.
+    // 좁은 쪽 화각(세로/가로 중 작은 것)에 구를 맞춰야 어떤 창 비율에서도 온전히 들어온다.
+    const vFov = (camera.fov * Math.PI) / 180;
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
+    camera.position.z = (gemRadius * FIT_MARGIN) / Math.sin(Math.min(vFov, hFov) / 2);
+    camera.updateProjectionMatrix();
+    gem.scale.setScalar(1);
   };
   fit();
   new ResizeObserver(fit).observe(gemHost);
