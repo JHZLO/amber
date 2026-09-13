@@ -1,6 +1,6 @@
 // 이름/경로 입력 검증 회귀 테스트. 여기서 새는 값이 곧 파일시스템 경로가 되므로
 // (특히 '..' 같은 상위 이동) 사유 문자열까지 함께 고정한다.
-// createVaultTree 쪽은 파일시스템 래퍼라 대상이 아니다.
+// createVaultTree 의 파일시스템 조작은 vaultTree.fs.test.ts 가 맡는다(fs 플러그인을 mock).
 
 import { describe, expect, it } from "vitest";
 import {

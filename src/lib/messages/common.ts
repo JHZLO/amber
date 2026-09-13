@@ -43,6 +43,7 @@ const ko = {
   "common.name.tooLong": "이름이 너무 길어요 (80자 이내).",
   "common.file.dupName": "같은 이름이 이미 있어요.",
   "common.file.dupFile": "같은 이름의 파일이 이미 있어요.",
+  "common.file.badTarget": "삭제할 대상이 올바르지 않아요.",
   "common.folder.intoSelf": "폴더를 자기 자신 안으로 옮길 수 없어요.",
   "common.folder.dupTarget": "대상 폴더에 같은 이름이 이미 있어요.",
 
@@ -180,6 +181,7 @@ const en: Record<keyof typeof ko, string> = {
   "common.name.tooLong": "That name is too long (80 characters max).",
   "common.file.dupName": "Something with that name already exists.",
   "common.file.dupFile": "A file with that name already exists.",
+  "common.file.badTarget": "That is not a valid thing to delete.",
   "common.folder.intoSelf": "A folder can't be moved into itself.",
   "common.folder.dupTarget": "The destination already has an item with that name.",
 

@@ -188,7 +188,8 @@ const targets = [
   },
   {
     file: "src-tauri/tauri.conf.json",
-    replace: (s) => s.replace(/"version": "[^"]+"/, `"version": "${next}"`),
+    // 최상위 키만 — 파일 어딘가에 다른 "version" 이 생겨도 첫 일치를 집지 않게 앵커를 건다
+    replace: (s) => s.replace(/^  "version": "[^"]+"/m, `  "version": "${next}"`),
   },
   {
     file: "src-tauri/Cargo.toml",
@@ -203,22 +204,37 @@ const targets = [
 ];
 
 console.log(`\n${current} → ${next} 적용:`);
+// 4 곳을 하나씩 쓰다 중간에서 멈추면 롤백이 없다 — 2/4 만 bump 된 워킹트리가 남고,
+// 다음 실행은 "워킹트리가 더럽다"로 막힌다(CI·훅이 없어 이 스크립트가 유일한 게이트다).
+// 그 상태로 커밋하면 package.json 과 Cargo.toml 의 버전이 갈린 **공개 태그**가 나간다.
+// 그래서 전부 메모리에서 계산해 하나라도 안 맞으면 **아무것도 쓰지 않는다.**
+const staged = [];
 for (const t of targets) {
   const p = join(root, t.file);
   const before = readFileSync(p, "utf8");
   const after = t.replace(before);
   if (before === after) {
-    console.error(`  ✗ 패턴 미일치: ${t.file}`);
+    console.error(`  ✗ 패턴 미일치: ${t.file} — 아무 파일도 쓰지 않고 중단합니다.`);
     process.exit(1);
   }
-  writeFileSync(p, after);
-  console.log(`  ✓ ${t.file}`);
+  staged.push({ p, file: t.file, before, after });
 }
+for (const s of staged) {
+  writeFileSync(s.p, s.after);
+  console.log(`  ✓ ${s.file}`);
+}
+
+/** 버전 4곳을 쓰기 전 상태로 되돌린다 — 뒤 단계가 실패했을 때 반쪽 상태를 안 남기려고 */
+const rollback = () => {
+  for (const s of staged) writeFileSync(s.p, s.before);
+  console.error("  ↩ 버전 파일 4곳을 되돌렸습니다.");
+};
 
 // 랜딩 페이지의 정적 정보(버전·tarball·변경 기록·태그 수)도 같은 커밋에 — 다음 태그는 아직 없으니 --next 로 넘긴다
 try {
   execFileSync("node", ["scripts/site-sync.mjs", "--next", `v${next}`], { cwd: root, stdio: "inherit" });
 } catch {
+  rollback();
   die("docs/index.html 갱신 실패 — scripts/site-sync.mjs 를 직접 실행해 보세요.");
 }
 

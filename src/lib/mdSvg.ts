@@ -24,6 +24,16 @@ const BLOCKED_TAGS = new Set([
   "meta",
   "link",
   "base",
+  // SMIL 애니메이션 — `attributeName` 으로 **아무 속성이나** 런타임에 설정한다.
+  // 예: <set attributeName="onload" to="alert(1)"/> 는 속성 이름이 on* 이 아니라
+  // attributeName/to 여서 아래 on* 규칙에 걸리지 않고, 부모의 href 도 갈아끼울 수 있다.
+  // 노트 그래프에 애니메이션이 필요한 적이 없고(DESIGN.md §1: 불필요한 애니메이션 지양)
+  // 위험 목록 방식이라 "안 쓰는데 위험한 것"은 통째로 막는 편이 맞다.
+  "animate",
+  "animatetransform",
+  "animatemotion",
+  "set",
+  "mpath",
 ]);
 
 /** raw HTML 블록이 통째로 하나의 <svg>…</svg> 인가 */

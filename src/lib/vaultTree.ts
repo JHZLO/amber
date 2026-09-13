@@ -390,7 +390,11 @@ export function createVaultTree(cfg: VaultTreeConfig) {
     const newRel =
       (parent ? `${parent}/` : "") + (isDir ? newName : `${newName}${mainExt}`);
     if (newRel === relPath) return relPath;
-    if (await exists(full(newRel), { baseDir: BASE }))
+    // macOS 기본 APFS 는 대소문자를 구분하지 않는다 — `tcp.md` → `TCP` 처럼 대소문자만 바꾸면
+    // exists(newRel) 가 **자기 자신** 때문에 참이 되어 "이미 같은 이름이 있습니다"로 거부됐다
+    // (우회로도 없었다: 임시 이름으로 두 번 바꾸는 수밖에). 같은 항목이면 중복 검사를 건너뛴다.
+    const sameEntry = newRel.toLowerCase() === relPath.toLowerCase();
+    if (!sameEntry && (await exists(full(newRel), { baseDir: BASE })))
       throw new Error(t("common.file.dupName"));
     await rename(full(relPath), full(newRel), {
       oldPathBaseDir: BASE,
@@ -420,7 +424,14 @@ export function createVaultTree(cfg: VaultTreeConfig) {
 
   /** 삭제 (폴더면 하위 전체 포함). 영구 삭제 대신 macOS 휴지통으로 이동 → 복구 가능 */
   async function deleteEntry(relPath: string): Promise<void> {
-    await invoke("move_to_trash", { relPath: full(relPath) });
+    // 빈 경로는 `full("")` = **루트 자체**다 — 작업 폴더를 통째로 휴지통에 넣는다.
+    // 백엔드 방어는 "홈 하위면 허용"이라 `~/rust-notes` 같은 폴더가 그대로 통과하므로
+    // 여기서 막지 않으면 막는 곳이 없다. 호출부의 버그 하나가 노트 전체를 날릴 수 있는 자리다.
+    const rel = relPath.trim();
+    if (!rel || rel === "/" || rel === "." || rel === "..") {
+      throw new Error(t("common.file.badTarget"));
+    }
+    await invoke("move_to_trash", { relPath: full(rel) });
   }
 
   return {
