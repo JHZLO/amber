@@ -53,11 +53,12 @@ p { margin: 0 0 16px; color: var(--text-2); }
 .hero-grid { position: relative; width: 100%; max-width: 1360px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 6fr); gap: 32px; align-items: center; }
 .hero-copy { position: relative; z-index: 2; }
 .headline { font-size: clamp(56px, 9.2vw, 152px); font-weight: 700; letter-spacing: -0.045em; line-height: 0.92; margin: 0 0 30px; }
-/* 단어마다 올라오는 등장 애니메이션의 가림창. line-height 0.92 로 짠 줄상자가 글립 상자보다 낮아
-   overflow:hidden 이 y·p 의 아래꼬리를 잘랐다(132px 에서 18px). 위아래로 여유를 주고 같은 만큼
-   margin 으로 되물려 레이아웃과 줄간격은 그대로 둔 채 잘림만 없앤다. 창이 커진 만큼 시작 위치도
+/* 단어마다 올라오는 등장 애니메이션의 가림창. 상자가 글자보다 작아 overflow:hidden 이 두 군데를 잘랐다:
+   세로는 line-height 0.92 가 글립 상자보다 낮아 y·p 의 아래꼬리를(132px 에서 18px), 가로는 음수 자간
+   (-0.045em)이 마지막 글자의 advance 만 줄여 마침표 오른쪽 잉크를. 네 방향으로 여유를 주고 같은 만큼
+   margin 으로 되물려 레이아웃·줄간격·자간은 그대로 둔 채 잘림만 없앤다. 창이 커진 만큼 시작 위치도
    110% → 150% 로 내려야 단어가 처음에 완전히 숨는다. */
-.headline .w { display: inline-block; overflow: hidden; vertical-align: top; padding: 0.16em 0; margin: -0.16em 0; }
+.headline .w { display: inline-block; overflow: hidden; vertical-align: top; padding: 0.16em 0.08em; margin: -0.16em -0.08em; }
 .headline .w > span { display: inline-block; transform: translateY(150%); animation: up 1s var(--ease) forwards; animation-delay: calc(0.15s + var(--i) * 0.09s); }
 @keyframes up { to { transform: translateY(0); } }
 .lede { font-size: clamp(17px, 1.4vw, 20px); max-width: 560px; color: var(--text-2); }
