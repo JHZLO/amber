@@ -8,7 +8,32 @@
 <meta property="og:title" content="Amber — keep what you learn">
 <meta property="og:description" content="A local-first study desk for engineers. Cards, notes, diagrams, planner and daily reports on your Mac, written with the AI CLIs you already have.">
 <meta property="og:image" content="https://jhzlo.github.io/amber/assets/hero.png">
+<meta property="og:url" content="https://jhzlo.github.io/amber/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Amber">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://jhzlo.github.io/amber/">
+<meta name="author" content="JHZLO">
 <meta name="theme-color" content="#0e0e10">
+<!-- 검색엔진이 "무엇이고 누가 만들었나"를 문장이 아니라 구조로 읽게 한다.
+     버전은 릴리스 때 scripts/site-sync.mjs 가 다른 표기들과 함께 다시 쓴다. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Amber",
+  "alternateName": "JHZLO Amber",
+  "applicationCategory": "EducationalApplication",
+  "operatingSystem": "macOS",
+  "url": "https://jhzlo.github.io/amber/",
+  "codeRepository": "https://github.com/JHZLO/amber",
+  "license": "https://opensource.org/licenses/MIT",
+  "softwareVersion": "0.20.27",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "JHZLO", "url": "https://github.com/JHZLO" },
+  "description": "Concept flashcards, markdown notes, mermaid diagrams, a day planner and AI-written daily reports in one local-first macOS app, powered by the Claude Code and Codex CLIs you already pay for."
+}
+</script>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -199,7 +224,7 @@
     <svg width="20" height="20" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="0.5" y="0.5" width="31" height="31" rx="7.2" fill="#18181b" stroke="#3a3a40"/><path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z" fill="#D08A2A"/><circle cx="16" cy="18.2" r="1.15" fill="#f4f4f5"/></svg>
     <span>Amber</span>
   </div>
-  <div class="mono">MIT · source distribution · <a href="https://github.com/JHZLO/amber" target="_blank" rel="noopener">github.com/JHZLO/amber</a></div>
+  <div class="mono">Built by <a href="https://github.com/JHZLO" target="_blank" rel="noopener">JHZLO</a> · MIT · source distribution · <a href="https://github.com/JHZLO/amber" target="_blank" rel="noopener">github.com/JHZLO/amber</a></div>
 </footer>
 
 <!-- inertial scrolling: native scroll position eased each frame (the module below skips it when the script is missing or motion is reduced) -->

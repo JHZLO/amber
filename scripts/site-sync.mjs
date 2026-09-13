@@ -52,6 +52,8 @@ export function syncHtml(html, { entries, tagCount, since }) {
   out = out.replace(/(<span[^>]*\bdata-latest\b[^>]*>)[^<]*(<\/span>)/g, `$1${esc(latest)}$2`);
   out = out.replace(/(<a[^>]*\bdata-tarball\b[^>]*\bhref=")[^"]*(")/g, `$1${REPO}/archive/refs/tags/${esc(latest)}.tar.gz$2`);
   out = out.replace(/(<p[^>]*\bid="tagline"[^>]*>)[^<]*/, `$1${tagCount} tags since ${esc(since)} · `);
+  // 구조화 데이터(JSON-LD)의 버전 — 화면의 표기와 어긋나면 검색엔진에 거짓을 흘린다
+  out = out.replace(/("softwareVersion":\s*")[^"]*(")/, `$1${esc(latest.replace(/^v/, ""))}$2`);
   return out;
 }
 
