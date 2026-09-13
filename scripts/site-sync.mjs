@@ -53,7 +53,11 @@ export function syncHtml(html, { entries, tagCount, since }) {
   out = out.replace(/(<a[^>]*\bdata-tarball\b[^>]*\bhref=")[^"]*(")/g, `$1${REPO}/archive/refs/tags/${esc(latest)}.tar.gz$2`);
   out = out.replace(/(<p[^>]*\bid="tagline"[^>]*>)[^<]*/, `$1${tagCount} tags since ${esc(since)} · `);
   // 구조화 데이터(JSON-LD)의 버전 — 화면의 표기와 어긋나면 검색엔진에 거짓을 흘린다
-  out = out.replace(/("softwareVersion":\s*")[^"]*(")/, `$1${esc(latest.replace(/^v/, ""))}$2`);
+  const bare = esc(latest.replace(/^v/, ""));
+  out = out.replace(/("softwareVersion":\s*")[^"]*(")/, `$1${bare}$2`);
+  // 자산 URL의 버전 — 파일 이름이 그대로면 브라우저가 예전 site.js 를 계속 쓴다(고쳐도 반영이 안 된다)
+  out = out.replace(/(href="site\.css\?v=)[^"]*(")/, `$1${bare}$2`);
+  out = out.replace(/(src="site\.js\?v=)[^"]*(")/, `$1${bare}$2`);
   return out;
 }
 

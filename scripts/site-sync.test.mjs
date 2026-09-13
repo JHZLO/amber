@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { displaySubject, renderChangelog, summarize, syncHtml } from "./site-sync.mjs";
 
-const PAGE = `<p class="eyebrow mono">Local-first · <span data-latest>v0.1.0</span></p>
+const PAGE = `<link rel="stylesheet" href="site.css?v=0.1.0">
+<script type="module" src="site.js?v=0.1.0"></script>
+<script type="application/ld+json">{ "softwareVersion": "0.1.0" }</script>
+<p class="eyebrow mono">Local-first · <span data-latest>v0.1.0</span></p>
 <a class="btn magnetic" data-tarball href="https://github.com/JHZLO/amber/archive/refs/tags/v0.1.0.tar.gz">Get the source <span class="mono ver" data-latest>v0.1.0</span></a>
 <p class="reveal" id="tagline">Tags since 2026-07-16 · <a href="https://github.com/JHZLO/amber/tags">all tags</a></p>
       <ol>
@@ -32,6 +35,10 @@ describe("site-sync", () => {
     expect(once).not.toContain(">v0.1.0<");
     expect(once).toContain('data-tarball href="https://github.com/JHZLO/amber/archive/refs/tags/v0.20.19.tar.gz"');
     expect(once).toContain('id="tagline">101 tags since 2026-07-16 · <a');
+    // 자산 URL과 구조화 데이터의 버전도 함께 움직여야 한다 — 하나만 뒤처지면 옛 사본이 계속 쓰인다
+    expect(once).toContain('href="site.css?v=0.20.19"');
+    expect(once).toContain('src="site.js?v=0.20.19"');
+    expect(once).toContain('"softwareVersion": "0.20.19"');
     expect(once).not.toContain("<li>old</li>");
     expect(once).toContain('class="layer reveal now"><span class="mono tag">v0.20.19</span>');
     expect(once).toContain("<p>Refresh the landing page from git.</p>");
