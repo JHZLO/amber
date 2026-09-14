@@ -93,6 +93,11 @@ const ko = {
   "report.weekly.regenBody": "지금 저장된 주간 리포트를 덮어써요. 그 사이 새로 만든 일간 리포트도 함께 반영돼요.",
   "report.weekly.deleteTitle": "주간 리포트 삭제",
   "report.weekly.deleteBody": "주간 리포트 파일을 휴지통으로 옮겨요. 일간 리포트는 그대로예요.",
+  "report.context.label": "추가 컨텍스트",
+  "report.context.placeholder":
+    "예: platform-svc-identity 는 회원 서비스다. PB 는 파트너스 전용 상품을 뜻한다. 인프라 관련 작업은 한 항목으로 묶어 달라.",
+  "report.context.hint":
+    "일간·주간 리포트를 만들 때 지시로 함께 실려요. 레포·약어가 무슨 뜻인지, 어떻게 묶어 쓸지 같은 배경을 적어 두면 리포트마다 고쳐 쓰지 않아도 돼요. 여기 적은 내용이 '한 일'로 옮겨지지는 않아요.",
   "report.weekly.nameLabel": "주간 리포트 담당자 이름",
   "report.weekly.namePlaceholder": "예: 김준형 — 비우면 이름 없이 정리",
   "report.weekly.nameHint":
@@ -199,6 +204,11 @@ const en: Record<keyof typeof ko, string> = {
   "report.weekly.regenBody": "This overwrites the saved weekly report, picking up any daily reports added since.",
   "report.weekly.deleteTitle": "Delete weekly report",
   "report.weekly.deleteBody": "Moves the weekly report file to the Trash. Daily reports are untouched.",
+  "report.context.label": "Extra context",
+  "report.context.placeholder":
+    "e.g. platform-svc-identity is the accounts service. PB means a partners-only product. Group infrastructure work into one item.",
+  "report.context.hint":
+    "Passed along as instructions whenever a daily or weekly report is generated. Spell out what a repo or an acronym means, or how you want work grouped, and you won't have to fix it in every report. Nothing written here is reported as work you did.",
   "report.weekly.nameLabel": "Name for weekly reports",
   "report.weekly.namePlaceholder": "e.g. Jun — leave blank to omit",
   "report.weekly.nameHint":

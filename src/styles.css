@@ -5455,10 +5455,15 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   tab-size: 4;
 }
 
+/* 소스 목록 아래의 '리포트 전체' 설정 — 구분선으로 목록과 층을 가른다 */
+.rep-context,
 .rep-weekly-name {
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
+}
+.rep-context-input {
+  min-height: 84px;
 }
 
 .report-hint {

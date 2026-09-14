@@ -158,6 +158,8 @@ export function reportGenerate(
     todosDigest: string;
     digests: SourceDigest[];
     mcpSources?: McpSource[];
+    /** 설정 › 데일리 리포트의 '추가 컨텍스트' — 시스템 프롬프트 꼬리에 붙는다 */
+    context?: string | null;
     model?: string | null;
     cliPath?: string | null;
     provider?: string | null;
@@ -173,6 +175,7 @@ export function reportGenerate(
     todosDigest: params.todosDigest,
     digests: params.digests,
     mcpSources: params.mcpSources ?? [],
+    context: params.context ?? null,
     model: params.model ?? null,
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
@@ -200,6 +203,8 @@ export interface ReportConfig {
   notionServer: string;
   /** 주간 리포트의 '@이름' (노션 공유 형식). 비우면 이름 없이 낸다 */
   displayName: string;
+  /** 사용자가 직접 적는 보정 컨텍스트. 일간·주간 생성 프롬프트에 함께 실린다 */
+  context: string;
 }
 
 /** 기본 소스 순서. github·ai_sessions 기본 on, slack·notion(P2)은 기본 off */
@@ -241,6 +246,7 @@ export async function loadReportConfig(): Promise<ReportConfig> {
     slackSrv,
     notionSrv,
     dispName,
+    context,
   ] =
     await Promise.all([
       getSetting("report_onboarded"),
@@ -253,6 +259,7 @@ export async function loadReportConfig(): Promise<ReportConfig> {
       getSetting("report_slack_server"),
       getSetting("report_notion_server"),
       getSetting("report_display_name"),
+      getSetting("report_context"),
     ]);
   return {
     onboarded: onb === "1",
@@ -269,6 +276,7 @@ export async function loadReportConfig(): Promise<ReportConfig> {
     slackServer: slackSrv ?? "",
     notionServer: notionSrv ?? "",
     displayName: dispName ?? "",
+    context: context ?? "",
   };
 }
 
@@ -284,6 +292,7 @@ export async function saveReportConfig(c: ReportConfig): Promise<void> {
     setSetting("report_slack_server", c.slackServer.trim()),
     setSetting("report_notion_server", c.notionServer.trim()),
     setSetting("report_display_name", c.displayName.trim()),
+    setSetting("report_context", c.context.trim()),
   ]);
 }
 
@@ -416,6 +425,8 @@ export function reportGenerateWeekly(
     weekEnd: string;
     days: { date: string; weekday: string; body: string }[];
     displayName?: string | null;
+    /** 일간과 같은 '추가 컨텍스트' */
+    context?: string | null;
     model?: string | null;
     cliPath?: string | null;
     provider?: string | null;
@@ -431,6 +442,7 @@ export function reportGenerateWeekly(
     weekEnd: params.weekEnd,
     days: params.days,
     displayName: params.displayName ?? null,
+    context: params.context ?? null,
     model: params.model ?? null,
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,

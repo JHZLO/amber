@@ -398,6 +398,20 @@ export function ReportSettings() {
         })}
       </div>
 
+      {/* 사용자가 직접 적는 보정 컨텍스트 — 일간·주간 생성 프롬프트에 함께 실린다.
+          수집기가 모르는 배경(레포가 무슨 서비스인지, 약어, 묶는 기준)을 여기서 채운다. */}
+      <div className="field rep-context">
+        <label>{t("report.context.label")}</label>
+        <textarea
+          className="textarea rep-context-input"
+          rows={4}
+          value={cfg.context}
+          placeholder={t("report.context.placeholder")}
+          onChange={(e) => update({ ...cfg, context: e.target.value })}
+        />
+        <div className="hint">{t("report.context.hint")}</div>
+      </div>
+
       {/* 주간 리포트 — 노션 공유 형식의 '@이름'. 비우면 이름 없이 낸다 */}
       <div className="field rep-weekly-name">
         <label>{t("report.weekly.nameLabel")}</label>
