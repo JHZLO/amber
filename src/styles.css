@@ -2220,7 +2220,10 @@ html.widget-root #root {
 .note-preview {
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 2px 18px;
+  /* 세로 여백은 짝이 되는 원문 칸(.textarea 의 9px)과 **같아야 한다** — 다르면 두 칸의 첫 줄이
+     그 차이만큼 어긋난 채로 시작하고, 스크롤을 맞춰도 그 상수만큼은 끝까지 따라붙는다.
+     가로는 다르다: 렌더된 글은 고정폭 원문보다 좌우 숨통이 더 필요하다. */
+  padding: 9px 18px;
   overflow-y: auto;
   min-height: 0;
   background: var(--surface);
