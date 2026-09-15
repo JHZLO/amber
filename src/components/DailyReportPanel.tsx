@@ -79,7 +79,7 @@ export function DailyReportPanel({
   // 편집 모드 2분할 — 한쪽을 굴리면 다른 쪽도 같은 비율로 따라온다(노트 편집과 같은 문법)
   const srcRef = useRef<HTMLTextAreaElement | null>(null);
   const previewRef = useRef<HTMLDivElement | null>(null);
-  useScrollSync(srcRef, previewRef, editing);
+  useScrollSync(srcRef, previewRef, editing, draft);
 
   const isFuture = date > todayStr();
 

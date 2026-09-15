@@ -148,10 +148,11 @@ export function NotesView({
 
   // 우측 플로팅 목차 (읽기 모드, h1~h3)
   const detailRef = useRef<HTMLElement | null>(null);
-  // 편집 모드 2분할 — 한쪽을 굴리면 다른 쪽도 같은 비율로 따라온다
+  // 편집 모드 2분할 — 한쪽을 굴리면 다른 쪽도 같은 자리를 보여준다.
+  // 원문을 함께 넘겨야 블록 대응점으로 맞춘다(안 넘기면 전체 비율이라 그림·표에서 밀린다)
   const srcRef = useRef<HTMLTextAreaElement | null>(null);
   const previewRef = useRef<HTMLDivElement | null>(null);
-  useScrollSync(srcRef, previewRef, editing && !loadingBody);
+  useScrollSync(srcRef, previewRef, editing && !loadingBody, previewMd);
   const mdRef = useRef<HTMLDivElement | null>(null);
   const tocRef = useRef<HTMLElement | null>(null);
   const [toc, setToc] = useState<{ id: string; text: string; level: number }[]>(
