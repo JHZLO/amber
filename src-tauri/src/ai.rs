@@ -1992,6 +1992,27 @@ mod tests {
         }
     }
 
+    // 그림 안 상자에 배경색을 칠하면 앱 밖(블로그·README)에서 흰 판이 되어 글자를 삼킨다 —
+    // 실제로 티스토리 다크에서 흰 판 + 흰 글자가 됐다. 가이드가 다시 그 지시를 담지 않게 못 박는다.
+    #[test]
+    fn svg_guide_never_asks_for_a_painted_background() {
+        let g = SVG_STYLE_PROMPT;
+        assert!(
+            g.contains("Never fill anything with the page's background color"),
+            "배경색 금지 규칙이 빠졌다"
+        );
+        assert!(
+            g.contains("broken, not covered"),
+            "선을 끊으라는 대안이 빠지면 모델이 다시 판을 깐다"
+        );
+        // 지시로서의 판 레시피가 남아 있으면 안 된다(금지 예시로 한 번 언급하는 것은 허용)
+        assert_eq!(
+            g.matches("var(--surface").count(),
+            1,
+            "판을 깔라는 지시가 남아 있다 — 금지 예시 한 번만 나와야 한다"
+        );
+    }
+
     #[test]
     fn note_prompts_carry_the_svg_style_guide() {
         for base in [NOTE_SYSTEM_PROMPT, NOTE_EDIT_SYSTEM_PROMPT] {
