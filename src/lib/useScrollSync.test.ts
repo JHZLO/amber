@@ -55,6 +55,18 @@ describe("mapWithAnchors", () => {
     expect(byAnchor).toBe(700); // 대응점은 그림 끝에 정확히 선다
   });
 
+  it("pins both panes to their own bottom at the same moment", () => {
+    // 끝점은 내용 높이가 아니라 '끝까지 굴린 위치'다 - 한쪽이 바닥이면 다른 쪽도 바닥이어야 한다
+    expect(mapWithAnchors(1000, anchors, 1000, 400)).toBe(400);
+    expect(mapWithAnchors(999, anchors, 1000, 400)).toBeLessThan(400);
+  });
+
+  it("drops anchors that sit past where the pane can scroll", () => {
+    // 마지막 한 화면 안의 블록은 화면 맨 위로 올릴 수 없다 - 대응점에서 빼야 보간이 뒤틀리지 않는다
+    const past = [...anchors, { a: 950, b: 5000 }];
+    expect(cleanAnchors(past, 1000, 1200)).toEqual(anchors);
+  });
+
   it("falls back to a plain ratio when there is nothing to anchor on", () => {
     expect(mapWithAnchors(500, [], 1000, 2000)).toBe(1000);
   });

@@ -113,7 +113,9 @@ export function measureOffsets(ta: HTMLTextAreaElement, text: string, offsets: n
   return out;
 }
 
-/** 렌더된 칸의 블록마다 (소스 오프셋 -> 그 칸의 픽셀 y) 를 모으고, 원문 쪽 픽셀 y 와 짝지어 준다 */
+/** 렌더된 칸의 블록마다 (소스 오프셋 -> 그 칸의 픽셀 y) 를 모으고, 원문 쪽 픽셀 y 와 짝지어 준다.
+ *  블록의 **시작과 끝을 둘 다** 점으로 잡는다 — 시작만 잡으면 한 문단 안에서 보간 구간이 길어져
+ *  화면 위쪽이 수십 px 씩 어긋난다. 끝까지 묶으면 문단 경계가 양쪽에서 정확히 맞는다. */
 export function buildAnchors(ta: HTMLTextAreaElement, dst: HTMLElement, text: string): Anchor[] {
   const els = dst.querySelectorAll<HTMLElement>("[data-md-start]");
   if (!els.length) return [];
@@ -121,10 +123,17 @@ export function buildAnchors(ta: HTMLTextAreaElement, dst: HTMLElement, text: st
   const offsets: number[] = [];
   const dstYs: number[] = [];
   for (const el of els) {
-    const n = Number(el.getAttribute("data-md-start"));
-    if (!Number.isFinite(n)) continue;
-    offsets.push(n);
-    dstYs.push(el.getBoundingClientRect().top - dstTop);
+    const start = Number(el.getAttribute("data-md-start"));
+    const end = Number(el.getAttribute("data-md-end"));
+    const r = el.getBoundingClientRect();
+    if (Number.isFinite(start)) {
+      offsets.push(start);
+      dstYs.push(r.top - dstTop);
+    }
+    if (Number.isFinite(end) && end > start) {
+      offsets.push(end);
+      dstYs.push(r.bottom - dstTop);
+    }
   }
   const srcYs = measureOffsets(ta, text, offsets);
   return offsets.map((_, i) => ({ a: srcYs[i], b: dstYs[i] })).sort((x, y) => x.a - y.a);
@@ -181,7 +190,8 @@ export function useScrollSync(
       // 대응점은 a(원문) 기준이라, 프리뷰가 주인이면 짝을 뒤집어 같은 함수를 쓴다
       const fromA = src === a;
       const pts = fromA ? anchors : anchors.map((p) => ({ a: p.b, b: p.a }));
-      const y = mapWithAnchors(src.scrollTop, pts, src.scrollHeight, dst.scrollHeight);
+      // 끝점은 내용 높이가 아니라 **끝까지 굴린 위치**다 — 그래야 한쪽이 바닥에 닿을 때 다른 쪽도 닿는다
+      const y = mapWithAnchors(src.scrollTop, pts, srcMax, dstMax);
       dst.scrollTop = Math.min(dstMax, Math.max(0, y));
     };
 
