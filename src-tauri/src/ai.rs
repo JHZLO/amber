@@ -1985,11 +1985,31 @@ mod tests {
     fn note_prompts_keep_a_figure_in_the_format_it_was_drawn_in() {
         for base in [NOTE_SYSTEM_PROMPT, NOTE_EDIT_SYSTEM_PROMPT] {
             assert!(base.contains("그림의 형식은 바꾸지 않는다"), "형식 보존 규칙이 빠졌다");
+        }
+        // 모델이 보는 것은 본문 + 스타일 가이드를 이은 한 덩어리다. 가이드 쪽에 우열 지시가 남아 있으면
+        // 본문이 "우열은 없다"고 해도 뒤에 온 쪽이 이긴다 — 셋 다 검사한다.
+        for body in [NOTE_SYSTEM_PROMPT, NOTE_EDIT_SYSTEM_PROMPT, SVG_STYLE_PROMPT] {
             assert!(
-                !base.to_lowercase().contains("prefer mermaid"),
+                !body.to_lowercase().contains("prefer mermaid"),
                 "mermaid 를 기본으로 삼는 지시가 남아 있으면 svg 가 다시 변환된다"
             );
         }
+    }
+
+    // 격자·계층처럼 뜻이 도형 자체에 있는 그림은 상자와 화살표로 옮기면 사라진다. 좌표를 눈대중으로 찍으면
+    // 타일이 어긋나 그림이 오히려 못 미덥게 되므로, 가이드가 계산식과 <defs>/<use> 재사용까지 들고 있어야 한다.
+    #[test]
+    fn svg_guide_teaches_geometry_diagrams() {
+        let g = SVG_STYLE_PROMPT;
+        assert!(g.contains("Geometry-driven diagrams"), "기하 도형 절이 빠졌다");
+        for needle in ["Compute, never eyeball", "<defs>", "<use href=", "3k² + 3k + 1", "√7"] {
+            assert!(g.contains(needle), "기하 절에서 {needle} 가 빠졌다");
+        }
+        // 노트 프롬프트도 이 갈래를 알아야 모델이 격자 그림을 svg 로 고른다
+        assert!(
+            NOTE_SYSTEM_PROMPT.contains("뜻이 도형 자체에 있으면 svg"),
+            "note-compose 가 도형 갈래를 모른다"
+        );
     }
 
     // 그림 안 상자에 배경색을 칠하면 앱 밖(블로그·README)에서 흰 판이 되어 글자를 삼킨다 —

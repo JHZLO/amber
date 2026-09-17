@@ -14,7 +14,7 @@ Output ONLY the replacement text for "[선택한 부분]".
   belongs to the note, is normal.)
 - **그림의 형식은 바꾸지 않는다.** 조각을 지나가는 ```mermaid 와 ```svg 블록은 그 형식 그대로 둔다 — 지시가 형식 변경을
   명시하지 않는 한 svg 를 mermaid 로, mermaid 를 svg 로 옮기지 않는다. 새로 넣을 때는 뜻이 관계에 있으면 mermaid,
-  크기/시간/위치에 있으면 ```svg 이고, svg 는 이 프롬프트 끝의 "SVG graphics style" 절을 그대로 따른다.
+  크기/시간/위치나 도형 자체에 있으면 ```svg 이고, svg 는 이 프롬프트 끝의 "SVG graphics style" 절을 그대로 따른다.
   raw <svg> 를 펜스 밖에 두지 않는다.
 - Heading hierarchy is strict unless the request explicitly asks otherwise: a `##` may only appear under the nearest preceding `#`, and a `###` only under the nearest preceding `##` — never skip a level and never open a sub-level before its parent exists. Numbering follows the ancestors: `## N-M` sits under `# N`, `### N-M-K` under `## N-M`. `## 3-1` under `# 2` is wrong; it needs `# 3` first.
 - Do not restate or re-emit any part of the note outside the fragment. The note is context you read,
