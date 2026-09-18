@@ -118,16 +118,21 @@ const AUGMENT_SYSTEM_PROMPT: &str = include_str!("../context/concept-augment.md"
 // 간헐적으로 깨진다 → "raw 마크다운 그 자체"만 받고 봉투 .result 를 그대로 본문으로 쓴다(CLI 가 이스케이프 담당).
 const NOTE_SYSTEM_PROMPT: &str = include_str!("../context/note-compose.md");
 const NOTE_EDIT_SYSTEM_PROMPT: &str = include_str!("../context/note-edit.md");
-// SVG 그래픽 스타일 가이드 — 노트 작성·부분 수정 프롬프트 끝에 항상 덧붙인다(note_prompt). 차트가 앱의
+// SVG 그래픽 스타일 가이드 — 있으면 노트 작성·부분 수정 프롬프트 끝에 덧붙인다(note_prompt). 차트가 앱의
 // 모노톤 판과 한 벌로 보이게: 요청마다 스타일이 달라지면 같은 노트 안 그림들이 다른 제품에서 붙여 온 듯 보인다.
-const SVG_STYLE_PROMPT: &str = include_str!("../context/svg-style.md");
+// 본문은 저장소가 아니라 빌드 시점에 build.rs 가 굽는다 — 없으면 빈 문자열이고, 그때는 아무것도 붙지 않는다.
+const SVG_STYLE_PROMPT: &str = include_str!(concat!(env!("OUT_DIR"), "/svg-style.md"));
 // 전문 작성(ai_note_compose_stream)만: 노트를 stdout 이 아니라 초안 폴더의 절 파일들로 받는다 — 한 응답의 출력
 // 상한(32k 토큰)에 긴 노트가 잘리던 문제의 구조적 해법. 부분 수정은 조각이 짧아 스트리밍을 그대로 쓴다.
 const NOTE_DRAFT_FILES_PROMPT: &str = include_str!("../context/note-draft-files.md");
 
-/// 노트 프롬프트 + SVG 스타일 가이드. 언어 지시(sys)는 이 뒤에 붙는다.
+/// 노트 프롬프트 + (있으면) SVG 스타일 가이드. 언어 지시(sys)는 이 뒤에 붙는다.
 fn note_prompt(base: &str) -> String {
-    format!("{base}\n\n{SVG_STYLE_PROMPT}")
+    let guide = SVG_STYLE_PROMPT.trim();
+    if guide.is_empty() {
+        return base.to_string();
+    }
+    format!("{base}\n\n{guide}")
 }
 
 // 필기노트 인라인 질문(노션 댓글식): 드래그한 문장 + 질문 → 짧은 답변.
@@ -1996,118 +2001,22 @@ mod tests {
         }
     }
 
-    // rx 는 네 모서리를 다 둥글게 만든다. 붙어 있는 두 세그먼트가 각자 이음매를 파먹으면
-    // 높이가 다른 블록처럼 보인다 — 실제로 타임라인과 격자에서 이 신고가 들어왔다.
+    // 스타일 가이드는 빌드 시점에 굽는 선택 사항이라(build.rs) 있을 때와 없을 때가 둘 다 정상이다.
+    // 없을 때 빈 줄만 덧붙이면 프롬프트 끝이 지저분해지고, 있을 때 언어 지시가 가운데 끼면 무시된다.
     #[test]
-    fn svg_guide_pins_abutting_corner_rule() {
-        let g = SVG_STYLE_PROMPT;
-        assert!(g.contains("Marks that touch get square corners"), "이음매 모서리 규칙이 빠졌다");
-        assert!(g.contains(r#"uses `rx="0"`"#), "각진 모서리 지시가 빠졌다");
-        assert!(g.contains("a run is one band, not a staircase"), "같은 y/height 요구가 빠졌다");
-    }
-
-    // 구간(min~max)을 막대로 그리면 짧은 구간이 '잘린 막대'로 읽히고, 이상치 하나가 축을 독점하면
-    // 나머지가 전부 뭉갠다. 실제로 6행짜리 구간 차트에서 다섯 행이 11단위 토막이 됐다.
-    #[test]
-    fn svg_guide_pins_interval_and_outlier_rules() {
-        let g = SVG_STYLE_PROMPT;
-        assert!(g.contains("## 11. Intervals and outliers"), "구간/이상치 절이 빠졌다");
-        for needle in [
-            "A range is not a bar",
-            "capped range",
-            "may start anywhere",
-            "must not set the scale for everyone",
-            "Minimum legible size: 16 units",
-        ] {
-            assert!(g.contains(needle), "구간 절에서 {needle} 가 빠졌다");
-        }
-    }
-
-    // 토큰과 부품 목록이 없으면 그림마다 톤·크기·마크를 새로 지어내서 한 노트 안에서도 따로 논다.
-    // 특히 연결선에 색을 입히면 그 색이 무슨 뜻인지 독자가 매번 새로 배워야 한다.
-    #[test]
-    fn svg_guide_carries_a_design_system() {
-        let g = SVG_STYLE_PROMPT;
-        assert!(g.contains("## 0. The system"), "디자인 시스템 절이 빠졌다");
-        for needle in [
-            "`ink.muted`", "`ink.surface`",          // 잉크 램프에 이름이 있다
-            "`accent.emphasis`", "`accent.contrast`", // 강조색은 둘뿐이고 뜻이 정해져 있다
-            "`type.value`", "`type.micro`",           // 글자 역할이 네 개다
-            "`connector`", "`node.highlight`",        // 부품 목록
-            "`node.state`",                           // 전후 비교는 패널마다 한 쪽씩 강조한다
-            "**Connectors are grey.**",               // 연결선에는 색을 쓰지 않는다
-            "One highlight per figure",
-            "never accents three shapes at stroke 1.5",
-            "Corresponding elements across panels share a `y`",
-        ] {
-            assert!(g.contains(needle), "디자인 시스템 절에서 {needle} 가 빠졌다");
-        }
-    }
-
-    // 화살표가 상자 모서리에서 어긋나면 도형이 아무리 정확해도 렌더 버그처럼 읽힌다.
-    // 실제로 상자 중앙이 아닌 곳에 붙은 연결선이 노트 61개 중 6개에서 나왔다 — 눈대중을 막는 규칙이 필요하다.
-    #[test]
-    fn svg_guide_pins_connector_rules() {
-        let g = SVG_STYLE_PROMPT;
-        assert!(g.contains("## 10. Connectors"), "연결선 절이 빠졌다");
-        for needle in [
-            "L = (x, y + h/2)",      // 앵커를 먼저 적는다
-            "not to its container",  // 컨테이너가 아니라 대상에 붙인다
-            "do not slant to cover the gap",
-            "through a spine",
-            "The head's tip is the anchor",
-            "Reference lines are not connectors",
-        ] {
-            assert!(g.contains(needle), "연결선 절에서 {needle} 가 빠졌다");
-        }
-    }
-
-    // 격자·계층처럼 뜻이 도형 자체에 있는 그림은 상자와 화살표로 옮기면 사라진다. 좌표를 눈대중으로 찍으면
-    // 타일이 어긋나 그림이 오히려 못 미덥게 되므로, 가이드가 계산식과 <defs>/<use> 재사용까지 들고 있어야 한다.
-    #[test]
-    fn svg_guide_teaches_geometry_diagrams() {
-        let g = SVG_STYLE_PROMPT;
-        assert!(g.contains("Geometry-driven diagrams"), "기하 도형 절이 빠졌다");
-        for needle in ["Compute, never eyeball", "<defs>", "<use href=", "3k² + 3k + 1", "√7"] {
-            assert!(g.contains(needle), "기하 절에서 {needle} 가 빠졌다");
-        }
-        // 노트 프롬프트도 이 갈래를 알아야 모델이 격자 그림을 svg 로 고른다
-        assert!(
-            NOTE_SYSTEM_PROMPT.contains("뜻이 도형 자체에 있으면 svg"),
-            "note-compose 가 도형 갈래를 모른다"
-        );
-    }
-
-    // 그림 안 상자에 배경색을 칠하면 앱 밖(블로그·README)에서 흰 판이 되어 글자를 삼킨다 —
-    // 실제로 티스토리 다크에서 흰 판 + 흰 글자가 됐다. 가이드가 다시 그 지시를 담지 않게 못 박는다.
-    #[test]
-    fn svg_guide_never_asks_for_a_painted_background() {
-        let g = SVG_STYLE_PROMPT;
-        assert!(
-            g.contains("Never fill anything with the page's background color"),
-            "배경색 금지 규칙이 빠졌다"
-        );
-        assert!(
-            g.contains("broken, not covered"),
-            "선을 끊으라는 대안이 빠지면 모델이 다시 판을 깐다"
-        );
-        // 지시로서의 판 레시피가 남아 있으면 안 된다(금지 예시로 한 번 언급하는 것은 허용)
-        assert_eq!(
-            g.matches("var(--surface").count(),
-            1,
-            "판을 깔라는 지시가 남아 있다 — 금지 예시 한 번만 나와야 한다"
-        );
-    }
-
-    #[test]
-    fn note_prompts_carry_the_svg_style_guide() {
+    fn note_prompts_append_the_svg_guide_only_when_there_is_one() {
         for base in [NOTE_SYSTEM_PROMPT, NOTE_EDIT_SYSTEM_PROMPT] {
             let p = note_prompt(base);
             assert!(p.starts_with(base), "본문 프롬프트가 앞에 그대로 와야 한다");
-            assert!(p.contains("# SVG graphics style"), "스타일 가이드가 빠졌다");
+            if SVG_STYLE_PROMPT.trim().is_empty() {
+                assert_eq!(p, base, "가이드가 없으면 아무것도 덧붙이지 않는다");
+            } else {
+                assert!(p.len() > base.len(), "가이드가 있는데 붙지 않았다");
+            }
         }
+        // 언어 지시는 언제나 맨 뒤 — 가이드가 붙든 안 붙든
         let s = sys(&note_prompt(NOTE_SYSTEM_PROMPT), Some("en"));
-        assert!(s.rfind("[Output language").unwrap() > s.rfind("# SVG graphics style").unwrap());
+        assert!(s.rfind("[Output language").unwrap() > s.rfind(NOTE_SYSTEM_PROMPT).unwrap());
     }
 
     // 빈 모델은 두 공급자 모두 "CLI 기본" — 앱이 옛 모델 id 를 폴백으로 박아 두면 CLI 를 올려도 옛 모델을 부른다

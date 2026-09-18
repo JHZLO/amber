@@ -44,28 +44,28 @@ describe("lint-svg — 잡아야 할 것", () => {
     expect(errors(NODE + NODE_R + through)).toContainEqual(expect.stringContaining("선이 상자를 관통"));
   });
 
-  it("상자 중앙에서 벗어난 화살표 끝점 (불변식 6)", () => {
+  it("상자 중앙에서 벗어난 화살표 끝점", () => {
     const slanted = '<g stroke="currentColor" stroke-opacity="0.62" stroke-width="1" fill="none"><path d="M136 92 H240"/></g>';
     expect(errors(NODE + NODE_R + slanted)).toEqual(["끝점 y=92 이 닿은 상자의 세로 중앙 100 과 어긋남"]);
   });
 
-  it("이어 붙는 막대의 높이가 다르면 (불변식 5)", () => {
+  it("이어 붙는 막대의 높이가 다르면", () => {
     const body = '<rect x="24" y="80" width="80" height="24" rx="0"/><rect x="104" y="80" width="80" height="16" rx="0"/>';
     expect(errors(body)).toContainEqual(expect.stringContaining("이어 붙는 사각형의 y/높이가 어긋남"));
   });
 
-  it("이음매에 둥근 모서리가 남으면 (불변식 5)", () => {
+  it("이음매에 둥근 모서리가 남으면", () => {
     const body = '<rect x="24" y="80" width="80" height="24" rx="3"/><rect x="104" y="80" width="80" height="24" rx="3"/>';
     expect(errors(body)).toEqual([expect.stringContaining("이음매에 둥근 모서리")]);
     expect(errors(body.replaceAll('rx="3"', 'rx="0"'))).toEqual([]);
   });
 
-  it("강조색이 칠해진 화살촉 (불변식 1)", () => {
+  it("강조색이 칠해진 화살촉", () => {
     const body = NODE + NODE_R + ARROW.replace('d="m233 94 7 6 -7 6"', 'd="m233 94 7 6 -7 6" stroke="#ea580c"');
     expect(errors(body)).toEqual(["화살촉에 강조색 #ea580c — 연결선은 ink.muted 회색이다"]);
   });
 
-  it("하이라이트는 하나, 전후 한 쌍까지 (불변식 2)", () => {
+  it("하이라이트는 하나, 전후 한 쌍까지", () => {
     const at = (x, hue) => `<rect x="${x}" y="80" width="112" height="40" rx="4" fill="${hue}" fill-opacity="0.08" stroke="${hue}" stroke-width="1.5"/>`;
     expect(errors(at(24, "#3b82f6"))).toEqual([]);
     expect(errors(at(24, "#ea580c") + at(240, "#3b82f6"))).toEqual([]); // 전후 한 쌍
@@ -73,7 +73,7 @@ describe("lint-svg — 잡아야 할 것", () => {
     expect(errors(at(24, "#3b82f6") + at(240, "#ea580c") + at(456, "#3b82f6"))).toEqual([expect.stringContaining("강조한 상자가 3개")]);
   });
 
-  it("팔레트 밖의 색 (불변식 3)", () => {
+  it("팔레트 밖의 색", () => {
     expect(errors('<rect x="24" y="80" width="80" height="24" fill="#ffffff"/>')).toContainEqual(
       expect.stringContaining("팔레트에 없는 색 #ffffff"),
     );

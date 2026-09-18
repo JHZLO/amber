@@ -1,16 +1,19 @@
 #!/usr/bin/env node
-// 노트 안의 ```svg 그림이 src-tauri/context/svg-style.md §0 의 불변식을 지키는지 기계로 확인한다.
-// 눈으로만 보면 작은 겹침과 1~2 단위 어긋남을 놓친다 — 실제로 화면에서 "UI 가 깨졌다"로 돌아온 신고가
-// 전부 여기서 잡히는 종류였다. 규칙과 검사기가 같은 커밋에서 움직이도록 레포 안에 둔다.
+// 노트 안의 ```svg 그림이 한 벌로 읽히는지 기계로 확인한다. 눈으로만 보면 작은 겹침과 1~2 단위
+// 어긋남을 놓친다 — 화면에서 "UI 가 깨졌다"로 돌아온 신고가 전부 여기서 잡히는 종류였다.
 //
 //   node scripts/lint-svg.mjs                    vault 의 모든 노트를 훑는다
 //   node scripts/lint-svg.mjs a.svg b.svg        따로 뽑아 둔 svg 파일만
 //   node scripts/lint-svg.mjs "~/…/노트.md"      특정 노트만
 //
-// 불변식 4(패널 간 y 정렬)만 '확인 필요' 목록으로 낸다 — 열의 리듬과 상자 높이가 다르면 y 가 달라야 맞는
-// 경우가 있어 기계가 단정할 수 없다. 나머지는 전부 오류다.
+// 오류로 잡는 것: 캔버스 이탈, 텍스트/상자 겹침, 텍스트끼리 겹침, 선이 글자를 지나감,
+// 선이 상자를 관통, 화살표 끝점이 닿은 상자 중앙과 어긋남, 이어 붙는 사각형의 y/height 와
+// 이음매 모서리, 화살촉에 칠해진 강조색, 강조 상자 개수, 팔레트 밖의 색, 글자 크기와 톤 토큰.
 //
-// 글자 폭은 재는 게 아니라 §4 의 추정치로 어림한다(한글 1.0em, 라틴 0.55em). 경계선에서 한두 단위
+// '확인 필요'로만 내는 것: 한 줄로 읽히는 글자의 y 어긋남과 너무 짧은 데이터 막대. 열의 리듬과
+// 상자 높이가 다르면 y 가 달라야 맞는 경우가 있어 기계가 단정할 수 없다 — 사람이 판단할 후보다.
+//
+// 글자 폭은 재는 게 아니라 비례로 어림한다(한글 1.0em, 라틴 0.55em). 경계선에서 한두 단위
 // 틀릴 수 있으니 임계값에 여유를 두었다 — 여기서 잡히면 거의 항상 진짜 겹침이다.
 
 import { globSync, readFileSync } from "node:fs";
@@ -26,7 +29,7 @@ const TYPE_SIZES = [11, 11.5, 12];
 
 const { window } = new JSDOM("");
 
-/** 글자 하나의 폭 — svg-style.md §4 추정치 */
+/** 글자 하나의 폭 어림 — 실측이 아니라 글자 종류별 비례다 */
 export function glyphWidth(ch, fs) {
   if ((ch >= "가" && ch <= "힣") || (ch >= "ㄱ" && ch <= "ㆎ")) return fs * 1.0;
   if (ch === " ") return fs * 0.3;
@@ -129,7 +132,7 @@ function collect(el, inherited, out) {
   for (const child of el.children) collect(child, attr, out);
 }
 
-/** 한 줄로 읽히는 글자끼리 y 가 맞는지 — 확정이 아니라 사람이 볼 후보다 (불변식 4) */
+/** 한 줄로 읽히는 글자끼리 y 가 맞는지 — 확정이 아니라 사람이 볼 후보다 */
 export function rowMismatches(texts) {
   const centre = (t) => (t.box[0] + t.box[2]) / 2;
   const roles = new Map();
@@ -181,7 +184,7 @@ export function lintSvg(source) {
   const issues = [];
   const notes = [];
 
-  // 불변식 1 — 연결선은 회색. 화살촉(상대 m 으로 시작하는 짧은 path)에 강조색이 있으면 어긴 것.
+  // 연결선은 회색이다. 화살촉(상대 m 으로 시작하는 짧은 path)에 강조색이 있으면 어긴 것.
   // 연결선 화살촉은 폭 1 이다. 폭이 다르면 마크의 일부(구간이 축을 넘어간 표시 등)라 예외.
   for (const [tag] of source.matchAll(/<path[^>]*\bd="m[^"]*"[^>]*>/g)) {
     if (!tag.includes('stroke-width="1"') && tag.includes("stroke-width")) continue;
@@ -190,14 +193,14 @@ export function lintSvg(source) {
     }
   }
 
-  // 불변식 2 — 하이라이트 하나. 전후 비교의 node.state 쌍만 예외이고, 그때도 두 색이 달라야 한다.
+  // 강조는 그림당 하나. 전후 비교의 node.state 쌍만 예외이고, 그때도 두 색이 달라야 한다.
   if (out.accented.length === 2) {
     if (out.accented[0].hue === out.accented[1].hue) issues.push(`같은 강조색 ${out.accented[0].hue} 로 두 곳을 강조 — 하이라이트는 그림당 하나다`);
   } else if (out.accented.length > 2) {
     issues.push(`강조한 상자가 ${out.accented.length}개 — 하이라이트 하나, 또는 전후 한 쌍까지다`);
   }
 
-  // 불변식 3 — 노트 전체가 강조색 둘. 팔레트 밖의 색은 그 자리에서 잡는다.
+  // 강조색은 둘뿐이다. 팔레트 밖의 색은 그 자리에서 잡는다.
   for (const [, hex] of source.matchAll(/(#[0-9a-fA-F]{6})/g)) {
     if (!ACCENTS.includes(hex.toLowerCase())) issues.push(`팔레트에 없는 색 ${hex} — accent.emphasis/#accent.contrast 둘뿐이다`);
   }
@@ -222,11 +225,11 @@ export function lintSvg(source) {
     }
   }
 
-  // 불변식 4 는 기계가 단정할 수 없다 — 8 단위로 흐르는 열과 64 짜리 상자가 만나면 y 가 달라야 맞는다.
+  // 한 줄 정렬은 기계가 단정할 수 없다 — 8 단위로 흐르는 열과 64 짜리 상자가 만나면 y 가 달라야 맞는다.
   // 그래서 오류가 아니라 사람이 볼 목록으로 낸다. 캡션이 184 와 200 에 앉은 실제 사고가 여기 걸린다.
   notes.push(...rowMismatches(out.texts));
 
-  // 불변식 6 — 연결선은 상자를 관통하지 않고, 끝점은 닿은 상자의 중앙에 선다
+  // 연결선은 상자를 관통하지 않고, 끝점은 닿은 상자의 중앙에 선다
   const encloses = (o, i) => o !== i && o[0] <= i[0] + 1 && o[1] <= i[1] + 1 && o[2] >= i[2] - 1 && o[3] >= i[3] - 1;
   const nodes = out.nodes.filter((r) => !out.nodes.some((q) => encloses(r, q)) && r[2] - r[0] < 0.7 * W);
   const midY = (r) => (r[1] + r[3]) / 2;
@@ -256,7 +259,7 @@ export function lintSvg(source) {
     }
   }
 
-  // 불변식 5 — 이어 붙는 사각형은 같은 y/height 이고 이음매에 둥근 모서리를 두지 않는다
+  // 이어 붙는 사각형은 같은 y/height 이고 이음매에 둥근 모서리를 두지 않는다
   for (const a of out.seams) {
     for (const b of out.seams) {
       if (a === b || Math.abs(a.x + a.w - b.x) > 1.5) continue;
