@@ -44,6 +44,7 @@ Accent belongs to **marks and shapes only** — a bar, a range, a cell, a node's
 | --- | --- | --- |
 | `node` | rect `rx="4"`, height 32 / 40 / 56 | fill `ink.surface`, stroke `ink.line` |
 | `node.highlight` | same, stroke 1.5 | stroke accent, fill accent at `0.08` — **exactly one per figure** |
+| `node.state` | same, stroke 1.5 | the accent its own panel owns — a matched pair across a before/after figure, one per panel, used when the state *is* the comparison |
 | `group` | rect `rx="8"`, no fill | stroke `ink.line`, label above-left in `type.micro` `ink.faint` |
 | `bar` | height 24, `rx="3"` alone and `rx="0"` abutting | accent, or `ink.primary` when there is one series |
 | `range` | 3-unit line, 1.5-unit caps 14 tall | accent, or `ink.muted` |
@@ -58,7 +59,7 @@ Accent belongs to **marks and shapes only** — a bar, a range, a cell, a node's
 **Invariants.** Check all seven before emitting, every time.
 
 1. **Connectors are grey.** Colour lives in the shapes an arrow connects, never in the arrow. A reader should be able to follow every path with the hues switched off; if the line has to be coloured to be understood, the shapes are not saying enough.
-2. **One highlight per figure.** If two things are highlighted, neither is.
+2. **One highlight per figure.** If two things are highlighted, neither is. A before/after figure is the one exception: it may carry one `node.state` per panel, and then the two must take different accents — a figure never mixes a highlight with a state pair, and never accents three shapes at stroke 1.5.
 3. **Two hues per note.** A third hue means the figure is carrying two arguments and should be two figures.
 4. **Corresponding elements across panels share a `y`.** Two captions at 184 and 200 read as a mistake even when each is fine alone.
 5. **Marks that touch share `y` and `height` and square their corners** (§3).

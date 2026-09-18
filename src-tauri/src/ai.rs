@@ -2034,8 +2034,10 @@ mod tests {
             "`accent.emphasis`", "`accent.contrast`", // 강조색은 둘뿐이고 뜻이 정해져 있다
             "`type.value`", "`type.micro`",           // 글자 역할이 네 개다
             "`connector`", "`node.highlight`",        // 부품 목록
+            "`node.state`",                           // 전후 비교는 패널마다 한 쪽씩 강조한다
             "**Connectors are grey.**",               // 연결선에는 색을 쓰지 않는다
             "One highlight per figure",
+            "never accents three shapes at stroke 1.5",
             "Corresponding elements across panels share a `y`",
         ] {
             assert!(g.contains(needle), "디자인 시스템 절에서 {needle} 가 빠졌다");
