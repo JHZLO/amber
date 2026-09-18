@@ -189,7 +189,7 @@ export function lintSvg(source) {
   for (const [tag] of source.matchAll(/<path[^>]*\bd="m[^"]*"[^>]*>/g)) {
     if (!tag.includes('stroke-width="1"') && tag.includes("stroke-width")) continue;
     for (const hue of ACCENTS) {
-      if (tag.includes(`stroke="${hue}"`) || tag.includes(`fill="${hue}"`)) issues.push(`화살촉에 강조색 ${hue} — 연결선은 ink.muted 회색이다`);
+      if (tag.includes(`stroke="${hue}"`) || tag.includes(`fill="${hue}"`)) issues.push(`화살촉에 강조색 ${hue} — 연결선은 회색이어야 한다`);
     }
   }
 
@@ -202,7 +202,7 @@ export function lintSvg(source) {
 
   // 강조색은 둘뿐이다. 팔레트 밖의 색은 그 자리에서 잡는다.
   for (const [, hex] of source.matchAll(/(#[0-9a-fA-F]{6})/g)) {
-    if (!ACCENTS.includes(hex.toLowerCase())) issues.push(`팔레트에 없는 색 ${hex} — accent.emphasis/#accent.contrast 둘뿐이다`);
+    if (!ACCENTS.includes(hex.toLowerCase())) issues.push(`팔레트에 없는 색 ${hex} — 강조색은 #3b82f6 과 #ea580c 둘뿐이다`);
   }
 
   // 글자 토큰 — 네 역할의 크기와 잉크 램프만 쓴다

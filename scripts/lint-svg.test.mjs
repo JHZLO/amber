@@ -62,7 +62,7 @@ describe("lint-svg — 잡아야 할 것", () => {
 
   it("강조색이 칠해진 화살촉", () => {
     const body = NODE + NODE_R + ARROW.replace('d="m233 94 7 6 -7 6"', 'd="m233 94 7 6 -7 6" stroke="#ea580c"');
-    expect(errors(body)).toEqual(["화살촉에 강조색 #ea580c — 연결선은 ink.muted 회색이다"]);
+    expect(errors(body)).toEqual(["화살촉에 강조색 #ea580c — 연결선은 회색이어야 한다"]);
   });
 
   it("하이라이트는 하나, 전후 한 쌍까지", () => {
