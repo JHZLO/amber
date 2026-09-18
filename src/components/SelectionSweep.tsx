@@ -9,9 +9,7 @@
 // 고정 레이어를 깐다. DOM 은 건드리지 않는다(마크다운 렌더 결과에 흔적이 남지 않게).
 
 import { useEffect, useState } from "react";
-import { nthIndex, rangeAt } from "../lib/noteAnchor";
-
-type Box = { top: number; left: number; width: number; height: number };
+import { mergeLineRects, nthIndex, rangeAt, type Rect } from "../lib/noteAnchor";
 
 export function SelectionSweep({
   containerRef,
@@ -26,7 +24,7 @@ export function SelectionSweep({
   /** 답을 기다리는 중인가 */
   active: boolean;
 }) {
-  const [boxes, setBoxes] = useState<Box[]>([]);
+  const [boxes, setBoxes] = useState<Rect[]>([]);
 
   useEffect(() => {
     if (!active) {
@@ -43,12 +41,9 @@ export function SelectionSweep({
       if (idx === -1) idx = nthIndex(full, anchor, 0); // 본문이 바뀌었으면 첫 출현으로
       const r = idx === -1 ? null : rangeAt(c, idx, anchor.length);
       if (!r) return setBoxes([]);
-      // 줄바꿈된 선택은 사각형이 여러 개다 — 줄마다 따로 칠해야 글자를 벗어나지 않는다
-      setBoxes(
-        [...r.getClientRects()]
-          .filter((x) => x.width > 0 && x.height > 0)
-          .map((x) => ({ top: x.top, left: x.left, width: x.width, height: x.height })),
-      );
+      // 줄마다 하나로 합쳐서 넘긴다 — 굵은 글씨·코드가 낀 줄은 getClientRects 가 조각을 여럿 주는데,
+      // 그대로 그리면 조각마다 빛이 따로 돌아 경계에서 띠가 끊긴다
+      setBoxes(mergeLineRects([...r.getClientRects()]));
     };
     const soon = () => {
       if (!raf) raf = requestAnimationFrame(measure);
