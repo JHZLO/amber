@@ -1996,6 +1996,23 @@ mod tests {
         }
     }
 
+    // 구간(min~max)을 막대로 그리면 짧은 구간이 '잘린 막대'로 읽히고, 이상치 하나가 축을 독점하면
+    // 나머지가 전부 뭉갠다. 실제로 6행짜리 구간 차트에서 다섯 행이 11단위 토막이 됐다.
+    #[test]
+    fn svg_guide_pins_interval_and_outlier_rules() {
+        let g = SVG_STYLE_PROMPT;
+        assert!(g.contains("## 11. Intervals and outliers"), "구간/이상치 절이 빠졌다");
+        for needle in [
+            "A range is not a bar",
+            "capped range",
+            "may start anywhere",
+            "must not set the scale for everyone",
+            "Minimum legible size: 16 units",
+        ] {
+            assert!(g.contains(needle), "구간 절에서 {needle} 가 빠졌다");
+        }
+    }
+
     // 화살표가 상자 모서리에서 어긋나면 도형이 아무리 정확해도 렌더 버그처럼 읽힌다.
     // 실제로 상자 중앙이 아닌 곳에 붙은 연결선이 노트 61개 중 6개에서 나왔다 — 눈대중을 막는 규칙이 필요하다.
     #[test]
