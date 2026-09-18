@@ -1996,6 +1996,24 @@ mod tests {
         }
     }
 
+    // 화살표가 상자 모서리에서 어긋나면 도형이 아무리 정확해도 렌더 버그처럼 읽힌다.
+    // 실제로 상자 중앙이 아닌 곳에 붙은 연결선이 노트 61개 중 6개에서 나왔다 — 눈대중을 막는 규칙이 필요하다.
+    #[test]
+    fn svg_guide_pins_connector_rules() {
+        let g = SVG_STYLE_PROMPT;
+        assert!(g.contains("## 10. Connectors"), "연결선 절이 빠졌다");
+        for needle in [
+            "L = (x, y + h/2)",      // 앵커를 먼저 적는다
+            "not to its container",  // 컨테이너가 아니라 대상에 붙인다
+            "do not slant to cover the gap",
+            "through a spine",
+            "The head's tip is the anchor",
+            "Reference lines are not connectors",
+        ] {
+            assert!(g.contains(needle), "연결선 절에서 {needle} 가 빠졌다");
+        }
+    }
+
     // 격자·계층처럼 뜻이 도형 자체에 있는 그림은 상자와 화살표로 옮기면 사라진다. 좌표를 눈대중으로 찍으면
     // 타일이 어긋나 그림이 오히려 못 미덥게 되므로, 가이드가 계산식과 <defs>/<use> 재사용까지 들고 있어야 한다.
     #[test]
