@@ -30,6 +30,8 @@ import { AiThinking, timeAgo, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { blockRangeFromSelection } from "../lib/mdBlocks";
+import { nthIndex, rangeAt } from "../lib/noteAnchor";
+import { SelectionSweep } from "./SelectionSweep";
 
 const HIGHLIGHT_KEY = "note-q";
 const CURRENT_KEY = "note-q-cur";
@@ -50,49 +52,6 @@ function offsetIn(container: Node, node: Node, offset: number): number {
     return 0;
   }
   return r.toString().length;
-}
-
-/** fullText 에서 anchor 의 occurrence 번째 출현 위치 (없으면 -1) */
-function nthIndex(fullText: string, anchor: string, occurrence: number): number {
-  if (!anchor) return -1;
-  let idx = -1;
-  for (let i = 0; i <= occurrence; i++) {
-    idx = fullText.indexOf(anchor, idx + 1);
-    if (idx === -1) return -1;
-  }
-  return idx;
-}
-
-/** container 의 텍스트 공간에서 [idx, idx+len) 구간을 Range 로 복원 (없으면 null).
- *  위치를 따로 받는 이유: 목록 정렬에 그 위치(본문 등장 순서)를 그대로 쓴다. */
-function rangeAt(container: HTMLElement, idx: number, len: number): Range | null {
-  const endIdx = idx + len;
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-  let acc = 0;
-  let startNode: Text | null = null;
-  let startOffset = 0;
-  let endNode: Text | null = null;
-  let endOffset = 0;
-  let n: Node | null;
-  while ((n = walker.nextNode())) {
-    const t = n as Text;
-    const len = t.data.length;
-    if (!startNode && acc + len > idx) {
-      startNode = t;
-      startOffset = idx - acc;
-    }
-    if (startNode && acc + len >= endIdx) {
-      endNode = t;
-      endOffset = endIdx - acc;
-      break;
-    }
-    acc += len;
-  }
-  if (!startNode || !endNode) return null;
-  const r = document.createRange();
-  r.setStart(startNode, startOffset);
-  r.setEnd(endNode, endOffset);
-  return r;
 }
 
 type HighlightRegistry = {
@@ -717,8 +676,24 @@ export function NoteCommentLayer({
 
   if (!active) return null;
 
+  // 답을 기다리는 동안 물어본 그 자리를 훑는다 — 새 질문이면 드래그한 구간, 스레드 안이면 그 앵커
+  const sweepAt =
+    pop?.kind === "ask"
+      ? { anchor: pop.anchor, occurrence: pop.occurrence }
+      : viewComment
+        ? { anchor: viewComment.anchor, occurrence: viewComment.occurrence }
+        : null;
+
   return createPortal(
     <>
+      {sweepAt && (
+        <SelectionSweep
+          containerRef={containerRef}
+          anchor={sweepAt.anchor}
+          occurrence={sweepAt.occurrence}
+          active={asking}
+        />
+      )}
       {selInfo && !pop && (
         <div className="cmt-fab-bar" style={fabStyle}>
           <button
