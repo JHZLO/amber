@@ -1996,6 +1996,16 @@ mod tests {
         }
     }
 
+    // rx 는 네 모서리를 다 둥글게 만든다. 붙어 있는 두 세그먼트가 각자 이음매를 파먹으면
+    // 높이가 다른 블록처럼 보인다 — 실제로 타임라인과 격자에서 이 신고가 들어왔다.
+    #[test]
+    fn svg_guide_pins_abutting_corner_rule() {
+        let g = SVG_STYLE_PROMPT;
+        assert!(g.contains("Marks that touch get square corners"), "이음매 모서리 규칙이 빠졌다");
+        assert!(g.contains(r#"uses `rx="0"`"#), "각진 모서리 지시가 빠졌다");
+        assert!(g.contains("a run is one band, not a staircase"), "같은 y/height 요구가 빠졌다");
+    }
+
     // 구간(min~max)을 막대로 그리면 짧은 구간이 '잘린 막대'로 읽히고, 이상치 하나가 축을 독점하면
     // 나머지가 전부 뭉갠다. 실제로 6행짜리 구간 차트에서 다섯 행이 11단위 토막이 됐다.
     #[test]
