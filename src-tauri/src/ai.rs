@@ -2023,6 +2023,25 @@ mod tests {
         }
     }
 
+    // 토큰과 부품 목록이 없으면 그림마다 톤·크기·마크를 새로 지어내서 한 노트 안에서도 따로 논다.
+    // 특히 연결선에 색을 입히면 그 색이 무슨 뜻인지 독자가 매번 새로 배워야 한다.
+    #[test]
+    fn svg_guide_carries_a_design_system() {
+        let g = SVG_STYLE_PROMPT;
+        assert!(g.contains("## 0. The system"), "디자인 시스템 절이 빠졌다");
+        for needle in [
+            "`ink.muted`", "`ink.surface`",          // 잉크 램프에 이름이 있다
+            "`accent.emphasis`", "`accent.contrast`", // 강조색은 둘뿐이고 뜻이 정해져 있다
+            "`type.value`", "`type.micro`",           // 글자 역할이 네 개다
+            "`connector`", "`node.highlight`",        // 부품 목록
+            "**Connectors are grey.**",               // 연결선에는 색을 쓰지 않는다
+            "One highlight per figure",
+            "Corresponding elements across panels share a `y`",
+        ] {
+            assert!(g.contains(needle), "디자인 시스템 절에서 {needle} 가 빠졌다");
+        }
+    }
+
     // 화살표가 상자 모서리에서 어긋나면 도형이 아무리 정확해도 렌더 버그처럼 읽힌다.
     // 실제로 상자 중앙이 아닌 곳에 붙은 연결선이 노트 61개 중 6개에서 나왔다 — 눈대중을 막는 규칙이 필요하다.
     #[test]

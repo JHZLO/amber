@@ -2,6 +2,69 @@
 
 Amber's interface is a quiet, near-monochrome system in the Vercel tradition: zinc neutrals, hairline rules, hierarchy carried by tone and weight rather than hue, and at most one deliberate accent. A chart inside a note must read as part of that surface — not as an image pasted in from another product. Apply these rules whenever you emit an <svg>, and apply them identically to every chart in the same note so they read as a set.
 
+## 0. The system — tokens, parts, invariants
+Everything below composes from a fixed set of values and a fixed set of parts. Do not invent a new tone, a new size or a new kind of mark: pick the one that already means what you need. Sections 1–11 are the detail behind this table.
+
+**Ink.** One ramp on `currentColor`. Nothing structural uses anything else.
+
+| token | opacity | carried by |
+| --- | --- | --- |
+| `ink.primary` | 1.0 | data marks, direct value labels |
+| `ink.strong` | 0.9 | the one annotation, text inside a highlight |
+| `ink.body` | 0.85 | text inside a node, pictograms |
+| `ink.muted` | 0.62 | category labels, captions, legend text, **connectors** |
+| `ink.faint` | 0.40 | tick labels, axis titles, units, optional connectors |
+| `ink.line` | 0.28 | axis baselines, node borders, lifelines |
+| `ink.hair` | 0.12 | grid lines, panel dividers |
+| `ink.surface` | 0.04 | node and note fills |
+
+**Accent.** Two hues for the whole note, assigned once and reused in every figure of it.
+
+| token | value | means |
+| --- | --- | --- |
+| `accent.emphasis` | `#3b82f6` | what the note argues for: after, new, the fix |
+| `accent.contrast` | `#ea580c` | what it is compared against: before, the failure, the gap |
+
+Accent belongs to **marks and shapes only** — a bar, a range, a cell, a node's border and tint. Never a connector, an axis, a grid line or body text. Red and green stay reserved for failure and success states elsewhere in the app.
+
+**Type.** Four roles, nothing between them.
+
+| token | size / weight | carried by |
+| --- | --- | --- |
+| `type.value` | 12 / 600 | direct data labels, a node title that carries the point |
+| `type.label` | 12 | category labels, panel titles |
+| `type.note` | 11.5 | captions; the one annotation adds weight 600 |
+| `type.micro` | 11 | tick labels, axis titles, in-node text, sub-labels |
+
+**Space.** Multiples of 8. Gutter 16, panel gap 24, row pitch 44 for compact rows and 52 for bar rows with labels, canvas width 680.
+
+**Parts.** The whole catalogue. Compose figures from these and nothing else.
+
+| part | geometry | tone |
+| --- | --- | --- |
+| `node` | rect `rx="4"`, height 32 / 40 / 56 | fill `ink.surface`, stroke `ink.line` |
+| `node.highlight` | same, stroke 1.5 | stroke accent, fill accent at `0.08` — **exactly one per figure** |
+| `group` | rect `rx="8"`, no fill | stroke `ink.line`, label above-left in `type.micro` `ink.faint` |
+| `bar` | height 24, `rx="3"` alone and `rx="0"` abutting | accent, or `ink.primary` when there is one series |
+| `range` | 3-unit line, 1.5-unit caps 14 tall | accent, or `ink.muted` |
+| `pill` | `rx` = half the height | a slot, a queue, a buffer |
+| `connector` | 1-unit line + 7-unit chevron | **`ink.muted`, always** |
+| `connector.weak` | same, `stroke-dasharray="4 4"` | `ink.faint` — optional, deferred or feedback paths |
+| `lifeline` | 1-unit | `ink.line`, broken around every note it meets |
+| `reference` | 1-unit dashed | `ink.faint` — cutoffs, means, thresholds |
+| `legend` | 16-unit swatch + label | one row, bottom-left, `ink.muted` |
+| `pictogram` | 20 units, §8 vocabulary | `ink.body` |
+
+**Invariants.** Check all seven before emitting, every time.
+
+1. **Connectors are grey.** Colour lives in the shapes an arrow connects, never in the arrow. A reader should be able to follow every path with the hues switched off; if the line has to be coloured to be understood, the shapes are not saying enough.
+2. **One highlight per figure.** If two things are highlighted, neither is.
+3. **Two hues per note.** A third hue means the figure is carrying two arguments and should be two figures.
+4. **Corresponding elements across panels share a `y`.** Two captions at 184 and 200 read as a mistake even when each is fine alone.
+5. **Marks that touch share `y` and `height` and square their corners** (§3).
+6. **Every arrow endpoint is an anchor and lands on the target's centre** (§10).
+7. **Nothing opaque is painted under text**; lines break instead (§3).
+
 ## 1. Canvas and structure
 - One <svg> per ```svg fence, with `viewBox="0 0 W H"` and `width="100%"`; no fixed height. Use W between 640 and 720. Height follows the chart type: horizontal bars = 52 per row + 64 for the axis and labels; line charts about 2.4:1; small multiples 200–240 tall.
 - `role="img"` plus a `<title>` (referenced by `aria-labelledby`) that states the chart's message, not merely its subject.
