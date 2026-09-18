@@ -2,7 +2,9 @@
 // → 모달을 닫거나 다른 노트·탭으로 옮겨도 CLI 는 끝까지 돌고, 결과는 노트 경로에 매달려 검토를 기다린다.
 //   (예전엔 상태가 NoteAiModal 안에 있어 닫기 = 중단이었고, 10분짜리 생성 동안 다른 일을 할 수 없었다.)
 // 컴포넌트(NoteAiModal · NotesView 의 배너/트리 점 · 레일 점)는 useNoteAiRun(path) 등으로 구독만 한다.
-// 노트 하나에 실행 하나(키 = vault 상대 경로). 부분 수정(NoteSpanAiModal)은 초 단위라 여기 오지 않는다.
+// 노트 하나에 실행 하나(키 = vault 상대 경로) — 전문 작성(compose)과 부분 수정(span)이 같은 자리를 쓴다.
+// 부분 수정도 여기 있는 이유: '조각이라 금방 끝난다'는 가정이 틀렸다. CLI 를 깨우는 시간이 조각 길이와
+// 무관하게 들어서 문단 하나를 고칠 때도 수십 초가 걸리고, 그동안 모달을 닫으면 그대로 날아갔다.
 
 import { useSyncExternalStore } from "react";
 import type { AppConfig } from "./config";
@@ -16,13 +18,25 @@ import {
   type InvocationMeta,
 } from "./ai";
 import { CONTINUE_INSTRUCTION, tailSpan } from "./aiInstruction";
+import { spliceSpan } from "./mdSections";
 
 export type NoteAiPhase = "running" | "done" | "error";
+/** 전문 작성이냐 부분 수정이냐 — 배너 문구와 되돌아갈 모달이 갈린다 */
+export type NoteAiKind = "compose" | "span";
+
+/** 한 번의 호출로 고칠 덩어리 = 소스 구간 + 화면에 보여줄 이름 (부분 수정 전용) */
+export interface NoteAiSpan {
+  kind: "selection" | "section";
+  start: number;
+  end: number;
+  label: string;
+}
 
 export interface NoteAiRun {
   /** vault 상대 경로 — 스토어 키. 이름 변경·이동은 remapNoteAiPaths 로 따라간다 */
   path: string;
   title: string;
+  kind: NoteAiKind;
   phase: NoteAiPhase;
   /** 내가 친 지시와 체크한 칩·참고 폴더 — "다시 지시" 가 이걸 되살린다 */
   typed: string;
@@ -36,7 +50,14 @@ export interface NoteAiRun {
   activityAt: number;
   startedAt: number;
   finishedAt: number | null;
-  /** 마지막으로 성공한 결과. 다시 실행해도 새 결과가 올 때까지 남는다 — 실패·중단이 이미 받은 것을 지우지 않게 */
+  /** 고칠 구간들 (부분 수정만, 뒤에서부터 되끼운다). 전문 작성은 빈 배열 */
+  spans: NoteAiSpan[];
+  /** 구간별로 받은 새 텍스트 — 검토 화면이 조각마다 변경점을 보여 준다 */
+  spanResults: string[];
+  /** 지금 처리 중인 구간 번호 (0-based) */
+  spanAt: number;
+  /** 마지막으로 성공한 결과 = **적용하면 되는 노트 전문**. 부분 수정은 조각을 되끼운 결과다.
+   *  다시 실행해도 새 결과가 올 때까지 남는다 — 실패·중단이 이미 받은 것을 지우지 않게 */
   result: string | null;
   meta: InvocationMeta | null;
   truncated: boolean;
@@ -151,6 +172,7 @@ export async function startNoteAi(p: StartNoteAiParams): Promise<void> {
   runs.set(p.path, {
     path: p.path,
     title: p.title,
+    kind: "compose",
     phase: "running",
     typed: p.typed,
     chosen: p.chosen,
@@ -161,11 +183,15 @@ export async function startNoteAi(p: StartNoteAiParams): Promise<void> {
     activityAt: 0,
     startedAt: Date.now(),
     finishedAt: null,
-    // 이전 결과는 새 결과가 올 때까지 남긴다 — 다시 실행이 실패해도 받아 둔 것을 잃지 않게
-    result: prev?.result ?? null,
-    meta: prev?.meta ?? null,
-    truncated: prev?.truncated ?? false,
-    continued: prev?.continued ?? false,
+    spans: [],
+    spanResults: [],
+    spanAt: 0,
+    // 이전 결과는 새 결과가 올 때까지 남긴다 — 다시 실행이 실패해도 받아 둔 것을 잃지 않게.
+    // 단 부분 수정 결과는 물려받지 않는다: 다른 종류의 결과를 전문 작성 검토 화면에 얹게 된다
+    result: prev?.kind === "compose" ? (prev.result ?? null) : null,
+    meta: prev?.kind === "compose" ? (prev.meta ?? null) : null,
+    truncated: prev?.kind === "compose" ? prev.truncated : false,
+    continued: prev?.kind === "compose" ? prev.continued : false,
     continuing: false,
     error: null,
     cancelKey: key,
@@ -220,6 +246,124 @@ export async function startNoteAi(p: StartNoteAiParams): Promise<void> {
       cancelKey: null,
     });
   }
+}
+
+export interface StartNoteSpanAiParams {
+  path: string;
+  title: string;
+  /** 지금 본문 — 구간 오프셋의 기준이자 프롬프트의 참고 입력 */
+  markdown: string;
+  /** 고칠 구간들. 붙어 있는 절은 호출부(mergeRuns)가 이미 하나로 묶어서 준다 */
+  spans: NoteAiSpan[];
+  instruction: string;
+  refDirs: string[];
+  config: AppConfig;
+}
+
+/** 부분 수정 시작 — 구간마다 한 번씩 순차로 부르고, 받은 조각을 **뒤에서부터** 되끼워
+ *  `result` 에 노트 전문으로 남긴다(앞을 먼저 갈아끼우면 길이가 달라져 뒤 오프셋이 밀린다).
+ *  순차로 도는 이유는 화면이다 — 스트림 박스가 하나라 동시에 흘리면 글자가 섞인다. */
+export async function startNoteSpanAi(p: StartNoteSpanAiParams): Promise<void> {
+  if (isNoteAiRunning(p.path) || p.spans.length === 0) return;
+  const seq = bump(p.path);
+  const live = () => seqs.get(p.path) === seq;
+  const prev = runs.get(p.path);
+  // 같은 구간을 다시 고치는 중이면 이전 결과를 남겨 둔다 — 재시도가 실패해도 받아 둔 것을 잃지 않게
+  const sameSpans =
+    prev?.kind === "span" &&
+    prev.spans.length === p.spans.length &&
+    prev.spans.every((s, i) => s.start === p.spans[i].start && s.end === p.spans[i].end);
+  runs.set(p.path, {
+    path: p.path,
+    title: p.title,
+    kind: "span",
+    phase: "running",
+    typed: p.instruction,
+    chosen: [],
+    refDirs: p.refDirs,
+    baseMarkdown: p.markdown,
+    stream: "",
+    activity: null,
+    activityAt: 0,
+    startedAt: Date.now(),
+    finishedAt: null,
+    spans: p.spans,
+    spanResults: sameSpans ? prev.spanResults : [],
+    spanAt: 0,
+    result: sameSpans ? prev.result : null,
+    meta: null,
+    truncated: false,
+    continued: false,
+    continuing: false,
+    error: null,
+    cancelKey: null,
+  });
+  emit();
+
+  const out: string[] = [];
+  let truncatedAny = false;
+  try {
+    for (let i = 0; i < p.spans.length; i++) {
+      if (!live()) return;
+      const key = newCancelKey();
+      patch(p.path, { spanAt: i, stream: "", cancelKey: key });
+      const { text, meta } = await aiNoteEditSpanStream(
+        {
+          title: p.title,
+          markdown: p.markdown,
+          span: p.markdown.slice(p.spans[i].start, p.spans[i].end),
+          instruction: p.instruction,
+          spanKind: p.spans[i].kind,
+          model: p.config.model,
+          cliPath: p.config.cliPath,
+          provider: p.config.provider,
+          cancelKey: key,
+          refDirs: p.refDirs,
+        },
+        (delta) => {
+          if (!live()) return;
+          const cur = runs.get(p.path);
+          if (cur) patch(p.path, { stream: cur.stream + delta });
+        },
+        (a) => {
+          if (live()) patch(p.path, { activity: a, activityAt: Date.now() });
+        },
+      );
+      if (!live()) return;
+      out.push(text);
+      if (meta.truncated) truncatedAny = true;
+    }
+    if (!live()) return;
+    patch(p.path, {
+      phase: "done",
+      spanResults: out,
+      result: spliceSpans(p.markdown, p.spans, out),
+      truncated: truncatedAny,
+      finishedAt: Date.now(),
+      stream: "",
+      cancelKey: null,
+    });
+  } catch (e) {
+    if (!live()) return;
+    patch(p.path, {
+      phase: "error",
+      error: friendlyError(e),
+      finishedAt: Date.now(),
+      stream: "",
+      cancelKey: null,
+    });
+  }
+}
+
+/** 조각들을 **뒤에서부터** 되끼운 노트 전문 */
+export function spliceSpans(body: string, spans: NoteAiSpan[], texts: string[]): string {
+  let next = body;
+  for (let i = spans.length - 1; i >= 0; i--) {
+    const text = texts[i];
+    if (text === undefined) continue;
+    next = spliceSpan(next, spans[i].start, spans[i].end, text);
+  }
+  return next;
 }
 
 /** 잘린 결과 이어 쓰기 — 끝 조각(~700자)을 span 으로 넘겨 "조각 + 이어질 내용"을 받아 그 자리에 되끼운다.
@@ -321,6 +465,15 @@ export function dismissNoteAiError(path: string): void {
   if (!run || run.phase !== "error") return;
   if (run.result) patch(path, { phase: "done", error: null });
   else remove(path);
+}
+
+/** 부분 수정 검토 화면에서 조각 하나를 손으로 고쳤을 때 — 전문(result)도 다시 끼운다 */
+export function setNoteSpanResult(path: string, index: number, text: string): void {
+  const run = runs.get(path);
+  if (!run || run.phase === "running" || run.kind !== "span") return;
+  const next = [...run.spanResults];
+  next[index] = text;
+  patch(path, { spanResults: next, result: spliceSpans(run.baseMarkdown, run.spans, next) });
 }
 
 /** 소스 탭에서 결과를 손으로 고쳤을 때 */

@@ -171,6 +171,8 @@ export function NoteAiModal({
 
   // 실행을 시작한 뒤 노트가 바뀌었나 — 변경점은 지금 내용과 비교하니 그 사실만 알린다
   const baseChanged = !!run?.result && run.baseMarkdown.trim() !== currentBody.trim();
+  // 노트 하나에 실행 하나다. 부분 수정이 도는 중이면 시작이 조용히 무시되므로 먼저 말해 준다
+  const spanBusy = run?.kind === "span" && run.phase === "running";
 
   function runAi() {
     if (!config || tooShort) return;
@@ -217,7 +219,7 @@ export function NoteAiModal({
         <button
           className="btn btn-primary"
           onClick={runAi}
-          disabled={tooShort || !config?.provider}
+          disabled={tooShort || !config?.provider || spanBusy}
           title={!config ? t("notes.ai.configLoading") : undefined}
         >
           <Icon name="sparkles" size={15} />
@@ -267,6 +269,11 @@ export function NoteAiModal({
       {error && (
         <div className="error-note" style={{ marginBottom: 12 }}>
           {error}
+        </div>
+      )}
+      {spanBusy && (
+        <div className="warn-note" style={{ marginBottom: 12 }}>
+          {t("notes.ai.spanBusy")}
         </div>
       )}
 

@@ -25,7 +25,9 @@ import {
   getNoteAiRun,
   remapNoteAiPaths,
   resetNoteAiRunsForTest,
+  setNoteSpanResult,
   startNoteAi,
+  startNoteSpanAi,
   stopNoteAi,
 } from "./noteAiRun";
 
@@ -205,5 +207,93 @@ describe("noteAiRun store", () => {
     const snap2 = getNoteAiPhases();
     expect(snap2).not.toBe(snap1);
     expect(snap2.get("A/n.md")).toBe("done");
+  });
+});
+
+// ---- 부분 수정 (span) — 전문 작성과 같은 자리를 쓰되, 결과는 조각을 되끼운 노트 전문이다 ----
+describe("부분 수정", () => {
+  const BODY = "머리말\n\n가운데 문단\n\n꼬리말";
+  const mid = { kind: "section" as const, start: 5, end: 11, label: "가운데" };
+  const startSpan = (path: string, spans = [mid]) =>
+    startNoteSpanAi({
+      path,
+      title: "n",
+      markdown: BODY,
+      spans,
+      instruction: "짧게",
+      refDirs: [],
+      config,
+    });
+
+  it("조각을 받아 노트 전문으로 되끼운다", async () => {
+    mocks.editSpan.mockResolvedValue({ text: "고친 문단", meta: META });
+    await startSpan("a.md");
+    const run = getNoteAiRun("a.md")!;
+    expect(run.kind).toBe("span");
+    expect(run.phase).toBe("done");
+    expect(run.spanResults).toEqual(["고친 문단"]);
+    expect(run.result).toBe("머리말\n\n고친 문단\n\n꼬리말");
+  });
+
+  it("떨어진 묶음은 뒤에서부터 되끼워 앞 묶음의 오프셋이 밀리지 않는다", async () => {
+    // 앞을 먼저 갈아끼우면 길이가 달라져 뒤 구간이 엉뚱한 자리를 가리킨다
+    mocks.editSpan
+      .mockResolvedValueOnce({ text: "아주 긴 새 머리말", meta: META })
+      .mockResolvedValueOnce({ text: "새 꼬리", meta: META });
+    await startSpan("b.md", [
+      { kind: "section", start: 0, end: 3, label: "머리말" },
+      { kind: "section", start: 13, end: 16, label: "꼬리말" },
+    ]);
+    expect(getNoteAiRun("b.md")!.result).toBe("아주 긴 새 머리말\n\n가운데 문단\n\n새 꼬리");
+  });
+
+  it("검토 화면에서 조각을 손보면 전문도 다시 끼운다", async () => {
+    mocks.editSpan.mockResolvedValue({ text: "첫 결과", meta: META });
+    await startSpan("c.md");
+    setNoteSpanResult("c.md", 0, "손본 결과");
+    const run = getNoteAiRun("c.md")!;
+    expect(run.spanResults).toEqual(["손본 결과"]);
+    expect(run.result).toBe("머리말\n\n손본 결과\n\n꼬리말");
+  });
+
+  it("실패해도 실행은 남아 배너가 알린다", async () => {
+    mocks.editSpan.mockRejectedValue(new Error("CLI 없음"));
+    await startSpan("d.md");
+    const run = getNoteAiRun("d.md")!;
+    expect(run.phase).toBe("error");
+    expect(run.error).toBe("CLI 없음");
+  });
+
+  it("같은 노트에 실행 둘을 겹치지 않는다 — 전문 작성 중이면 시작하지 않는다", async () => {
+    const d = deferred<{ markdown: string; meta: InvocationMeta }>();
+    mocks.compose.mockReturnValue(d.promise);
+    void start("e.md");
+    await flush();
+    await startSpan("e.md");
+    expect(getNoteAiRun("e.md")!.kind).toBe("compose"); // 부분 수정이 덮어쓰지 않았다
+    expect(mocks.editSpan).not.toHaveBeenCalled();
+    d.resolve({ markdown: "done", meta: META });
+    await flush();
+  });
+
+  it("전문 작성 결과를 부분 수정 실행이 물려받지 않는다", async () => {
+    mocks.compose.mockResolvedValue({ markdown: "전문 결과", meta: META });
+    await start("f.md");
+    expect(getNoteAiRun("f.md")!.result).toBe("전문 결과");
+    mocks.editSpan.mockRejectedValue(new Error("끊김"));
+    await startSpan("f.md");
+    // 종류가 다른 결과를 이어받으면 부분 수정 검토 화면에 전문이 뜬다
+    expect(getNoteAiRun("f.md")!.result).toBeNull();
+  });
+
+  it("중단하면 받아 둔 결과가 없을 때 실행 자체가 사라진다", async () => {
+    const d = deferred<{ text: string; meta: InvocationMeta }>();
+    mocks.editSpan.mockReturnValue(d.promise);
+    void startSpan("g.md");
+    await flush();
+    expect(getNoteAiRun("g.md")!.phase).toBe("running");
+    stopNoteAi("g.md");
+    expect(getNoteAiRun("g.md")).toBeUndefined();
+    expect(mocks.cancel).toHaveBeenCalled();
   });
 });

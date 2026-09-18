@@ -17,6 +17,9 @@ import {
 export function NoteAiBanner({ run, onOpen }: { run: NoteAiRun; onOpen: () => void }) {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const running = run.phase === "running";
+  // 전문 작성과 부분 수정이 같은 자리를 쓴다 — 무엇이 도는지 말해 주지 않으면
+  // "노트를 통째로 다시 쓰는 중" 으로 읽힌다
+  const span = run.kind === "span";
   const waitLine = useAiWaitLine({
     running,
     startedAt: run.startedAt,
@@ -37,7 +40,13 @@ export function NoteAiBanner({ run, onOpen }: { run: NoteAiRun; onOpen: () => vo
       <div className="ai-bg-bar" role="status">
         <AiThinking
           compact
-          label={run.continuing ? t("notes.ai.continuing") : t("notes.ai.bg.running")}
+          label={
+            run.continuing
+              ? t("notes.ai.continuing")
+              : span
+                ? t("notes.ai.bg.editing")
+                : t("notes.ai.bg.running")
+          }
           activity={waitLine ?? undefined}
         />
         <span className="ai-bg-actions">
@@ -79,7 +88,7 @@ export function NoteAiBanner({ run, onOpen }: { run: NoteAiRun; onOpen: () => vo
       <div className="ok-note ai-bg-bar" role="status">
         <span className="ai-bg-text">
           <Icon name="sparkles" size={14} />
-          <b>{t("notes.ai.bg.ready")}</b>
+          <b>{span ? t("notes.ai.bg.editReady") : t("notes.ai.bg.ready")}</b>
           {run.finishedAt && (
             <span className="ai-bg-when">
               {t("notes.ai.bg.readyAt", { when: timeAgo(run.finishedAt) })}

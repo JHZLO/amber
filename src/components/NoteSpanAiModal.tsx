@@ -8,14 +8,25 @@
 //   section   — 제목 기준으로 쪼갠 절(mdSections). **여러 개 고를 수 있다.**
 //
 // 절을 여러 개 고르면 붙어 있는 것끼리 한 덩어리(run)로 묶어 한 번에 고친다 — 이어진 절을 따로
-// 고치면 이음새 문장이 서로 어긋난다. 떨어진 묶음은 각각 따로 호출하고, 되끼울 때는 **뒤에서부터**
-// 넣는다: 앞을 먼저 갈아끼우면 길이가 달라져 뒤 묶음의 오프셋이 밀린다.
+// 고치면 이음새 문장이 서로 어긋난다. 떨어진 묶음은 각각 따로 호출한다.
+//
+// **실행은 이 컴포넌트가 들고 있지 않다.** lib/noteAiRun 스토어가 전문 작성과 같은 자리에서 돌린다 —
+// 모달을 닫아도 계속 돌고, 노트 위 배너·트리 점으로 돌아올 길이 남는다. 조각이라 금방 끝난다고 봤던
+// 게 틀렸다: CLI 를 깨우는 시간은 조각 길이와 무관해서 한 문단에도 수십 초가 걸린다.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { DiffView } from "./DiffView";
 import type { AppConfig } from "../lib/config";
-import { aiCancel, aiNoteEditSpanStream, friendlyError, newCancelKey, type AiActivity } from "../lib/ai";
-import { mergeRuns, splitSections, spliceSpan } from "../lib/mdSections";
+import { mergeRuns, splitSections } from "../lib/mdSections";
+import {
+  dismissNoteAi,
+  getNoteAiRun,
+  setNoteSpanResult,
+  startNoteSpanAi,
+  stopNoteAi,
+  useNoteAiRun,
+  type NoteAiSpan,
+} from "../lib/noteAiRun";
 import { AiThinking, ChoiceChip, DiscardAiModal, Modal, Tooltip } from "../ui";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { loadRecentRefDirs, refDirName, rememberRefDir } from "../lib/refDirs";
@@ -26,17 +37,13 @@ import { t } from "../lib/i18n";
 type Step = "pick" | "prompt" | "loading" | "preview";
 type ViewMode = "diff" | "source";
 
-/** 한 번의 호출로 고칠 덩어리 = 소스 구간 + 화면에 보여줄 이름 */
-interface Run {
-  kind: "selection" | "section";
-  start: number;
-  end: number;
-  label: string;
-}
+/** 한 번의 호출로 고칠 덩어리 = 소스 구간 + 화면에 보여줄 이름 (스토어와 같은 모양) */
+type Run = NoteAiSpan;
 
 export function NoteSpanAiModal({
   open,
   mode,
+  path,
   title,
   body,
   selection,
@@ -47,6 +54,8 @@ export function NoteSpanAiModal({
   open: boolean;
   /** selection = 넘겨받은 구간을 바로 고친다 · section = 절 목록에서 고를 것부터 시작 */
   mode: "selection" | "section";
+  /** vault 상대 경로 — 실행 스토어의 키 */
+  path: string;
   title: string;
   /** 노트 전문 (마크다운 소스) */
   body: string;
@@ -57,7 +66,11 @@ export function NoteSpanAiModal({
   /** 조각들이 끼워진 **전문**을 넘긴다 — 호출한 쪽은 초안에 그대로 반영하면 된다 */
   onApplied: (nextBody: string) => void;
 }) {
-  const [step, setStep] = useState<Step>("prompt");
+  // 이 노트의 실행(없으면 undefined). 진행·결과·실패 전부 스토어에서 온다
+  const run = useNoteAiRun(path);
+  const spanRun = run?.kind === "span" ? run : undefined;
+  /** 지시·검토를 오갈 때의 화면 상태. 실행 중/결과 있음은 스토어가 정한다 */
+  const [stage, setStage] = useState<"pick" | "prompt">("prompt");
   const [runs, setRuns] = useState<Run[]>([]);
   /** 고른 절의 인덱스 (splitSections 결과 기준) */
   const [picked, setPicked] = useState<Set<number>>(new Set());
@@ -65,43 +78,51 @@ export function NoteSpanAiModal({
   // 참고 폴더 — 최근 목록(칩)과 그중 이번 요청에 붙일 것. AI 가 읽기 전용으로 살펴본다
   const [refDirs, setRefDirs] = useState<string[]>([]);
   const [refOn, setRefOn] = useState<Set<string>>(() => new Set());
-  // 진행 신호 — CLI 스트림의 단계(생각·쓰기·도구 호출)와 그 시각. 대기 문구(useAiWaitLine)가 이걸로 바뀐다
-  const [activity, setActivity] = useState<AiActivity | null>(null);
-  const [activityAt, setActivityAt] = useState(0);
-  const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [confirmClose, setConfirmClose] = useState(false);
-  // 묶음 중 하나라도 출력 상한에서 잘렸는가 — 조각은 짧아 드물지만 조용히 넘기지 않는다
-  const [truncated, setTruncated] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<string[]>([]);
-  const [streamText, setStreamText] = useState("");
-  /** 진행 중인 덩어리 번호 (0-based) — 여러 묶음이면 몇 번째인지 보여준다 */
-  const [runAt, setRunAt] = useState(0);
+  // "다시 지시" — 결과가 있어도 지시 화면을 보인다. 결과는 새 결과가 올 때까지 스토어에 남는다
+  const [revise, setRevise] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("diff");
   const streamRef = useRef<HTMLPreElement>(null);
-  const cancelKey = useRef<string | null>(null);
-  // 실행 세대 — 중단·재실행으로 버려진 실행의 델타가 새 버퍼에 섞이지 않게 (NoteAiModal 과 같은 이유)
-  const runSeq = useRef(0);
+
+  // 화면 단계는 스토어 상태에서 나온다. 실패했어도 이전 결과가 있으면 그 결과 위에 에러를 얹어 보인다
+  const step: Step =
+    !spanRun || revise
+      ? stage
+      : spanRun.phase === "running"
+        ? "loading"
+        : spanRun.phase === "done" || spanRun.result
+          ? "preview"
+          : stage;
+  const error = spanRun && !revise && spanRun.phase === "error" ? spanRun.error : null;
+  const streamText = spanRun?.stream ?? "";
+  const results = spanRun?.spanResults ?? [];
+  const truncated = spanRun?.truncated ?? false;
+  const runAt = spanRun?.spanAt ?? 0;
+  // 검토는 실행을 시작한 시점의 본문과 견준다 — 그 사이 노트를 고쳤어도 변경점이 흔들리지 않게
+  const baseBody = spanRun?.baseMarkdown ?? body;
 
   const sections = useMemo(() => (open ? splitSections(body) : []), [open, body]);
 
-  // 열 때마다 초기화. selection 은 받은 구간으로 바로 시작하고, section 은 고르는 화면부터.
+  // 열 때마다: 이 노트에 부분 수정 실행이 남아 있으면 그때의 구간·지시·폴더를 되살리고,
+  // 없으면 새로 시작한다(selection 은 받은 구간으로 바로, section 은 고르는 화면부터).
   useEffect(() => {
     if (!open) return;
-    runSeq.current++;
-    setInstruction("");
+    const cur = getNoteAiRun(path);
+    const prior = cur?.kind === "span" ? cur : undefined;
+    setRevise(false);
+    setConfirmDiscard(false);
     setRefDirs(loadRecentRefDirs());
-    setRefOn(new Set());
-    setActivity(null);
-    setStartedAt(null);
-    setConfirmClose(false);
-    setTruncated(false);
-    setError(null);
-    setResults([]);
-    setStreamText("");
-    setRunAt(0);
     setViewMode("diff");
     setPicked(new Set());
+    if (prior) {
+      setRuns(prior.spans);
+      setInstruction(prior.typed);
+      setRefOn(new Set(prior.refDirs));
+      setStage("prompt");
+      return;
+    }
+    setInstruction("");
+    setRefOn(new Set());
     if (mode === "selection" && selection && selection.end > selection.start) {
       setRuns([
         {
@@ -111,14 +132,14 @@ export function NoteSpanAiModal({
           label: t("notes.spanAi.selectionLabel"),
         },
       ]);
-      setStep("prompt");
+      setStage("prompt");
     } else {
       setRuns([]);
-      setStep("pick");
+      setStage("pick");
     }
     // selection 은 열 때의 값만 쓴다 — 열려 있는 동안 원문 선택이 바뀌어도 대상은 고정이다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mode]);
+  }, [open, mode, path]);
 
   useEffect(() => {
     if (step === "loading" && streamRef.current) {
@@ -177,109 +198,43 @@ export function NoteSpanAiModal({
   const chosenDirs = refDirs.filter((d) => refOn.has(d));
   const waitLine = useAiWaitLine({
     running: step === "loading",
-    startedAt,
-    activity,
-    activityAt,
-    hasRefDirs: chosenDirs.length > 0,
+    startedAt: spanRun?.startedAt ?? null,
+    activity: spanRun?.activity ?? null,
+    activityAt: spanRun?.activityAt ?? 0,
+    hasRefDirs: (spanRun?.refDirs.length ?? 0) > 0,
   });
 
-  const hasResult = results.length > 0;
-  // 닫기 — 결과가 있거나 생성 중이면 한 번 묻는다. 몇 분 걸린 생성물이 X 한 번에 사라지면 안 된다
-  function requestClose() {
-    if (step === "loading" || step === "preview" || hasResult) {
-      setConfirmClose(true);
-      return;
-    }
-    onClose();
-  }
-  function discardAndClose() {
-    if (step === "loading") stop();
-    setConfirmClose(false);
-    onClose();
-  }
-
-  async function run() {
+  /** 실행 시작 — 컴포넌트가 아니라 스토어가 돌린다. 닫아도 끝까지 간다 */
+  function start() {
     if (!config || runs.length === 0 || instruction.trim().length < 2) return;
-    setError(null);
-    setResults([]);
-    setStreamText("");
-    setActivity(null);
-    setStartedAt(Date.now());
-    setRunAt(0);
-    setStep("loading");
-    const my = ++runSeq.current;
-    const out: string[] = [];
-    let truncatedAny = false;
-    try {
-      // 묶음마다 한 번씩. 순차로 도는 이유는 화면이다 — 스트림 박스가 하나라 동시에 흘리면
-      // 두 덩어리의 글자가 섞여 무엇을 보고 있는지 알 수 없게 된다.
-      for (let i = 0; i < runs.length; i++) {
-        if (my !== runSeq.current) return;
-        setRunAt(i);
-        setStreamText("");
-        const key = newCancelKey();
-        cancelKey.current = key;
-        const { text, meta } = await aiNoteEditSpanStream(
-          {
-            title,
-            markdown: body,
-            span: body.slice(runs[i].start, runs[i].end),
-            instruction,
-            spanKind: runs[i].kind,
-            model: config.model,
-            cliPath: config.cliPath,
-            provider: config.provider,
-            cancelKey: key,
-            refDirs: chosenDirs,
-          },
-          (delta) => {
-            if (my !== runSeq.current) return;
-            setStreamText((prev) => prev + delta);
-          },
-          (a) => {
-            if (my !== runSeq.current) return;
-            setActivity(a);
-            setActivityAt(Date.now());
-          },
-        );
-        if (my !== runSeq.current) return;
-        out.push(text);
-        if (meta.truncated) truncatedAny = true;
-      }
-      setResults(out);
-      setTruncated(truncatedAny);
-      setViewMode("diff");
-      setStep("preview");
-    } catch (e) {
-      if (my !== runSeq.current) return;
-      setError(friendlyError(e));
-      setStep("prompt");
-    } finally {
-      if (my === runSeq.current) cancelKey.current = null;
-    }
+    setRevise(false);
+    void startNoteSpanAi({
+      path,
+      title,
+      markdown: body,
+      spans: runs,
+      instruction,
+      refDirs: chosenDirs,
+      config,
+    });
   }
 
-  /** 중단 — CLI 를 죽이고 기다리지 않고 지시 화면으로 (NoteAiModal 과 같은 규약) */
-  function stop() {
-    const k = cancelKey.current;
-    runSeq.current++; // 남은 묶음도 여기서 끊긴다
-    cancelKey.current = null;
-    if (k) void aiCancel(k);
-    setStreamText("");
-    setStep("prompt");
-  }
-
-  /** 되끼우기 — **뒤에서부터**. 앞을 먼저 갈아끼우면 길이가 바뀌어 뒤 오프셋이 밀린다. */
+  /** 되끼운 전문을 넘긴다 — 스토어가 조각을 뒤에서부터 끼워 이미 만들어 뒀다 */
   function apply() {
-    let next = body;
-    for (let i = runs.length - 1; i >= 0; i--) {
-      const text = results[i];
-      if (text === undefined) continue;
-      next = spliceSpan(next, runs[i].start, runs[i].end, text);
-    }
-    onApplied(next);
+    if (!spanRun?.result) return;
+    onApplied(spanRun.result);
+    dismissNoteAi(path); // 에디터로 들어갔으니 대기 중 결과는 끝
     onClose();
   }
+  function discard() {
+    dismissNoteAi(path);
+    setConfirmDiscard(false);
+  }
+
+  // 실행을 시작한 뒤 노트가 바뀌었나 — 되끼운 전문이 그 편집을 덮어쓰게 되므로 알린다
+  const baseChanged = !!spanRun?.result && spanRun.baseMarkdown !== body;
+  // 노트 하나에 실행 하나다. 전문 작성이 도는 중이면 시작이 조용히 무시되므로 먼저 말해 준다
+  const composeBusy = run?.kind === "compose" && run.phase === "running";
 
   const tooShort = instruction.trim().length < 2;
 
@@ -288,7 +243,7 @@ export function NoteSpanAiModal({
     footer = (
       <>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={requestClose}>
+        <button className="btn btn-sm" onClick={onClose}>
           {t("common.cancel")}
         </button>
         <button
@@ -296,7 +251,7 @@ export function NoteSpanAiModal({
           disabled={picked.size === 0}
           onClick={() => {
             setRuns(runsFromPicked());
-            setStep("prompt");
+            setStage("prompt");
           }}
         >
           {t("notes.spanAi.next")}
@@ -307,20 +262,27 @@ export function NoteSpanAiModal({
   } else if (step === "prompt") {
     footer = (
       <>
-        {mode === "section" && (
-          <button className="btn btn-sm" onClick={() => setStep("pick")}>
+        {revise && spanRun?.result ? (
+          <button className="btn btn-sm" onClick={() => setRevise(false)}>
             <Icon name="chevron-left" size={14} />
-            {t("notes.spanAi.backToPick")}
+            {t("notes.ai.backToResult")}
           </button>
+        ) : (
+          mode === "section" && (
+            <button className="btn btn-sm" onClick={() => setStage("pick")}>
+              <Icon name="chevron-left" size={14} />
+              {t("notes.spanAi.backToPick")}
+            </button>
+          )
         )}
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={requestClose}>
+        <button className="btn btn-sm" onClick={onClose}>
           {t("common.cancel")}
         </button>
         <button
           className="btn btn-primary"
-          onClick={run}
-          disabled={tooShort || !config?.provider || runs.length === 0}
+          onClick={start}
+          disabled={tooShort || !config?.provider || runs.length === 0 || composeBusy}
           title={!config ? t("notes.ai.configLoading") : undefined}
         >
           <Icon name="sparkles" size={15} />
@@ -330,21 +292,31 @@ export function NoteSpanAiModal({
     );
   } else if (step === "loading") {
     footer = (
-      <button className="btn btn-sm btn-danger-ghost" onClick={stop}>
-        <Icon name="x" size={14} />
-        {t("notes.ai.stop")}
-      </button>
+      <>
+        {/* 탈출구는 남기되, 닫기는 중단이 아니다 — 스토어가 계속 돌린다 */}
+        <button className="btn btn-sm btn-danger-ghost" onClick={() => stopNoteAi(path)}>
+          <Icon name="x" size={14} />
+          {t("notes.ai.stop")}
+        </button>
+        <span className="spacer" />
+        <button className="btn btn-sm" onClick={onClose}>
+          {t("notes.ai.bg.keep")}
+        </button>
+      </>
     );
   } else {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={() => setStep("prompt")}>
+        <button className="btn btn-sm" onClick={() => setRevise(true)}>
           <Icon name="chevron-left" size={14} />
           {t("notes.ai.back")}
         </button>
+        <button className="btn btn-sm btn-danger-ghost" onClick={() => setConfirmDiscard(true)}>
+          {t("notes.ai.discard")}
+        </button>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={requestClose}>
-          {t("common.cancel")}
+        <button className="btn btn-sm" onClick={onClose}>
+          {t("common.close")}
         </button>
         <button
           className="btn btn-primary"
@@ -363,13 +335,18 @@ export function NoteSpanAiModal({
     <Modal
       open={open}
       title={t("notes.spanAi.title")}
-      onClose={requestClose}
+      onClose={onClose}
       footer={footer}
       wide
     >
       {error && (
         <div className="error-note" style={{ marginBottom: 12 }}>
           {error}
+        </div>
+      )}
+      {composeBusy && (
+        <div className="warn-note" style={{ marginBottom: 12 }}>
+          {t("notes.spanAi.composeBusy")}
         </div>
       )}
 
@@ -451,10 +428,12 @@ export function NoteSpanAiModal({
               )}
               <pre className="span-source">{body.slice(r.start, r.end)}</pre>
               {step === "loading" && i === runAt && (
-                <div className="note-stream" style={{ marginTop: 8 }}>
+                // 항상 compact — 고칠 원문 바로 아래 붙는 한 줄이라, 가운데 정렬된 큰 블록을 쓰면
+                // 원문과 진행 표시 사이가 벌어져 모달이 텅 빈 것처럼 읽힌다
+                <div className="note-stream" style={{ marginTop: 10 }}>
                   <AiThinking
+                    compact
                     activity={waitLine ?? undefined}
-                    compact={!!streamText}
                     label={
                       runs.length > 1
                         ? t("notes.spanAi.progress", {
@@ -477,6 +456,7 @@ export function NoteSpanAiModal({
           {runs.length > 1 && step === "prompt" && (
             <div className="hint">{t("notes.spanAi.runsHint", { n: runs.length })}</div>
           )}
+          {step === "loading" && <div className="hint">{t("notes.ai.bg.hint")}</div>}
         </div>
       )}
 
@@ -495,7 +475,7 @@ export function NoteSpanAiModal({
               if (e.nativeEvent.isComposing) return;
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
-                void run();
+                start();
               }
             }}
           />
@@ -526,6 +506,11 @@ export function NoteSpanAiModal({
         </div>
       )}
 
+      {step === "preview" && baseChanged && (
+        <div className="warn-note" style={{ marginBottom: 12 }}>
+          {t("notes.spanAi.baseChanged")}
+        </div>
+      )}
       {step === "preview" && truncated && (
         <div className="warn-note" style={{ marginBottom: 12 }}>
           {t("notes.ai.truncated")}
@@ -560,7 +545,7 @@ export function NoteSpanAiModal({
               )}
               {viewMode === "diff" ? (
                 <DiffView
-                  oldText={body.slice(r.start, r.end)}
+                  oldText={baseBody.slice(r.start, r.end)}
                   newText={results[i] ?? ""}
                 />
               ) : (
@@ -569,13 +554,7 @@ export function NoteSpanAiModal({
                   style={{ fontFamily: "var(--mono)" }}
                   rows={runs.length > 1 ? 8 : 14}
                   value={results[i] ?? ""}
-                  onChange={(e) =>
-                    setResults((prev) => {
-                      const next = [...prev];
-                      next[i] = e.target.value;
-                      return next;
-                    })
-                  }
+                  onChange={(e) => setNoteSpanResult(path, i, e.target.value)}
                 />
               )}
             </div>
@@ -585,10 +564,10 @@ export function NoteSpanAiModal({
       )}
     </Modal>
     <DiscardAiModal
-      open={confirmClose}
-      running={step === "loading"}
-      onKeep={() => setConfirmClose(false)}
-      onDiscard={discardAndClose}
+      open={confirmDiscard}
+      mode="discard"
+      onKeep={() => setConfirmDiscard(false)}
+      onDiscard={discard}
     />
     </>
   );
