@@ -26,7 +26,7 @@ import {
   type NoteComment,
 } from "../lib/comments";
 import { Markdown } from "./Markdown";
-import { AiThinking, timeAgo, Tooltip } from "../ui";
+import { timeAgo, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { blockRangeFromSelection } from "../lib/mdBlocks";
@@ -62,6 +62,19 @@ function highlightRegistry(): HighlightRegistry | null {
   const css = CSS as unknown as { highlights?: HighlightRegistry };
   const HL = (window as unknown as { Highlight?: unknown }).Highlight;
   return css.highlights && HL ? css.highlights : null;
+}
+
+/** 말풍선 안의 대기 한 줄 — **바가 없다.** 기다림의 모션은 본문 위를 지나가는 형광펜
+ *  (SelectionSweep) 하나뿐이다(DESIGN §9.1 "한 대기 상태에 모션은 하나"). 둘을 함께 두면
+ *  도는 것이 둘이라 어디를 봐야 할지 흐려지고, 정작 "어느 문장인가"를 말하는 쪽이 묻힌다.
+ *  글자는 남긴다 — 형광펜은 `aria-hidden` 이라 이 줄이 유일한 라이브 리전이고,
+ *  구간이 화면 밖으로 스크롤됐을 때 기다리는 중이라고 말해 주는 것도 여기뿐이다. */
+function CmtWaiting({ label }: { label: string }) {
+  return (
+    <div className="cmt-waiting" role="status" aria-live="polite">
+      {label}
+    </div>
+  );
 }
 
 export function NoteCommentLayer({
@@ -860,7 +873,7 @@ export function NoteCommentLayer({
                 </div>
               )}
               {asking ? (
-                <AiThinking compact label={t("notes.cmt.thinking")} />
+                <CmtWaiting label={t("notes.cmt.thinking")} />
               ) : (
                 <div className="cmt-actions">
                   <button className="btn btn-sm" onClick={() => setPop(null)}>
@@ -969,7 +982,7 @@ export function NoteCommentLayer({
                       </div>
                     )}
                     {asking && revising === i && (
-                      <AiThinking compact label={t("notes.cmt.revising")} />
+                      <CmtWaiting label={t("notes.cmt.revising")} />
                     )}
                   </div>
                 ))}
@@ -980,7 +993,7 @@ export function NoteCommentLayer({
                       {pendingQ.q}
                     </div>
                     <div className="cmt-a">
-                      <AiThinking compact label={t("notes.cmt.thinking")} />
+                      <CmtWaiting label={t("notes.cmt.thinking")} />
                     </div>
                   </div>
                 )}
