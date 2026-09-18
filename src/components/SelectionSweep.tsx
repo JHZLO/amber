@@ -11,6 +11,9 @@
 import { useEffect, useState } from "react";
 import { mergeLineRects, nthIndex, rangeAt, type Rect } from "../lib/noteAnchor";
 
+/** 지나가는 빛의 폭(px). 줄 길이와 무관하게 일정해야 같은 붓으로 그은 것처럼 보인다 */
+const BAND = 200;
+
 export function SelectionSweep({
   containerRef,
   anchor,
@@ -60,6 +63,20 @@ export function SelectionSweep({
   }, [active, anchor, occurrence, containerRef]);
 
   if (!active || boxes.length === 0) return null;
+
+  // 줄들을 **읽는 순서로 이어 붙인 한 줄**로 본다. 각 줄의 빛은 그 긴 줄 위의 같은 지점을 보여 주고
+  // (left 를 앞 줄들의 길이만큼 당겨 둔다), 모든 줄이 같은 거리를 같은 시간에 움직인다.
+  // → 빛 하나가 첫 줄 왼쪽에서 마지막 줄 오른쪽까지 한 번에 지나간다.
+  let at = 0;
+  const offsets = boxes.map((b) => {
+    const o = at;
+    at += b.width;
+    return o;
+  });
+  const total = at;
+  // 구간이 길든 짧든 빛의 **속도**를 맞춘다 — 시간을 고정하면 긴 문단일수록 휙 지나간다
+  const seconds = Math.min(3.2, Math.max(1, (total + BAND) / 560));
+
   return (
     <div className="sel-sweep" aria-hidden="true">
       {boxes.map((b, i) => (
@@ -67,7 +84,16 @@ export function SelectionSweep({
           key={i}
           className="sel-sweep-line"
           style={
-            { top: b.top, left: b.left, width: b.width, height: b.height, "--i": i } as React.CSSProperties
+            {
+              top: b.top,
+              left: b.left,
+              width: b.width,
+              height: b.height,
+              "--o": `${offsets[i]}px`,
+              "--len": `${total}px`,
+              "--band": `${BAND}px`,
+              "--dur": `${seconds}s`,
+            } as React.CSSProperties
           }
         >
           <i />
