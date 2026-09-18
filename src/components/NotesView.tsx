@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
 import { PageFind } from "./PageFind";
+import { TREE_ROW_ATTR, TreeFindBar, TreeLabel, useTreeFind } from "./TreeFind";
 import { headingSection } from "../lib/mdSecRefs";
 import { NoteCommentLayer } from "./NoteComments";
 import {
@@ -589,19 +590,36 @@ export function NotesView({
 
   const pane = usePaneResize({ storageKey: "amber.notes.list-width", active });
 
+  // 트리 안에서 찾기(⌘F) — 접힌 폴더 안까지 본다. 포커스가 트리에 있을 때만 잡으므로
+  // 본문에 있을 때의 ⌘F(PageFind)와 겹치지 않는다
+  const find = useTreeFind(tree ?? [], (path, isDir) => {
+    if (isDir) {
+      expandTo(path);
+      setExpanded((prev) => new Set(prev).add(path));
+      setMountedDirs((prev) => new Set(prev).add(path));
+      return;
+    }
+    openNote(path);
+    find.close();
+  });
+
   // 컴포넌트가 아닌 렌더 함수 — 렌더마다 트리 DOM 이 리마운트되지 않게.
   // 하위는 조건부 언마운트 대신 항상 렌더하고 CSS grid(0fr↔1fr)로 펼침 → 부드러운 전개 애니메이션.
   function renderRows(nodes: NoteNode[], depth: number) {
     return (
       <>
         {nodes.map((n) => {
-          const isOpen = n.isDir && expanded.has(n.path);
+          // 찾는 중에는 맞은 것의 조상을 임시로 펼친다 — 접힌 채로는 결과가 보이지 않는다
+          const isOpen = n.isDir && (expanded.has(n.path) || find.autoExpand.has(n.path));
           return (
             <div key={n.path} className="tree-branch">
               <div
+                {...{ [TREE_ROW_ATTR]: n.path }}
                 className={`tree-row ${n.isDir ? "dir" : ""} ${
                   !n.isDir && selected === n.path ? "selected" : ""
-                } ${n.isDir && activeDir === n.path ? "active" : ""} ${dnd.rowClass(n)}`}
+                } ${n.isDir && activeDir === n.path ? "active" : ""} ${
+                  find.current?.path === n.path ? "find-current" : ""
+                } ${dnd.rowClass(n)}`}
                 style={{ paddingLeft: 8 + depth * 14 }}
                 {...dnd.rowProps(n)}
                 onClick={() => {
@@ -628,7 +646,7 @@ export function NotesView({
                   className="tree-ico"
                 />
                 <span className="label" title={n.name}>
-                  {n.name}
+                  <TreeLabel name={n.name} query={find.query} />
                 </span>
                 {/* 백그라운드 AI 실행 점 — 맥동 = 쓰는 중, 멈춘 필 = 초안 준비됨, danger 링 = 실패. 단어는 툴팁이 */}
                 {!n.isDir && aiPhases.has(n.path) && (
@@ -708,7 +726,10 @@ export function NotesView({
                   1,000개 규모에서 수천 개 엘리먼트가 살아 있고 창 포커스마다 전부 재조정된다.
                   0fr→1fr 트랜지션을 살리려면 마운트와 .open 을 같은 프레임에 주면 안 되므로
                   mountedDirs 에 넣는 시점(펼침 클릭)과 isOpen 이 자연히 한 프레임 어긋난다. */}
-              {n.isDir && n.children && n.children.length > 0 && mountedDirs.has(n.path) && (
+              {n.isDir &&
+                n.children &&
+                n.children.length > 0 &&
+                (mountedDirs.has(n.path) || find.autoExpand.has(n.path)) && (
                 <div className={`tree-children ${isOpen ? "open" : ""}`}>
                   <div className="tree-children-inner">
                     {renderRows(n.children, depth + 1)}
@@ -739,7 +760,7 @@ export function NotesView({
 
   return (
     <div className="body" {...pane.bodyProps}>
-      <aside className="list">
+      <aside className="list" {...find.paneProps}>
         <div className="notes-tree-head">
           <RootPicker section="notes" />
           <span className="spacer" />
@@ -761,6 +782,11 @@ export function NotesView({
               <Icon name="folder-plus" size={15} />
             </button>
           </Tooltip>
+          <Tooltip label={t("common.find.treeTip")}>
+            <button className="icon-btn sm" aria-label={t("common.find.treeTip")} onClick={find.start}>
+              <Icon name="search" size={14} />
+            </button>
+          </Tooltip>
           <Tooltip label={t("notes.tooltip.refresh")}>
             <button
               className="icon-btn sm"
@@ -771,6 +797,7 @@ export function NotesView({
             </button>
           </Tooltip>
         </div>
+        <TreeFindBar find={find} />
 
         {treeError && (
           <div className="error-note" style={{ margin: 12 }}>
@@ -804,7 +831,11 @@ export function NotesView({
               if (e.detail > 1) e.preventDefault();
             }}
           >
-            {renderRows(tree, 0)}
+            {find.open && find.nodes.length === 0 ? (
+              <p className="tree-find-empty">{t("common.find.treeEmpty")}</p>
+            ) : (
+              renderRows(find.nodes, 0)
+            )}
           </div>
         )}
       </aside>
@@ -975,7 +1006,17 @@ export function NotesView({
             </div>
 
             {/* 백그라운드 AI 실행 — 모달을 닫아도 여기서 진행·결과·실패를 보고 되돌아간다 */}
-            {aiRun && <NoteAiBanner run={aiRun} onOpen={() => setAiOpen(true)} />}
+            {aiRun && (
+              <NoteAiBanner
+                run={aiRun}
+                // 되돌아갈 곳은 그 실행을 시작한 모달이다 — 부분 수정 결과를 전문 작성 검토에 띄우면 맞지 않는다
+                onOpen={() =>
+                  aiRun.kind === "span"
+                    ? setSpanAi(aiRun.spans[0]?.kind === "selection" ? "selection" : "section")
+                    : setAiOpen(true)
+                }
+              />
+            )}
 
             {loadingBody ? (
               <Spinner />
@@ -1274,6 +1315,7 @@ export function NotesView({
         <NoteSpanAiModal
           open
           mode={spanAi}
+          path={selected}
           title={fileName}
           body={editing ? draft : body}
           selection={srcSel}

@@ -108,6 +108,9 @@ const ko = {
 
   // 페이지 내 검색(⌘F) — 필기노트·개념·투두 공용 (components/PageFind.tsx)
   "common.find.ph": "이 화면에서 찾기",
+  "common.find.treePh": "트리에서 찾기 — 접힌 폴더 안까지",
+  "common.find.treeTip": "트리에서 찾기 (⌘F)",
+  "common.find.treeEmpty": "맞는 이름이 없어요.",
   "common.find.prev": "이전 결과",
   "common.find.next": "다음 결과",
 
@@ -241,6 +244,9 @@ const en: Record<keyof typeof ko, string> = {
   "common.alert.caution": "Caution",
 
   "common.find.ph": "Find on this screen",
+  "common.find.treePh": "Find in tree, including collapsed folders",
+  "common.find.treeTip": "Find in tree (⌘F)",
+  "common.find.treeEmpty": "No matching name.",
   "common.find.prev": "Previous match",
   "common.find.next": "Next match",
 

@@ -21,6 +21,7 @@ import {
   type DiagramNode,
 } from "../lib/diagrams";
 import { ancestorPaths, remapPath, remapPaths, splitDbRoots } from "../lib/vaultTree";
+import { TREE_ROW_ATTR, TreeFindBar, TreeLabel, useTreeFind } from "./TreeFind";
 import { useTreeDnd } from "../lib/useTreeDnd";
 import { usePaneResize } from "../lib/usePaneResize";
 import { DiagramCanvas } from "./DiagramCanvas";
@@ -796,7 +797,8 @@ export function DiagramsView({
     return (
       <>
         {nodes.map((n) => {
-          const isOpen = n.isDir && expanded.has(n.path);
+          // 찾는 중에는 맞은 것의 조상을 임시로 펼친다 — 접힌 채로는 결과가 보이지 않는다
+          const isOpen = n.isDir && (expanded.has(n.path) || find.autoExpand.has(n.path));
           // DB 연동: 이 폴더가 연결 폴더인가 / 스키마 폴더인가
           const connHit = n.isDir ? connIndex.byFolder.get(n.path) : undefined;
           const schemaHit = n.isDir ? connIndex.schemaByFolder.get(n.path) : undefined;
@@ -819,11 +821,12 @@ export function DiagramsView({
           return (
             <div key={n.path} className="tree-branch">
               <div
+                {...{ [TREE_ROW_ATTR]: n.path }}
                 className={`tree-row ${n.isDir ? "dir" : ""} ${
                   (!n.isDir && selected === n.path) || schemaSelected ? "selected" : ""
                 } ${n.isDir && activeDir === n.path && !schemaSelected ? "active" : ""} ${
                   isSyncing ? "db-syncing" : ""
-                } ${dnd.rowClass(n)}`}
+                } ${find.current?.path === n.path ? "find-current" : ""} ${dnd.rowClass(n)}`}
                 style={{ paddingLeft: 8 + depth * 14 }}
                 {...dnd.rowProps(n)}
                 onClick={() => {
@@ -869,7 +872,7 @@ export function DiagramsView({
                   className="tree-ico"
                 />
                 <span className="label" title={n.name}>
-                  {n.name}
+                  <TreeLabel name={n.name} query={find.query} />
                 </span>
                 {schemaHit?.pref.label && <span className="tree-sub">{schemaHit.pref.label}</span>}
                 {isGenerated && <span className="tree-sub">{t("diagrams.db.tree.generated")}</span>}
@@ -1022,7 +1025,10 @@ export function DiagramsView({
                   1,000개 규모에서 수천 개 엘리먼트가 살아 있고 창 포커스마다 전부 재조정된다.
                   0fr→1fr 트랜지션을 살리려면 마운트와 .open 을 같은 프레임에 주면 안 되므로
                   mountedDirs 에 넣는 시점(펼침 클릭)과 isOpen 이 자연히 한 프레임 어긋난다. */}
-              {n.isDir && n.children && n.children.length > 0 && mountedDirs.has(n.path) && (
+              {n.isDir &&
+                n.children &&
+                n.children.length > 0 &&
+                (mountedDirs.has(n.path) || find.autoExpand.has(n.path)) && (
                 <div className={`tree-children ${isOpen ? "open" : ""}`}>
                   <div className="tree-children-inner">
                     {renderRows(n.children, depth + 1)}
@@ -1097,10 +1103,22 @@ export function DiagramsView({
     return false;
   }
 
+  // 트리 안에서 찾기(⌘F) — 두 구역을 한 번에 훑는다. 나누기 전에 걸러야 결과가 원래 있던 구역에 남는다
+  const find = useTreeFind(tree ?? [], (path, isDir) => {
+    if (isDir) {
+      expandTo(path);
+      setExpanded((prev) => new Set(prev).add(path));
+      setMountedDirs((prev) => new Set(prev).add(path));
+      return;
+    }
+    openFile(path);
+    find.close();
+  });
+
   // 연결 폴더는 "내 다이어그램"에서 빼고 아래 구역에 뿌리로 세운다 — 같은 폴더가 두 번 보이지 않게
   const { mine, dbRoots } = useMemo(
-    () => splitDbRoots(tree ?? [], (p) => connIndex.byFolder.has(p)),
-    [tree, connIndex],
+    () => splitDbRoots(find.nodes, (p) => connIndex.byFolder.has(p)),
+    [find.nodes, connIndex],
   );
 
   const fileName = selected
@@ -1114,11 +1132,16 @@ export function DiagramsView({
 
   return (
     <div className="body" {...pane.bodyProps}>
-      <aside className="list">
+      <aside className="list" {...find.paneProps}>
         <div className="notes-tree-head">
           <RootPicker section="diagrams" />
           <span className="spacer" />
           {/* 헤더에는 트리 전체에 걸리는 것만 남긴다 — 만드는 동작은 각자 구역 머리로 내려갔다(§7) */}
+          <Tooltip label={t("common.find.treeTip")}>
+            <button className="icon-btn sm" aria-label={t("common.find.treeTip")} onClick={find.start}>
+              <Icon name="search" size={14} />
+            </button>
+          </Tooltip>
           <Tooltip label={t("diagrams.tooltip.refresh")}>
             <button
               className="icon-btn sm"
@@ -1129,6 +1152,7 @@ export function DiagramsView({
             </button>
           </Tooltip>
         </div>
+        <TreeFindBar find={find} />
 
         {treeError && (
           <div className="error-note" style={{ margin: 12 }}>
@@ -1184,7 +1208,11 @@ export function DiagramsView({
                 </button>
               </Tooltip>
             </div>
-            {renderRows(mine, 0)}
+            {find.open && find.nodes.length === 0 ? (
+              <p className="tree-find-empty">{t("common.find.treeEmpty")}</p>
+            ) : (
+              renderRows(mine, 0)
+            )}
             <div className="tree-group">
               <span>{t("diagrams.tree.group.db")}</span>
               <span className="spacer" />
