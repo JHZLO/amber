@@ -16,9 +16,6 @@
   --accent: #18181b;
   --accent-soft: #f4f4f5;
 
-  /* 스크롤바 — 트랙은 없고 엄지만. 판 위에 얹히는 회색이라 잉크 램프가 아니라 알파로 둔다 */
-  --scroll-thumb: rgba(24, 24, 27, 0.18);
-  --scroll-thumb-hover: rgba(24, 24, 27, 0.34);
 
   /* 파괴적 액션(삭제·버리고 이동 등)과 실패 상태는 모노톤 예외로 빨강 사용.
      danger=선/아이콘/테두리, danger-soft=배경 틴트, danger-text=틴트 위 본문(대비 확보용) */
@@ -120,8 +117,6 @@
   --accent: #f4f4f5;
   --accent-soft: #1f1f23;
 
-  --scroll-thumb: rgba(244, 244, 245, 0.16);
-  --scroll-thumb-hover: rgba(244, 244, 245, 0.3);
 
   /* 다크는 달력 예외와 같은 방식 — 채도를 낮추고 밝기를 올린다 (9.9~10.0:1 on --bg,
      caution 만 7.65:1 로 낮은데 빨강을 더 밝히면 danger 와 뜻이 섞인다) */
@@ -195,32 +190,21 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
-/* ---- 스크롤바 — 조용하게. 트랙을 그리지 않고 엄지만 띄운다.
-   기본(WKWebView)은 굵고 또렷한 알약이라 목록 옆에서 계속 눈에 걸린다. 여기서는 폭 11px 중
-   3.5px 을 투명 테두리로 먹여(background-clip: content-box) **보이는 굵기를 4px** 로 줄이고,
-   색은 판 위에 얹히는 회색이라 잉크 램프가 아니라 알파로 둔다. 잡으려고 다가가면 진해진다 —
-   자리는 그대로이므로 내용이 밀리지 않는다. ---- */
+/* ---- 스크롤바 — 그리지 않는다.
+   이 WebView 는 겹침(overlay) 스크롤바를 주지 않는다. 아무것도 칠하지 않으면 15px, 얇게
+   잡아도 11px 짜리 **골**이 생긴다 — 자리를 차지하는 고전 스크롤바다. 그 골이 목록 옆에
+   세로 띠로 남고, 옆 패널 경계선과 나란히 서면 엄지가 상자에 갇힌 것처럼 보인다.
+   실측으로 골을 0 으로 만드는 길은 폭을 0 으로 두는 것 하나뿐이었다(width:0 → 0px).
+
+   대신 위치 표시를 잃는다. 받아들인 이유: amber 의 스크롤 영역은 목록과 글이라 **어디까지
+   왔는지보다 무엇이 적혀 있는지가 중요하고**, 막대가 사라지면 내용이 11~15px 넓어진다.
+   휠과 트랙패드는 그대로 동작한다 — 사라진 건 막대지 스크롤이 아니다. ---- */
 * {
-  scrollbar-width: thin; /* 표준 속성 — 웹킷 가상 요소를 못 쓰는 환경 대비 */
-  scrollbar-color: var(--scroll-thumb) transparent;
+  scrollbar-width: none; /* 표준 속성 — 웹킷 가상 요소를 못 쓰는 환경 대비 */
 }
 ::-webkit-scrollbar {
-  width: 11px;
-  height: 11px;
-}
-::-webkit-scrollbar-track,
-::-webkit-scrollbar-corner {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  border: 3.5px solid transparent;
-  border-radius: 999px;
-  background-color: var(--scroll-thumb);
-  background-clip: content-box;
-  transition: background-color 0.12s;
-}
-::-webkit-scrollbar-thumb:hover {
-  background-color: var(--scroll-thumb-hover);
+  width: 0;
+  height: 0;
 }
 
 button {
