@@ -108,7 +108,9 @@ export function TodoDrawer({
             onClick={() => setTab("parked")}
           >
             {t("todos.parked.title")}
-            {rows.length > 0 && <span className="parked-cnt">{rows.length}</span>}
+            {/* 카드 수다(행 수가 아니라). 서브트리는 카드 하나로 접히고 그 안의 수는 카드가
+                "2 sub" 로 말하므로, 행을 세면 "3 인데 하나만 보인다" 가 되어 삼켜진 줄 안다 */}
+            {roots.length > 0 && <span className="parked-cnt">{roots.length}</span>}
           </button>
         </div>
         <span className="spacer" />

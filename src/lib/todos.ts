@@ -7,6 +7,18 @@ import type { DayTodoCount, Todo, TodoAncestor, TodoScope } from "../types";
 
 const now = () => Date.now();
 
+/** 서브트리 재귀의 **경계**: 씨앗과 같은 쪽(달력/서랍)에 있는 행만 따라간다.
+ *
+ *  `parkSubtree` 는 `parent_id` 를 지우지 않는다 — 어디서 왔는지 남겨야 서랍이 경로를 그리고
+ *  꺼낼 때 묶음을 되살린다. 그 대가로 **내려놓은 항목이 달력 부모의 서브트리에 그대로 남는다.**
+ *  경계를 안 그으면 달력 쪽 작업이 서랍 안까지 손을 뻗는다: 묶음을 지우면 서랍에 치워 둔
+ *  항목이 **말없이 함께 삭제되고**(확인 창은 그 날 목록만 세므로 개수도 틀리게 말한다),
+ *  묶음을 체크하면 미뤄 둔 것까지 완료가 된다. 실제로 그렇게 두 건이 사라졌다.
+ *
+ *  씨앗이 서랍 쪽이면(카드 삭제) 반대로 서랍 안쪽만 따라간다 — 방향이 아니라 경계다. */
+const parkedBoundary = (seed: string) =>
+  `(t.parked_at IS NULL) = (SELECT parked_at IS NULL FROM todos WHERE id = ${seed})`;
+
 /** 특정 날짜의 할 일 = 그 날짜가 마감인 행 + **그 날짜에서 이월해 나간 기록**(고스트).
  *
  *  고스트는 `todo_carries` 의 **스냅샷**이다(migrations/0014) — 이월한 순간의 내용·부모를
@@ -185,7 +197,7 @@ export async function listParkedAncestors(): Promise<TodoAncestor[]> {
  *  통째로 사라진다**(DB 에는 멀쩡히 있는데 아무 데도 안 그려진다). 그래서 조상을 바깥쪽부터
  *  훑어 그 날에 같은 묶음이 이미 있으면 거기 붙이고, 없으면 그 날짜로 하나 만든다.
  *  같은 묶음의 형제를 둘 꺼내도 묶음은 하나만 생긴다 — 만들기 전에 항상 먼저 찾는다. */
-export async function unparkSubtree(id: number, dueDate: string): Promise<void> {
+export async function unparkSubtree(id: number, dueDate: string): Promise<number | null> {
   const db = await getDb();
   const [row] = await db.select<{ parent_id: number | null }[]>(
     `SELECT parent_id FROM todos WHERE id = $1`,
@@ -212,6 +224,8 @@ export async function unparkSubtree(id: number, dueDate: string): Promise<void> 
     now(),
     id,
   ]);
+  // 붙은 자리를 돌려준다 — 호출부가 그 묶음의 완료 상태를 다시 계산해야 한다
+  return parentId;
 }
 
 /** 조상 사슬을 그 날짜에 되살리고 붙일 부모 id 를 돌려준다(없으면 null = 최상위).
@@ -285,6 +299,7 @@ export async function setSubtreeDone(id: number, done: 0 | 1): Promise<void> {
        -- flattenRows 는 이미 seen set 으로 같은 방어를 한다(todoTree.ts) — SQL 만 빠져 있었다.
        UNION
        SELECT t.id FROM todos t JOIN sub ON t.parent_id = sub.id
+        WHERE ${parkedBoundary("$2")}
      )
      UPDATE todos SET done = $1
       WHERE done <> $1 AND id IN (SELECT id FROM sub)`,
@@ -296,8 +311,10 @@ export async function setSubtreeDone(id: number, done: 0 | 1): Promise<void> {
 export async function recomputeParentDone(parentId: number): Promise<void> {
   const db = await getDb();
   const rows = await db.select<{ open: number; total: number }[]>(
+    // 내려놓은 자식은 세지 않는다 — 오늘 화면에 없는 것이 오늘의 완료를 막으면 안 된다.
+    // 꺼내 올 때 pull 이 다시 재계산하므로 되돌아오면 부모도 같이 열린다.
     `SELECT COALESCE(SUM(done = 0), 0) AS open, COUNT(*) AS total
-       FROM todos WHERE parent_id = $1`,
+       FROM todos WHERE parent_id = $1 AND parked_at IS NULL`,
     [parentId],
   );
   const r = rows[0] ?? { open: 0, total: 0 };
@@ -359,8 +376,11 @@ export async function moveTodos(ids: number[], dueDate: string): Promise<void> {
   // 씨앗과 그 자손 전부(완료 포함) — 어느 가지를 따라갈지 판단하려면 완료 자식도 봐야 한다
   const all = await db.select<Todo[]>(
     `WITH RECURSIVE sub(id) AS (
-       SELECT id FROM todos WHERE id IN (${ph(ids.length, 1)})
+       SELECT id FROM todos WHERE id IN (${ph(ids.length, 1)}) AND parked_at IS NULL
+       -- 이월은 달력 위의 것만 옮긴다 — 서랍에 치워 둔 자손까지 끌고 가면 날짜 없는 것에
+       -- 날짜가 붙고 이월 기록까지 남는다
        UNION SELECT t.id FROM todos t JOIN sub ON t.parent_id = sub.id
+        WHERE t.parked_at IS NULL
      )
      SELECT * FROM todos
       WHERE id IN (SELECT id FROM sub)
@@ -426,6 +446,7 @@ export async function deleteTodo(id: number): Promise<void> {
        SELECT $1
        UNION -- ALL 아님: parent_id 순환에서 무한 재귀가 되지 않게 (setSubtreeDone 과 동일)
        SELECT t.id FROM todos t JOIN sub ON t.parent_id = sub.id
+        WHERE ${parkedBoundary("$1")}
      )`;
   await db.execute(
     `${sub}
@@ -449,6 +470,15 @@ export async function deleteTodo(id: number): Promise<void> {
           SELECT 1 FROM todo_carries c
            WHERE c.todo_id = time_blocks.todo_id AND c.date = time_blocks.date
         )`,
+    [id],
+  );
+  // 서랍에 치워 둔 자식은 지우지 않는다(경계 — parkedBoundary) 대신 묶음에서 떼어낸다.
+  // 안 떼면 없어진 부모를 가리킨 채 남아 경로가 허공을 짚는다.
+  await db.execute(
+    `${sub}
+     UPDATE todos
+        SET parent_id = NULL, updated_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
+      WHERE parked_at IS NOT NULL AND parent_id IN (SELECT id FROM sub)`,
     [id],
   );
   await db.execute(`${sub} DELETE FROM todos WHERE id IN (SELECT id FROM sub)`, [

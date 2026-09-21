@@ -503,7 +503,10 @@ export function TodoView({
    *  꺼내는 동작의 뜻이 '지금 한다'이지 '이 날에 한다'가 아니다 */
   async function pull(todo: Todo) {
     try {
-      await unparkSubtree(todo.id, todayStr());
+      // 붙은 자리는 원래 부모일 수도, 그 날짜에 새로 살아난 묶음일 수도 있다(unparkSubtree)
+      const parentId = await unparkSubtree(todo.id, todayStr());
+      // 내려놓는 동안 부모는 이 자식을 안 세고 완료로 넘어갔을 수 있다 — 돌아오면 다시 연다
+      if (parentId != null) await recomputeChainFrom(parentId);
       await reloadCurrent();
       void reloadCounts();
       void reloadParked();

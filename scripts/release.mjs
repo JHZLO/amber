@@ -164,6 +164,8 @@ if (!process.env.SKIP_VERIFY) {
     ["cargo", ["test", "--manifest-path", "src-tauri/Cargo.toml"]],
     // SQL 은 어디서도 컴파일되지 않는다 — 태그 전에 한 번은 실제로 실행해 본다
     ["node", ["scripts/check-migrations.mjs"]],
+    // 달력 작업이 서랍(내려놓은 항목)까지 지우지 않는지 — 한 번 데이터가 조용히 날아갔다
+    ["node", ["scripts/check-todo-sql.mjs"]],
   ];
   for (const [cmd, args] of checks) {
     console.log(`\n검증  ${cmd} ${args.join(" ")}`);
