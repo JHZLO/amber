@@ -39,12 +39,7 @@ import {
   subtreeIds,
   visibleRoots,
 } from "../lib/todoTree";
-import {
-  createBlock,
-  findFreeSlot,
-  listBlocks,
-  nowMinute,
-} from "../lib/timeBlocks";
+import { listBlocks } from "../lib/timeBlocks";
 import {
   VACATION_KINDS,
   listVacations,
@@ -162,9 +157,9 @@ export function TodoView({
   useEffect(() => {
     localStorage.setItem(TT_VIEW_KEY, ttView);
   }, [ttView]);
-  const [ttFocus, setTtFocus] = useState<{ min: number; nonce: number } | null>(
-    null,
-  );
+  // 행에서 시간표로 보내던 길이 없어지면서(시계 버튼 제거) 자동 스크롤할 자리도 사라졌다.
+  // 타입은 유지한다 — 시간표가 계속 받는 prop 이고, 다시 생기면 여기에 값을 넣으면 된다
+  const ttFocus: { min: number; nonce: number } | null = null;
   const [counts, setCounts] = useState<Record<string, DayTodoCount>>({});
   // 휴가로 표시한 날짜 → 종류. 캘린더 그리드 범위만 들고 있는다(counts 와 같은 주기로 갱신)
   const [vacations, setVacations] = useState<Record<string, VacationKind>>({});
@@ -766,27 +761,6 @@ export function TodoView({
     }
   }
 
-  // 할 일을 타임테이블에 배치 — 다음 빈 슬롯에 1시간 블록 생성 후 그리로 스크롤.
-  // 오늘이면 지금 이후(15분 올림), 다른 날이면 09:00 부터 빈 자리를 찾는다.
-  async function scheduleTodo(t: Todo) {
-    try {
-      const from =
-        selected === todayStr()
-          ? Math.min(Math.ceil(nowMinute() / 15) * 15, 1440 - 60)
-          : 9 * 60;
-      const start = findFreeSlot(
-        blocks.filter((b) => b.date === selected),
-        from,
-        60,
-      );
-      await createBlock(selected, start, start + 60, "", t.id);
-      setTtFocus({ min: start, nonce: Date.now() });
-      await reloadDay();
-    } catch (e) {
-      setError(errMsg(e));
-    }
-  }
-
   // 하위 항목 추가 (부모 hover '+하위'). 추가 후 부모 완료 재계산 + 입력 유지(연속 추가)
   async function addChild(parentId: number, keepFocus = true) {
     const content = childInput.trim();
@@ -998,22 +972,13 @@ export function TodoView({
                 <Icon name="plus" size={13} />
               </button>
             </Tooltip>
-            <Tooltip label={t("todos.row.schedule")}>
-              <button
-                aria-label={t("todos.row.schedule")}
-                className="icon-btn sm"
-                onClick={() => void scheduleTodo(todo)}
-              >
-                <Icon name="clock" size={13} />
-              </button>
-            </Tooltip>
             <Tooltip label={t("todos.row.park")}>
               <button
                 aria-label={t("todos.row.park")}
                 className="icon-btn sm"
                 onClick={() => void park(todo)}
               >
-                <Icon name="set-down" size={13} />
+                <Icon name="arrow-right" size={13} />
               </button>
             </Tooltip>
             {/* 이름 변경 버튼은 두지 않는다 — 글자를 클릭하면 바로 인라인 편집이고(.todo-text 의
