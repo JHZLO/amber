@@ -16,7 +16,8 @@ const DAY_MS = 86_400_000;
 const MAX_LINES = 40;
 
 export interface SuggestState {
-  phase: "idle" | "running" | "done" | "error";
+  /** empty = 볼 거리 자체가 없었다. 고장이 아니라 상태라 error 와 나눈다 */
+  phase: "idle" | "running" | "done" | "empty" | "error";
   items: TodoSuggestion[];
   error: string | null;
   /** 마지막으로 성공한 시각 — "방금 훑었다"를 화면이 말할 수 있게 */
@@ -29,6 +30,11 @@ const emit = () => listeners.forEach((l) => l());
 function set(next: Partial<SuggestState>) {
   state = { ...state, ...next };
   emit();
+}
+
+/** 훅 밖에서 지금 상태를 본다 (테스트, 그리고 실행 중복 방지) */
+export function getSuggestState(): SuggestState {
+  return state;
 }
 
 export function useSuggest(): SuggestState {
@@ -102,13 +108,22 @@ export interface RunSuggestParams {
 /** 훑기 시작. 이미 돌고 있으면 무시한다 */
 export async function runSuggest(p: RunSuggestParams): Promise<void> {
   if (state.phase === "running") return;
+  const overdue = formatOverdue(p.overdue, p.todayDate);
+  const anytime = formatAnytime(p.anytime, Date.now());
+  const notes = p.notes.slice(0, 6000);
+  // 볼 거리가 하나도 없으면 CLI 를 깨우지 않는다. 그리고 이건 **에러가 아니다** —
+  // 기록이 쌓이기 전에는 당연한 상태고, 빨간 판으로 알리면 고장으로 읽힌다.
+  if (!overdue.trim() && !anytime.trim() && !notes.trim()) {
+    set({ phase: "empty", items: [], error: null, ranAt: Date.now() });
+    return;
+  }
   set({ phase: "running", error: null });
   try {
     const { items } = await aiTodoSuggest({
       today: formatToday(p.today),
-      overdue: formatOverdue(p.overdue, p.todayDate),
-      anytime: formatAnytime(p.anytime, Date.now()),
-      notes: p.notes.slice(0, 6000),
+      overdue,
+      anytime,
+      notes,
       model: p.config.model,
       cliPath: p.config.cliPath,
       provider: p.config.provider,

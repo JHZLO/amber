@@ -41,6 +41,8 @@ const ko = {
   "todos.suggest.running": "기록을 훑는 중…",
   "todos.suggest.idle": "아직 안 훑었어요. 위 새로고침을 누르면 밀린 일, 내려놓은 일, 최근 기록을 보고 오늘 챙길 것을 골라 드려요.",
   "todos.suggest.none": "오늘 따로 챙길 건 없어 보여요.",
+  "todos.suggest.nothingToRead":
+    "아직 읽을 게 없어요. 밀린 일이 생기거나, 할 일을 언젠가로 내려놓거나, 일간 리포트를 쓰면 그걸 보고 골라 드려요.",
   "todos.suggest.hint": "누르면 오늘 목록으로 들어가요. 안 고른 건 그냥 사라져요 — 따로 치우지 않아도 돼요.",
   "todos.suggest.acceptTip": "오늘 목록에 넣기",
   "todos.suggest.src.overdue": "밀린 일",
@@ -164,6 +166,8 @@ const en: Record<keyof typeof ko, string> = {
   "todos.suggest.running": "Reading your records…",
   "todos.suggest.idle": "Nothing looked at yet. Refresh above and the overdue, the parked and the recent write-ups get read for what today is owed.",
   "todos.suggest.none": "Nothing stands out for today.",
+  "todos.suggest.nothingToRead":
+    "Nothing to read yet. Once something goes overdue, gets set down for Anytime, or a daily write-up exists, it gets read for what today is owed.",
   "todos.suggest.hint": "Click one to put it on today. What you leave simply goes - nothing to clear.",
   "todos.suggest.acceptTip": "Put on today",
   "todos.suggest.src.overdue": "Overdue",

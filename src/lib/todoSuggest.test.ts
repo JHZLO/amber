@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { daysBetween, formatAnytime, formatOverdue, formatToday } from "./todoSuggest";
+import {
+  daysBetween,
+  formatAnytime,
+  formatOverdue,
+  formatToday,
+  getSuggestState,
+  resetSuggestForTest,
+  runSuggest,
+} from "./todoSuggest";
+import type { AppConfig } from "./config";
 import type { Todo } from "../types";
 
 const t = (over: Partial<Todo>): Todo =>
@@ -65,5 +74,40 @@ describe("daysBetween", () => {
 
   it("형식이 깨진 값에 NaN 을 내지 않는다", () => {
     expect(daysBetween("", "2026-09-21")).toBe(0);
+  });
+});
+
+describe("runSuggest", () => {
+  const config = { provider: "claude", model: "", cliPath: null } as unknown as AppConfig;
+
+  it("볼 거리가 하나도 없으면 CLI 를 부르지 않고 'empty' 로 끝난다", async () => {
+    // 기록이 쌓이기 전에는 당연한 상태다. 에러로 올리면 빨간 판이 떠서 고장으로 읽힌다
+    resetSuggestForTest();
+    await runSuggest({
+      today: [t({ content: "오늘 것" })],
+      overdue: [],
+      anytime: [],
+      notes: "",
+      todayDate: "2026-09-21",
+      config,
+    });
+    const st = getSuggestState();
+    expect(st.phase).toBe("empty");
+    expect(st.error).toBeNull(); // 빨간 판이 뜨면 안 된다
+    expect(st.items).toEqual([]);
+  });
+
+  it("볼 거리가 하나라도 있으면 실행으로 넘어간다", async () => {
+    resetSuggestForTest();
+    // CLI 는 이 환경에 없으므로 실패로 끝나지만, 'empty' 가 아니라는 게 요점이다
+    await runSuggest({
+      today: [],
+      overdue: [t({ content: "밀린 것", due_date: "2026-09-14" })],
+      anytime: [],
+      notes: "",
+      todayDate: "2026-09-21",
+      config,
+    });
+    expect(getSuggestState().phase).not.toBe("empty");
   });
 });

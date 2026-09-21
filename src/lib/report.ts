@@ -357,6 +357,20 @@ export async function upsertReport(input: {
   );
 }
 
+/** 최근 리포트 날짜 몇 개 (최신순). '어제/그제' 로 고정하면 며칠 건너뛴 사람에게는
+ *  늘 빈손이다 — 실제로 마지막 리포트가 사흘 전이라 '오늘 후보'가 아무것도 못 봤다. */
+export async function recentReportDates(before: string, limit: number): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.select<{ report_date: string }[]>(
+    `SELECT report_date FROM daily_reports
+      WHERE report_date < $1
+      ORDER BY report_date DESC
+      LIMIT $2`,
+    [before, limit],
+  );
+  return rows.map((r) => r.report_date);
+}
+
 export async function deleteReport(date: string): Promise<void> {
   const db = await getDb();
   await db.execute(`DELETE FROM daily_reports WHERE report_date = $1`, [date]);

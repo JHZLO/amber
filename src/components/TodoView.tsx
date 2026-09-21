@@ -79,7 +79,7 @@ import { TodoDrawer } from "./TodoDrawer";
 import { useReportGeneratingDates } from "../lib/reportRun";
 import { usePaneResize } from "../lib/usePaneResize";
 import { dropSuggestion, runSuggest, useSuggest } from "../lib/todoSuggest";
-import { readReportFile } from "../lib/report";
+import { readReportFile, recentReportDates } from "../lib/report";
 import { openConceptInApp } from "../lib/nav";
 import type { AppConfig } from "../lib/config";
 
@@ -419,15 +419,14 @@ export function TodoView({
   // '오늘 후보' — 모듈 스토어라 탭을 옮겨도 계속 돈다(lib/todoSuggest)
   const suggest = useSuggest();
 
-  /** 훑기 — 입력은 앱이 이미 아는 것뿐이다. 최근 리포트는 어제·그제 두 장만 본다:
-   *  더 거슬러 올라가면 프롬프트만 길어지고 '오늘'과의 관련은 옅어진다 */
+  /** 훑기 — 입력은 앱이 이미 아는 것뿐이다. 리포트는 **실제로 있는 최근 두 장**을 찾아 온다:
+   *  '어제·그제'로 날짜를 고정하면 며칠 건너뛴 사람에게는 늘 빈손이다(실제로 그랬다) */
   async function lookAgain() {
     if (!config) return;
     try {
       const today = todayStr();
-      const recent = await Promise.all(
-        [shiftDay(today, -1), shiftDay(today, -2)].map((d) => readReportFile(d)),
-      );
+      const dates = await recentReportDates(today, 2);
+      const recent = await Promise.all(dates.map((d) => readReportFile(d)));
       await runSuggest({
         today: todos,
         overdue,

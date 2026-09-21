@@ -114,7 +114,11 @@ export function TodoDrawer({
               ))}
             {!busy && !suggest.error && suggest.items.length === 0 && (
               <p className="parked-empty">
-                {suggest.phase === "done" ? t("todos.suggest.none") : t("todos.suggest.idle")}
+                {suggest.phase === "empty"
+                  ? t("todos.suggest.nothingToRead")
+                  : suggest.phase === "done"
+                    ? t("todos.suggest.none")
+                    : t("todos.suggest.idle")}
               </p>
             )}
           </div>
