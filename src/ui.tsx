@@ -150,10 +150,12 @@ export function Checkbox({
   checked,
   onChange,
   label,
+  disabled,
 }: {
   checked: boolean;
   onChange: () => void;
   label?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -161,6 +163,7 @@ export function Checkbox({
       role="checkbox"
       aria-checked={checked}
       aria-label={label}
+      disabled={disabled}
       className={`checkbox ${checked ? "checked" : ""}`}
       onClick={onChange}
     >

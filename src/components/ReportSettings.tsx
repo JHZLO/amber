@@ -1,6 +1,10 @@
 // 설정 › 데일리 리포트 섹션. 연동 소스 활성화 + 드래그 순위(배열 순서=rank) + 소스별 확장 설정.
 // 테마처럼 "변경 즉시 저장"(saveReportConfig).
-// P1: GitHub · AI 세션. P2: Slack · Notion(MCP) — claude 에 등록된 서버를 선택해 재사용.
+//
+// 소스는 두 종류다. 위쪽 목록은 앱이 직접 긁는 것(GitHub, AI 세션) — 순위를 매긴다.
+// 아래 MCP 절은 claude 에 등록된 서버를 **그대로** 체크박스로 낸다. Slack/Notion 두 칸만
+// 있던 걸 걷어낸 이유: 붙어 있는 서버는 사람마다 다르고(Gmail, Calendar, Drive …) 이름도
+// 제각각이라, 앱이 아는 목록을 고정하는 순간 나머지는 영영 못 고른다.
 
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { McpServer, ReportSourceId } from "../types";
@@ -21,20 +25,16 @@ import { Checkbox, Select, Spinner, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 
-const ALL_SOURCES: ReportSourceId[] = ["github", "ai_sessions", "slack", "notion"];
-const MCP_SOURCES: ReportSourceId[] = ["slack", "notion"];
-// GitHub·Slack·Notion 은 브랜드명이라 번역하지 않는다
+// 앱이 직접 긁는 소스 둘. MCP 서버는 등록된 것을 그대로 아래에 목록으로 낸다
+const ALL_SOURCES: ReportSourceId[] = ["github", "ai_sessions"];
+// GitHub 은 브랜드명이라 번역하지 않는다
 const LABEL: Record<ReportSourceId, string> = {
   github: "GitHub",
   ai_sessions: t("report.source.aiSessions"),
-  slack: "Slack",
-  notion: "Notion",
 };
 const SUB: Record<ReportSourceId, string> = {
   github: t("report.sub.github"),
   ai_sessions: t("report.sub.aiSessions"),
-  slack: t("report.sub.slack"),
-  notion: t("report.sub.notion"),
 };
 
 const MCP_STATUS: Record<string, string> = {
@@ -56,7 +56,6 @@ export function ReportSettings() {
   const [expanded, setExpanded] = useState<ReportSourceId | null>(null);
   const [dragId, setDragId] = useState<ReportSourceId | null>(null);
   const alive = useRef(true);
-  const suggested = useRef(false);
 
   const isClaude = appCfg?.provider === "claude";
 
@@ -86,26 +85,6 @@ export function ReportSettings() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // 서버 목록·설정이 모두 준비되면 이름이 맞는 연결된 서버를 자동 제안(비어 있을 때만).
-  // 캐시 덕에 목록이 cfg 보다 먼저 올 수 있어 둘 다 의존하되, 사용자가 '선택 안 함' 으로
-  // 비운 걸 다시 채우지 않도록 열려 있는 동안 한 번만 돈다.
-  useEffect(() => {
-    if (suggested.current) return;
-    if (!mcpServers || !cfg) return;
-    suggested.current = true;
-    let next = cfg;
-    if (!next.slackServer) {
-      const m = mcpServers.find((s) => s.connected && /slack/i.test(s.name));
-      if (m) next = { ...next, slackServer: m.name };
-    }
-    if (!next.notionServer) {
-      const m = mcpServers.find((s) => s.connected && /notion/i.test(s.name));
-      if (m) next = { ...next, notionServer: m.name };
-    }
-    if (next !== cfg) update(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mcpServers, cfg]);
 
   async function redetect() {
     setDetecting(true);
@@ -197,36 +176,28 @@ export function ReportSettings() {
         ? { label: `gh ${tools.gh.version.replace(/^gh version\s*/, "")}`, ok: true }
         : { label: t("report.status.ghMissing"), ok: false };
     }
-    if (id === "ai_sessions") {
-      const has = !!(tools?.claude_sessions || tools?.codex_sessions);
-      return has
-        ? { label: t("report.status.detected"), ok: true }
-        : { label: t("report.status.noSessions"), ok: false };
-    }
-    // slack / notion (MCP)
-    if (!isClaude) return { label: t("report.status.claudeRequired"), ok: false };
-    const server = id === "slack" ? cfg!.slackServer : cfg!.notionServer;
-    if (!server) return { label: t("report.status.pickServer"), ok: false };
-    // 감지 전(null)은 '아직 모름' — 실패(빈 배열)와 구분한다. 저장은 됐는데 "미확인" 으로 보이면
-    // 설정이 날아간 걸로 오해한다(claude mcp list 는 10초 이상 걸린다).
-    if (!mcpServers) return { label: t("report.status.checking"), ok: false };
-    const s = mcpServers.find((x) => x.name === server);
-    if (!s) return { label: t("report.status.unknown"), ok: false };
-    return s.connected
-      ? { label: t("report.mcpStatus.connected"), ok: true }
-      : { label: MCP_STATUS[s.status] || t("report.status.notConnected"), ok: false };
+    const has = !!(tools?.claude_sessions || tools?.codex_sessions);
+    return has
+      ? { label: t("report.status.detected"), ok: true }
+      : { label: t("report.status.noSessions"), ok: false };
   }
 
-  function serverOptions() {
-    const opts = [{ value: "", label: t("report.mcp.serverNone") }];
-    for (const s of mcpServers ?? []) {
-      const st = MCP_STATUS[s.status];
-      opts.push({ value: s.name, label: s.connected ? s.name : `${s.name} · ${st}` });
-    }
-    return opts;
+  function toggleMcp(name: string) {
+    if (!cfg) return;
+    const on = cfg.mcpPicked.includes(name);
+    update({
+      ...cfg,
+      mcpPicked: on ? cfg.mcpPicked.filter((n) => n !== name) : [...cfg.mcpPicked, name],
+    });
   }
 
-  const hasConnectedMcp = (mcpServers ?? []).some((s) => s.connected);
+  // 목록에 없는데 저장돼 있는 이름도 행으로 낸다 — 안 보이면 끌 수가 없다(감지 실패, 서버 삭제).
+  const mcpRows = [
+    ...(mcpServers ?? []),
+    ...cfg.mcpPicked
+      .filter((n) => !(mcpServers ?? []).some((s) => s.name === n))
+      .map((n) => ({ name: n, connected: false, status: "unknown" }) as McpServer),
+  ];
 
   return (
     <section className="set-section">
@@ -244,7 +215,6 @@ export function ReportSettings() {
         {rows.map((s) => {
           const st = statusFor(s.id);
           const isOpen = expanded === s.id;
-          const isMcp = MCP_SOURCES.includes(s.id);
           return (
             <div
               key={s.id}
@@ -273,7 +243,6 @@ export function ReportSettings() {
                   <span className="rep-src-title">
                     {LABEL[s.id]}
                     {s.id === "ai_sessions" && <span className="rep-src-tag">Claude · Codex</span>}
-                    {isMcp && <span className="rep-src-tag">MCP</span>}
                   </span>
                   <span className="rep-src-sub">{SUB[s.id]}</span>
                 </div>
@@ -342,7 +311,7 @@ export function ReportSettings() {
                         <div className="hint">{t("report.gh.repoHint")}</div>
                       </div>
                     </>
-                  ) : s.id === "ai_sessions" ? (
+                  ) : (
                     <div className="rep-sub-toggles">
                       <Checkbox
                         checked={cfg.sessionsClaude}
@@ -371,31 +340,68 @@ export function ReportSettings() {
                         </span>
                       </span>
                     </div>
-                  ) : (
-                    // slack / notion (MCP)
-                    <McpSourceBody
-                      id={s.id}
-                      isClaude={isClaude}
-                      loading={mcpLoading}
-                      servers={mcpServers}
-                      hasConnected={hasConnectedMcp}
-                      value={s.id === "slack" ? cfg.slackServer : cfg.notionServer}
-                      options={serverOptions()}
-                      onPick={(v) =>
-                        update(
-                          s.id === "slack"
-                            ? { ...cfg, slackServer: v }
-                            : { ...cfg, notionServer: v },
-                        )
-                      }
-                      onRedetect={() => void redetectMcp()}
-                    />
                   )}
                 </div>
               )}
             </div>
           );
         })}
+      </div>
+
+      {/* MCP 서버 — 앱이 목록을 고정하지 않는다. claude 에 등록된 걸 그대로 낸다.
+          체크한 서버는 리포트와 투두 후보가 함께 쓴다(같은 질문을 두 번 묻지 않는다). */}
+      <div className="rep-mcp-sec">
+        <div className="set-head">
+          <span className="set-eyebrow">{t("report.mcp.sectionTitle")}</span>
+          <span className="spacer" />
+          <button
+            className="btn btn-sm"
+            onClick={() => void redetectMcp()}
+            disabled={mcpLoading || !isClaude}
+          >
+            <Icon name="refresh" size={13} />
+            {mcpLoading ? t("report.set.detecting") : t("report.mcp.redetect")}
+          </button>
+        </div>
+        <p className="set-desc">{t("report.mcp.sectionDesc")}</p>
+        {!isClaude ? (
+          <div className="hint">
+            {t("report.mcp.claudeOnlyPre", { name: "MCP" })}
+            <b>{t("report.mcp.claudeOnlyLink")}</b>
+            {t("report.mcp.claudeOnlyPost")}
+          </div>
+        ) : !mcpServers ? (
+          // 감지 전(null)은 '아직 모름' — 실패(빈 배열)와 구분한다. 갱신 중에는 캐시를 계속
+          // 보여준다. 여기서 로딩으로 되돌리면 설정이 사라진 것처럼 보인다.
+          <div className="loading-box" style={{ padding: "12px 0" }}>
+            <Spinner />
+            <span className="hint">{t("report.mcp.searching")}</span>
+          </div>
+        ) : mcpRows.length === 0 ? (
+          <div className="rep-mcp-guide">
+            <div className="hint" style={{ marginBottom: 8 }}>
+              {t("report.mcp.noneGuide")}
+            </div>
+            <code className="rep-mcp-cmd">{t("report.mcp.addStep")}</code>
+            <code className="rep-mcp-cmd">{t("report.mcp.authStep")}</code>
+          </div>
+        ) : (
+          <>
+            <div className="rep-mcp-list">
+              {mcpRows.map((srv) => (
+                <McpServerRow
+                  key={srv.name}
+                  server={srv}
+                  checked={cfg.mcpPicked.includes(srv.name)}
+                  onToggle={() => toggleMcp(srv.name)}
+                />
+              ))}
+            </div>
+            <div className="hint" style={{ marginTop: 8 }}>
+              {t("report.mcp.tokenHint")}
+            </div>
+          </>
+        )}
       </div>
 
       {/* 사용자가 직접 적는 보정 컨텍스트 — 일간·주간 생성 프롬프트에 함께 실린다.
@@ -427,68 +433,33 @@ export function ReportSettings() {
   );
 }
 
-function McpSourceBody({
-  id,
-  isClaude,
-  loading,
-  servers,
-  hasConnected,
-  value,
-  options,
-  onPick,
-  onRedetect,
+// 등록 서버 한 줄. 연결 안 된 서버는 끄고, 왜 못 고르는지 그 자리에서 말한다 —
+// 체크박스만 죽여 두면 사용자는 앱이 고장 난 줄 안다.
+function McpServerRow({
+  server,
+  checked,
+  onToggle,
 }: {
-  id: ReportSourceId;
-  isClaude: boolean;
-  loading: boolean;
-  servers: McpServer[] | null;
-  hasConnected: boolean;
-  value: string;
-  options: { value: string; label: string }[];
-  onPick: (v: string) => void;
-  onRedetect: () => void;
+  server: McpServer;
+  checked: boolean;
+  onToggle: () => void;
 }) {
-  if (!isClaude) {
-    return (
-      <div className="hint">
-        {t("report.mcp.claudeOnlyPre", { name: LABEL[id] })}
-        <b>{t("report.mcp.claudeOnlyLink")}</b>
-        {t("report.mcp.claudeOnlyPost")}
-      </div>
-    );
-  }
+  const st = MCP_STATUS[server.status] || t("report.status.notConnected");
   return (
-    <>
-      <div className="field" style={{ marginBottom: 8 }}>
-        <label>{t("report.mcp.serverLabel")}</label>
-        {/* servers === null = 감지 전(캐시도 없음). 갱신 중에는 캐시를 계속 보여준다 —
-            여기서 로딩/'없어요' 로 되돌리면 설정이 사라진 것처럼 보인다 */}
-        {!servers ? (
-          <div className="loading-box" style={{ padding: "12px 0" }}>
-            <Spinner />
-            <span className="hint">{t("report.mcp.searching")}</span>
-          </div>
-        ) : servers.length && hasConnected ? (
-          <Select block value={value} options={options} onChange={onPick} />
-        ) : (
-          <div className="rep-mcp-guide">
-            <div className="hint" style={{ marginBottom: 8 }}>
-              {t("report.mcp.noneGuide")}
-            </div>
-            <code className="rep-mcp-cmd">
-              claude mcp add --transport http {id} https://mcp.{id}.com/mcp
-            </code>
-            <code className="rep-mcp-cmd">{t("report.mcp.authStep")}</code>
-          </div>
-        )}
-        <div className="hint" style={{ marginTop: 6 }}>
-          {t("report.mcp.tokenHint")}
-        </div>
+    <div className={`rep-mcp-row ${server.connected ? "" : "off"}`}>
+      <Checkbox
+        checked={checked}
+        disabled={!server.connected}
+        onChange={onToggle}
+        label={server.name}
+      />
+      <div className="rep-mcp-name">
+        <span className="rep-mcp-title">{server.name}</span>
+        {!server.connected && <span className="rep-mcp-why">{t("report.mcp.connectHint")}</span>}
       </div>
-      <button className="btn btn-sm" onClick={onRedetect} disabled={loading}>
-        <Icon name="refresh" size={13} />
-        {loading ? t("report.set.detecting") : t("report.mcp.redetect")}
-      </button>
-    </>
+      <span className={`rep-status ${server.connected ? "ok" : ""}`}>
+        {server.connected ? t("report.mcpStatus.connected") : st}
+      </span>
+    </div>
   );
 }

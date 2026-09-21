@@ -114,7 +114,9 @@ export interface DayTodoCount {
 // ---- 데일리 리포트 (daily_reports 테이블 한 행 + 수집 계층) ----
 
 /** 연동 플랫폼 소스 식별자. P1 은 github·ai_sessions 만 동작(slack·notion 은 P2). */
-export type ReportSourceId = "github" | "ai_sessions" | "slack" | "notion";
+/** 리포트가 스스로 긁는 소스 — Rust 수집기가 있는 것들. MCP 서버는 여기 들어오지 않는다:
+ *  등록된 서버가 사람마다 달라 고정 유니온으로 셀 수 없고, 이름 자체가 곧 id 다. */
+export type ReportSourceId = "github" | "ai_sessions";
 
 /** 소스 활성화 상태. 배열에서의 순서(index)가 곧 우선순위(rank) */
 export interface ReportSourcePref {
@@ -150,7 +152,7 @@ export interface McpServer {
 
 /** 생성 시 claude 가 직접 조회할 MCP 소스 (report_generate 로 전달) */
 export interface McpSource {
-  id: ReportSourceId; // slack | notion
+  id: string; // 등록된 MCP 서버 이름 그대로 (id 를 따로 두면 이름과 어긋난다)
   rank: number;
   server: string; // 등록 서버 이름
 }

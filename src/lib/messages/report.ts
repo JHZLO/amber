@@ -19,15 +19,12 @@ const ko = {
   "report.source.aiSessions": "AI 세션",
   "report.sub.github": "내 계정 활동 이력",
   "report.sub.aiSessions": "로컬 세션 요약",
-  "report.sub.slack": "MCP · 메시지·스레드",
-  "report.sub.notion": "MCP · 페이지·코멘트",
 
   // 소스 상태 배지
   "report.status.ghMissing": "gh 설치 필요",
   "report.status.detected": "감지됨",
   "report.status.noSessions": "세션 없음",
   "report.status.claudeRequired": "claude 필요",
-  "report.status.pickServer": "서버 선택",
   "report.status.checking": "확인 중…",
   "report.status.unknown": "미확인",
   "report.status.notConnected": "미연결",
@@ -58,8 +55,11 @@ const ko = {
   "report.mcp.claudeOnlyPre": "{name} 수집은 claude 프로바이더 전용이에요. 설정 상단 ",
   "report.mcp.claudeOnlyLink": "AI 연결",
   "report.mcp.claudeOnlyPost": "에서 claude 에 연결하면 등록된 MCP 서버를 그대로 사용합니다.",
-  "report.mcp.serverLabel": "MCP 서버",
-  "report.mcp.serverNone": "선택 안 함",
+  "report.mcp.sectionTitle": "MCP 서버",
+  "report.mcp.sectionDesc":
+    "claude 에 등록된 서버 그대로예요. 체크한 서버에서만 정보를 가져오고, 리포트와 투두 후보가 함께 씁니다.",
+  "report.mcp.connectHint": "터미널에서 인증하면 고를 수 있어요",
+  "report.mcp.addStep": "claude mcp add --transport http <이름> <url>",
   "report.mcp.searching": "등록된 서버를 찾는 중…",
   "report.mcp.noneGuide":
     "claude 에 등록·인증된 MCP 서버가 없어요. 터미널에서 한 번만 등록·인증하면 이후 자동 재사용돼요:",
@@ -136,14 +136,11 @@ const en: Record<keyof typeof ko, string> = {
   "report.source.aiSessions": "AI Sessions",
   "report.sub.github": "Your account activity",
   "report.sub.aiSessions": "Local session summaries",
-  "report.sub.slack": "MCP · messages & threads",
-  "report.sub.notion": "MCP · pages & comments",
 
   "report.status.ghMissing": "gh not installed",
   "report.status.detected": "Detected",
   "report.status.noSessions": "No sessions",
   "report.status.claudeRequired": "claude required",
-  "report.status.pickServer": "Select a server",
   "report.status.checking": "Checking…",
   "report.status.unknown": "Not found",
   "report.status.notConnected": "Not connected",
@@ -171,8 +168,11 @@ const en: Record<keyof typeof ko, string> = {
   "report.mcp.claudeOnlyPre": "{name} collection needs the claude provider. Connect to claude under ",
   "report.mcp.claudeOnlyLink": "AI connection",
   "report.mcp.claudeOnlyPost": " at the top of Settings to reuse its registered MCP servers.",
-  "report.mcp.serverLabel": "MCP server",
-  "report.mcp.serverNone": "None",
+  "report.mcp.sectionTitle": "MCP servers",
+  "report.mcp.sectionDesc":
+    "These are the servers registered with claude. Amber pulls only from the ones you check, and both the report and the to-do candidates use them.",
+  "report.mcp.connectHint": "Authenticate in a terminal to pick it",
+  "report.mcp.addStep": "claude mcp add --transport http <name> <url>",
   "report.mcp.searching": "Looking for registered servers…",
   "report.mcp.noneGuide":
     "No MCP server is registered and authenticated with claude. Register and authenticate once in a terminal, and it's reused automatically from then on:",

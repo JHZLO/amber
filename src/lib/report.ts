@@ -198,24 +198,44 @@ export interface ReportConfig {
   githubAccount: string;
   sessionsClaude: boolean;
   sessionsCodex: boolean;
-  /** P2 — 선택한 등록 MCP 서버 이름 (빈 문자열 = 미선택) */
-  slackServer: string;
-  notionServer: string;
+  /** 켜 둔 MCP 서버 이름들. **배열 순서 = rank** (앞일수록 중심 소스).
+   *  예전엔 slack, notion 두 칸에 고정돼 있었는데, 등록 서버는 사람마다 다르고
+   *  Gmail, Calendar 처럼 칸이 없는 것은 아예 고를 수가 없었다. */
+  mcpPicked: string[];
   /** 주간 리포트의 '@이름' (노션 공유 형식). 비우면 이름 없이 낸다 */
   displayName: string;
   /** 사용자가 직접 적는 보정 컨텍스트. 일간·주간 생성 프롬프트에 함께 실린다 */
   context: string;
 }
 
-/** 기본 소스 순서. github·ai_sessions 기본 on, slack·notion(P2)은 기본 off */
+/** 기본 소스 순서 — Rust 수집기가 있는 둘. MCP 는 mcpPicked 가 따로 다스린다 */
 const DEFAULT_SOURCES: ReportSourcePref[] = [
   { id: "github", enabled: true },
   { id: "ai_sessions", enabled: true },
-  { id: "slack", enabled: false },
-  { id: "notion", enabled: false },
 ];
 
-const VALID_IDS: ReportSourceId[] = ["github", "ai_sessions", "slack", "notion"];
+// 예전 설정에 남아 있는 "slack", "notion" 항목은 여기서 걸러진다 — 이제 mcpPicked 가 다스린다
+const VALID_IDS: ReportSourceId[] = ["github", "ai_sessions"];
+
+/** 켜 둔 MCP 서버 목록. 키가 없으면 **예전 두 칸(slack, notion)에서 옮겨 온다** —
+ *  설정이 조용히 비워지면 리포트 소스가 하루아침에 사라진 것처럼 보인다. */
+export function parseMcpPicked(
+  raw: string | null,
+  legacySlack: string | null,
+  legacyNotion: string | null,
+): string[] {
+  if (raw) {
+    try {
+      const arr = JSON.parse(raw) as unknown;
+      if (Array.isArray(arr)) {
+        return [...new Set(arr.filter((x): x is string => typeof x === "string" && !!x.trim()))];
+      }
+    } catch {
+      /* 형식이 깨졌으면 아래 이관 경로로 */
+    }
+  }
+  return [...new Set([legacySlack ?? "", legacyNotion ?? ""].filter((x) => x.trim()))];
+}
 
 function parseSources(raw: string | null): ReportSourcePref[] {
   if (!raw) return DEFAULT_SOURCES.map((s) => ({ ...s }));
@@ -243,6 +263,7 @@ export async function loadReportConfig(): Promise<ReportConfig> {
     ghAccount,
     sesClaude,
     sesCodex,
+    mcpRaw,
     slackSrv,
     notionSrv,
     dispName,
@@ -256,6 +277,7 @@ export async function loadReportConfig(): Promise<ReportConfig> {
       getSetting("report_github_account"),
       getSetting("report_sessions_claude"),
       getSetting("report_sessions_codex"),
+      getSetting("report_mcp_servers"),
       getSetting("report_slack_server"),
       getSetting("report_notion_server"),
       getSetting("report_display_name"),
@@ -273,8 +295,7 @@ export async function loadReportConfig(): Promise<ReportConfig> {
     // 기본 on (감지되면 사용). 명시적으로 "0" 저장했을 때만 off
     sessionsClaude: sesClaude !== "0",
     sessionsCodex: sesCodex !== "0",
-    slackServer: slackSrv ?? "",
-    notionServer: notionSrv ?? "",
+    mcpPicked: parseMcpPicked(mcpRaw, slackSrv, notionSrv),
     displayName: dispName ?? "",
     context: context ?? "",
   };
@@ -289,8 +310,7 @@ export async function saveReportConfig(c: ReportConfig): Promise<void> {
     setSetting("report_github_account", c.githubAccount.trim()),
     setSetting("report_sessions_claude", c.sessionsClaude ? "1" : "0"),
     setSetting("report_sessions_codex", c.sessionsCodex ? "1" : "0"),
-    setSetting("report_slack_server", c.slackServer.trim()),
-    setSetting("report_notion_server", c.notionServer.trim()),
+    setSetting("report_mcp_servers", JSON.stringify(c.mcpPicked)),
     setSetting("report_display_name", c.displayName.trim()),
     setSetting("report_context", c.context.trim()),
   ]);
@@ -303,16 +323,14 @@ export function rankedSources(c: ReportConfig): { id: ReportSourceId; rank: numb
     .map((s, i) => ({ id: s.id, rank: i + 1 }));
 }
 
-/** 활성 MCP 소스(Slack·Notion)를 report_generate 용 McpSource[] 로. 서버 미선택이면 제외 */
+/** 켜 둔 MCP 서버를 McpSource[] 로. rank 는 **내장 소스 뒤에서** 이어진다 —
+ *  저장소와 세션은 앱이 직접 긁어 확실하고, MCP 는 도구 호출이라 실패할 수 있어서다. */
 export function mcpSourcesFrom(c: ReportConfig): McpSource[] {
-  const out: McpSource[] = [];
-  for (const r of rankedSources(c)) {
-    if (r.id === "slack" && c.slackServer)
-      out.push({ id: "slack", rank: r.rank, server: c.slackServer });
-    if (r.id === "notion" && c.notionServer)
-      out.push({ id: "notion", rank: r.rank, server: c.notionServer });
-  }
-  return out;
+  const base = rankedSources(c).length;
+  return c.mcpPicked
+    .map((server) => server.trim())
+    .filter(Boolean)
+    .map((server, i) => ({ id: server, rank: base + i + 1, server }));
 }
 
 // ---- daily_reports 메타 (DB) ----

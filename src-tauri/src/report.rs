@@ -329,10 +329,11 @@ pub struct SessionsCfg {
     pub codex: bool,
 }
 
-/// P2 — MCP 소스(Slack·Notion). 수집은 생성 시 claude 가 등록 서버 도구를 직접 호출해 처리한다.
+/// MCP 소스. 수집은 생성 시 claude 가 등록 서버 도구를 직접 호출해 처리한다.
+/// 앱은 어떤 서버가 붙어 있는지 모른다 — 사용자가 설정에서 고른 이름을 그대로 받는다.
 #[derive(Debug, Deserialize)]
 pub struct McpSource {
-    pub id: String,     // "slack" | "notion"
+    pub id: String, // 서버 이름과 같다 (예전 설정의 "slack", "notion" 도 들어올 수 있다)
     pub rank: u8,
     pub server: String, // 등록된 MCP 서버 이름 (claude mcp list, 예: "plugin:Notion:notion")
 }
@@ -1274,8 +1275,6 @@ fn source_label(id: &str) -> &'static str {
     match id {
         "github" => "GitHub",
         "ai_sessions" => "AI 코딩 세션 (Claude Code · Codex)",
-        "slack" => "Slack",
-        "notion" => "Notion",
         _ => "기타",
     }
 }
@@ -1358,15 +1357,14 @@ pub(crate) fn mcp_instructions(date: &str, mcp: &mut [McpSource]) -> String {
 반드시 읽기/조회 도구만 쓰고, 메시지 전송·페이지 생성/수정·삭제 등 쓰기 도구는 절대 호출하지 마라. \
 도구가 인증 오류·빈 결과를 주면 그 소스는 건너뛰고 나머지로 리포트를 완성하라.\n",
     );
+    // 서버가 무엇을 다루는지 앱이 안다고 가정하지 않는다 — 이름과 도구 목록을 보고 모델이 고르게 한다.
+    // 고정 문구를 쓰면 Gmail, Calendar 처럼 나중에 붙는 서버가 전부 "기타" 로 떨어진다.
     for m in mcp.iter() {
-        let what = match m.id.as_str() {
-            "slack" => format!(
-                "{date} 에 내가 보낸 메시지·참여한 스레드·의사결정/이슈 공유를 Slack 도구로 조회"
-            ),
-            "notion" => format!("{date} 에 편집·생성한 페이지와 코멘트를 Notion 도구로 조회"),
-            _ => format!("{date} 활동을 조회"),
-        };
-        s.push_str(&format!("- [{}순위] {}\n", m.rank, what));
+        s.push_str(&format!(
+            "- [{}순위] `{}` 서버의 조회 도구로 {date} 에 내가 남긴 활동을 찾아라 \
+(그 서버가 다루는 것 — 메시지, 스레드, 페이지, 코멘트, 일정, 메일 등 도구 이름을 보고 판단하라)\n",
+            m.rank, m.server
+        ));
     }
     s
 }
