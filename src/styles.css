@@ -1800,14 +1800,16 @@ body.resizing-col .pane-resizer::after {
 }
 
 /* 헤더의 '언젠가' 토글 — 날짜 이동 오른쪽, 구분선 하나 두고. 켜지면 눌린 상태로 남는다 */
+/* 유리는 **덩어리 하나**다 — 한쪽 모서리만 각지게 두면 잘린 조각으로 읽힌다.
+   예전엔 왼쪽을 각지게 깎고 세로선을 그어 날짜 이동 묶음에 붙여 뒀는데, 유리가 되고 나니
+   그 선은 유리 위에 그은 남의 선이 되고 각진 왼쪽만 깨져 보였다. 가르는 일은 공백이 한다. */
 .todo-parked-toggle {
-  margin-left: 10px;
-  padding-left: 10px;
-  border-left: 1px solid var(--border);
-  border-radius: 0 6px 6px 0;
+  margin-left: 16px;
 }
 .todo-parked-toggle.on {
-  background: var(--surface-3);
+  background: var(--glass-fill-hover), var(--glass-raise);
+  border-color: var(--glass-edge-hover);
+  box-shadow: var(--glass-sheen-hover);
   color: var(--text);
 }
 .todo-parked-n {
@@ -2460,13 +2462,17 @@ html.widget-root #root {
   color: var(--text-2);
   font-size: 13px;
   font-weight: 500;
-  padding: 7px 10px;
+  /* 오른쪽 = 왼쪽 + 체크 칸(14) + 간격(6). 체크 칸은 **모든 항목이 늘 들고 있는** 자리라
+     왼쪽만 30px 이 되고 오른쪽은 10px 이었다 — 글이 오른쪽으로 밀려 메뉴가 기울어 보였다. */
+  padding: 7px 30px 7px 10px;
   border-radius: 6px;
   cursor: pointer;
 }
+/* 판 안의 행이라 유리를 또 씌우지 않는다(유리 위의 유리는 탁해진다). 대신 불투명한 면도
+   쓰지 않는다 — 반투명한 판에 불투명한 블록이 뚫리면 판이 유리가 아니게 된다. 틴트만. */
 .select-item:hover,
 .select-item.kbd-active {
-  background: var(--surface-2);
+  background: var(--glass-fill-hover);
   color: var(--text);
 }
 .select-item.active {
