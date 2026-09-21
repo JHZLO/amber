@@ -37,6 +37,7 @@ const ko = {
   // '오늘 후보' — AI 가 내 기록을 훑어 고른 것. 아직 할 일이 아니라 비우는 게 목표다
   "todos.suggest.title": "오늘 후보",
   "todos.suggest.run": "다시 훑기",
+  "todos.suggest.collecting": "오늘 움직인 기록을 모으는 중…",
   "todos.suggest.running": "기록을 훑는 중…",
   "todos.suggest.idle": "아직 안 훑었어요. 위 새로고침을 누르면 설정 › 리포트에서 켜 둔 소스(저장소, AI 세션, Slack, Notion)를 보고 목록에 없는 할 일을 골라 드려요.",
   "todos.suggest.none": "오늘 따로 챙길 건 없어 보여요.",
@@ -162,6 +163,7 @@ const en: Record<keyof typeof ko, string> = {
 
   "todos.suggest.title": "For today",
   "todos.suggest.run": "Look again",
+  "todos.suggest.collecting": "Gathering what moved today…",
   "todos.suggest.running": "Reading your records…",
   "todos.suggest.idle": "Nothing looked at yet. Refresh above and the sources switched on under Settings › Report get read for work that never made the list.",
   "todos.suggest.none": "Nothing stands out for today.",

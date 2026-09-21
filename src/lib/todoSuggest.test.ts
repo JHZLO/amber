@@ -87,7 +87,7 @@ describe("runSuggest", () => {
       today: [t({ content: "오늘 것" })],
       overdue: [],
       anytime: [],
-      activity: "",
+      collect: async () => ({ activity: "", mcpSources: [] }),
       todayDate: "2026-09-21",
       config,
     });
@@ -104,7 +104,7 @@ describe("runSuggest", () => {
       today: [],
       overdue: [t({ content: "밀린 것", due_date: "2026-09-14" })],
       anytime: [],
-      activity: "",
+      collect: async () => ({ activity: "", mcpSources: [] }),
       todayDate: "2026-09-21",
       config,
     });
@@ -121,8 +121,10 @@ describe("MCP 소스가 켜져 있으면", () => {
       today: [],
       overdue: [],
       anytime: [],
-      activity: "",
-      mcpSources: [{ id: "slack", rank: 0, server: "plugin:slack:slack" }],
+      collect: async () => ({
+        activity: "",
+        mcpSources: [{ id: "plugin:slack:slack", rank: 3, server: "plugin:slack:slack" }],
+      }),
       todayDate: "2026-09-21",
       config,
     });
@@ -135,11 +137,52 @@ describe("MCP 소스가 켜져 있으면", () => {
       today: [],
       overdue: [],
       anytime: [],
-      activity: "",
-      mcpSources: [],
+      collect: async () => ({ activity: "", mcpSources: [] }),
       todayDate: "2026-09-21",
       config,
     });
     expect(getSuggestState().phase).toBe("empty");
+  });
+});
+
+describe("훑기 단계 표시", () => {
+  const config = { provider: "claude", model: "", cliPath: null } as unknown as AppConfig;
+
+  it("재료를 모으는 동안 이미 running 이다 — 버튼을 누른 즉시 반응해야 한다", async () => {
+    resetSuggestForTest();
+    let seen: ReturnType<typeof getSuggestState> | null = null;
+    const run = runSuggest({
+      today: [],
+      overdue: [],
+      anytime: [],
+      // 수집이 오래 걸리는 상황: gh CLI 는 수 초에서 수십 초가 걸린다
+      collect: async () => {
+        seen = { ...getSuggestState() };
+        return { activity: "", mcpSources: [] };
+      },
+      todayDate: "2026-09-21",
+      config,
+    });
+    await run;
+    expect(seen).not.toBeNull();
+    expect(seen!.phase).toBe("running");
+    expect(seen!.step).toBe("collect");
+  });
+
+  it("수집이 실패해도 빨간 판 하나로 끝난다 — 화면이 running 에 멈추지 않는다", async () => {
+    resetSuggestForTest();
+    await runSuggest({
+      today: [],
+      overdue: [],
+      anytime: [],
+      collect: async () => {
+        throw new Error("gh not found");
+      },
+      todayDate: "2026-09-21",
+      config,
+    });
+    const st = getSuggestState();
+    expect(st.phase).toBe("error");
+    expect(st.error).toBeTruthy();
   });
 });

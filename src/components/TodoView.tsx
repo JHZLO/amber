@@ -419,51 +419,52 @@ export function TodoView({
    *  둘 다 `gh` CLI 와 로컬 세션 파일을 읽는 Rust 쪽이라 MCP 커넥터 없이 동작한다. */
   async function lookAgain() {
     if (!config) return;
-    try {
-      const today = todayStr();
-      const rc = await loadReportConfig();
-      const ranked = rankedSources(rc);
-      const gh = ranked.find((x) => x.id === "github");
-      const sess = ranked.find((x) => x.id === "ai_sessions");
-      // 오늘은 아직 안 끝났다 — 하루 끝이 아니라 **지금까지**를 본다
-      const [startMs] = dayRangeMs(today);
-      const digests = await reportCollect(
-        {
-          date: today,
-          startMs,
-          endMs: Date.now(),
-          tzOffsetMin: new Date().getTimezoneOffset(),
-          github: gh
-            ? {
-                rank: gh.rank,
-                path: rc.githubPath || null,
-                repos: rc.githubRepos,
-                account: rc.githubAccount || null,
-              }
-            : null,
-          aiSessions: sess
-            ? { rank: sess.rank, claude: rc.sessionsClaude, codex: rc.sessionsCodex }
-            : null,
-          todos: null,
-        },
-        () => {},
-      );
-      await runSuggest({
-        today: todos,
-        overdue,
-        anytime: parked,
-        activity: digests
-          .filter((d) => d.ok && d.digest_md.trim())
-          .map((d) => d.digest_md.trim())
-          .join("\n\n"),
-        // 같은 스위치가 리포트와 후보를 함께 다스린다 — 설정을 두 군데 두지 않는다
-        mcpSources: config.provider === "claude" ? mcpSourcesFrom(rc) : [],
-        todayDate: today,
-        config,
-      });
-    } catch (e) {
-      setError(errMsg(e));
-    }
+    const today = todayStr();
+    await runSuggest({
+      today: todos,
+      overdue,
+      anytime: parked,
+      todayDate: today,
+      config,
+      // 수집은 runSuggest 안에서 일어난다 — 여기서 await 하면 로딩 표시가 그만큼 늦게 뜬다
+      collect: async () => {
+        const rc = await loadReportConfig();
+        const ranked = rankedSources(rc);
+        const gh = ranked.find((x) => x.id === "github");
+        const sess = ranked.find((x) => x.id === "ai_sessions");
+        // 오늘은 아직 안 끝났다 — 하루 끝이 아니라 **지금까지**를 본다
+        const [startMs] = dayRangeMs(today);
+        const digests = await reportCollect(
+          {
+            date: today,
+            startMs,
+            endMs: Date.now(),
+            tzOffsetMin: new Date().getTimezoneOffset(),
+            github: gh
+              ? {
+                  rank: gh.rank,
+                  path: rc.githubPath || null,
+                  repos: rc.githubRepos,
+                  account: rc.githubAccount || null,
+                }
+              : null,
+            aiSessions: sess
+              ? { rank: sess.rank, claude: rc.sessionsClaude, codex: rc.sessionsCodex }
+              : null,
+            todos: null,
+          },
+          () => {},
+        );
+        return {
+          activity: digests
+            .filter((d) => d.ok && d.digest_md.trim())
+            .map((d) => d.digest_md.trim())
+            .join("\n\n"),
+          // 같은 스위치가 리포트와 후보를 함께 다스린다 — 설정을 두 군데 두지 않는다
+          mcpSources: config.provider === "claude" ? mcpSourcesFrom(rc) : [],
+        };
+      },
+    });
   }
 
   /** 후보를 받아들인다 — 그때 비로소 todos 행이 된다. 목록에서는 빠진다(비우는 게 목표) */

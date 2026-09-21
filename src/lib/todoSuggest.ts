@@ -4,8 +4,8 @@
 // 이미 투두에 있는 것(밀린 것, 언젠가)은 정의상 '추가 안 한 것'이 아니라서 후보의 본류가
 // 아니다 — 오늘의 움직임이 그것을 건드렸을 때만 딸려 올라온다.
 //
-// github·ai_sessions 수집기는 `gh` CLI 와 로컬 세션 파일을 읽는 Rust 쪽이라
-// **MCP 커넥터 없이 동작한다**. Slack·Notion 은 MCP 가 필요해서 아직 여기 오지 않는다.
+// github, ai_sessions 수집기는 `gh` CLI 와 로컬 세션 파일을 읽는 Rust 쪽이라
+// **MCP 커넥터 없이 동작한다**. 설정에서 MCP 서버를 켜 두면 그 서버 도구도 함께 쓴다.
 //
 // **DB 에 넣지 않는다.** 후보는 아직 내 할 일이 아니다 — 받아들이면 그때 todos 행이 되고,
 // 안 받아들이면 그냥 사라지면 된다. 보관하면 "무시한 것"을 또 관리해야 하고, 그 순간
@@ -25,13 +25,16 @@ const MAX_LINES = 40;
 export interface SuggestState {
   /** empty = 볼 거리 자체가 없었다. 고장이 아니라 상태라 error 와 나눈다 */
   phase: "idle" | "running" | "done" | "empty" | "error";
+  /** running 의 두 토막. 재료 모으기(gh CLI)가 수 초에서 수십 초라 한 덩어리로 묶으면
+   *  "아무 반응 없다가 갑자기 로딩바" 가 된다 — 무엇을 하고 있는지 말해 준다 */
+  step: "collect" | "ask";
   items: TodoSuggestion[];
   error: string | null;
   /** 마지막으로 성공한 시각 — "방금 훑었다"를 화면이 말할 수 있게 */
   ranAt: number | null;
 }
 
-let state: SuggestState = { phase: "idle", items: [], error: null, ranAt: null };
+let state: SuggestState = { phase: "idle", step: "collect", items: [], error: null, ranAt: null };
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 function set(next: Partial<SuggestState>) {
@@ -59,7 +62,7 @@ export function dropSuggestion(index: number): void {
   set({ items: state.items.filter((_, i) => i !== index) });
 }
 export function clearSuggestions(): void {
-  state = { phase: "idle", items: [], error: null, ranAt: null };
+  state = { phase: "idle", step: "collect", items: [], error: null, ranAt: null };
   emit();
 }
 export function resetSuggestForTest(): void {
@@ -102,14 +105,22 @@ export function daysBetween(from: string, to: string): number {
   return Math.max(0, Math.round((b - a) / DAY_MS));
 }
 
+/** 훑기의 앞 절반이 모아 오는 재료 */
+export interface SuggestMaterial {
+  /** 오늘 실제로 움직인 것 (report_collect 의 digest 를 이어 붙인 것) */
+  activity: string;
+  /** 설정 › 리포트에서 켜 둔 MCP 소스 — 같은 스위치가 리포트와 후보를 함께 다스린다 */
+  mcpSources: { id: string; rank: number; server: string }[];
+}
+
 export interface RunSuggestParams {
   today: Todo[];
   overdue: Todo[];
   anytime: Todo[];
-  /** 오늘 실제로 움직인 것 (report_collect 의 digest 를 이어 붙인 것) */
-  activity: string;
-  /** 설정 › 리포트에서 켜 둔 MCP 소스 — 같은 스위치가 리포트와 후보를 함께 다스린다 */
-  mcpSources?: { id: string; rank: number; server: string }[];
+  /** 재료 모으기. **밖에서 await 하지 않고 여기서 부른다** — gh CLI 를 깨우느라 수 초에서
+   *  수십 초가 걸리는데, 그동안 phase 가 idle 이면 버튼을 눌러도 화면이 죽은 것처럼 보인다.
+   *  (실제로 그랬다: 새로고침 → 한참 무반응 → 갑자기 로딩바) */
+  collect: () => Promise<SuggestMaterial>;
   todayDate: string;
   config: AppConfig;
 }
@@ -117,26 +128,29 @@ export interface RunSuggestParams {
 /** 훑기 시작. 이미 돌고 있으면 무시한다 */
 export async function runSuggest(p: RunSuggestParams): Promise<void> {
   if (state.phase === "running") return;
+  // 첫 await 앞에서 켠다 — 누른 즉시 반응이 보여야 한다
+  set({ phase: "running", step: "collect", error: null });
   const overdue = formatOverdue(p.overdue, p.todayDate);
   const anytime = formatAnytime(p.anytime, Date.now());
-  const activity = p.activity.slice(0, 12000);
-  // 볼 거리가 하나도 없으면 CLI 를 깨우지 않는다. 그리고 이건 **에러가 아니다** —
-  // 기록이 쌓이기 전에는 당연한 상태고, 빨간 판으로 알리면 고장으로 읽힌다.
-  // MCP 소스가 켜져 있으면 직접 긁으러 가므로 로컬 재료가 비어도 부른다.
-  const hasMcp = (p.mcpSources?.length ?? 0) > 0;
-  if (!hasMcp && !overdue.trim() && !anytime.trim() && !activity.trim()) {
-    set({ phase: "empty", items: [], error: null, ranAt: Date.now() });
-    return;
-  }
-  set({ phase: "running", error: null });
   try {
+    const mat = await p.collect();
+    const activity = mat.activity.slice(0, 12000);
+    // 볼 거리가 하나도 없으면 CLI 를 깨우지 않는다. 그리고 이건 **에러가 아니다** —
+    // 기록이 쌓이기 전에는 당연한 상태고, 빨간 판으로 알리면 고장으로 읽힌다.
+    // MCP 소스가 켜져 있으면 직접 긁으러 가므로 로컬 재료가 비어도 부른다.
+    const hasMcp = mat.mcpSources.length > 0;
+    if (!hasMcp && !overdue.trim() && !anytime.trim() && !activity.trim()) {
+      set({ phase: "empty", items: [], error: null, ranAt: Date.now() });
+      return;
+    }
+    set({ step: "ask" });
     const { items } = await aiTodoSuggest({
       date: p.todayDate,
       today: formatToday(p.today),
       overdue,
       anytime,
       activity,
-      mcpSources: p.mcpSources,
+      mcpSources: mat.mcpSources,
       model: p.config.model,
       cliPath: p.config.cliPath,
       provider: p.config.provider,

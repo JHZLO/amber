@@ -107,7 +107,16 @@ export function TodoDrawer({
         <>
           <div className="parked-body">
             {suggest.error && <div className="error-note">{suggest.error}</div>}
-            {busy && <AiThinking compact label={t("todos.suggest.running")} />}
+            {busy && (
+              <AiThinking
+                compact
+                label={
+                  suggest.step === "collect"
+                    ? t("todos.suggest.collecting")
+                    : t("todos.suggest.running")
+                }
+              />
+            )}
             {!busy &&
               suggest.items.map((it, i) => (
                 <SuggestCard key={`${it.text}-${i}`} item={it} onAccept={() => onAccept(i)} />
