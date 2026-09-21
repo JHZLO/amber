@@ -142,6 +142,10 @@ const ASK_SYSTEM_PROMPT: &str = include_str!("../context/note-ask.md");
 // 다이어그램 탭: 스키마 DDL → ERD mermaid 소스. 노트와 같은 이유로 JSON 계약 없이 raw 텍스트.
 const ERD_SYSTEM_PROMPT: &str = include_str!("../context/diagram-erd.md");
 
+// 할 일 탭의 '오늘 후보' — 내 기록만 보고 오늘 챙길 것을 골라 준다.
+// 바깥(Slack·메일 등)은 CLI 에 MCP 서버가 붙어 있을 때만 닿는다. 없으면 아래 로컬 신호만 본다.
+const TODO_SUGGEST_PROMPT: &str = include_str!("../context/todo-suggest.md");
+
 /// 출력 언어 지시 — 정본은 **설정 › AI 의 '응답 언어'**(auto 면 UI 언어). 프롬프트 본문에
 /// 언어를 박아 두면 기능마다 파일을 언어별로 복제해야 하므로, 이 블록 하나만 갈아끼운다.
 ///
@@ -864,6 +868,98 @@ pub async fn ai_note_ask(
     }
 
     Ok(NoteAskResult { answer, meta })
+}
+
+/// '오늘 후보' 한 건 — 아직 할 일이 아니다. 받아들이면 그때 todos 행이 된다.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TodoSuggestion {
+    pub text: String,
+    /// 어디서 봤나 (overdue | anytime | note)
+    pub source: String,
+    /// **왜 오늘인가** — 할 일을 되풀이한 말이면 쓸모가 없다
+    pub why: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct SuggestContract {
+    items: Vec<TodoSuggestion>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TodoSuggestResult {
+    pub items: Vec<TodoSuggestion>,
+    pub meta: MetaOut,
+}
+
+/// 오늘 챙길 것 고르기. 입력은 **앱이 이미 아는 것**뿐이다 — 오늘 목록, 밀린 것,
+/// 언젠가(나이 포함), 최근 리포트. 도구는 열지 않는다(기존 실행과 같은 기본 정책):
+/// 고르는 일에 파일을 읽거나 명령을 돌릴 이유가 없고, 열면 그만큼 새는 곳이 생긴다.
+#[tauri::command]
+pub async fn ai_todo_suggest(
+    today: String,
+    overdue: String,
+    anytime: String,
+    notes: String,
+    model: Option<String>,
+    cli_path: Option<String>,
+    provider: Option<String>,
+    timeout_secs: Option<u64>,
+    lang: Option<String>,
+) -> Result<TodoSuggestResult, AiError> {
+    // 볼 게 없으면 CLI 를 깨우지 않는다 — 빈 목록을 받으려고 몇십 초를 쓸 이유가 없다
+    if overdue.trim().is_empty() && anytime.trim().is_empty() && notes.trim().is_empty() {
+        return Err(AiError::new(
+            "NOTHING_TO_SUGGEST",
+            "고를 거리가 없습니다. 밀린 일도, 내려놓은 일도, 최근 기록도 비어 있어요.",
+        ));
+    }
+
+    let kind = provider_kind(provider.as_deref());
+    let program =
+        cli_path.filter(|p| !p.is_empty()).unwrap_or_else(|| default_binary(kind).to_string());
+    let model = resolve_model(kind, model);
+    let dur = Duration::from_secs(timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS));
+
+    let section = |name: &str, body: &str| {
+        let b = body.trim();
+        format!("[{name}]\n{}\n\n", if b.is_empty() { "(없음)" } else { b })
+    };
+    let input = format!(
+        "{}{}{}{}",
+        section("Today", &today),
+        section("Overdue", &overdue),
+        section("Anytime", &anytime),
+        section("Recent notes", &notes),
+    );
+
+    let (result_str, meta) = run_provider_text(
+        kind,
+        program,
+        model,
+        dur,
+        &sys(TODO_SUGGEST_PROMPT, lang.as_deref()),
+        input,
+    )
+    .await?;
+
+    let contract: SuggestContract = serde_json::from_str(strip_outer_fence(&result_str))
+        .map_err(|e| AiError::new("AI_BAD_CONTRACT", format!("후보(JSON) 파싱 실패: {e}")))?;
+
+    // 빈 목록은 정상이다 — 조용한 날의 정직한 답이라 에러로 올리지 않는다.
+    // 다만 글자가 빠진 항목은 화면에 빈 줄로 남으므로 여기서 걷는다.
+    let items: Vec<TodoSuggestion> = contract
+        .items
+        .into_iter()
+        .map(|i| TodoSuggestion {
+            text: i.text.trim().to_string(),
+            source: i.source.trim().to_string(),
+            why: i.why.trim().to_string(),
+        })
+        .filter(|i| !i.text.is_empty())
+        .take(5)
+        .collect();
+
+    Ok(TodoSuggestResult { items, meta })
 }
 
 /// 다이어그램 탭: 스키마 DDL → ERD mermaid 소스 (스트리밍).

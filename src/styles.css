@@ -1524,6 +1524,54 @@ body.resizing-col .pane-resizer::after {
   padding: 12px 10px 10px 14px;
   border-bottom: 1px solid var(--border);
 }
+/* 탭 둘 — 머리글 자리를 그대로 쓴다. 제목을 따로 두면 탭까지 세 줄이 된다 */
+.parked-tabs {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+}
+.parked-tabs .tab {
+  padding: 3px 8px 4px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.parked-tabs .tab .parked-cnt {
+  margin-left: 4px;
+}
+
+/* 후보 카드 — 언젠가 카드와 같은 문법(누르면 왼쪽으로 간다). 다른 건 위에 붙는 한 줄뿐이다 */
+.suggest-card {
+  align-items: flex-start;
+}
+.suggest-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.suggest-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+.suggest-src {
+  flex-shrink: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+/* '왜 오늘인가' — 이게 없으면 이 서랍은 알림 쓰레기통이다. 그래서 잘라내지 않고 줄바꿈한다 */
+.suggest-why {
+  min-width: 0;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
 .parked-head b {
   font-size: 12px;
   font-weight: 700;

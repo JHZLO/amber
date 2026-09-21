@@ -457,6 +457,7 @@ pub fn run() {
             ai::ai_note_compose_stream,
             ai::ai_note_edit_span,
             ai::ai_note_ask,
+            ai::ai_todo_suggest,
             ai::ai_erd_generate_stream,
             ai::ai_health,
             ai::ai_cancel,

@@ -41,6 +41,7 @@ export const CODE_KEY: Record<string, MsgKey> = {
   EMPTY_QUESTION: "common.err.empty.question",
   EMPTY_SELECTION: "common.err.empty.selection",
   EMPTY_DDL: "common.err.empty.ddl",
+  NOTHING_TO_SUGGEST: "common.err.nothingToSuggest",
   // 데일리 리포트 수집(gh)
   GH_NOT_FOUND: "common.err.gh.notFound",
   GH_AUTH: "common.err.gh.auth",

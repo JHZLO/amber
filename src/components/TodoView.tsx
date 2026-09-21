@@ -14,6 +14,7 @@ import {
   createTodo,
   deleteTodo,
   listMonthCounts,
+  createTodo as createTodoRow,
   listOverdueOpen,
   listParked,
   listTodos,
@@ -74,9 +75,11 @@ import { PageFind } from "./PageFind";
 import { DayTimetable, type TtView } from "./DayTimetable";
 import { DailyReportPanel } from "./DailyReportPanel";
 import { WeeklyReportPanel } from "./WeeklyReportPanel";
-import { TodoParkedDrawer } from "./TodoParkedDrawer";
+import { TodoDrawer } from "./TodoDrawer";
 import { useReportGeneratingDates } from "../lib/reportRun";
 import { usePaneResize } from "../lib/usePaneResize";
+import { dropSuggestion, runSuggest, useSuggest } from "../lib/todoSuggest";
+import { readReportFile } from "../lib/report";
 import { openConceptInApp } from "../lib/nav";
 import type { AppConfig } from "../lib/config";
 
@@ -412,6 +415,45 @@ export function TodoView({
   useEffect(() => {
     localStorage.setItem(PARKED_KEY, parkedOpen ? "1" : "0");
   }, [parkedOpen]);
+
+  // '오늘 후보' — 모듈 스토어라 탭을 옮겨도 계속 돈다(lib/todoSuggest)
+  const suggest = useSuggest();
+
+  /** 훑기 — 입력은 앱이 이미 아는 것뿐이다. 최근 리포트는 어제·그제 두 장만 본다:
+   *  더 거슬러 올라가면 프롬프트만 길어지고 '오늘'과의 관련은 옅어진다 */
+  async function lookAgain() {
+    if (!config) return;
+    try {
+      const today = todayStr();
+      const recent = await Promise.all(
+        [shiftDay(today, -1), shiftDay(today, -2)].map((d) => readReportFile(d)),
+      );
+      await runSuggest({
+        today: todos,
+        overdue,
+        anytime: parked,
+        notes: recent.filter(Boolean).join("\n\n"),
+        todayDate: today,
+        config,
+      });
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  }
+
+  /** 후보를 받아들인다 — 그때 비로소 todos 행이 된다. 목록에서는 빠진다(비우는 게 목표) */
+  async function acceptSuggestion(index: number) {
+    const item = suggest.items[index];
+    if (!item) return;
+    try {
+      await createTodoRow(item.text, todayStr(), null, "day");
+      dropSuggestion(index);
+      await reloadCurrent();
+      void reloadCounts();
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  }
 
   /** 오늘 목록에서 내려놓는다 — 서브트리째. 부모만 내려놓으면 자식이 부모 없는 날짜에 남는다 */
   async function park(todo: Todo) {
@@ -1127,8 +1169,10 @@ export function TodoView({
               onClick={() => setParkedOpen((v) => !v)}
             >
               <Icon name="panel" size={14} />
-              {t("todos.parked.title")}
-              {parked.length > 0 && <span className="todo-parked-n">{parked.length}</span>}
+              {t("todos.drawer.title")}
+              {parked.length + suggest.items.length > 0 && (
+                <span className="todo-parked-n">{parked.length + suggest.items.length}</span>
+              )}
             </button>
           )}
         </div>
@@ -1284,10 +1328,13 @@ export function TodoView({
           손잡이와 싸운다. 암묵 열은 내용 폭으로 잡히고 2열의 1fr 이 나머지를 가져간다.
           일 단위에서만 — 주 목록은 이번 주라는 기한이 있어 '날짜 없음'과 섞이지 않는다 */}
       {unit === "day" && (
-        <TodoParkedDrawer
+        <TodoDrawer
           rows={parked}
+          suggest={suggest}
           open={parkedOpen}
           onClose={() => setParkedOpen(false)}
+          onRun={() => void lookAgain()}
+          onAccept={(i) => void acceptSuggestion(i)}
           onPull={(todo) => void pull(todo)}
           onDelete={(todo) => void removeParked(todo)}
         />

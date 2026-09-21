@@ -32,6 +32,21 @@ const ko = {
 
   // '언젠가' 서랍 — 달력에서 내려놓은 것. 끝내는 곳이 아니라 꺼내 오는 곳이라 체크박스가 없다
   "todos.parked.title": "언젠가",
+  // 헤더 토글 — 탭이 둘이라 어느 한쪽 이름을 붙이면 나머지가 숨은 것처럼 읽힌다
+  "todos.drawer.title": "서랍",
+
+  // '오늘 후보' — AI 가 내 기록을 훑어 고른 것. 아직 할 일이 아니라 비우는 게 목표다
+  "todos.suggest.title": "오늘 후보",
+  "todos.suggest.run": "다시 훑기",
+  "todos.suggest.running": "기록을 훑는 중…",
+  "todos.suggest.idle": "아직 안 훑었어요. 위 새로고침을 누르면 밀린 일, 내려놓은 일, 최근 기록을 보고 오늘 챙길 것을 골라 드려요.",
+  "todos.suggest.none": "오늘 따로 챙길 건 없어 보여요.",
+  "todos.suggest.hint": "누르면 오늘 목록으로 들어가요. 안 고른 건 그냥 사라져요 — 따로 치우지 않아도 돼요.",
+  "todos.suggest.acceptTip": "오늘 목록에 넣기",
+  "todos.suggest.src.overdue": "밀린 일",
+  "todos.suggest.src.anytime": "언젠가",
+  "todos.suggest.src.note": "기록",
+  "todos.suggest.src.other": "찾음",
   "todos.parked.open": "언젠가 열기",
   "todos.parked.close": "접기",
   "todos.parked.empty": "내려놓은 게 없어요. 오늘 안 할 일은 행 옆의 내려놓기로 여기에 둘 수 있어요.",
@@ -142,6 +157,19 @@ const en: Record<keyof typeof ko, string> = {
   "todos.overdue.title": "Overdue",
 
   "todos.parked.title": "Anytime",
+  "todos.drawer.title": "Drawer",
+
+  "todos.suggest.title": "For today",
+  "todos.suggest.run": "Look again",
+  "todos.suggest.running": "Reading your records…",
+  "todos.suggest.idle": "Nothing looked at yet. Refresh above and the overdue, the parked and the recent write-ups get read for what today is owed.",
+  "todos.suggest.none": "Nothing stands out for today.",
+  "todos.suggest.hint": "Click one to put it on today. What you leave simply goes - nothing to clear.",
+  "todos.suggest.acceptTip": "Put on today",
+  "todos.suggest.src.overdue": "Overdue",
+  "todos.suggest.src.anytime": "Anytime",
+  "todos.suggest.src.note": "Notes",
+  "todos.suggest.src.other": "Found",
   "todos.parked.open": "Open Anytime",
   "todos.parked.close": "Collapse",
   "todos.parked.empty": "Nothing set down yet. Use the set-down action on a row to park what you are not doing today.",

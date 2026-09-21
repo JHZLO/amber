@@ -277,6 +277,44 @@ export async function aiNoteAsk(params: {
   });
 }
 
+/** 할 일 탭 '오늘 후보' 한 건 — 아직 할 일이 아니다 */
+export interface TodoSuggestion {
+  text: string;
+  /** overdue | anytime | note */
+  source: string;
+  /** 왜 오늘인가 (할 일을 되풀이한 말이 아니라) */
+  why: string;
+}
+
+export interface TodoSuggestResult {
+  items: TodoSuggestion[];
+  meta: InvocationMeta;
+}
+
+/** 오늘 챙길 것 고르기 — 입력은 앱이 이미 아는 것뿐이다(도구를 열지 않는다) */
+export async function aiTodoSuggest(params: {
+  today: string;
+  overdue: string;
+  anytime: string;
+  notes: string;
+  model?: string | null;
+  cliPath?: string | null;
+  provider?: string | null;
+  timeoutSecs?: number | null;
+}): Promise<TodoSuggestResult> {
+  return aiInvoke<TodoSuggestResult>("ai_todo_suggest", {
+    today: params.today,
+    overdue: params.overdue,
+    anytime: params.anytime,
+    notes: params.notes,
+    model: params.model ?? null,
+    cliPath: params.cliPath ?? null,
+    provider: params.provider ?? null,
+    timeoutSecs: params.timeoutSecs ?? null,
+    lang: aiOutputLang(),
+  });
+}
+
 export interface ErdResult {
   mermaid: string;
   meta: InvocationMeta;
