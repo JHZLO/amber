@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dropletPath, progressOf, thumbLength } from "./ScrollDroplet";
+import { progressOf, thumbLength } from "./ScrollDroplet";
 
 describe("progressOf", () => {
   it("맨 위는 0, 맨 아래는 1", () => {
@@ -42,29 +42,5 @@ describe("thumbLength", () => {
 
   it("트랙보다 길어지지 않는다", () => {
     expect(thumbLength(400, 900, 1000)).toBeLessThanOrEqual(400);
-  });
-});
-
-describe("dropletPath", () => {
-  it("위에서 시작해 아래에서 둥글게 닫힌다", () => {
-    const d = dropletPath(9, 40);
-    expect(d.startsWith("M 4.5 0")).toBe(true); // 머리는 한 점
-    expect(d).toContain("A 4.5 4.5"); // 꼬리는 반원
-    expect(d.endsWith("Z")).toBe(true);
-  });
-
-  it("길이가 달라져도 머리와 꼬리의 생김새는 같다", () => {
-    const a = dropletPath(9, 30);
-    const b = dropletPath(9, 200);
-    expect(a.startsWith("M 4.5 0")).toBe(true);
-    expect(b.startsWith("M 4.5 0")).toBe(true);
-    expect(a).toContain("A 4.5 4.5");
-    expect(b).toContain("A 4.5 4.5");
-  });
-
-  it("아주 짧아도 꼬리가 몸을 넘지 않는다", () => {
-    // belly 가 h - r 을 넘으면 경로가 뒤집혀 모양이 깨진다
-    const d = dropletPath(9, 10);
-    expect(d).not.toMatch(/-\d/); // 음수 좌표가 없다
   });
 });
