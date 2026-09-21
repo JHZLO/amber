@@ -629,13 +629,68 @@ body.resizing-col .pane-resizer::after {
   font-size: 12px;
 }
 
+/* ==== 유리 (amber liquid glass) — 값은 여기 한 벌뿐이다 (.claude/DESIGN.md §2 유리 규약)
+   테두리 있는 버튼은 전부 이 토큰을 가져다 쓴다. 새 rgba 를 직접 적지 않는다:
+   농도를 손으로 맞추기 시작하면 화면마다 유리가 조금씩 달라지고, 그게 유리를 유리가 아니라
+   '반투명한 회색 판'으로 만든다.
+
+   네 겹 = blur(뒤를 흐림) + 사선 채움 + 위쪽 한 줄기 빛 + 유리 두께.
+   빛줄기는 **언제나 흰색**이다 — 라이트에서도 위에서 빛이 든다. 바뀌는 건 채움의 먹(tint)뿐. */
+:root {
+  --glass-blur: blur(8px) saturate(170%);
+  --glass-fill: linear-gradient(
+    150deg,
+    rgba(255, 255, 255, 0.05),
+    rgba(255, 255, 255, 0.015) 46%,
+    rgba(255, 255, 255, 0.04)
+  );
+  --glass-fill-hover: linear-gradient(
+    150deg,
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.032) 46%,
+    rgba(255, 255, 255, 0.075)
+  );
+  --glass-rim:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.07);
+  --glass-rim-hover:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.14);
+}
+/* 밝은 판에서는 흰 유리가 사라진다 — 같은 네 겹을 연기처럼 어둡게(빛줄기는 그대로 흰색) */
+:root:not([data-theme="dark"]) {
+  --glass-fill: linear-gradient(
+    150deg,
+    rgba(24, 24, 27, 0.05),
+    rgba(24, 24, 27, 0.015) 46%,
+    rgba(24, 24, 27, 0.04)
+  );
+  --glass-fill-hover: linear-gradient(
+    150deg,
+    rgba(24, 24, 27, 0.1),
+    rgba(24, 24, 27, 0.035) 46%,
+    rgba(24, 24, 27, 0.075)
+  );
+  --glass-rim:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.6),
+    inset 0 0 0 0.5px rgba(24, 24, 27, 0.09);
+  --glass-rim-hover:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.78),
+    inset 0 0 0 0.5px rgba(24, 24, 27, 0.16);
+}
+
 /* ---- 버튼 ---- */
 .btn {
   height: 34px;
   padding: 0 14px;
-  border: 1px solid var(--border-strong);
+  /* 1px 투명 — 자리(border-box)는 그대로 두고 선은 유리 두께(--glass-rim)가 대신한다.
+     남겨 두는 이유: .btn-danger-ghost:hover 처럼 **선을 되살려 뜻을 말하는** 변형이 있다 */
+  border: 1px solid transparent;
   border-radius: 6px;
-  background: var(--surface);
+  background: var(--glass-fill);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-rim);
   color: var(--text);
   font-weight: 600;
   font-size: 13px;
@@ -643,13 +698,14 @@ body.resizing-col .pane-resizer::after {
   align-items: center;
   gap: 6px;
   white-space: nowrap;
-  transition: background 0.12s, border-color 0.12s, opacity 0.12s,
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s, opacity 0.12s,
     transform 0.16s var(--ease-out);
 }
 /* hover/press 는 누를 수 있을 때만 — 비활성 버튼이 밝아지거나 눌리는 시늉을 하면
    "눌렸는데 아무 일도 안 났다"로 읽힌다(§8: 응답은 실제로 받는 입력에만). */
 .btn:hover:not(:disabled) {
-  background: var(--surface-2);
+  background: var(--glass-fill-hover);
+  box-shadow: var(--glass-rim-hover);
 }
 /* press 피드백 — 인터페이스가 듣고 있다는 즉각 반응 (pointer-down 순간, §8) */
 .btn:active:not(:disabled) {
@@ -674,9 +730,10 @@ body.resizing-col .pane-resizer::after {
   background: var(--primary-bg-hover);
   border-color: var(--primary-bg-hover);
 }
-/* 삭제(파괴 액션)도 색 없이, 명암으로만 구분 */
+/* 삭제(파괴 액션)도 색 없이, 명암으로만 구분.
+   평소엔 다른 버튼과 똑같은 유리고, 손이 닿을 때만 선이 살아나 빨강을 두른다 */
 .btn-danger-ghost {
-  border-color: var(--border-strong);
+  border-color: transparent;
   color: var(--danger);
 }
 .btn-danger-ghost:hover {
@@ -695,16 +752,20 @@ body.resizing-col .pane-resizer::after {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: 6px;
-  background: var(--surface);
+  background: var(--glass-fill);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-rim);
   color: var(--text-2);
   font-size: 15px;
-  transition: background 0.12s, color 0.12s, border-color 0.12s,
+  transition: background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.12s,
     transform 0.16s var(--ease-out);
 }
 .icon-btn:hover:not(:disabled) {
-  background: var(--surface-2);
+  background: var(--glass-fill-hover);
+  box-shadow: var(--glass-rim-hover);
   color: var(--text);
 }
 .icon-btn:active:not(:disabled) {
@@ -761,10 +822,14 @@ body.resizing-col .pane-resizer::after {
   gap: 4px;
   font-size: 12px;
   color: var(--text-2);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: 6px;
   padding: 3px 9px;
+  background: var(--glass-fill);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-rim);
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
 .chip.active {
   background: var(--primary-bg);
@@ -782,7 +847,8 @@ body.resizing-col .pane-resizer::after {
   cursor: pointer;
 }
 .chip.btn-like:hover {
-  border-color: var(--border-strong);
+  background: var(--glass-fill-hover);
+  box-shadow: var(--glass-rim-hover);
 }
 
 /* ---- 상세 ---- */
@@ -2303,9 +2369,12 @@ html.widget-root #root {
 }
 .select-trigger {
   height: 34px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid transparent;
   border-radius: 6px;
-  background: var(--surface);
+  background: var(--glass-fill);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-rim);
   color: var(--text);
   font-weight: 600;
   font-size: 13px;
@@ -2314,10 +2383,11 @@ html.widget-root #root {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  transition: border-color 0.12s;
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
 .select-trigger:hover {
-  border-color: var(--text-3);
+  background: var(--glass-fill-hover);
+  box-shadow: var(--glass-rim-hover);
 }
 /* 아직 고르지 않음(placeholder) — 값이 아니라 안내문이라 한 단계 흐리게.
    클래스 이름에 select- 를 붙인다: 전역 `.empty`(빈 상태 블록 — column·height:100%)와
@@ -2888,10 +2958,15 @@ html.widget-root #root {
   opacity: 1;
 }
 
-/* 고스트 아이콘 버튼 (보더/배경 없이 hover 시만 옅게) */
+/* 고스트 아이콘 버튼 (보더/배경 없이 hover 시만 옅게).
+   **테두리가 없으면 유리도 없다** — 유리는 면이고, 면이 없는 버튼에 유리를 씌우면
+   목록 안 행마다 판이 하나씩 떠올라 글보다 앞으로 나온다. 앞선 유리를 전부 걷는다. */
 .icon-btn.ghost {
   border: none;
   background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
   color: var(--text-3);
 }
 .icon-btn.ghost:hover {
@@ -2916,18 +2991,20 @@ html.widget-root #root {
   gap: 0;
   padding: 0;
   overflow: hidden;
-  background: var(--surface);
-  border-color: var(--border-strong);
+  background: var(--glass-fill);
+  border-color: transparent;
   color: var(--text);
   max-width: 100%;
   transition:
     background 0.12s ease,
     border-color 0.12s ease,
+    box-shadow 0.12s ease,
     color 0.12s ease,
     transform 0.16s var(--ease-out);
 }
 .chip.chip-choice:hover {
-  border-color: var(--text-3);
+  background: var(--glass-fill-hover);
+  box-shadow: var(--glass-rim-hover);
 }
 .chip.chip-choice:has(button:active) {
   transform: scale(0.97);
@@ -6398,6 +6475,8 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
    컴포넌트: DbConnectionModal · SchemaOverview · DbSettings · DiagramsView 의 트리/배너. */
 
 /* 작은 칩 — 헤더 제목 옆·트리 보조 표기용. 채움(chip-fill)은 운영 환경 표식 하나에만 쓴다 */
+/* 상태 뱃지 — 누르는 물건이 아니라 **켜짐/꺼짐을 말하는 표시**다(§3 채움/아웃라인).
+   유리를 벗기고 진짜 아웃라인을 남긴다: 여기서 선은 장식이 아니라 상태의 한쪽 값이다. */
 .chip.chip-sm {
   height: 20px;
   padding: 0 7px;
@@ -6406,6 +6485,9 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   border-radius: 999px;
   border-color: var(--border-strong);
   background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
 }
 .chip.chip-fill {
   background: var(--primary-bg);
