@@ -33,6 +33,30 @@ export function parkedRoots(rows: Todo[]): Todo[] {
   return rows.filter((r) => r.parent_id == null || !ids.has(r.parent_id));
 }
 
+/** 같은 묶음에서 내려온 것끼리 묶는다 — 줄마다 "Devops" 를 반복하면 그게 서로 남남처럼 보인다.
+ *  이름은 머리글 한 번에 올리고 카드는 본문만 남긴다(오늘 목록의 묶음 머리글과 같은 문법).
+ *
+ *  머리글 순서는 **그 묶음의 첫 카드가 나온 순서**다. 목록 자체가 오래 묵은 것부터라
+ *  (listParked 의 parked_at ASC) 따로 정렬하면 "17일째 안 건드렸네" 가 위에서 밀려난다.
+ *  묶음이 없던 것(원래 최상위)은 머리글 없이 그 자리에 그대로 선다. */
+export interface ParkedGroup {
+  /** 머리글 텍스트. 빈 문자열이면 머리글 없는 묶음(원래 최상위였던 것들) */
+  key: string;
+  items: Todo[];
+}
+export function groupParked(roots: Todo[], ancestors: TodoAncestor[]): ParkedGroup[] {
+  const out: ParkedGroup[] = [];
+  for (const r of roots) {
+    const key = ancestorPath(ancestors, r.parent_id).join(" › ");
+    // 같은 이름이라도 **떨어져 있으면 합치지 않는다** — 목록 순서가 곧 나이라
+    // 멀리 있는 것을 끌어올리면 위아래가 뜻을 잃는다
+    const last = out[out.length - 1];
+    if (last && last.key === key) last.items.push(r);
+    else out.push({ key, items: [r] });
+  }
+  return out;
+}
+
 export function TodoDrawer({
   rows,
   ancestors,
@@ -145,16 +169,27 @@ export function TodoDrawer({
             {roots.length === 0 ? (
               <p className="parked-empty">{t("todos.parked.empty")}</p>
             ) : (
-              roots.map((r) => (
-                <ParkedCard
-                  key={r.id}
-                  todo={r}
-                  path={ancestorPath(ancestors, r.parent_id)}
-                  kids={kidCount(r.id)}
-                  days={r.parked_at == null ? 0 : parkedDays(r.parked_at, now)}
-                  onPull={() => onPull(r)}
-                  onDelete={() => onDelete(r)}
-                />
+              groupParked(roots, ancestors).map((g, gi) => (
+                <div className="parked-group" key={`${g.key}-${gi}`}>
+                  {g.key && (
+                    <div className="parked-group-head">
+                      <span className="parked-group-name" title={g.key}>
+                        {g.key}
+                      </span>
+                      <span className="parked-group-rule" />
+                    </div>
+                  )}
+                  {g.items.map((r) => (
+                    <ParkedCard
+                      key={r.id}
+                      todo={r}
+                      kids={kidCount(r.id)}
+                      days={r.parked_at == null ? 0 : parkedDays(r.parked_at, now)}
+                      onPull={() => onPull(r)}
+                      onDelete={() => onDelete(r)}
+                    />
+                  ))}
+                </div>
               ))
             )}
           </div>
@@ -212,15 +247,12 @@ function sourceKey(source: string) {
  *  카드가 2px 왼쪽으로 물러난다 — 움직이는 방향이 곧 가는 곳이다(오늘 목록은 왼쪽에 있다). */
 function ParkedCard({
   todo,
-  path,
   kids,
   days,
   onPull,
   onDelete,
 }: {
   todo: Todo;
-  /** 바깥쪽부터의 묶음 이름들. 비어 있으면 원래 최상위였다는 뜻이라 아무것도 안 그린다 */
-  path: string[];
   kids: number;
   days: number;
   onPull: () => void;
@@ -241,14 +273,7 @@ function ParkedCard({
         }
       }}
     >
-      <span className="parked-card-main">
-        {path.length > 0 && (
-          <span className="parked-card-path" title={path.join(" › ")}>
-            {path.join(" › ")}
-          </span>
-        )}
-        <span className="parked-card-text">{todo.content}</span>
-      </span>
+      <span className="parked-card-text">{todo.content}</span>
       {kids > 0 && <span className="parked-card-kids">{t("todos.parked.kids", { n: kids })}</span>}
       <span className="parked-card-age">
         {days === 0 ? t("todos.parked.age.zero") : t("todos.parked.age", { n: days })}

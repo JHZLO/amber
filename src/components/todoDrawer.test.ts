@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parkedDays, parkedRoots } from "./TodoDrawer";
+import { groupParked, parkedDays, parkedRoots } from "./TodoDrawer";
 import type { Todo } from "../types";
 
 const at = (id: number, parent: number | null, content = `t${id}`): Todo =>
@@ -55,5 +55,39 @@ describe("parkedDays", () => {
   it("시계가 뒤로 간 경우에도 음수를 내지 않는다", () => {
     // 기기 시간 변경이나 타임존 보정으로 now 가 과거가 될 수 있다 — "-3일"은 표시할 말이 아니다
     expect(parkedDays(DAY * 5, 0)).toBe(0);
+  });
+});
+
+describe("groupParked", () => {
+  const anc = [
+    { id: 1, content: "Devops", parent_id: null },
+    { id: 2, content: "Amber", parent_id: null },
+    { id: 3, content: "릴리스", parent_id: 2 },
+  ];
+
+  it("같은 부모에서 내려온 것은 머리글 하나로 묶는다", () => {
+    const g = groupParked([at(10, 1), at(11, 1)], anc);
+    expect(g).toHaveLength(1);
+    expect(g[0].key).toBe("Devops");
+    expect(g[0].items.map((r) => r.id)).toEqual([10, 11]);
+  });
+
+  it("경로 전체가 머리글이 된다 — 같은 이름이라도 자리가 다르면 다른 묶음이다", () => {
+    expect(groupParked([at(10, 3)], anc)[0].key).toBe("Amber › 릴리스");
+  });
+
+  it("원래 최상위였으면 머리글이 없다", () => {
+    const g = groupParked([at(10, null)], anc);
+    expect(g[0].key).toBe("");
+  });
+
+  it("떨어져 있으면 합치지 않는다 — 목록 순서가 곧 나이다", () => {
+    // 오래 묵은 순서(listParked 의 parked_at ASC)를 흔들면 "17일째" 가 위에서 밀려난다
+    const g = groupParked([at(10, 1), at(11, 2), at(12, 1)], anc);
+    expect(g.map((x) => x.key)).toEqual(["Devops", "Amber", "Devops"]);
+  });
+
+  it("빈 목록은 빈 묶음", () => {
+    expect(groupParked([], anc)).toEqual([]);
   });
 });

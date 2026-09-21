@@ -1644,22 +1644,33 @@ body.resizing-col .pane-resizer::after {
   outline: none;
   box-shadow: var(--focus-ring);
 }
-/* 본문 + 그 위 묶음 경로. 경로는 문맥이라 본문보다 작고 옅게 — 읽는 것은 아래 한 줄이다 */
-.parked-card-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+/* 같은 묶음에서 내려온 카드들의 머리글 — 오늘 목록의 묶음 머리글과 같은 문법(이름 + 실선).
+   카드마다 이름을 반복하지 않으려고 있는 것이라, 카드보다 눈에 덜 띄어야 한다. */
+.parked-group + .parked-group {
+  margin-top: 16px;
 }
-.parked-card-path {
+.parked-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 22px;
+  margin-bottom: 6px;
+}
+.parked-group-name {
   font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--text-3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.parked-group-rule {
+  flex: 1;
+  min-width: 12px;
+  height: 1px;
+  background: var(--border);
 }
 .parked-card-text {
   flex: 1;
