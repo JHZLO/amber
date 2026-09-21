@@ -671,10 +671,22 @@ body.resizing-col .pane-resizer::after {
      완전히 투명하면 뒤의 트리 위에서 글이 안 읽힌다. 유리의 뜻은 '뒤가 비침'이지 '안 보임'이 아니다. */
   --glass-blur-panel: blur(20px) saturate(180%);
   --glass-panel: color-mix(in srgb, var(--surface) 86%, transparent);
-  /* 채움(주 동작, 켜짐)도 유리로 — 색을 없애는 게 아니라 **그 색을 유리로 희석한다.**
-     그래야 뒤가 비치면서도 --primary-fg 글자가 계속 읽히고, 위계(§3 채움 > 유리)가 남는다. */
-  --glass-accent: color-mix(in srgb, var(--primary-bg) 82%, transparent);
-  --glass-accent-hover: color-mix(in srgb, var(--primary-bg-hover) 92%, transparent);
+  /* 주 동작, 켜짐 — **채움을 빼고 유리를 두껍게 한다.** 흰 알약을 82% 로 희석해 봤지만
+     그건 여전히 흰 판이었다: 뒤가 거의 안 비치니 유리들 사이에서 혼자 스티커로 보인다.
+     위계는 색이 아니라 농도로 말한다(면 5% → 강조 18%), 글자는 --text 그대로 쓴다. */
+  --glass-fill-accent: linear-gradient(
+    150deg,
+    rgba(255, 255, 255, 0.18),
+    rgba(255, 255, 255, 0.07) 46%,
+    rgba(255, 255, 255, 0.14)
+  );
+  --glass-fill-accent-hover: linear-gradient(
+    150deg,
+    rgba(255, 255, 255, 0.26),
+    rgba(255, 255, 255, 0.105) 46%,
+    rgba(255, 255, 255, 0.2)
+  );
+  --glass-edge-accent: rgba(255, 255, 255, 0.3);
   /* 켜진 탭처럼 '면이 떠오르는' 상태 */
   --glass-raise: color-mix(in srgb, var(--surface) 78%, transparent);
 }
@@ -694,6 +706,19 @@ body.resizing-col .pane-resizer::after {
   );
   --glass-edge: rgba(24, 24, 27, 0.12);
   --glass-edge-hover: rgba(24, 24, 27, 0.2);
+  --glass-fill-accent: linear-gradient(
+    150deg,
+    rgba(24, 24, 27, 0.16),
+    rgba(24, 24, 27, 0.06) 46%,
+    rgba(24, 24, 27, 0.125)
+  );
+  --glass-fill-accent-hover: linear-gradient(
+    150deg,
+    rgba(24, 24, 27, 0.24),
+    rgba(24, 24, 27, 0.095) 46%,
+    rgba(24, 24, 27, 0.185)
+  );
+  --glass-edge-accent: rgba(24, 24, 27, 0.34);
   --glass-sheen: inset 0 0.5px 0 rgba(255, 255, 255, 0.6);
   --glass-sheen-hover: inset 0 0.5px 0 rgba(255, 255, 255, 0.8);
 }
@@ -740,18 +765,19 @@ body.resizing-col .pane-resizer::after {
 .widget-btn svg {
   flex-shrink: 0;
 }
-/* primary = 강조 유리. 예전엔 불투명한 알약이었는데, 화면에서 **유일하게 뒤가 안 비치는 것**이
-   되어 유리들 사이에 스티커처럼 얹혀 보였다. 색을 유리로 희석해 뒤가 비치게 하되 농도를
-   높여(82%) --primary-fg 대비를 지킨다 — 위계는 색이 아니라 **유리의 두께**로 남는다. */
+/* primary = 강조 유리. **채움을 뺀다.** 불투명한 흰 알약은 화면에서 유일하게 뒤가 안 비치는
+   물건이라 유리들 사이에 스티커로 얹혀 보였고, 82% 로 희석해도 여전히 흰 판이었다.
+   앞으로 나오는 일은 **더 두꺼운 유리**가 한다 — 채움 3.6배, 테두리 3.3배, 글자는 한 단 굵게. */
 .btn-primary {
-  background: var(--glass-fill), var(--glass-accent);
-  border-color: var(--glass-edge-hover);
+  background: var(--glass-fill-accent);
+  border-color: var(--glass-edge-accent);
   box-shadow: var(--glass-sheen-hover);
-  color: var(--primary-fg);
+  color: var(--text);
+  font-weight: 700;
 }
 .btn-primary:hover:not(:disabled) {
-  background: var(--glass-fill-hover), var(--glass-accent-hover);
-  border-color: var(--glass-edge-hover);
+  background: var(--glass-fill-accent-hover);
+  border-color: var(--glass-edge-accent);
   box-shadow: var(--glass-sheen-hover);
 }
 /* 삭제(파괴 액션)도 색 없이, 명암으로만 구분.
@@ -857,9 +883,10 @@ body.resizing-col .pane-resizer::after {
   transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
 .chip.active {
-  background: var(--glass-fill), var(--glass-accent);
-  color: var(--primary-fg);
-  border-color: var(--glass-edge-hover);
+  background: var(--glass-fill-accent);
+  color: var(--text);
+  font-weight: 600;
+  border-color: var(--glass-edge-accent);
   box-shadow: var(--glass-sheen-hover);
 }
 .chip .x {
@@ -4837,10 +4864,12 @@ html.widget-root #root {
 .checkbox:active {
   transform: scale(0.88);
 }
+/* 켜짐 = 두꺼운 유리 + 체크. 흰 원으로 칠하지 않는다 — 켜졌다고 말하는 건 **체크 표시**지
+   면이 아니고, 20px 짜리 흰 점은 목록에서 유리들 사이에 혼자 튄다. */
 .checkbox.checked {
-  background: var(--primary-bg);
-  border-color: var(--primary-bg);
-  color: var(--primary-fg);
+  background: var(--glass-fill-accent);
+  border-color: var(--glass-edge-accent);
+  color: var(--text);
 }
 .checkbox:focus-visible {
   outline: none;
@@ -6538,9 +6567,9 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   box-shadow: none;
 }
 .chip.chip-fill {
-  background: var(--glass-fill), var(--glass-accent);
-  color: var(--primary-fg);
-  border-color: var(--glass-edge-hover);
+  background: var(--glass-fill-accent);
+  color: var(--text);
+  border-color: var(--glass-edge-accent);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   box-shadow: var(--glass-sheen-hover);
