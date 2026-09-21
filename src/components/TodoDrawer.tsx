@@ -189,6 +189,7 @@ function SuggestCard({
 function sourceKey(source: string) {
   if (source === "overdue") return "todos.suggest.src.overdue" as const;
   if (source === "anytime") return "todos.suggest.src.anytime" as const;
+  if (source === "activity") return "todos.suggest.src.activity" as const;
   if (source === "note") return "todos.suggest.src.note" as const;
   return "todos.suggest.src.other" as const;
 }

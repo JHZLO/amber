@@ -891,15 +891,17 @@ pub struct TodoSuggestResult {
     pub meta: MetaOut,
 }
 
-/// 오늘 챙길 것 고르기. 입력은 **앱이 이미 아는 것**뿐이다 — 오늘 목록, 밀린 것,
-/// 언젠가(나이 포함), 최근 리포트. 도구는 열지 않는다(기존 실행과 같은 기본 정책):
-/// 고르는 일에 파일을 읽거나 명령을 돌릴 이유가 없고, 열면 그만큼 새는 곳이 생긴다.
+/// 오늘 챙길 것 고르기 — **오늘 해야 하는데 목록에 없는 것**을 찾는다.
+/// 재료는 리포트가 쓰는 수집기와 같다(report_collect): 저장소 이벤트와 AI 세션.
+/// 둘 다 `gh` CLI 와 로컬 세션 파일을 읽는 Rust 쪽이라 MCP 커넥터 없이 동작한다.
+/// 여기서 도구는 열지 않는다 — 재료는 이미 앱이 모아서 넘긴다.
 #[tauri::command]
 pub async fn ai_todo_suggest(
     today: String,
     overdue: String,
     anytime: String,
-    notes: String,
+    // 오늘 실제로 움직인 것 — 저장소 이벤트, 리뷰 요청, AI 세션. 후보는 여기서 나온다
+    activity: String,
     model: Option<String>,
     cli_path: Option<String>,
     provider: Option<String>,
@@ -907,7 +909,7 @@ pub async fn ai_todo_suggest(
     lang: Option<String>,
 ) -> Result<TodoSuggestResult, AiError> {
     // 볼 게 없으면 CLI 를 깨우지 않는다 — 빈 목록을 받으려고 몇십 초를 쓸 이유가 없다
-    if overdue.trim().is_empty() && anytime.trim().is_empty() && notes.trim().is_empty() {
+    if overdue.trim().is_empty() && anytime.trim().is_empty() && activity.trim().is_empty() {
         return Err(AiError::new(
             "NOTHING_TO_SUGGEST",
             "고를 거리가 없습니다. 밀린 일도, 내려놓은 일도, 최근 기록도 비어 있어요.",
@@ -929,7 +931,7 @@ pub async fn ai_todo_suggest(
         section("Today", &today),
         section("Overdue", &overdue),
         section("Anytime", &anytime),
-        section("Recent notes", &notes),
+        section("Activity", &activity),
     );
 
     let (result_str, meta) = run_provider_text(

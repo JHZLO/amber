@@ -87,7 +87,7 @@ describe("runSuggest", () => {
       today: [t({ content: "오늘 것" })],
       overdue: [],
       anytime: [],
-      notes: "",
+      activity: "",
       todayDate: "2026-09-21",
       config,
     });
@@ -104,7 +104,7 @@ describe("runSuggest", () => {
       today: [],
       overdue: [t({ content: "밀린 것", due_date: "2026-09-14" })],
       anytime: [],
-      notes: "",
+      activity: "",
       todayDate: "2026-09-21",
       config,
     });

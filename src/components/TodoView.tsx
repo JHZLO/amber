@@ -79,7 +79,7 @@ import { TodoDrawer } from "./TodoDrawer";
 import { useReportGeneratingDates } from "../lib/reportRun";
 import { usePaneResize } from "../lib/usePaneResize";
 import { dropSuggestion, runSuggest, useSuggest } from "../lib/todoSuggest";
-import { readReportFile, recentReportDates } from "../lib/report";
+import { loadReportConfig, rankedSources, reportCollect } from "../lib/report";
 import { openConceptInApp } from "../lib/nav";
 import type { AppConfig } from "../lib/config";
 
@@ -419,19 +419,48 @@ export function TodoView({
   // '오늘 후보' — 모듈 스토어라 탭을 옮겨도 계속 돈다(lib/todoSuggest)
   const suggest = useSuggest();
 
-  /** 훑기 — 입력은 앱이 이미 아는 것뿐이다. 리포트는 **실제로 있는 최근 두 장**을 찾아 온다:
-   *  '어제·그제'로 날짜를 고정하면 며칠 건너뛴 사람에게는 늘 빈손이다(실제로 그랬다) */
+  /** 훑기 — 오늘 **실제로 움직인 것**을 모아 목록에 없는 할 일을 찾는다.
+   *  수집기는 일간 리포트가 쓰는 것과 같다(report_collect): 저장소 이벤트와 AI 세션.
+   *  둘 다 `gh` CLI 와 로컬 세션 파일을 읽는 Rust 쪽이라 MCP 커넥터 없이 동작한다. */
   async function lookAgain() {
     if (!config) return;
     try {
       const today = todayStr();
-      const dates = await recentReportDates(today, 2);
-      const recent = await Promise.all(dates.map((d) => readReportFile(d)));
+      const rc = await loadReportConfig();
+      const ranked = rankedSources(rc);
+      const gh = ranked.find((x) => x.id === "github");
+      const sess = ranked.find((x) => x.id === "ai_sessions");
+      // 오늘은 아직 안 끝났다 — 하루 끝이 아니라 **지금까지**를 본다
+      const [startMs] = dayRangeMs(today);
+      const digests = await reportCollect(
+        {
+          date: today,
+          startMs,
+          endMs: Date.now(),
+          tzOffsetMin: new Date().getTimezoneOffset(),
+          github: gh
+            ? {
+                rank: gh.rank,
+                path: rc.githubPath || null,
+                repos: rc.githubRepos,
+                account: rc.githubAccount || null,
+              }
+            : null,
+          aiSessions: sess
+            ? { rank: sess.rank, claude: rc.sessionsClaude, codex: rc.sessionsCodex }
+            : null,
+          todos: null,
+        },
+        () => {},
+      );
       await runSuggest({
         today: todos,
         overdue,
         anytime: parked,
-        notes: recent.filter(Boolean).join("\n\n"),
+        activity: digests
+          .filter((d) => d.ok && d.digest_md.trim())
+          .map((d) => d.digest_md.trim())
+          .join("\n\n"),
         todayDate: today,
         config,
       });

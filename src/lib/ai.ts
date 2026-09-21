@@ -296,7 +296,8 @@ export async function aiTodoSuggest(params: {
   today: string;
   overdue: string;
   anytime: string;
-  notes: string;
+  /** 오늘 실제로 움직인 것 (report_collect 의 digest) — 후보는 여기서 나온다 */
+  activity: string;
   model?: string | null;
   cliPath?: string | null;
   provider?: string | null;
@@ -306,7 +307,7 @@ export async function aiTodoSuggest(params: {
     today: params.today,
     overdue: params.overdue,
     anytime: params.anytime,
-    notes: params.notes,
+    activity: params.activity,
     model: params.model ?? null,
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,

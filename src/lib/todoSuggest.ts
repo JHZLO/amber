@@ -1,4 +1,11 @@
-// 할 일 탭 '오늘 후보' — AI 가 고른 것들을 담는 모듈 스토어 + 프롬프트 입력 만들기.
+// 할 일 탭 '오늘 후보' — **오늘 해야 하는데 목록에 없는 것**을 찾는다.
+//
+// 재료는 일간 리포트가 쓰는 수집기와 같다(report_collect): 저장소 이벤트와 AI 세션.
+// 이미 투두에 있는 것(밀린 것, 언젠가)은 정의상 '추가 안 한 것'이 아니라서 후보의 본류가
+// 아니다 — 오늘의 움직임이 그것을 건드렸을 때만 딸려 올라온다.
+//
+// github·ai_sessions 수집기는 `gh` CLI 와 로컬 세션 파일을 읽는 Rust 쪽이라
+// **MCP 커넥터 없이 동작한다**. Slack·Notion 은 MCP 가 필요해서 아직 여기 오지 않는다.
 //
 // **DB 에 넣지 않는다.** 후보는 아직 내 할 일이 아니다 — 받아들이면 그때 todos 행이 되고,
 // 안 받아들이면 그냥 사라지면 된다. 보관하면 "무시한 것"을 또 관리해야 하고, 그 순간
@@ -99,8 +106,8 @@ export interface RunSuggestParams {
   today: Todo[];
   overdue: Todo[];
   anytime: Todo[];
-  /** 최근 일간 리포트 본문 — 적어 두기만 하고 할 일로 안 옮긴 것이 여기 남는다 */
-  notes: string;
+  /** 오늘 실제로 움직인 것 (report_collect 의 digest 를 이어 붙인 것) */
+  activity: string;
   todayDate: string;
   config: AppConfig;
 }
@@ -110,10 +117,10 @@ export async function runSuggest(p: RunSuggestParams): Promise<void> {
   if (state.phase === "running") return;
   const overdue = formatOverdue(p.overdue, p.todayDate);
   const anytime = formatAnytime(p.anytime, Date.now());
-  const notes = p.notes.slice(0, 6000);
+  const activity = p.activity.slice(0, 12000);
   // 볼 거리가 하나도 없으면 CLI 를 깨우지 않는다. 그리고 이건 **에러가 아니다** —
   // 기록이 쌓이기 전에는 당연한 상태고, 빨간 판으로 알리면 고장으로 읽힌다.
-  if (!overdue.trim() && !anytime.trim() && !notes.trim()) {
+  if (!overdue.trim() && !anytime.trim() && !activity.trim()) {
     set({ phase: "empty", items: [], error: null, ranAt: Date.now() });
     return;
   }
@@ -123,7 +130,7 @@ export async function runSuggest(p: RunSuggestParams): Promise<void> {
       today: formatToday(p.today),
       overdue,
       anytime,
-      notes,
+      activity,
       model: p.config.model,
       cliPath: p.config.cliPath,
       provider: p.config.provider,
