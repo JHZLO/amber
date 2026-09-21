@@ -5207,6 +5207,12 @@ body.resizing-tt * {
   }
 }
 /* 우: 상세 헤더(날짜 + 이동) — 기본 detail-head 는 flex-start 라 여기선 center + wrap */
+/* 읽는 열의 자(尺)는 **패널 하나**에 둔다. 목록만 좁히고 머리글을 창 끝까지 늘려 놓으면
+   [Today ‹ ›] 가 본문에서 한참 떨어져 혼자 떠 있다 — 넓은 창에서 그게 오른쪽이 텅 빈
+   원인이었다. 패널을 묶으면 머리글도 입력칸도 목록도 자동으로 같은 오른쪽 끝을 갖는다. */
+.todo-body .detail {
+  max-width: 880px;
+}
 .detail-head.todo-head {
   align-items: center;
   flex-wrap: wrap;
@@ -5247,7 +5253,6 @@ body.resizing-tt * {
   gap: 12px;
   padding: 8px 8px 9px;
   margin-bottom: 6px;
-  max-width: 640px; /* 목록과 같은 자(尺) — 밑줄과 묶음 선이 어긋나면 둘 다 실수처럼 보인다 */
   border-radius: 8px 8px 0 0;
   border-bottom: 1px solid var(--border);
   background: transparent;
@@ -5278,13 +5283,10 @@ body.resizing-tt * {
 }
 
 /* 목록 */
-/* 폭을 잡는다. 창 끝까지 늘리면 제목과 오른쪽 끝 진행 배지가 한 화면 거리만큼 떨어져,
-   둘을 잇는 데 눈이 한 번 더 움직인다. 읽는 열은 640 안팎이면 충분하다. */
 .todo-listing {
   position: relative; /* 드래그 삽입선(.todo-drop-line)의 좌표 기준 */
   display: flex;
   flex-direction: column;
-  max-width: 640px;
 }
 
 /* ---- 묶음 머리글 — 최상위에서 하위를 거느린 행 (TodoView renderUnit 의 isGroup) ----

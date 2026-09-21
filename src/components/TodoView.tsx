@@ -946,15 +946,9 @@ export function TodoView({
                 <Icon name="set-down" size={13} />
               </button>
             </Tooltip>
-            <Tooltip label={t("todos.row.rename")}>
-              <button
-                aria-label={t("todos.row.rename")}
-                className="icon-btn sm"
-                onClick={() => startEdit(todo)}
-              >
-                <Icon name="pencil" size={13} />
-              </button>
-            </Tooltip>
+            {/* 이름 변경 버튼은 두지 않는다 — 글자를 클릭하면 바로 인라인 편집이고(.todo-text 의
+                cursor: text 가 그걸 말한다), 같은 일을 하는 아이콘을 하나 더 두면 hover 줄만
+                길어진다. 아이콘은 **글자를 눌러서는 할 수 없는 일**에만 쓴다. */}
             <Tooltip label={t("common.delete")}>
               <button
                 aria-label={t("common.delete")}
