@@ -15,7 +15,10 @@ import {
   deleteTodo,
   listMonthCounts,
   listOverdueOpen,
+  listParked,
   listTodos,
+  parkSubtree,
+  unparkSubtree,
   listWeekCounts,
   listWeekTodos,
   moveTodos,
@@ -71,6 +74,7 @@ import { PageFind } from "./PageFind";
 import { DayTimetable, type TtView } from "./DayTimetable";
 import { DailyReportPanel } from "./DailyReportPanel";
 import { WeeklyReportPanel } from "./WeeklyReportPanel";
+import { TodoParkedDrawer } from "./TodoParkedDrawer";
 import { useReportGeneratingDates } from "../lib/reportRun";
 import { usePaneResize } from "../lib/usePaneResize";
 import { openConceptInApp } from "../lib/nav";
@@ -97,6 +101,8 @@ const INDENT = 24;
 // 타임테이블 뷰 모드 (일/주/월, localStorage 영속)
 const TT_VIEW_KEY = "amber.todo.tt-view";
 const UNIT_KEY = "amber.todo.unit";
+/** '언젠가' 서랍을 열어 뒀는가 — 창 폭이 기기마다 달라 앱 설정이 아니라 로컬에 둔다 */
+const PARKED_KEY = "amber.todo.parked-open";
 
 /** 뷰별 블록 로드 범위 [from, to] — 일=선택일, 주=일~토, 월=그 달 1일~말일 */
 function ttRange(view: TtView, selected: string): [string, string] {
@@ -388,6 +394,60 @@ export function TodoView({
   }
 
   // 선택 날짜의 목록 + 밀린 할 일 + 이날 학습완료 개념
+  // '언젠가' — 날짜에서 내려놓은 것들. 날짜와 무관하므로 선택 날짜가 바뀌어도 다시 읽지 않는다
+  const [parked, setParked] = useState<Todo[]>([]);
+  const [parkedOpen, setParkedOpen] = useState(
+    () => localStorage.getItem(PARKED_KEY) === "1",
+  );
+  const reloadParked = useCallback(async () => {
+    try {
+      setParked(await listParked());
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  }, []);
+  useEffect(() => {
+    if (active) void reloadParked();
+  }, [active, reloadParked]);
+  useEffect(() => {
+    localStorage.setItem(PARKED_KEY, parkedOpen ? "1" : "0");
+  }, [parkedOpen]);
+
+  /** 오늘 목록에서 내려놓는다 — 서브트리째. 부모만 내려놓으면 자식이 부모 없는 날짜에 남는다 */
+  async function park(todo: Todo) {
+    try {
+      await parkSubtree(todo.id);
+      if (todo.parent_id != null) await recomputeChainFrom(todo.parent_id);
+      await reloadCurrent();
+      void reloadCounts();
+      void reloadParked();
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  }
+
+  /** 서랍에서 오늘로 올린다. 보고 있는 날짜가 아니라 **오늘**로 — 서랍은 날짜를 모르는 곳이고,
+   *  꺼내는 동작의 뜻이 '지금 한다'이지 '이 날에 한다'가 아니다 */
+  async function pull(todo: Todo) {
+    try {
+      await unparkSubtree(todo.id, todayStr());
+      await reloadCurrent();
+      void reloadCounts();
+      void reloadParked();
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  }
+
+  async function removeParked(todo: Todo) {
+    try {
+      await deleteTodo(todo.id);
+      void reloadParked();
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  }
+
   const reloadDay = useCallback(async () => {
     const seq = ++daySeq.current;
     try {
@@ -877,6 +937,15 @@ export function TodoView({
                 <Icon name="clock" size={13} />
               </button>
             </Tooltip>
+            <Tooltip label={t("todos.row.park")}>
+              <button
+                aria-label={t("todos.row.park")}
+                className="icon-btn sm"
+                onClick={() => void park(todo)}
+              >
+                <Icon name="set-down" size={13} />
+              </button>
+            </Tooltip>
             <Tooltip label={t("todos.row.rename")}>
               <button
                 aria-label={t("todos.row.rename")}
@@ -1201,6 +1270,20 @@ export function TodoView({
           </div>
         )}
       </section>
+
+      {/* '언젠가' 서랍 — .body 그리드의 **암묵 3열**에 얹는다(grid-column: 3).
+          usePaneResize 가 gridTemplateColumns 를 인라인으로 잡고 있어서, 명시 열을 늘리면
+          손잡이와 싸운다. 암묵 열은 내용 폭으로 잡히고 2열의 1fr 이 나머지를 가져간다.
+          일 단위에서만 — 주 목록은 이번 주라는 기한이 있어 '날짜 없음'과 섞이지 않는다 */}
+      {unit === "day" && (
+        <TodoParkedDrawer
+          rows={parked}
+          open={parkedOpen}
+          onToggle={() => setParkedOpen((v) => !v)}
+          onPull={(todo) => void pull(todo)}
+          onDelete={(todo) => void removeParked(todo)}
+        />
+      )}
 
       <Modal
         open={confirmDelete != null}

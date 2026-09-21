@@ -39,6 +39,7 @@ export type IconName =
   | "copy"
   | "grip"
   | "clock"
+  | "set-down"
   | "info"
   | "lightbulb"
   | "alert-triangle"
@@ -111,6 +112,15 @@ const PATHS: Record<IconName, ReactNode> = {
     <>
       <circle cx="12" cy="12" r="10" />
       <polyline points="12 6 12 12 16 14" />
+    </>
+  ),
+  /* 달력에서 '내려놓기' — 아래 선 위에 내려놓는 화살표. 상자(archive)로 하지 않은 이유는
+     보관이 아니기 때문이다: 치우는 게 아니라 날짜만 떼어 두는 것이고, 언제든 도로 올린다. */
+  "set-down": (
+    <>
+      <path d="M12 3v11" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M5 20h14" />
     </>
   ),
   pencil: <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />,

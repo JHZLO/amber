@@ -29,6 +29,19 @@ const ko = {
 
   // 밀린 할 일 스트립
   "todos.overdue.title": "밀린 할 일",
+
+  // '언젠가' 서랍 — 달력에서 내려놓은 것. 끝내는 곳이 아니라 꺼내 오는 곳이라 체크박스가 없다
+  "todos.parked.title": "언젠가",
+  "todos.parked.open": "언젠가 열기",
+  "todos.parked.close": "접기",
+  "todos.parked.empty": "내려놓은 게 없어요. 오늘 안 할 일은 행 옆의 내려놓기로 여기에 둘 수 있어요.",
+  "todos.parked.hint": "누르면 오늘로 올라와요. 날짜가 없으니 밀리지도, 개수에 세지지도 않아요.",
+  "todos.parked.pullTip": "오늘로 올리기",
+  "todos.parked.age.zero": "오늘",
+  "todos.parked.age": "{n}일",
+  "todos.parked.kids": "하위 {n}",
+  "todos.row.park": "언젠가로 내려놓기",
+  "todos.parked.pulled": "{name} 을(를) 오늘로 올렸어요",
   "todos.overdue.moveOne": "오늘로",
   "todos.overdue.moveAll": "모두 오늘로 가져오기",
   "todos.overdue.more": "외 {n}개",
@@ -127,6 +140,18 @@ const en: Record<keyof typeof ko, string> = {
   "todos.child.placeholder": "Sub-item — press Enter to add",
 
   "todos.overdue.title": "Overdue",
+
+  "todos.parked.title": "Anytime",
+  "todos.parked.open": "Open Anytime",
+  "todos.parked.close": "Collapse",
+  "todos.parked.empty": "Nothing set down yet. Use the set-down action on a row to park what you are not doing today.",
+  "todos.parked.hint": "Click one to bring it to today. With no date it never goes overdue and never counts.",
+  "todos.parked.pullTip": "Bring to today",
+  "todos.parked.age.zero": "today",
+  "todos.parked.age": "{n}d",
+  "todos.parked.kids": "{n} sub",
+  "todos.row.park": "Set down for Anytime",
+  "todos.parked.pulled": "Brought {name} to today",
   "todos.overdue.moveOne": "To today",
   "todos.overdue.moveAll": "Bring all to today",
   "todos.overdue.more": "{n} more",
