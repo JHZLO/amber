@@ -853,6 +853,7 @@ export function NotesView({
         <PageFind
           containerRef={detailRef}
           sourceRef={editing ? srcRef : undefined}
+          sourceText={editing ? draft : undefined}
           active={active}
         />
         {selected ? (
@@ -1029,28 +1030,31 @@ export function NotesView({
             ) : readError ? null : editing ? (
               // 좌 소스 / 우 라이브 프리뷰 (PRD §4.2 편집 모드)
               <div className="note-edit-split">
-                <textarea
-                  ref={srcRef}
-                  className="textarea note-textarea"
-                  value={draft}
-                  onChange={(e) => {
-                    setDraft(e.target.value);
-                    // 글자를 고치면 앞서 잡아 둔 구간의 오프셋이 밀린다 — 그 자리에 그대로
-                    // 끼우면 엉뚱한 데를 자르므로 선택은 버린다(다시 고르게 한다)
-                    setSrcSel(null);
-                  }}
-                  // 선택 구간을 그때그때 담아 둔다 — 툴바 버튼을 누르면 포커스가 옮겨가지만
-                  // 구간은 이미 잡혀 있어야 한다
-                  onSelect={(e) => {
-                    const el = e.currentTarget;
-                    setSrcSel(
-                      el.selectionEnd > el.selectionStart
-                        ? { start: el.selectionStart, end: el.selectionEnd }
-                        : null,
-                    );
-                  }}
-                  spellCheck={false}
-                />
+                {/* 찾기(⌘F)가 칠할 거울판이 이 칸 안에 겹쳐 그려진다 — PageFind 참고 */}
+                <div className="note-src-wrap">
+                  <textarea
+                    ref={srcRef}
+                    className="textarea note-textarea"
+                    value={draft}
+                    onChange={(e) => {
+                      setDraft(e.target.value);
+                      // 글자를 고치면 앞서 잡아 둔 구간의 오프셋이 밀린다 — 그 자리에 그대로
+                      // 끼우면 엉뚱한 데를 자르므로 선택은 버린다(다시 고르게 한다)
+                      setSrcSel(null);
+                    }}
+                    // 선택 구간을 그때그때 담아 둔다 — 툴바 버튼을 누르면 포커스가 옮겨가지만
+                    // 구간은 이미 잡혀 있어야 한다
+                    onSelect={(e) => {
+                      const el = e.currentTarget;
+                      setSrcSel(
+                        el.selectionEnd > el.selectionStart
+                          ? { start: el.selectionStart, end: el.selectionEnd }
+                          : null,
+                      );
+                    }}
+                    spellCheck={false}
+                  />
+                </div>
                 <div className="markdown note-preview" ref={previewRef}>
                   <Markdown>{previewMd}</Markdown>
                 </div>

@@ -2327,6 +2327,51 @@ html.widget-root #root {
   min-height: 0;
   resize: none;
 }
+/* 편집 중 찾기(⌘F) — textarea 는 글자를 칠할 수 없어서(텍스트 노드가 없다) 같은 글을 같은 상자에
+   겹쳐 그린 거울판에 칠하고, 원문 칸은 배경만 비워 그 위에 글자만 얹는다.
+   글꼴·여백·줄바꿈 값은 PageFind 가 원문 칸에서 베껴 넣는다 — 여기에 또 적으면 둘이 갈라진다. */
+.note-src-wrap {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  /* 판때기는 여기서 깐다 — 원문 칸이 투명해야 그 아래 형광펜이 비치고, 거울판은 찾는 동안만 있다 */
+  border-radius: 6px;
+  background: var(--surface);
+}
+.note-src-wrap > .note-textarea {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  background: transparent;
+}
+.find-src-mirror {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border: 0 solid transparent;
+  border-radius: 6px;
+  /* 글자는 원문 칸 것이 보인다 — 여기서는 칠한 자리만 보이면 된다 */
+  color: transparent;
+}
+/* 색은 읽기 갈래(::highlight(page-find))와 같은 값을 쓴다 — 같은 찾기가 화면마다 다른 색이면 안 된다 */
+.find-src-mirror mark {
+  color: transparent;
+  border-radius: 2px;
+  background-color: rgba(120, 120, 130, 0.3);
+}
+.find-src-mirror mark.cur {
+  background-color: rgba(250, 204, 21, 0.55);
+}
+:root[data-theme="dark"] .find-src-mirror mark {
+  background-color: rgba(160, 160, 175, 0.3);
+}
+:root[data-theme="dark"] .find-src-mirror mark.cur {
+  background-color: rgba(202, 138, 4, 0.62);
+}
+
 .note-preview {
   border: 1px solid var(--border);
   border-radius: 8px;
