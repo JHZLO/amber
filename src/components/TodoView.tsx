@@ -9,7 +9,7 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import type { DayTodoCount, TimeBlock, Todo, TodoUnit } from "../types";
+import type { DayTodoCount, TimeBlock, Todo, TodoAncestor, TodoUnit } from "../types";
 import {
   createTodo,
   deleteTodo,
@@ -17,6 +17,7 @@ import {
   createTodo as createTodoRow,
   listOverdueOpen,
   listParked,
+  listParkedAncestors,
   listTodos,
   parkSubtree,
   unparkSubtree,
@@ -394,12 +395,16 @@ export function TodoView({
   // 선택 날짜의 목록 + 밀린 할 일 + 이날 학습완료 개념
   // '언젠가' — 날짜에서 내려놓은 것들. 날짜와 무관하므로 선택 날짜가 바뀌어도 다시 읽지 않는다
   const [parked, setParked] = useState<Todo[]>([]);
+  // 서랍 밖에 남아 있는 조상 행 — 카드가 "DEVOPS ›" 로 문맥을 되돌려 준다
+  const [parkedAnc, setParkedAnc] = useState<TodoAncestor[]>([]);
   const [parkedOpen, setParkedOpen] = useState(
     () => localStorage.getItem(PARKED_KEY) === "1",
   );
   const reloadParked = useCallback(async () => {
     try {
-      setParked(await listParked());
+      const [rows, anc] = await Promise.all([listParked(), listParkedAncestors()]);
+      setParked(rows);
+      setParkedAnc(anc);
     } catch (e) {
       setError(errMsg(e));
     }
@@ -1326,6 +1331,7 @@ export function TodoView({
       {unit === "day" && (
         <TodoDrawer
           rows={parked}
+          ancestors={parkedAnc}
           suggest={suggest}
           open={parkedOpen}
           onClose={() => setParkedOpen(false)}

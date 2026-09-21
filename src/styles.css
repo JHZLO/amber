@@ -1644,6 +1644,23 @@ body.resizing-col .pane-resizer::after {
   outline: none;
   box-shadow: var(--focus-ring);
 }
+/* 본문 + 그 위 묶음 경로. 경로는 문맥이라 본문보다 작고 옅게 — 읽는 것은 아래 한 줄이다 */
+.parked-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.parked-card-path {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .parked-card-text {
   flex: 1;
   min-width: 0;

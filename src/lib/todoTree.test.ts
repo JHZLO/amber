@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  ancestorPath,
   childrenOf,
   clampDropDepth,
   descendantCount,
@@ -300,5 +301,32 @@ describe("resolveDrop — 방어", () => {
         }
       }
     }
+  });
+});
+
+describe("ancestorPath", () => {
+  const rows = [
+    { id: 1, content: "DEVOPS", parent_id: null },
+    { id: 2, content: "kafka", parent_id: 1 },
+  ];
+
+  it("바깥쪽부터 안쪽 순서로 준다", () => {
+    expect(ancestorPath(rows, 2)).toEqual(["DEVOPS", "kafka"]);
+  });
+
+  it("최상위였으면 빈 경로 — 카드에 아무것도 안 붙는다", () => {
+    expect(ancestorPath(rows, null)).toEqual([]);
+  });
+
+  it("조상 행이 없으면 거기서 멈춘다 — 지워진 부모에 매달리지 않는다", () => {
+    expect(ancestorPath(rows, 99)).toEqual([]);
+  });
+
+  it("고리가 있어도 멈춘다", () => {
+    const loop = [
+      { id: 1, content: "A", parent_id: 2 },
+      { id: 2, content: "B", parent_id: 1 },
+    ];
+    expect(ancestorPath(loop, 1)).toEqual(["B", "A"]);
   });
 });

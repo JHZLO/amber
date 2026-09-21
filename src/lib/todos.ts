@@ -3,7 +3,7 @@
 // 스키마·트리거는 Rust 마이그레이션(0002_todos.sql)이 정본. 완료 시각(completed_at)은 트리거가 관리.
 
 import { getDb } from "./db";
-import type { DayTodoCount, Todo, TodoScope } from "../types";
+import type { DayTodoCount, Todo, TodoAncestor, TodoScope } from "../types";
 
 const now = () => Date.now();
 
@@ -136,7 +136,11 @@ export async function listParked(): Promise<Todo[]> {
 
 /** 달력에서 내려놓는다 — 서브트리째. 부모만 내려놓으면 자식이 부모 없는 날짜에 남는다.
  *  due_date 는 그대로 둔다: 되돌릴 때 원래 자리를 물어보지 않아도 되고, 어차피 어떤 조회도
- *  parked_at IS NOT NULL 인 행의 날짜를 보지 않는다. */
+ *  parked_at IS NOT NULL 인 행의 날짜를 보지 않는다.
+ *
+ *  **위로는 안 간다.** 하위 항목만 내려놓으면 부모는 달력에 그대로 남는다 — 묶음 전체를 치우는
+ *  것이 아니라 그 한 줄을 미루는 것이기 때문이다. 대신 `parent_id` 를 지우지 않아서 어디 것이었는지는
+ *  남고(`listParkedAncestors` 가 서랍에 경로를 그린다), 꺼낼 때 `unparkSubtree` 가 그 묶음을 되살린다. */
 export async function parkSubtree(id: number): Promise<void> {
   const db = await getDb();
   await db.execute(
@@ -153,9 +157,41 @@ export async function parkSubtree(id: number): Promise<void> {
   );
 }
 
-/** 다시 달력으로 — 서브트리째 그 날짜에 올린다. 자식은 부모와 같은 날짜를 써야 한다(0004). */
+/** 내려놓은 항목들의 **조상 행** — 서랍이 "DEVOPS › kafka connect" 로 문맥을 보여 주고,
+ *  꺼낼 때 그 묶음을 되살리는 데도 쓴다.
+ *
+ *  조상은 보통 달력에 그대로 남아 있다: `parkSubtree` 는 아래로만 내려가므로 부모는 안 따라간다.
+ *  그래서 서랍에 있는 행만 읽으면 부모가 통째로 안 보인다. */
+export async function listParkedAncestors(): Promise<TodoAncestor[]> {
+  const db = await getDb();
+  return db.select<TodoAncestor[]>(
+    `WITH RECURSIVE anc(id, content, parent_id) AS (
+       SELECT t.id, t.content, t.parent_id
+         FROM todos t
+        WHERE t.id IN (SELECT parent_id FROM todos
+                        WHERE parked_at IS NOT NULL AND parent_id IS NOT NULL)
+       UNION
+       SELECT t.id, t.content, t.parent_id
+         FROM todos t JOIN anc ON t.id = anc.parent_id
+     )
+     SELECT id, content, parent_id FROM anc`,
+  );
+}
+
+/** 다시 달력으로 — 서브트리째 그 날짜에 올린다. 자식은 부모와 같은 날짜를 써야 한다(0004).
+ *
+ *  **묶음을 되살린다.** 하루의 목록은 `due_date = 그 날`인 행만 읽으므로, 다른 날에 있던 부모는
+ *  그 날 목록에 없다. `parent_id` 만 그대로 두면 그 항목은 부모도 뿌리도 아니라서 **화면에서
+ *  통째로 사라진다**(DB 에는 멀쩡히 있는데 아무 데도 안 그려진다). 그래서 조상을 바깥쪽부터
+ *  훑어 그 날에 같은 묶음이 이미 있으면 거기 붙이고, 없으면 그 날짜로 하나 만든다.
+ *  같은 묶음의 형제를 둘 꺼내도 묶음은 하나만 생긴다 — 만들기 전에 항상 먼저 찾는다. */
 export async function unparkSubtree(id: number, dueDate: string): Promise<void> {
   const db = await getDb();
+  const [row] = await db.select<{ parent_id: number | null }[]>(
+    `SELECT parent_id FROM todos WHERE id = $1`,
+    [id],
+  );
+  const parentId = row ? await restoreChain(row.parent_id, dueDate) : null;
   await db.execute(
     `WITH RECURSIVE sub(id) AS (
        SELECT $2
@@ -170,6 +206,47 @@ export async function unparkSubtree(id: number, dueDate: string): Promise<void> 
       WHERE parked_at IS NOT NULL AND id IN (SELECT id FROM sub)`,
     [dueDate, id],
   );
+  // 서브트리 UPDATE 가 parent_id 는 안 건드리므로 뿌리만 새 묶음으로 옮긴다
+  await db.execute(`UPDATE todos SET parent_id = $1, updated_at = $2 WHERE id = $3`, [
+    parentId,
+    now(),
+    id,
+  ]);
+}
+
+/** 조상 사슬을 그 날짜에 되살리고 붙일 부모 id 를 돌려준다(없으면 null = 최상위).
+ *  바깥쪽부터 내려오며 "이미 있나" 를 먼저 보므로 같은 묶음이 두 번 생기지 않는다. */
+async function restoreChain(parentId: number | null, dueDate: string): Promise<number | null> {
+  if (parentId == null) return null;
+  const db = await getDb();
+  const chain: TodoAncestor[] = [];
+  const seen = new Set<number>();
+  let cur: number | null = parentId;
+  while (cur != null && !seen.has(cur)) {
+    seen.add(cur);
+    const rows: TodoAncestor[] = await db.select<TodoAncestor[]>(
+      `SELECT id, content, parent_id FROM todos WHERE id = $1`,
+      [cur],
+    );
+    const a = rows[0];
+    if (!a) break;
+    chain.unshift(a);
+    cur = a.parent_id;
+  }
+  let attach: number | null = null;
+  for (const a of chain) {
+    // 그 날에 이미 같은 이름의 묶음이 같은 자리에 있으면 그걸 쓴다 — 내려놓기 전 그대로면
+    // 원래 id 가 그대로 걸리고, 다른 날이면 지난번에 만든 복제본이 걸린다
+    const hits: { id: number }[] = await db.select<{ id: number }[]>(
+      `SELECT id FROM todos
+        WHERE due_date = $1 AND scope = 'day' AND parked_at IS NULL
+          AND content = $2 AND parent_id IS $3
+        ORDER BY id LIMIT 1`,
+      [dueDate, a.content, attach],
+    );
+    attach = hits.length ? hits[0].id : await createTodo(a.content, dueDate, attach);
+  }
+  return attach;
 }
 
 /** 드래그 트리 이동: 부모 변경 (하위로 넣기·상위로 꺼내기·다른 부모로).

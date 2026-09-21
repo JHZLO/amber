@@ -135,6 +135,13 @@ export interface SourceDigest {
 }
 
 /** 수집 진행 알림(Channel) — 소스별로 끝나는 대로 도착 */
+/** 트리 위쪽 행 — 내려놓은 항목의 문맥("DEVOPS › …")과 꺼낼 때의 묶음 복원에 쓴다 */
+export interface TodoAncestor {
+  id: number;
+  content: string;
+  parent_id: number | null;
+}
+
 export interface CollectProgress {
   id: string;
   ok: boolean;

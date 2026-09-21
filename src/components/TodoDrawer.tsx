@@ -16,7 +16,8 @@ import type { SuggestState } from "../lib/todoSuggest";
 import { Icon } from "../icons";
 import { Tooltip } from "../ui";
 import { t } from "../lib/i18n";
-import type { Todo } from "../types";
+import type { Todo, TodoAncestor } from "../types";
+import { ancestorPath } from "../lib/todoTree";
 
 const DAY_MS = 86_400_000;
 
@@ -34,6 +35,7 @@ export function parkedRoots(rows: Todo[]): Todo[] {
 
 export function TodoDrawer({
   rows,
+  ancestors,
   suggest,
   open,
   onClose,
@@ -43,6 +45,8 @@ export function TodoDrawer({
   onDelete,
 }: {
   rows: Todo[];
+  /** 서랍 밖(달력)에 남아 있는 조상 행 — 카드에 "DEVOPS ›" 를 달아 문맥을 되돌려 준다 */
+  ancestors: TodoAncestor[];
   suggest: SuggestState;
   open: boolean;
   onClose: () => void;
@@ -145,6 +149,7 @@ export function TodoDrawer({
                 <ParkedCard
                   key={r.id}
                   todo={r}
+                  path={ancestorPath(ancestors, r.parent_id)}
                   kids={kidCount(r.id)}
                   days={r.parked_at == null ? 0 : parkedDays(r.parked_at, now)}
                   onPull={() => onPull(r)}
@@ -207,12 +212,15 @@ function sourceKey(source: string) {
  *  카드가 2px 왼쪽으로 물러난다 — 움직이는 방향이 곧 가는 곳이다(오늘 목록은 왼쪽에 있다). */
 function ParkedCard({
   todo,
+  path,
   kids,
   days,
   onPull,
   onDelete,
 }: {
   todo: Todo;
+  /** 바깥쪽부터의 묶음 이름들. 비어 있으면 원래 최상위였다는 뜻이라 아무것도 안 그린다 */
+  path: string[];
   kids: number;
   days: number;
   onPull: () => void;
@@ -233,7 +241,14 @@ function ParkedCard({
         }
       }}
     >
-      <span className="parked-card-text">{todo.content}</span>
+      <span className="parked-card-main">
+        {path.length > 0 && (
+          <span className="parked-card-path" title={path.join(" › ")}>
+            {path.join(" › ")}
+          </span>
+        )}
+        <span className="parked-card-text">{todo.content}</span>
+      </span>
       {kids > 0 && <span className="parked-card-kids">{t("todos.parked.kids", { n: kids })}</span>}
       <span className="parked-card-age">
         {days === 0 ? t("todos.parked.age.zero") : t("todos.parked.age", { n: days })}

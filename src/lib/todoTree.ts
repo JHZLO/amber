@@ -25,6 +25,29 @@ export function childrenOf<T extends TodoNode>(
   return nodes.filter((n) => (n.parent_id ?? null) === parentId);
 }
 
+/** 조상 경로 — 바깥쪽부터 안쪽 순서의 내용 목록.
+ *  내려놓은 항목이 묶음(부모)에서 떨어져 나오면 "kafka connect 도입할만한듯" 한 줄만 남아
+ *  그게 어느 묶음의 일이었는지 알 수 없다. 서랍 카드가 이 경로를 앞에 단다.
+ *
+ *  자기 참조로 고리가 생긴 데이터에도 멈춘다 — 지나온 id 를 기억하고 다시 만나면 끊는다. */
+export function ancestorPath<T extends { id: number; content: string; parent_id: number | null }>(
+  rows: readonly T[],
+  parentId: number | null,
+): string[] {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const out: string[] = [];
+  const seen = new Set<number>();
+  let cur = parentId;
+  while (cur != null && !seen.has(cur)) {
+    seen.add(cur);
+    const row = byId.get(cur);
+    if (!row) break;
+    out.unshift(row.content);
+    cur = row.parent_id;
+  }
+  return out;
+}
+
 /** 렌더와 동일한 순서의 플랫 행 목록 (depth 포함) */
 export function flattenTree(nodes: readonly TodoNode[]): TreeRow[] {
   const rows: TreeRow[] = [];
