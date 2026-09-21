@@ -31,13 +31,13 @@ export function parkedRoots(rows: Todo[]): Todo[] {
 export function TodoParkedDrawer({
   rows,
   open,
-  onToggle,
+  onClose,
   onPull,
   onDelete,
 }: {
   rows: Todo[];
   open: boolean;
-  onToggle: () => void;
+  onClose: () => void;
   /** 오늘로 올린다 (서브트리째) */
   onPull: (todo: Todo) => void;
   onDelete: (todo: Todo) => void;
@@ -45,30 +45,15 @@ export function TodoParkedDrawer({
   const now = Date.now();
   const roots = parkedRoots(rows);
   const kidCount = (id: number) => rows.filter((r) => r.parent_id === id).length;
-  // 손잡이는 **언제나 렌더한다.** 열려 있을 때는 CSS 가 숨기는데, 창이 좁아지면 서랍 대신
-  // 손잡이가 다시 나온다(아래 미디어 쿼리) — 좁은 창에서 서랍이 사라지면 들어갈 길이 없어진다.
-  const handle = (
-    <button
-      className={`parked-handle ${open ? "only-narrow" : ""}`}
-      onClick={onToggle}
-      title={t("todos.parked.open")}
-    >
-      <Icon name="chevron-left" size={14} />
-      <span className="parked-handle-label">{t("todos.parked.title")}</span>
-      {rows.length > 0 && <span className="parked-handle-cnt">{rows.length}</span>}
-    </button>
-  );
-  if (!open) return handle;
+  if (!open) return null;
   return (
-    <>
-      {handle}
     <aside className="parked">
       <div className="parked-head">
         <b>{t("todos.parked.title")}</b>
         <span className="parked-cnt">{rows.length}</span>
         <span className="spacer" />
         <Tooltip label={t("todos.parked.close")}>
-          <button className="icon-btn sm" aria-label={t("todos.parked.close")} onClick={onToggle}>
+          <button className="icon-btn sm" aria-label={t("todos.parked.close")} onClick={onClose}>
             <Icon name="chevron-right" size={14} />
           </button>
         </Tooltip>
@@ -93,7 +78,6 @@ export function TodoParkedDrawer({
 
       {roots.length > 0 && <p className="parked-note">{t("todos.parked.hint")}</p>}
     </aside>
-    </>
   );
 }
 

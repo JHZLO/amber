@@ -1123,6 +1123,20 @@ export function TodoView({
               </button>
             </Tooltip>
           </div>
+          {/* '언젠가' 토글 — 사이드 패널 토글은 오른쪽 위 구석이 자리다. 가장자리에 세로 탭을
+              세우면 스크롤바와 붙어 창에 붙은 군더더기로 읽히고, 닫혀 있는데도 폭을 먹는다.
+              날짜 이동과 같은 줄이되 구분선으로 가른다 — 이건 날짜를 바꾸는 버튼이 아니다. */}
+          {unit === "day" && (
+            <button
+              className={`btn btn-sm todo-parked-toggle ${parkedOpen ? "on" : ""}`}
+              aria-pressed={parkedOpen}
+              onClick={() => setParkedOpen((v) => !v)}
+            >
+              <Icon name="panel" size={14} />
+              {t("todos.parked.title")}
+              {parked.length > 0 && <span className="todo-parked-n">{parked.length}</span>}
+            </button>
+          )}
         </div>
 
         {error && <div className="error-note">{error}</div>}
@@ -1279,7 +1293,7 @@ export function TodoView({
         <TodoParkedDrawer
           rows={parked}
           open={parkedOpen}
-          onToggle={() => setParkedOpen((v) => !v)}
+          onClose={() => setParkedOpen(false)}
           onPull={(todo) => void pull(todo)}
           onDelete={(todo) => void removeParked(todo)}
         />

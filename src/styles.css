@@ -1428,8 +1428,7 @@ body.resizing-col .pane-resizer::after {
 
 /* ---- '언젠가' 서랍 (TodoParkedDrawer) — 오늘 목록 오른쪽. .body 그리드의 암묵 3열.
    왼쪽(오늘)과 오른쪽(아직 아님) 사이의 경계를 선이 아니라 **자리**로 긋는다. ---- */
-.parked,
-.parked-handle {
+.parked {
   grid-row: 1;
   grid-column: 3;
 }
@@ -1550,48 +1549,33 @@ body.resizing-col .pane-resizer::after {
   opacity: 1;
 }
 
-/* 접힌 손잡이 — 닫아 두면 세로 띠 하나만 남아 오늘 목록이 폭을 다 쓴다 */
-.parked-handle {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  width: 34px;
-  padding: 14px 0;
-  border: none;
+/* 헤더의 '언젠가' 토글 — 날짜 이동 오른쪽, 구분선 하나 두고. 켜지면 눌린 상태로 남는다 */
+.todo-parked-toggle {
+  margin-left: 10px;
+  padding-left: 10px;
   border-left: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-3);
-  cursor: pointer;
-  font: inherit;
-  transition: color 0.12s, background 0.12s;
+  border-radius: 0 6px 6px 0;
 }
-.parked-handle:hover {
-  background: var(--surface-2);
-  color: var(--text-2);
+.todo-parked-toggle.on {
+  background: var(--surface-3);
+  color: var(--text);
 }
-.parked-handle-label {
-  writing-mode: vertical-rl;
+.todo-parked-n {
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-}
-.parked-handle-cnt {
-  font-size: 10.5px;
+  color: var(--text-3);
   font-variant-numeric: tabular-nums;
 }
-/* 열려 있으면 손잡이는 숨는다 — 넓은 창에서는 둘이 같이 있을 이유가 없다 */
-.parked-handle.only-narrow {
-  display: none;
+.todo-parked-toggle.on .todo-parked-n {
+  color: var(--text-2);
 }
-/* 창이 좁으면 서랍이 오늘 목록의 폭을 먹는다. 달력 300 + 서랍 296 을 빼면 읽을 자리가 남지
-   않으므로 접는다 — 사라지는 게 아니라 손잡이로 돌아간다(위 .only-narrow 가 여기서 켜진다). */
-@media (max-width: 1140px) {
-  .parked {
+
+/* 서랍은 **열었을 때만** 자리를 잡는다. 닫혀 있으면 DOM 에 없고, 오늘 목록이 폭을 다 쓴다.
+   창이 아주 좁으면(달력 300 + 서랍 296 을 빼면 읽을 자리가 없다) 여는 길 자체를 닫는다 —
+   버튼만 남겨 두면 눌러도 아무 일이 없는 버튼이 된다. */
+@media (max-width: 900px) {
+  .parked,
+  .todo-parked-toggle {
     display: none;
-  }
-  .parked-handle.only-narrow {
-    display: flex;
   }
 }
 
