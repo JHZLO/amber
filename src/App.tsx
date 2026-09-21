@@ -35,6 +35,7 @@ import { TodoView } from "./components/TodoView";
 import { SearchModal, type SearchHit } from "./components/SearchModal";
 import { THEME_EVENT, resolvedTheme, toggleTheme } from "./lib/theme";
 import { OPEN_CONCEPT, OPEN_NOTE, openDiagramInApp, openNoteInApp } from "./lib/nav";
+import { ScrollDroplet } from "./components/ScrollDroplet";
 import { t } from "./lib/i18n";
 import { errText } from "./lib/errors";
 import { usePaneResize } from "./lib/usePaneResize";
@@ -572,6 +573,10 @@ function App() {
           p?.run();
         }}
       />
+
+      {/* 스크롤 포인터 — 앱에 하나만 둔다. document 의 scroll 을 캡처로 받아 어느 패널이든
+          같은 표식을 쓴다(DESIGN §2: 스크롤바는 전역으로 한 벌) */}
+      <ScrollDroplet />
     </div>
   );
 }
