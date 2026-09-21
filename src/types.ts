@@ -77,6 +77,10 @@ export interface Todo {
   sort_order: number; // 표시 순서(드래그로 조정), 형제 그룹 내 오름차순
   created_at: number; // UTC ms
   updated_at: number; // UTC ms
+  /** 달력에서 내려놓은 시각(UTC ms). null = 달력 위에 있다 (migrations/0016).
+   *  값이 있으면 '언젠가' 목록에 산다 — 날짜 목록, 밀린 목록, 월 개수에서 전부 빠지고,
+   *  due_date 는 내려놓기 전 마지막 자리로 남아 있을 뿐 아무 날짜도 주장하지 않는다. */
+  parked_at: number | null;
   /** 이 날짜 목록에서 '이월 고스트'인가 — 조회한 날짜에 있었지만 지금은 due_date 가 다른 줄.
    *  DB 컬럼이 아니라 listTodos 가 붙이는 표식이라, 다른 조회는 undefined 로 온다.
    *  고스트의 내용·부모는 이월 시점 스냅샷이고(migrations/0014), 라이브 행이 살아있는 한

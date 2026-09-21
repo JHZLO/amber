@@ -23,19 +23,23 @@ export async function listTodos(date: string): Promise<Todo[]> {
     // scope='day' 필수 — 주 항목의 due_date 는 실재하는 날짜(그 주 시작일)라,
     // 안 걸면 매주 그 날 목록에 '이번 주 할 일'이 통째로 섞인다(migrations/0012)
     `SELECT t.id, t.content, t.due_date, t.scope, t.done, t.completed_at, t.parent_id,
-            t.sort_order, t.created_at, t.updated_at, 0 AS carried, 0 AS gone
+            t.sort_order, t.created_at, t.updated_at, t.parked_at,
+            0 AS carried, 0 AS gone
        FROM todos t
-      WHERE t.due_date = $1 AND t.scope = 'day'
+      WHERE t.due_date = $1 AND t.scope = 'day' AND t.parked_at IS NULL
      UNION ALL
      SELECT c.todo_id AS id, c.content, COALESCE(t.due_date, c.date) AS due_date,
             'day' AS scope, COALESCE(t.done, c.done) AS done, t.completed_at,
             c.parent_id, COALESCE(t.sort_order, 0) AS sort_order,
             COALESCE(t.created_at, 0) AS created_at, COALESCE(t.updated_at, 0) AS updated_at,
+            NULL AS parked_at,
             1 AS carried, CASE WHEN t.id IS NULL THEN 1 ELSE 0 END AS gone
        FROM todo_carries c
        -- LEFT JOIN 이라야 라이브 행이 지워진 기록도 남는다. scope 를 조인 조건에 두는 것도
        -- 같은 이유 — WHERE 로 옮기면 주 항목으로 바뀐 행의 기록이 통째로 사라진다.
-       LEFT JOIN todos t ON t.id = c.todo_id AND t.scope = 'day'
+       -- parked_at 조건도 조인에 둔다: 내려놓은 항목의 과거 줄은 '그 날 이런 게 있었다'는
+       -- 읽기 전용 기록(gone)이 되어야 한다. 갈 날짜가 없는데 살아 있는 척하면 안 된다.
+       LEFT JOIN todos t ON t.id = c.todo_id AND t.scope = 'day' AND t.parked_at IS NULL
       WHERE c.date = $2 AND (t.id IS NULL OR t.due_date <> $3)
      ORDER BY carried, gone, sort_order, id`,
     [date, date, date],
@@ -51,7 +55,7 @@ export async function listMonthCounts(
   return db.select<DayTodoCount[]>(
     `SELECT due_date, COUNT(*) AS total, COALESCE(SUM(done), 0) AS done
        FROM todos
-      WHERE due_date BETWEEN $1 AND $2 AND scope = 'day'
+      WHERE due_date BETWEEN $1 AND $2 AND scope = 'day' AND parked_at IS NULL
       GROUP BY due_date`,
     [from, to],
   );
@@ -63,7 +67,7 @@ export async function listOverdueOpen(before: string): Promise<Todo[]> {
   const db = await getDb();
   return db.select<Todo[]>(
     `SELECT * FROM todos
-      WHERE done = 0 AND due_date < $1 AND scope = 'day'
+      WHERE done = 0 AND due_date < $1 AND scope = 'day' AND parked_at IS NULL
       ORDER BY due_date, sort_order, id`,
     [before],
   );
@@ -95,7 +99,7 @@ export async function listWeekTodos(monday: string): Promise<Todo[]> {
   const db = await getDb();
   return db.select<Todo[]>(
     `SELECT *, 0 AS carried FROM todos
-      WHERE due_date = $1 AND scope = 'week'
+      WHERE due_date = $1 AND scope = 'week' AND parked_at IS NULL
       ORDER BY sort_order, id`,
     [monday],
   );
@@ -110,9 +114,61 @@ export async function listWeekCounts(
   return db.select<DayTodoCount[]>(
     `SELECT due_date, COUNT(*) AS total, COALESCE(SUM(done), 0) AS done
        FROM todos
-      WHERE due_date BETWEEN $1 AND $2 AND scope = 'week'
+      WHERE due_date BETWEEN $1 AND $2 AND scope = 'week' AND parked_at IS NULL
       GROUP BY due_date`,
     [fromMonday, toMonday],
+  );
+}
+
+/** '언젠가' 목록 — 달력에서 내려놓은 것 전부. 오래 묵은 것이 위로 온다.
+ *
+ *  날짜가 없으니 정렬 기준도 날짜가 아니다: 내려놓은 지 오래된 것부터 보여 줘야
+ *  "이건 17일째 안 건드렸네" 가 목록을 여는 순간 보인다. 끝내는 곳이 아니라 꺼내 오는 곳이라,
+ *  완료 여부는 정렬에 넣지 않는다(내려놓은 것은 애초에 완료 대상이 아니다). */
+export async function listParked(): Promise<Todo[]> {
+  const db = await getDb();
+  return db.select<Todo[]>(
+    `SELECT *, 0 AS carried, 0 AS gone FROM todos
+      WHERE parked_at IS NOT NULL
+      ORDER BY parked_at, sort_order, id`,
+  );
+}
+
+/** 달력에서 내려놓는다 — 서브트리째. 부모만 내려놓으면 자식이 부모 없는 날짜에 남는다.
+ *  due_date 는 그대로 둔다: 되돌릴 때 원래 자리를 물어보지 않아도 되고, 어차피 어떤 조회도
+ *  parked_at IS NOT NULL 인 행의 날짜를 보지 않는다. */
+export async function parkSubtree(id: number): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `WITH RECURSIVE sub(id) AS (
+       SELECT $1
+       UNION
+       SELECT t.id FROM todos t JOIN sub ON t.parent_id = sub.id
+     )
+     UPDATE todos
+        SET parked_at = CAST(unixepoch('subsec') * 1000 AS INTEGER),
+            updated_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
+      WHERE parked_at IS NULL AND id IN (SELECT id FROM sub)`,
+    [id],
+  );
+}
+
+/** 다시 달력으로 — 서브트리째 그 날짜에 올린다. 자식은 부모와 같은 날짜를 써야 한다(0004). */
+export async function unparkSubtree(id: number, dueDate: string): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `WITH RECURSIVE sub(id) AS (
+       SELECT $2
+       UNION
+       SELECT t.id FROM todos t JOIN sub ON t.parent_id = sub.id
+     )
+     UPDATE todos
+        SET parked_at = NULL,
+            due_date = $1,
+            scope = 'day',
+            updated_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
+      WHERE parked_at IS NOT NULL AND id IN (SELECT id FROM sub)`,
+    [dueDate, id],
   );
 }
 
