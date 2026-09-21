@@ -1307,7 +1307,7 @@ fn assemble_input(date: &str, todos_digest: &str, digests: &mut [SourceDigest]) 
 
 /// MCP 서버명 → allowedTools 토큰. 비영숫자(콜론·공백·하이픈)는 '_' 로 정규화(claude 규칙).
 /// 예: "plugin:Notion:notion" → "mcp__plugin_Notion_notion"
-fn mcp_tool_prefix(server: &str) -> String {
+pub(crate) fn mcp_tool_prefix(server: &str) -> String {
     let s: String = server
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
@@ -1340,7 +1340,7 @@ const MCP_WRITE_VERBS: &[&str] = &[
 /// allow 는 서버 통째로 둘 수밖에 없다(도구 이름이 서버·버전마다 달라 엄격한 화이트리스트는
 /// 조용히 아무것도 못 걷는다) — 대신 쓰기 도구를 deny 로 막는다. deny 는 allow 를 이기고
 /// 와일드카드를 위치 제한 없이 허용한다(allow 규칙은 접두 뒤에서만 허용).
-fn mcp_deny_tools(prefixes: &[String]) -> Vec<String> {
+pub(crate) fn mcp_deny_tools(prefixes: &[String]) -> Vec<String> {
     let mut out = Vec::new();
     for p in prefixes {
         for verb in MCP_WRITE_VERBS {
@@ -1351,7 +1351,7 @@ fn mcp_deny_tools(prefixes: &[String]) -> Vec<String> {
 }
 
 /// 생성 프롬프트에 붙일 MCP 수집 지시(claude 가 등록 서버 도구를 직접 호출). rank 순, 읽기 전용 강제.
-fn mcp_instructions(date: &str, mcp: &mut [McpSource]) -> String {
+pub(crate) fn mcp_instructions(date: &str, mcp: &mut [McpSource]) -> String {
     mcp.sort_by_key(|m| m.rank);
     let mut s = String::from(
         "\n[MCP 수집 지시]\n아래 도구를 직접 호출해 대상 날짜의 활동을 수집한 뒤 리포트에 반영하라. \

@@ -222,9 +222,23 @@ pub(crate) async fn run_provider_text(
     system_prompt: &str,
     input: String,
 ) -> Result<(String, MetaOut), AiError> {
+    run_provider_text_with(kind, program, model, dur, system_prompt, input, &[]).await
+}
+
+/// 도구 인자를 실은 갈래. codex 는 MCP 경로가 없어 인자를 무시한다 —
+/// 조용히 무시하는 게 맞다: 후보 기능은 claude 가 아니어도 로컬 재료만으로 돌아간다.
+pub(crate) async fn run_provider_text_with(
+    kind: ProviderKind,
+    program: String,
+    model: String,
+    dur: Duration,
+    system_prompt: &str,
+    input: String,
+    extra_args: &[String],
+) -> Result<(String, MetaOut), AiError> {
     match kind {
         ProviderKind::Claude => {
-            spawn_claude_result(program, model, dur, system_prompt, input).await
+            spawn_claude_result(program, model, dur, system_prompt, input, extra_args).await
         }
         ProviderKind::Codex => {
             spawn_simple_cli_result(program, model, dur, system_prompt, input).await
@@ -897,11 +911,16 @@ pub struct TodoSuggestResult {
 /// 여기서 도구는 열지 않는다 — 재료는 이미 앱이 모아서 넘긴다.
 #[tauri::command]
 pub async fn ai_todo_suggest(
+    // 오늘 날짜('YYYY-MM-DD') — MCP 수집 지시가 '어느 날의 활동'인지 말하는 데 쓴다
+    date: String,
     today: String,
     overdue: String,
     anytime: String,
     // 오늘 실제로 움직인 것 — 저장소 이벤트, 리뷰 요청, AI 세션. 후보는 여기서 나온다
     activity: String,
+    // 설정에서 켜 둔 MCP 소스(Slack·Notion 등). 있으면 claude 가 그 서버 도구를 직접 불러
+    // 오늘의 움직임을 더 긁는다. 없으면 위 activity 만으로 고른다.
+    mcp_sources: Option<Vec<crate::report::McpSource>>,
     model: Option<String>,
     cli_path: Option<String>,
     provider: Option<String>,
@@ -926,7 +945,7 @@ pub async fn ai_todo_suggest(
         let b = body.trim();
         format!("[{name}]\n{}\n\n", if b.is_empty() { "(없음)" } else { b })
     };
-    let input = format!(
+    let mut input = format!(
         "{}{}{}{}",
         section("Today", &today),
         section("Overdue", &overdue),
@@ -934,13 +953,31 @@ pub async fn ai_todo_suggest(
         section("Activity", &activity),
     );
 
-    let (result_str, meta) = run_provider_text(
+    // MCP 는 claude 에서만. 서버 통째로 allow 하고 **쓰기 도구는 deny 로 실제로 막는다** —
+    // 리포트와 같은 정책이다(report::mcp_deny_tools). 여기 입력에도 남이 쓴 텍스트가 섞이므로
+    // 프롬프트 지시만으로는 부족하다는 판단이 그대로 적용된다.
+    let mut extra_args: Vec<String> = Vec::new();
+    let mut mcp = mcp_sources.unwrap_or_default();
+    if kind == ProviderKind::Claude && !mcp.is_empty() {
+        input.push_str(&crate::report::mcp_instructions(&date, &mut mcp));
+        let prefixes: Vec<String> =
+            mcp.iter().map(|m| crate::report::mcp_tool_prefix(&m.server)).collect();
+        extra_args.push("--allowedTools".into());
+        extra_args.push(prefixes.join(","));
+        extra_args.push("--disallowedTools".into());
+        extra_args.push(crate::report::mcp_deny_tools(&prefixes).join(","));
+        extra_args.push("--permission-mode".into());
+        extra_args.push("dontAsk".into());
+    }
+
+    let (result_str, meta) = run_provider_text_with(
         kind,
         program,
         model,
         dur,
         &sys(TODO_SUGGEST_PROMPT, lang.as_deref()),
         input,
+        &extra_args,
     )
     .await?;
 
@@ -1806,11 +1843,16 @@ async fn spawn_claude_result(
     dur: Duration,
     system_prompt: &str,
     input: String,
+    // 추가 CLI 인자 — MCP 로 재료를 직접 긁는 실행에만 붙는다(나머지는 빈 슬라이스)
+    extra_args: &[String],
 ) -> Result<(String, MetaOut), AiError> {
     let mut cmd = Command::new(&program);
     cmd.arg("-p").args(["--output-format", "json"]);
     if !model.is_empty() {
         cmd.args(["--model", &model]);
+    }
+    if !extra_args.is_empty() {
+        cmd.args(extra_args);
     }
     let mut child = cmd
         .args(["--append-system-prompt", system_prompt])

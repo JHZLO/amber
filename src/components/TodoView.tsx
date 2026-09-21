@@ -74,7 +74,7 @@ import { TodoDrawer } from "./TodoDrawer";
 import { useReportGeneratingDates } from "../lib/reportRun";
 import { usePaneResize } from "../lib/usePaneResize";
 import { dropSuggestion, runSuggest, useSuggest } from "../lib/todoSuggest";
-import { loadReportConfig, rankedSources, reportCollect } from "../lib/report";
+import { loadReportConfig, mcpSourcesFrom, rankedSources, reportCollect } from "../lib/report";
 import { openConceptInApp } from "../lib/nav";
 import type { AppConfig } from "../lib/config";
 
@@ -456,6 +456,8 @@ export function TodoView({
           .filter((d) => d.ok && d.digest_md.trim())
           .map((d) => d.digest_md.trim())
           .join("\n\n"),
+        // 같은 스위치가 리포트와 후보를 함께 다스린다 — 설정을 두 군데 두지 않는다
+        mcpSources: config.provider === "claude" ? mcpSourcesFrom(rc) : [],
         todayDate: today,
         config,
       });

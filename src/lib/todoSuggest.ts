@@ -108,6 +108,8 @@ export interface RunSuggestParams {
   anytime: Todo[];
   /** 오늘 실제로 움직인 것 (report_collect 의 digest 를 이어 붙인 것) */
   activity: string;
+  /** 설정 › 리포트에서 켜 둔 MCP 소스 — 같은 스위치가 리포트와 후보를 함께 다스린다 */
+  mcpSources?: { id: string; rank: number; server: string }[];
   todayDate: string;
   config: AppConfig;
 }
@@ -120,17 +122,21 @@ export async function runSuggest(p: RunSuggestParams): Promise<void> {
   const activity = p.activity.slice(0, 12000);
   // 볼 거리가 하나도 없으면 CLI 를 깨우지 않는다. 그리고 이건 **에러가 아니다** —
   // 기록이 쌓이기 전에는 당연한 상태고, 빨간 판으로 알리면 고장으로 읽힌다.
-  if (!overdue.trim() && !anytime.trim() && !activity.trim()) {
+  // MCP 소스가 켜져 있으면 직접 긁으러 가므로 로컬 재료가 비어도 부른다.
+  const hasMcp = (p.mcpSources?.length ?? 0) > 0;
+  if (!hasMcp && !overdue.trim() && !anytime.trim() && !activity.trim()) {
     set({ phase: "empty", items: [], error: null, ranAt: Date.now() });
     return;
   }
   set({ phase: "running", error: null });
   try {
     const { items } = await aiTodoSuggest({
+      date: p.todayDate,
       today: formatToday(p.today),
       overdue,
       anytime,
       activity,
+      mcpSources: p.mcpSources,
       model: p.config.model,
       cliPath: p.config.cliPath,
       provider: p.config.provider,

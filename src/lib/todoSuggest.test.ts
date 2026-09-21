@@ -111,3 +111,35 @@ describe("runSuggest", () => {
     expect(getSuggestState().phase).not.toBe("empty");
   });
 });
+
+describe("MCP 소스가 켜져 있으면", () => {
+  const config = { provider: "claude", model: "", cliPath: null } as unknown as AppConfig;
+
+  it("로컬 재료가 비어도 실행한다 — 직접 긁으러 가니까", async () => {
+    resetSuggestForTest();
+    await runSuggest({
+      today: [],
+      overdue: [],
+      anytime: [],
+      activity: "",
+      mcpSources: [{ id: "slack", rank: 0, server: "plugin:slack:slack" }],
+      todayDate: "2026-09-21",
+      config,
+    });
+    expect(getSuggestState().phase).not.toBe("empty");
+  });
+
+  it("꺼져 있고 재료도 없으면 CLI 를 부르지 않는다", async () => {
+    resetSuggestForTest();
+    await runSuggest({
+      today: [],
+      overdue: [],
+      anytime: [],
+      activity: "",
+      mcpSources: [],
+      todayDate: "2026-09-21",
+      config,
+    });
+    expect(getSuggestState().phase).toBe("empty");
+  });
+});

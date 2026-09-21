@@ -293,21 +293,27 @@ export interface TodoSuggestResult {
 
 /** 오늘 챙길 것 고르기 — 입력은 앱이 이미 아는 것뿐이다(도구를 열지 않는다) */
 export async function aiTodoSuggest(params: {
+  /** 오늘 날짜 'YYYY-MM-DD' — MCP 수집 지시가 어느 날을 볼지 */
+  date: string;
   today: string;
   overdue: string;
   anytime: string;
   /** 오늘 실제로 움직인 것 (report_collect 의 digest) — 후보는 여기서 나온다 */
   activity: string;
+  /** 설정에서 켜 둔 MCP 소스 (claude 전용). 없으면 도구를 열지 않는다 */
+  mcpSources?: { id: string; rank: number; server: string }[];
   model?: string | null;
   cliPath?: string | null;
   provider?: string | null;
   timeoutSecs?: number | null;
 }): Promise<TodoSuggestResult> {
   return aiInvoke<TodoSuggestResult>("ai_todo_suggest", {
+    date: params.date,
     today: params.today,
     overdue: params.overdue,
     anytime: params.anytime,
     activity: params.activity,
+    mcpSources: params.mcpSources?.length ? params.mcpSources : null,
     model: params.model ?? null,
     cliPath: params.cliPath ?? null,
     provider: params.provider ?? null,
