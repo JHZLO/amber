@@ -848,7 +848,13 @@ export function NotesView({
 
       <section className="detail" ref={detailRef}>
         {/* ⌘F — 지금 보고 있는 노트 안에서 찾기(전역 보관함 검색은 ⌘K·⌘P) */}
-        <PageFind containerRef={detailRef} active={active} />
+        {/* 편집 중이면 원문 칸에서 찾는다 — 오른쪽 미리보기로 스크롤해 봐야 스크롤 동기화가
+            원문을 도로 끌어당기고, 고치려고 찾은 것이니 커서도 원문에 서야 한다 */}
+        <PageFind
+          containerRef={detailRef}
+          sourceRef={editing ? srcRef : undefined}
+          active={active}
+        />
         {selected ? (
           <div className={`notes-detail ${editing ? "editing" : ""}`}>
             <div className="note-crumb">

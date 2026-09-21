@@ -8,6 +8,25 @@
  *  엔진 인자 상한에 걸려 RangeError 로 터질 수 있다. 넘는 만큼은 개수만 알려준다. */
 export const FIND_LIMIT = 500;
 
+/** 문자열 안에서 검색어가 나오는 구간 `[시작, 끝)` (최대 FIND_LIMIT 개). 대소문자는 무시한다.
+ *  편집 중인 원문(textarea)처럼 **DOM 이 아닌 글자**를 찾을 때 쓴다 — textarea 의 내용은
+ *  텍스트 노드가 아니라서 `findRanges` 로는 한 건도 잡히지 않는다. */
+export function findInText(text: string, query: string): [number, number][] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const hay = text.toLowerCase();
+  // toLowerCase 가 길이를 바꾸는 글자(예: "İ")가 섞이면 오프셋이 원문과 어긋난다 — 그때는 원문으로 찾는다
+  const src = hay.length === text.length ? hay : text;
+  const needle = src === hay ? q : query.trim();
+  const out: [number, number][] = [];
+  let i = src.indexOf(needle);
+  while (i !== -1 && out.length < FIND_LIMIT) {
+    out.push([i, i + needle.length]);
+    i = src.indexOf(needle, i + needle.length);
+  }
+  return out;
+}
+
 /** 컨테이너 안에서 검색어가 나오는 자리를 Range 로 (최대 FIND_LIMIT 개). 대소문자는 무시한다. */
 export function findRanges(root: HTMLElement, query: string): Range[] {
   const q = query.trim().toLowerCase();
