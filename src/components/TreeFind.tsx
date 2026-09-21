@@ -69,6 +69,23 @@ export function useTreeFind<T extends FindableNode>(
     [result.matches.length],
   );
 
+  // 바깥을 누르면 트리에서 포커스를 놓는다 — 브라우저에 맡기면 놓치는 곳이 있다.
+  // 다이어그램 캔버스(svg-pan-zoom)는 끌기를 위해 mousedown 기본 동작을 막는데, 그 기본 동작이
+  // 바로 "포커스를 옮긴다" 이다. 그래서 트리 행을 눌렀다가 ERD 를 눌러도 포커스는 트리에 남고,
+  // ⌘F 가 계속 트리로 왔다. 누른 곳이 밖이면 여기서 직접 놓아 준다.
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      const pane = paneRef.current;
+      const target = e.target as Node | null;
+      if (!pane || (target && pane.contains(target))) return;
+      const focused = document.activeElement;
+      if (focused instanceof HTMLElement && pane.contains(focused)) focused.blur();
+    };
+    // 캡처로 받는다 — 누른 쪽이 이벤트를 멈추거나 기본 동작을 막기 전에 봐야 한다
+    document.addEventListener("mousedown", h, true);
+    return () => document.removeEventListener("mousedown", h, true);
+  }, []);
+
   /** 트리 패널에 그대로 펼치는 속성 — ⌘F 를 여기서 받아 본문 검색으로 새지 않게 한다 */
   const paneProps = {
     ref: (el: HTMLElement | null) => {
