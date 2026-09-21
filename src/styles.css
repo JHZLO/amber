@@ -5086,18 +5086,23 @@ body.resizing-tt * {
 /* 인라인 추가 (Todoist 풍 — 큰 입력창 대신 은은한 plus + 무테 입력) */
 /* 입력란임이 항상 보이도록 기본에서 이미 채워 둔다(빈 줄처럼 보이지 않게).
    포커스는 한 단계 더 진한 surface-3 로 구분 — §3 의 surface-2→surface-3 문법 */
+/* 채운 판이 아니라 밑줄 한 줄이다 — 목록 맨 위에서 가장 무거운 덩어리가 입력칸이면
+   눈이 할 일보다 빈칸을 먼저 본다. 포커스를 받을 때만 판이 올라온다. */
 .todo-quick {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 9px 8px;
-  margin-bottom: 4px;
-  border-radius: 8px;
-  background: var(--surface-2);
-  transition: background 0.12s;
+  padding: 8px 8px 9px;
+  margin-bottom: 6px;
+  max-width: 640px; /* 목록과 같은 자(尺) — 밑줄과 묶음 선이 어긋나면 둘 다 실수처럼 보인다 */
+  border-radius: 8px 8px 0 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  transition: background 0.12s, border-color 0.12s;
 }
 .todo-quick:focus-within {
-  background: var(--surface-3);
+  background: var(--surface-2);
+  border-bottom-color: var(--border-strong);
 }
 .todo-quick-ico {
   display: inline-flex;
@@ -5120,10 +5125,70 @@ body.resizing-tt * {
 }
 
 /* 목록 */
+/* 폭을 잡는다. 창 끝까지 늘리면 제목과 오른쪽 끝 진행 배지가 한 화면 거리만큼 떨어져,
+   둘을 잇는 데 눈이 한 번 더 움직인다. 읽는 열은 640 안팎이면 충분하다. */
 .todo-listing {
   position: relative; /* 드래그 삽입선(.todo-drop-line)의 좌표 기준 */
   display: flex;
   flex-direction: column;
+  max-width: 640px;
+}
+
+/* ---- 묶음 머리글 — 최상위에서 하위를 거느린 행 (TodoView renderUnit 의 isGroup) ----
+   체크박스가 없다. 작은 대문자 + 가는 선 + 진행 수로 내려, 같은 크기로 늘어선 할 일들
+   사이에서 '여기서부터 다른 덩어리'만 말한다. 깊이를 여백으로만 구분하면 얕게 읽힌다 —
+   글자 크기와 톤이 역할을 대신 말하게 한다. */
+.todo-row.todo-group {
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  margin-bottom: 2px;
+}
+.todo-row.todo-group:hover {
+  background: transparent; /* 머리글은 누르는 물건이 아니다 — 이름 고치기는 글자에만 */
+}
+.todo-row.todo-group .todo-text {
+  flex: 0 1 auto;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.todo-row.todo-group:hover .todo-text {
+  color: var(--text-2);
+}
+.todo-row.todo-group.done .todo-text {
+  text-decoration: none; /* 묶음에 취소선을 그으면 안의 남은 일까지 끝난 것처럼 읽힌다 */
+}
+.todo-group-rule {
+  flex: 1;
+  min-width: 12px;
+  height: 1px;
+  background: var(--border);
+}
+/* 리듬 — 묶음 앞에만 크게 띄운다. 모든 행이 같은 간격이면 덩어리가 안 보인다.
+   빈 곳이 곧 구분선이다(선을 더 긋지 않는다). */
+.todo-unit.is-group + .todo-unit {
+  margin-top: 22px;
+}
+.todo-unit.is-group + .todo-unit.is-group {
+  margin-top: 22px;
+}
+.todo-listing > .todo-unit:not(.is-group) + .todo-unit.is-group {
+  margin-top: 22px;
+}
+/* 하위의 하위 — 세로 안내선으로 소속을 말하고 글자를 한 단 내린다 */
+.todo-unit .todo-unit .todo-unit {
+  border-left: 1px solid var(--border);
+  padding-left: 10px;
+}
+.todo-unit .todo-unit .todo-unit > .todo-row .todo-text {
+  font-size: 13px;
+  color: var(--text-2);
 }
 .todo-row {
   position: relative; /* row-actions 오버레이 기준 */

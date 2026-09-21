@@ -708,8 +708,12 @@ export function TodoView({
   );
 
   // 파라미터를 todo 로 둔다 — t 로 줄이면 i18n 의 t() 를 가려서(shadowing) 번역 호출이 깨진다
-  function renderRow(todo: Todo, opts?: { overdue?: boolean }) {
+  function renderRow(todo: Todo, opts?: { overdue?: boolean; group?: boolean }) {
     const isOverdue = opts?.overdue ?? false;
+    // 묶음 머리글 — 최상위에서 하위를 거느린 행. 체크박스를 떼고 작은 대문자 + 가는 선으로 내린다.
+    // 왜: 모든 행이 같은 빈 원으로 시작하면 그 열은 정보가 아니라 무늬가 된다. 그리고 컨테이너는
+    // 원래 체크하는 물건이 아니다 — 하위가 다 끝나면 recomputeChainFrom 이 알아서 닫아 준다.
+    const isGroup = opts?.group ?? false;
     // 이월 고스트 — 이 날짜에 있었지만 다른 날로 넘어간 행. **체크는 된다**(그게 요점: 어제
     // 화면에서 끝내면 그 할 일이 완료되고 도착 날짜에도 체크된 채로 남는다). 편집·드래그·
     // 삭제·하위추가는 막는다 — 그 할 일이 지금 사는 곳은 도착 날짜라 거기서 다루게 한다.
@@ -731,7 +735,7 @@ export function TodoView({
     const kidsDone = kids.filter((k) => k.done === 1).length;
     return (
       <div
-        className={`todo-row ${todo.done === 1 ? "done" : ""} ${isCarried ? "carried" : ""} ${isGone ? "gone" : ""}`}
+        className={`todo-row ${isGroup ? "todo-group" : ""} ${todo.done === 1 ? "done" : ""} ${isCarried ? "carried" : ""} ${isGone ? "gone" : ""}`}
         data-todo-id={todo.id}
       >
         {!readOnly && (
@@ -744,11 +748,13 @@ export function TodoView({
             <Icon name="grip" size={14} />
           </span>
         )}
-        <Checkbox
-          checked={todo.done === 1}
-          onChange={onToggle}
-          label={todo.content}
-        />
+        {!isGroup && (
+          <Checkbox
+            checked={todo.done === 1}
+            onChange={onToggle}
+            label={todo.content}
+          />
+        )}
         {editingId === todo.id && !readOnly ? (
           <input
             className="input todo-edit"
@@ -772,6 +778,8 @@ export function TodoView({
             {todo.content}
           </span>
         )}
+
+        {isGroup && <span className="todo-group-rule" aria-hidden="true" />}
 
         {kids.length > 0 && (
           <span className="todo-progress" title={t("todos.row.progress")}>
@@ -896,15 +904,18 @@ export function TodoView({
   // 항목 유닛(항목 + 그 서브트리) 재귀 렌더. 각 유닛은 data-parent-id 로 형제 그룹을 표시(드래그용),
   // depth>0 이면 marginLeft 로 들여쓴다(중첩이 겹쳐 단계마다 더 들어간다).
   function renderUnit(node: Todo, depth: number) {
+    // 최상위에서 하위를 거느린 것만 머리글이다. 하위가 없으면 그냥 할 일이고,
+    // 하위의 하위는 계속 할 일이다 — 깊이가 아니라 **역할**이 모양을 정한다
+    const isGroup = depth === 0 && childrenOf(node.id).length > 0;
     return (
       <div
         key={node.id}
-        className="todo-unit"
+        className={`todo-unit ${isGroup ? "is-group" : ""}`}
         data-unit-id={node.id}
         data-parent-id={node.parent_id == null ? "root" : String(node.parent_id)}
         style={depth > 0 ? { marginLeft: INDENT } : undefined}
       >
-        {renderRow(node)}
+        {renderRow(node, { group: isGroup })}
         {childrenOf(node.id).map((c) => renderUnit(c, depth + 1))}
         {addingChildFor === node.id && (
           <div className="todo-row todo-subadd" style={{ marginLeft: INDENT }}>
