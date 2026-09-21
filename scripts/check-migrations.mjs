@@ -15,7 +15,9 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const DIR = join(dirname(fileURLToPath(import.meta.url)), "../src-tauri/migrations");
+const HERE = dirname(fileURLToPath(import.meta.url));
+const DIR = join(HERE, "../src-tauri/migrations");
+const LIB = join(HERE, "../src-tauri/src/lib.rs");
 
 const files = readdirSync(DIR)
   .filter((f) => f.endsWith(".sql"))
@@ -31,6 +33,33 @@ files.forEach((f, i) => {
   const n = Number(f.slice(0, 4));
   if (n !== i + 1) fail(`번호가 이어지지 않습니다 — ${f} (기대: ${String(i + 1).padStart(4, "0")})`);
 });
+
+// **파일을 두는 것만으로는 아무도 실행하지 않는다.** lib.rs 의 `migrations` vec 이
+// Migration { version, description, sql: include_str!(...) } 로 하나씩 등록해야 돌아간다.
+// 빠뜨리면 증상이 체크섬 드리프트와 똑같다 — 앱은 잘 뜨고 새 컬럼만 없다("no such column: …").
+// 실제로 0016 이 등록 없이 태그까지 나갔다(v0.21.0).
+const REGISTERED = new Map(
+  [
+    ...readFileSync(LIB, "utf8").matchAll(
+      /version:\s*(\d+)\s*,\s*description:\s*"[^"]*"\s*,\s*sql:\s*include_str!\(\s*"\.\.\/migrations\/([^"]+)"\s*\)/g,
+    ),
+  ].map((m) => [m[2], Number(m[1])]),
+);
+for (const f of files) {
+  const version = REGISTERED.get(f);
+  if (version === undefined) {
+    fail(
+      `lib.rs 에 등록되지 않았습니다 — ${f}\n` +
+        `  src-tauri/src/lib.rs 의 migrations vec 에 Migration { version, description, ` +
+        `sql: include_str!("../migrations/${f}"), kind: MigrationKind::Up } 를 더하세요.`,
+    );
+  }
+  const n = Number(f.slice(0, 4));
+  if (version !== n) fail(`lib.rs 의 version 이 파일 번호와 다릅니다 — ${f} (version: ${version}, 기대: ${n})`);
+}
+for (const f of REGISTERED.keys()) {
+  if (!files.includes(f)) fail(`lib.rs 가 없는 파일을 등록하고 있습니다 — ${f}`);
+}
 
 // **이미 커밋된 마이그레이션 파일은 고치지 않는다 — 주석 한 줄도.**
 // sqlx 는 `_sqlx_migrations` 에 파일 전체(주석 포함)의 SHA-384 를 남기고 적용 전마다 비교하는데,

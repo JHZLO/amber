@@ -365,6 +365,12 @@ pub fn run() {
             sql: include_str!("../migrations/0015_db_connections.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 16,
+            description: "add_todo_parked",
+            sql: include_str!("../migrations/0016_todo_parked.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
