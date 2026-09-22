@@ -29,6 +29,7 @@ import {
   upsertWeeklyReport,
   getWeeklyReport,
 } from "./report";
+import { markRailDone } from "./railDone";
 
 export type RunPhase = "collecting" | "streaming" | "done" | "empty" | "error";
 export interface RunChip {
@@ -81,6 +82,7 @@ const emit = () => {
 };
 
 function patch(date: string, p: Partial<RunState>) {
+  const before = runs.get(date)?.phase;
   const cur =
     runs.get(date) ??
     ({
@@ -93,6 +95,8 @@ function patch(date: string, p: Partial<RunState>) {
       body: "",
     } as RunState);
   runs.set(date, { ...cur, ...p });
+  // 성공으로 **넘어가는 순간**에만 레일 점을 켠다 — 같은 phase 로 여러 번 patch 되어도 한 번이다
+  if (p.phase === "done" && before !== "done") markRailDone("todo");
   emit();
 }
 

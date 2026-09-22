@@ -19,6 +19,7 @@ import {
 } from "./ai";
 import { CONTINUE_INSTRUCTION, tailSpan } from "./aiInstruction";
 import { spliceSpan } from "./mdSections";
+import { markRailDone } from "./railDone";
 
 export type NoteAiPhase = "running" | "done" | "error";
 /** 전문 작성이냐 부분 수정이냐 — 배너 문구와 되돌아갈 모달이 갈린다 */
@@ -107,6 +108,8 @@ function patch(path: string, p: Partial<NoteAiRun>) {
   const cur = runs.get(path);
   if (!cur) return;
   runs.set(path, { ...cur, ...p });
+  // 성공으로 **넘어가는 순간**에만 레일 점을 켠다 — 같은 phase 로 여러 번 patch 되어도 한 번이다
+  if (p.phase === "done" && cur.phase !== "done") markRailDone("notes");
   emit();
 }
 

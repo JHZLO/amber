@@ -39,6 +39,7 @@ import { ScrollDroplet } from "./components/ScrollDroplet";
 import { t } from "./lib/i18n";
 import { errText } from "./lib/errors";
 import { usePaneResize } from "./lib/usePaneResize";
+import { setRailFocus, useRailDone, type RailSection } from "./lib/railDone";
 
 type StatusTab = ConceptStatus | "all";
 type Section = "til" | "notes" | "diagrams" | "todo";
@@ -129,6 +130,8 @@ function App() {
   // 리포트가 백그라운드로 생성 중이면 어느 탭에 있든 할 일 레일에 표시(진행이 안 끊김을 알림)
   const reportBusy = useAnyReportGenerating();
   const noteAiBusy = useAnyNoteAiRunning();
+  // 끝난 백그라운드 작업의 초록 점. 그 칸에 들어가면 꺼진다 — 읽은 알림은 남기지 않는다
+  const railDone = useRailDone();
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -312,6 +315,12 @@ function App() {
     void emitTo("widget", "concept-changed", {});
   };
 
+  // 지금 보고 있는 칸을 스토어에 알린다 — 여기 있던 점은 즉시 꺼지고,
+  // 여기서 끝나는 일은 점을 켜지 않는다(눈앞에서 끝난 걸 "와서 보라"고 부를 이유가 없다)
+  useEffect(() => {
+    setRailFocus(section === "todo" || section === "notes" ? section : null);
+  }, [section]);
+
   const countOf = (id: StatusTab) =>
     id === "learning" ? counts.learning : id === "learned" ? counts.learned : counts.all;
 
@@ -336,11 +345,25 @@ function App() {
               key={r.id}
               className={`rail-item ${section === r.id ? "active" : ""}`}
               onClick={() => setSection(r.id)}
-              title={busy ? `${r.label} · ${busy.title}` : r.label}
+              title={
+                busy
+                  ? `${r.label} · ${busy.title}`
+                  : railDone.has(r.id as RailSection)
+                    ? `${r.label} · ${t("app.rail.done")}`
+                    : r.label
+              }
             >
               <Icon name={r.icon} size={20} />
               <span>{r.label}</span>
-              {busy && <span className="rail-busy" aria-label={busy.aria} />}
+              {/* 도는 중이면 맥동 점, 끝났으면 초록 점. 둘은 같은 자리를 쓴다 —
+                  한 칸에 대해 "지금 돌고 있다"와 "다 됐다"가 동시에 참일 일은 없다. */}
+              {busy ? (
+                <span className="rail-busy" aria-label={busy.aria} />
+              ) : (
+                railDone.has(r.id as RailSection) && (
+                  <span className="rail-done" aria-label={t("app.rail.done")} />
+                )
+              )}
             </button>
           );
         })}

@@ -10,6 +10,7 @@ const ko = {
   "app.rail.settings": "설정",
   "app.rail.reportBusy": "리포트 생성 중…",
   "app.rail.reportBusyAria": "리포트 생성 중",
+  "app.rail.done": "완료 — 확인하세요",
   "app.rail.noteAiBusy": "AI 노트 작성 중…",
   "app.rail.noteAiBusyAria": "AI 노트 작성 중",
 
@@ -65,6 +66,7 @@ const en: Record<keyof typeof ko, string> = {
   "app.rail.settings": "Settings",
   "app.rail.reportBusy": "Generating report…",
   "app.rail.reportBusyAria": "Generating report",
+  "app.rail.done": "Done - take a look",
   "app.rail.noteAiBusy": "Writing a note with AI…",
   "app.rail.noteAiBusyAria": "Writing a note with AI",
 
