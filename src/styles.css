@@ -82,7 +82,12 @@
   /* 포커스 링 — 컴포넌트마다 리터럴로 쓰면 다크에서 배경과 같은 색이 돼 안 보인다(DESIGN.md §2) */
   --focus-ring: 0 0 0 3px rgba(24, 24, 27, 0.12);
 
+  /* 모서리 — 네 단계뿐이다. 값이 열다섯 가지까지 늘어나 있었고 토큰은 한 곳에서만 쓰였다.
+     고를 때 재지 말고 여기서 집는다: 컨트롤 / 카드 / 판 / 알약. */
+  --radius-sm: 6px;
+  --radius: 8px;
   --radius-lg: 12px;
+  --radius-pill: 999px;
   --shadow-sm: 0 1px 2px rgba(24, 24, 27, 0.06);
   --shadow: 0 10px 30px -8px rgba(24, 24, 27, 0.12),
     0 4px 10px -4px rgba(24, 24, 27, 0.07);
@@ -220,7 +225,7 @@ body {
   position: fixed;
   z-index: 60;
   pointer-events: none;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   backdrop-filter: blur(6px) saturate(180%);
   -webkit-backdrop-filter: blur(6px) saturate(180%);
   background: linear-gradient(
@@ -318,7 +323,7 @@ select {
   padding: 9px 0 7px;
   border: 1px solid transparent;
   background: transparent;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -469,7 +474,7 @@ select {
   height: 36px;
   padding: 0 12px 0 34px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--surface-2);
   color: var(--text);
   outline: none;
@@ -509,7 +514,7 @@ select {
   font-weight: 600;
   font-size: 13px;
   padding: 5px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   transition: background 0.12s, color 0.12s, transform 0.16s var(--ease-out);
 }
 .tab:active {
@@ -775,7 +780,7 @@ body.resizing-col .pane-resizer::after {
   /* 테두리가 곧 유리 두께다(--glass-edge). 선을 지우고 inset 링으로 그리지 않는다 —
      inset 은 padding-box 안쪽이라 바깥 윤곽과 반경이 어긋나 두 겹으로 보였다. */
   border: 1px solid var(--glass-edge);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--glass-fill);
   box-shadow: var(--glass-sheen), var(--glass-seat);
   color: var(--text);
@@ -846,7 +851,7 @@ body.resizing-col .pane-resizer::after {
   align-items: center;
   justify-content: center;
   border: 1px solid var(--glass-edge);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--glass-fill);
   box-shadow: var(--glass-sheen), var(--glass-seat);
   color: var(--text-2);
@@ -894,7 +899,7 @@ body.resizing-col .pane-resizer::after {
   font-weight: 700;
   letter-spacing: 0.03em;
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   text-transform: uppercase;
 }
 .badge.learning {
@@ -915,7 +920,7 @@ body.resizing-col .pane-resizer::after {
   font-size: 12px;
   color: var(--text-2);
   border: 1px solid var(--glass-edge);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 3px 9px;
   background: var(--glass-fill);
   box-shadow: var(--glass-sheen), var(--glass-seat);
@@ -1022,7 +1027,7 @@ body.resizing-col .pane-resizer::after {
 .textarea {
   width: 100%;
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 9px 11px;
   background: var(--surface);
   color: var(--text);
@@ -1123,7 +1128,7 @@ body.resizing-col .pane-resizer::after {
   gap: 9px;
   padding: 8px 10px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: transparent;
   color: var(--text-2);
   font-size: 13px;
@@ -1247,7 +1252,7 @@ body.resizing-col .pane-resizer::after {
   color: var(--text);
   border: 1px solid var(--glass-edge);
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: 500;
   white-space: nowrap;
@@ -1496,7 +1501,7 @@ body.resizing-col .pane-resizer::after {
   width: 100%;
   max-width: 240px;
   height: 3px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--surface-3);
   overflow: hidden;
 }
@@ -1506,7 +1511,7 @@ body.resizing-col .pane-resizer::after {
   bottom: 0;
   left: 0;
   width: 40%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--text);
   /* linear 고정 (DESIGN.md §9.1 ③) — 바가 들고 나는 지점이 이동 경로의 양 끝이라
      ease-in-out 은 그 양 끝에서 감속해, 클리핑된 조각이 기어 나오다 중간만 확 스치고
@@ -1594,7 +1599,7 @@ body.resizing-col .pane-resizer::after {
   background: var(--surface-2);
   color: var(--text);
   border-left: 3px solid var(--text);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   animation: note-in 0.18s var(--ease-out);
   padding: 10px 12px;
   font-size: 13px;
@@ -1655,7 +1660,7 @@ body.resizing-col .pane-resizer::after {
 }
 .ai-bg-bar:not(.ok-note):not(.error-note) {
   background: var(--surface-2);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 6px 12px;
   animation: note-in 0.18s var(--ease-out);
 }
@@ -1718,7 +1723,7 @@ body.resizing-col .pane-resizer::after {
   overflow: auto;
   margin: 0;
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface-2);
   color: var(--text-2);
   font-size: 12px;
@@ -1924,7 +1929,7 @@ body.resizing-col .pane-resizer::after {
   padding: 9px 10px 9px 22px;
   margin-bottom: 6px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--surface-2);
   cursor: pointer;
   transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
@@ -2294,7 +2299,7 @@ body.resizing-col .pane-resizer::after {
 .markdown pre {
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 12px 14px;
   overflow-x: auto;
 }
@@ -2466,7 +2471,7 @@ html.widget-root #root {
   flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   overflow: hidden;
   user-select: none;
@@ -2500,7 +2505,7 @@ html.widget-root #root {
   font-size: 12px;
   line-height: 1;
   padding: 2px 4px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 .widget-x:hover {
   color: var(--text);
@@ -2529,7 +2534,7 @@ html.widget-root #root {
   justify-content: center;
   width: 26px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 19px;
   line-height: 1;
   transition: background 0.12s, color 0.12s;
@@ -2580,7 +2585,7 @@ html.widget-root #root {
   cursor: pointer;
   min-width: 26px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 14px;
   display: inline-flex;
   align-items: center;
@@ -2623,7 +2628,7 @@ html.widget-root #root {
 .select-trigger {
   height: 34px;
   border: 1px solid var(--glass-edge);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--glass-fill);
   box-shadow: var(--glass-sheen), var(--glass-seat);
   color: var(--text);
@@ -2657,7 +2662,7 @@ html.widget-root #root {
   backdrop-filter: var(--glass-blur-panel);
   -webkit-backdrop-filter: var(--glass-blur-panel);
   border: 1px solid var(--glass-edge);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--glass-sheen), var(--shadow);
   padding: 4px;
   z-index: 60;
@@ -2679,7 +2684,7 @@ html.widget-root #root {
   /* 오른쪽 = 왼쪽 + 체크 칸(14) + 간격(6). 체크 칸은 **모든 항목이 늘 들고 있는** 자리라
      왼쪽만 30px 이 되고 오른쪽은 10px 이었다 — 글이 오른쪽으로 밀려 메뉴가 기울어 보였다. */
   padding: 7px 30px 7px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 /* 판 안의 행이라 유리를 또 씌우지 않는다(유리 위의 유리는 탁해진다). 대신 불투명한 면도
@@ -2703,7 +2708,7 @@ html.widget-root #root {
 /* 마크다운 프리뷰 박스 (추가 모달) */
 .md-preview {
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 12px;
   min-height: 200px;
 }
@@ -2800,7 +2805,7 @@ html.widget-root #root {
   align-items: center;
   gap: 6px;
   padding: 4px 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--text-2);
   font-size: 13.5px;
@@ -2979,7 +2984,7 @@ html.widget-root #root {
   min-width: 0;
   min-height: 0;
   /* 판때기는 여기서 깐다 — 원문 칸이 투명해야 그 아래 형광펜이 비치고, 거울판은 찾는 동안만 있다 */
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
 }
 .note-src-wrap > .note-textarea {
@@ -2995,7 +3000,7 @@ html.widget-root #root {
   overflow: hidden;
   pointer-events: none;
   border: 0 solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   /* 글자는 원문 칸 것이 보인다 — 여기서는 칠한 자리만 보이면 된다 */
   color: transparent;
 }
@@ -3017,7 +3022,7 @@ html.widget-root #root {
 
 .note-preview {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   /* 세로 여백은 짝이 되는 원문 칸(.textarea 의 9px)과 **같아야 한다** — 다르면 두 칸의 첫 줄이
      그 차이만큼 어긋난 채로 시작하고, 스크롤을 맞춰도 그 상수만큼은 끝까지 따라붙는다.
      가로는 다르다: 렌더된 글은 고정폭 원문보다 좌우 숨통이 더 필요하다. */
@@ -3063,7 +3068,7 @@ html.widget-root #root {
 .note-title-btn:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 .note-crumb {
   display: flex;
@@ -3176,7 +3181,7 @@ html.widget-root #root {
 .prompt-empty {
   padding: 16px;
   border: 1px dashed var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: var(--text-3);
   font-size: 13px;
   text-align: center;
@@ -3185,7 +3190,7 @@ html.widget-root #root {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 /* 컴팩트한 한 줄 행: 이름만. 행 클릭 → 편집, hover 시 삭제 노출 */
@@ -3367,7 +3372,7 @@ html.widget-root #root {
   color: var(--text);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   max-height: 50vh;
   overflow: auto;
 }
@@ -3382,7 +3387,7 @@ html.widget-root #root {
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   overflow-x: auto;
 }
 .md-svg svg {
@@ -3399,7 +3404,7 @@ html.widget-root #root {
   margin: 14px 0;
   padding: 14px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   /* mermaid 는 라이트(neutral) 테마로 렌더되므로, 다크에서도 다이어그램은 밝은 카드 위에 둔다 */
   background: #ffffff;
   overflow-x: auto;
@@ -3428,7 +3433,7 @@ html.widget-root #root {
   align-items: center;
   gap: 4px;
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   /* 밝은 카드 위 배지라 테마와 무관하게 고정 다크 */
   background: #18181b;
   color: #fff;
@@ -3509,7 +3514,7 @@ html.widget-root #root {
   margin: 14px 0;
   padding: 20px;
   border: 1px dashed var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: var(--text-3);
   font-size: 13px;
   text-align: center;
@@ -3545,7 +3550,7 @@ html.widget-root #root {
 }
 .diff-view {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   overflow: auto;
   max-height: 460px;
   background: var(--surface);
@@ -3667,7 +3672,7 @@ html.widget-root #root {
   overflow-y: auto;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--surface-2);
   font-family: var(--mono);
   font-size: 12px;
@@ -3681,7 +3686,7 @@ html.widget-root #root {
   max-height: 340px;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 .span-pick-row {
   display: flex;
@@ -3781,7 +3786,7 @@ html.widget-root #root {
   overflow-y: auto;
   padding: 14px 16px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--surface-2);
   font-family: var(--mono);
   font-size: 12.5px;
@@ -3817,7 +3822,7 @@ html.widget-root #root {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   overflow: hidden;
   background: #ffffff; /* 다이어그램은 다크에서도 밝은 캔버스 */
 }
@@ -3928,7 +3933,7 @@ html.widget-root #root {
   height: 28px;
   padding: 0 6px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: #52525b;
   font-size: 11px;
@@ -4009,7 +4014,7 @@ html.widget-root #root {
   top: 8px;
   left: 8px;
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--danger-soft);
   color: var(--danger);
   border: 1px solid var(--danger);
@@ -4136,7 +4141,7 @@ html.widget-root #root {
   margin: -4px -6px;
   padding: 4px 6px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: inherit;
   text-align: left;
@@ -4376,7 +4381,7 @@ html.widget-root #root {
   gap: 5px;
   padding: 5px 11px;
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
   font-size: 12px;
@@ -4432,7 +4437,7 @@ html.widget-root #root {
   gap: 6px;
   padding: 6px 11px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--surface);
   color: var(--text-2);
   font-size: 12px;
@@ -4517,7 +4522,7 @@ html.widget-root #root {
   gap: 5px;
   padding: 7px 5px 7px 7px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -4556,7 +4561,7 @@ html.widget-root #root {
   gap: 3px;
   padding: 1px 6px;
   border: 1px solid var(--glass-edge-accent);
-  border-radius: 99px;
+  border-radius: var(--radius-pill);
   background: var(--glass-fill-accent);
   color: var(--text-2);
   font-size: 10px;
@@ -5016,7 +5021,7 @@ html.widget-root #root {
   max-width: 170px;
   padding: 4px 8px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text);
   font-size: 12px;
@@ -5294,7 +5299,7 @@ html.widget-root #root {
   padding: 3px 0 4px;
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   transition: background 0.12s;
 }
 .tt-day-cell:hover {
@@ -5375,7 +5380,7 @@ html.widget-root #root {
   position: absolute;
   min-width: 28px; /* lane 이 아무리 좁아져도 잡을 수 있게 (폭 하한 — ttLayout.boxWidth 주석) */
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   box-shadow: inset 2px 0 0 var(--text);
   padding: 3px 8px 3px 10px;
@@ -5559,7 +5564,7 @@ html.widget-root #root {
   font-size: 10px;
   font-weight: 700;
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--primary-bg);
   color: var(--primary-fg);
 }
@@ -5567,7 +5572,7 @@ html.widget-root #root {
   display: flex;
   gap: 8px;
   padding: 4px 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   cursor: pointer;
   transition: background 0.12s;
@@ -5634,7 +5639,7 @@ body.resizing-tt * {
   padding: 5px 8px;
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text);
   font-size: 14px;
   font-weight: 700;
@@ -5786,7 +5791,7 @@ body.resizing-tt * {
 .cal-pick {
   height: 44px;
   margin: 3px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   font-size: 13px;
   font-weight: 500;
   color: var(--text);
@@ -5907,7 +5912,9 @@ body.resizing-tt * {
   padding: 9px 16px 10px 14px;
   margin-bottom: 12px;
   border: 1px solid var(--glass-edge);
-  border-radius: 999px;
+  /* 알약이 아니라 판이다 — 레일 칸과 같은 모서리를 쓴다. 완전히 둥근 캡슐은 이 폭에서
+     혼자 다른 물건으로 보였다(옆의 어떤 것도 알약이 아니다). */
+  border-radius: var(--radius-lg);
   background: var(--glass-fill);
   box-shadow: var(--glass-sheen), var(--glass-seat);
   transition: background 0.16s, border-color 0.16s, box-shadow 0.16s;
@@ -6006,7 +6013,7 @@ body.resizing-tt * {
   align-items: flex-start; /* 여러 줄로 줄바꿈돼도 체크박스를 첫 줄에 맞춤 */
   gap: 12px;
   padding: 10px 8px;
-  border-radius: 8px; /* 구분선 없이 여백+hover 로만 구분 (선 과다 방지) */
+  border-radius: var(--radius); /* 구분선 없이 여백+hover 로만 구분 (선 과다 방지) */
   transition: background 0.12s, box-shadow 0.12s, transform 0.12s;
 }
 .todo-row:hover {
@@ -6057,7 +6064,7 @@ body.resizing-tt * {
   padding: 8px 12px;
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
   font-size: 14px;
   pointer-events: none;
@@ -6073,7 +6080,7 @@ body.resizing-tt * {
   font-size: 11px;
   color: var(--text-3);
   border: 1px solid var(--border-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 1px 7px;
   font-variant-numeric: tabular-nums;
 }
@@ -6151,7 +6158,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
 /* 루트(트리 여백)로 드롭 */
 .tree.drop-root {
   box-shadow: inset 0 0 0 2px var(--text-3);
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 
 /* 떠 있는 오버레이(원본 복제본) — body 로 portal 되어 모든 overflow 를 벗어난다.
@@ -6168,7 +6175,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   font-weight: 600;
   color: var(--text);
   background: var(--surface);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   box-shadow:
     0 8px 22px rgba(0, 0, 0, 0.18),
     0 2px 6px rgba(0, 0, 0, 0.12);
@@ -6268,7 +6275,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
 .todo-overdue {
   margin-bottom: 16px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--surface);
   overflow: hidden;
 }
@@ -6535,7 +6542,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   gap: 5px;
   font-size: 12px;
   padding: 3px 10px;
-  border-radius: 99px;
+  border-radius: var(--radius-pill);
   font-variant-numeric: tabular-nums;
 }
 .report-chip.ok {
@@ -6621,7 +6628,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
 .rep-src {
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 .rep-src.off {
@@ -6687,7 +6694,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   font-size: 11px;
   color: var(--text-3);
   border: 1px solid var(--border);
-  border-radius: 99px;
+  border-radius: var(--radius-pill);
   padding: 2px 9px;
   white-space: nowrap;
 }
@@ -6733,7 +6740,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   color: var(--text);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 7px 10px;
   white-space: pre-wrap;
   word-break: break-all;
@@ -6756,7 +6763,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   padding: 8px 12px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 .rep-mcp-row.off {
   border-style: dashed;
@@ -6850,7 +6857,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   padding: 0 7px;
   font-size: 11px;
   font-weight: 600;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border-color: var(--border-strong);
   background: transparent;
   backdrop-filter: none;
@@ -6953,7 +6960,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   gap: 14px;
   margin-top: 18px;
   padding: 12px 14px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface-2);
   border-left: 3px solid var(--border-strong);
 }
@@ -7011,7 +7018,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   gap: 8px;
   padding: 0 4px 0 10px;
   border: 1px dashed var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text-2);
   font-size: 13px;
 }
@@ -7114,7 +7121,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   gap: 8px;
   padding: 0 10px;
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface-2);
   color: var(--text-2);
   font-size: 13px;
@@ -7180,7 +7187,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   height: 26px;
   padding: 0 8px;
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text-3);
   width: 200px;
@@ -7227,7 +7234,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
 }
 .db-stat {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 8px 10px;
   background: var(--surface);
 }
@@ -7328,7 +7335,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   align-items: center;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--surface);
 }
 /* 비밀번호 필요 — 사용자가 손을 대야 끝나는 유일한 상태라 행 전체가 표식이다(점선 + 주의색 테두리).
