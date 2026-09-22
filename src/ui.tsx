@@ -173,6 +173,96 @@ export function Checkbox({
   );
 }
 
+/** 설정 한 구획 — 눈썹 제목 + (오른쪽 동작) + 설명 + 내용.
+ *  설정 화면마다 `.set-head` 를 손으로 조립하던 걸 모은 것이다. 손으로 짜면 어떤 구획은
+ *  설명이 있고 어떤 구획은 없고, 동작 버튼 크기가 `btn` 과 `btn-sm` 으로 갈린다(실제로 그랬다). */
+export function SetSection({
+  title,
+  desc,
+  action,
+  children,
+}: {
+  title: string;
+  desc?: ReactNode;
+  /** 오른쪽 끝 동작 하나. 크기는 여기서 정한다 — 호출부가 고르게 두지 않는다 */
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="set-section">
+      <div className="set-head">
+        <span className="set-eyebrow">{title}</span>
+        <span className="spacer" />
+        {action}
+      </div>
+      {desc && <p className="set-desc">{desc}</p>}
+      {children}
+    </section>
+  );
+}
+
+/** 라벨 + 컨트롤 + 힌트 한 벌. 여백은 CSS 가 갖는다 —
+ *  예전엔 자리마다 `style={{ marginBottom: 0, marginTop: 14 }}` 을 손으로 붙여 줄이 안 맞았다. */
+export function SetField({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="field">
+      <label>{label}</label>
+      {children}
+      {hint && <div className="hint">{hint}</div>}
+    </div>
+  );
+}
+
+/** 컨트롤 + 그 옆 동작 하나(경로 입력 + 연결 테스트처럼). 크기와 간격을 한 곳에서 잡는다 */
+export function SetInline({ children }: { children: ReactNode }) {
+  return <div className="set-inline">{children}</div>;
+}
+
+/** 골라 쓰는 카드 한 장 — 라디오다(여럿 중 하나). 선택은 색이 아니라 채움/아웃라인(§3).
+ *  AI 프로바이더 고르기와 온보딩이 같은 물건을 쓴다: 처음 본 모양이 설정에서도 같아야 한다. */
+export function OptionCard({
+  selected,
+  name,
+  meta,
+  sub,
+  onSelect,
+}: {
+  selected: boolean;
+  name: string;
+  /** 이름 옆 작은 글씨 (버전 등) */
+  meta?: string;
+  /** 아랫줄 (경로 등) */
+  sub?: string;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      className={`onb-card ${selected ? "selected" : ""}`}
+      onClick={onSelect}
+    >
+      <span className="onb-dot" />
+      <span className="onb-name">{name}</span>
+      {meta && <span className="onb-version">{meta}</span>}
+      {sub && (
+        <span className="onb-path" title={sub}>
+          {sub}
+        </span>
+      )}
+    </button>
+  );
+}
+
 /** 삭제 확인 — **지우는 동작은 예외 없이 이 문을 지난다**(.claude/DESIGN.md §3 파괴 동작).
  *  되돌릴 수 없는 일에 도달하는 길이 클릭 하나면 안 된다.
  *
@@ -382,6 +472,7 @@ export function Modal({
   wide,
   narrow,
   fixedHeight,
+  settings,
 }: {
   open: boolean;
   title: string;
@@ -392,6 +483,8 @@ export function Modal({
   narrow?: boolean;
   /** 내부 탭·섹션 전환이 있는 모달용 — 내용 높이와 무관하게 크기 고정(본문만 스크롤) */
   fixedHeight?: boolean;
+  /** 설정 셸 — 넓게 열고 본문을 [왼쪽 내비 | 내용] 두 칸으로 나눈다(본문 패딩은 안쪽이 맡는다) */
+  settings?: boolean;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -482,7 +575,7 @@ export function Modal({
         aria-labelledby={titleId}
         className={`modal ${wide ? "wide" : ""} ${narrow ? "narrow" : ""} ${
           fixedHeight ? "fixed-h" : ""
-        }`}
+        } ${settings ? "settings" : ""}`}
       >
         <div className="modal-head">
           <h2 id={titleId}>{title}</h2>

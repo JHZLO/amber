@@ -2,7 +2,7 @@
 // 설정 모달의 형제로 띄운다(Modal 은 portal 이 아니라 모달 안에 모달을 넣으면 overflow 에 잘린다).
 
 import { useCallback, useEffect, useState } from "react";
-import { Spinner, Tooltip, timeAgo } from "../ui";
+import { SetSection, Spinner, Tooltip, timeAgo } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import {
@@ -49,15 +49,15 @@ export function DbSettings({
   }, [reload]);
 
   return (
-    <section className="set-section">
-      <div className="set-head">
-        <span className="set-eyebrow">{t("settings.db.title")}</span>
-        <span className="spacer" />
+    <SetSection
+      title={t("settings.db.title")}
+      action={
         <button className="btn btn-sm" onClick={onAdd}>
           <Icon name="plus" size={13} />
           {t("settings.db.add")}
         </button>
-      </div>
+      }
+    >
 
       {error && (
         <div className="error-note" style={{ marginBottom: 12 }}>
@@ -127,6 +127,6 @@ export function DbSettings({
         <br />
         {t("diagrams.db.hint.readonly")}
       </p>
-    </section>
+    </SetSection>
   );
 }

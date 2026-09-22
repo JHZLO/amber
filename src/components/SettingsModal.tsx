@@ -31,8 +31,18 @@ import {
   type Lang,
 } from "../lib/i18n";
 import { errText } from "../lib/errors";
-import { ConfirmDelete, Modal, Select, Spinner, Tooltip } from "../ui";
-import { Icon } from "../icons";
+import {
+  ConfirmDelete,
+  Modal,
+  OptionCard,
+  Select,
+  SetField,
+  SetInline,
+  SetSection,
+  Spinner,
+  Tooltip,
+} from "../ui";
+import { Icon, type IconName } from "../icons";
 import { ReportSettings } from "./ReportSettings";
 import { AiAuthModal } from "./AiAuthModal";
 import { DbSettings } from "./DbSettings";
@@ -58,12 +68,15 @@ const LANGS: { id: Lang; label: string }[] = [
 
 // 설정 카테고리 탭 — 한 화면에 다 쌓지 않고 갈래로 나눈다
 type SetTab = "ai" | "prompts" | "report" | "databases" | "appearance";
-const SETTING_TABS: { id: SetTab; label: string }[] = [
-  { id: "ai", label: t("settings.tab.ai") },
-  { id: "prompts", label: t("settings.tab.prompts") },
-  { id: "report", label: t("settings.tab.report") },
-  { id: "databases", label: t("settings.tab.databases") },
-  { id: "appearance", label: t("settings.tab.appearance") },
+// 칸 목록 — 왼쪽 세로 내비. 가로 탭이던 걸 옮겼다: 다섯 칸이 한 줄을 다 먹으면서도
+// 어느 칸이 얼마나 긴지는 못 말했고, 좁아진 본문에 긴 폼이 세로로만 쌓였다.
+// 아이콘은 그 칸이 다루는 물건을 가리킨다(사이드 레일과 같은 문법).
+const SETTING_TABS: { id: SetTab; label: string; icon: IconName }[] = [
+  { id: "ai", label: t("settings.tab.ai"), icon: "sparkles" },
+  { id: "prompts", label: t("settings.tab.prompts"), icon: "lightbulb" },
+  { id: "report", label: t("settings.tab.report"), icon: "calendar-check" },
+  { id: "databases", label: t("settings.tab.databases"), icon: "database" },
+  { id: "appearance", label: t("settings.tab.appearance"), icon: "sun" },
 ];
 
 export function SettingsModal({
@@ -427,6 +440,8 @@ export function SettingsModal({
       onClose={handleClose}
       footer={footer}
       fixedHeight
+      // 프롬프트 편집은 큰 textarea 한 장짜리 집중 화면이라 내비가 필요 없다
+      settings={!editing}
     >
       {editing ? (
         // 포커스 에디터 — 이름 + 큰 textarea 하나만
@@ -465,23 +480,29 @@ export function SettingsModal({
               {backupResult.msg}
             </div>
           )}
-          <div className="set-tabs">
+          <nav className="set-nav" aria-label={t("settings.title")}>
             {SETTING_TABS.map((st) => (
               <button
                 key={st.id}
-                className={`set-tab ${tab === st.id ? "active" : ""}`}
+                className={`set-nav-item ${tab === st.id ? "active" : ""}`}
+                aria-current={tab === st.id ? "page" : undefined}
                 onClick={() => setTab(st.id)}
               >
+                <Icon name={st.icon} size={15} />
                 {st.label}
               </button>
             ))}
-          </div>
-          <div className="set-tab-content">
+          </nav>
+          <div className="set-pane">
           {tab === "ai" && (
-          <section className="set-section">
-            <div className="set-head">
-              <span className="set-eyebrow">{t("settings.ai.title")}</span>
-              <span className="spacer" />
+          <SetSection
+            title={t("settings.ai.title")}
+            desc={
+              provider
+                ? t("settings.ai.connected", { name: PROVIDER_LABELS[provider] })
+                : t("settings.ai.none")
+            }
+            action={
               <button
                 className="btn btn-sm"
                 onClick={() => void redetect()}
@@ -490,12 +511,8 @@ export function SettingsModal({
                 <Icon name="refresh" size={13} />
                 {detecting ? t("settings.ai.detecting") : t("settings.ai.redetect")}
               </button>
-            </div>
-            <p className="set-desc">
-              {provider
-                ? t("settings.ai.connected", { name: PROVIDER_LABELS[provider] })
-                : t("settings.ai.none")}
-            </p>
+            }
+          >
 
             {/* 로그인 상태 — 위 문장이 "CLI 의 로그인 세션을 그대로 쓴다"고 말하는 그 세션의
                 현재 상태다. 별도 'Sign-in' 필드로 떼어 두면 같은 얘기가 두 군데로 갈리고,
@@ -560,41 +577,38 @@ export function SettingsModal({
             ) : detected !== null && detected.length === 0 ? (
               <div className="error-note">{t("settings.ai.notFound")}</div>
             ) : (
-              <div className="onb-grid">
+              <div className="onb-grid" role="radiogroup" aria-label={t("settings.ai.title")}>
                 {(detected ?? []).map((d) => (
-                  <button
+                  <OptionCard
                     key={d.id}
-                    className={`onb-card ${provider === d.id ? "selected" : ""}`}
-                    onClick={() => pickDetected(d)}
-                  >
-                    <span className="onb-dot" />
-                    <span className="onb-name">{d.name}</span>
-                    <span className="onb-version">{d.version}</span>
-                    <span className="onb-path" title={d.path}>
-                      {d.path}
-                    </span>
-                  </button>
+                    selected={provider === d.id}
+                    name={d.name}
+                    meta={d.version}
+                    sub={d.path}
+                    onSelect={() => pickDetected(d)}
+                  />
                 ))}
               </div>
             )}
 
             {provider && (
               <div className="set-provider">
-                <div className="field">
-                  <label>
-                    {t("settings.ai.pathLabel", { name: PROVIDER_LABELS[provider] })}
-                  </label>
-                  <div className="set-inline">
+                <SetField
+                  label={t("settings.ai.pathLabel", { name: PROVIDER_LABELS[provider] })}
+                >
+                  <SetInline>
                     <input
                       className="input"
                       value={path}
                       onChange={(e) => setPath(e.target.value)}
                       placeholder={`/opt/homebrew/bin/${provider}`}
                     />
-                    <button className="btn" onClick={test} disabled={testing}>
+                    {/* 구획 안의 모든 버튼은 btn-sm 이다 — 예전엔 이 하나만 표준 높이라
+                        옆 입력칸보다 커서 줄이 어긋나 보였다 */}
+                    <button className="btn btn-sm" onClick={test} disabled={testing}>
                       {testing ? <Spinner /> : t("settings.ai.test")}
                     </button>
-                  </div>
+                  </SetInline>
                   {testResult && (
                     <div
                       className={testResult.ok ? "ok-note" : "error-note"}
@@ -603,10 +617,12 @@ export function SettingsModal({
                       {testResult.msg}
                     </div>
                   )}
-                </div>
+                </SetField>
 
-                <div className="field" style={{ marginBottom: 0 }}>
-                  <label>{t("settings.ai.modelLabel")}</label>
+                <SetField
+                  label={t("settings.ai.modelLabel")}
+                  hint={showCustom ? t("settings.model.customHint") : t("settings.ai.creditHint")}
+                >
                   <Select
                     block
                     value={showCustom ? CUSTOM_MODEL : model}
@@ -634,16 +650,12 @@ export function SettingsModal({
                       spellCheck={false}
                     />
                   )}
-                  <div className="hint" style={{ marginTop: 6 }}>
-                    {showCustom ? t("settings.model.customHint") : t("settings.ai.creditHint")}
-                  </div>
-                </div>
+                </SetField>
 
                 {/* 응답 언어 — UI 언어와 따로 둔다. 기술 노트는 본문이 영어 식별자로
                     가득해서 예전엔 모델이 '입력은 영어'로 판단하고 한국어 UI 에서도 영어로
                     답했다. 이제 이 값이 절대 지시로 프롬프트에 박힌다(ai.rs lang_directive). */}
-                <div className="field" style={{ marginBottom: 0, marginTop: 14 }}>
-                  <label>{t("settings.ai.langLabel")}</label>
+                <SetField label={t("settings.ai.langLabel")} hint={t("settings.ai.langHint")}>
                   <Select<AiLang>
                     block
                     value={aiLang}
@@ -654,13 +666,10 @@ export function SettingsModal({
                     ]}
                     onChange={setAiLang}
                   />
-                  <div className="hint" style={{ marginTop: 6 }}>
-                    {t("settings.ai.langHint")}
-                  </div>
-                </div>
+                </SetField>
               </div>
             )}
-          </section>
+          </SetSection>
           )}
           {tab === "report" && <ReportSettings />}
           {tab === "databases" && (
@@ -679,21 +688,16 @@ export function SettingsModal({
             />
           )}
           {tab === "appearance" && (
-          <section className="set-section">
-            <div className="set-head">
-              <span className="set-eyebrow">{t("settings.tab.appearance")}</span>
-            </div>
-            <div className="field">
-              <label>{t("settings.theme.label")}</label>
+          <SetSection title={t("settings.tab.appearance")}>
+            <SetField label={t("settings.theme.label")}>
               <Select
                 block
                 value={theme}
                 options={THEMES.map((th) => ({ value: th.id, label: th.label }))}
                 onChange={changeTheme}
               />
-            </div>
-            <div className="field" style={{ marginBottom: 0 }}>
-              <label>{t("settings.lang.label")}</label>
+            </SetField>
+            <SetField label={t("settings.lang.label")} hint={t("settings.lang.hint")}>
               {/* 테마와 달리 즉시 적용하지 않는다 — 리로드가 필요해 확인 모달을 거친다 */}
               <Select
                 block
@@ -703,24 +707,26 @@ export function SettingsModal({
                   if (v !== getLang()) setLangPending(v);
                 }}
               />
-            </div>
-          </section>
+            </SetField>
+          </SetSection>
           )}
           {tab === "prompts" && (
-          <section className="set-section">
-            <div className="set-head">
-              <span className="set-eyebrow">{t("settings.prompts.title")}</span>
-              <span className="spacer" />
+          <SetSection
+            title={t("settings.prompts.title")}
+            action={
               <button className="btn btn-sm" onClick={startNew}>
                 <Icon name="plus" size={13} />
                 {t("settings.prompt.new")}
               </button>
-            </div>
-            <p className="set-desc">
-              {t("settings.prompts.desc.pre")}
-              <b>{t("settings.prompts.desc.bold")}</b>
-              {t("settings.prompts.desc.post")}
-            </p>
+            }
+            desc={
+              <>
+                {t("settings.prompts.desc.pre")}
+                <b>{t("settings.prompts.desc.bold")}</b>
+                {t("settings.prompts.desc.post")}
+              </>
+            }
+          >
 
             {prompts.length === 0 ? (
               <div className="prompt-empty">{t("settings.prompts.empty")}</div>
@@ -753,7 +759,7 @@ export function SettingsModal({
                 ))}
               </div>
             )}
-          </section>
+          </SetSection>
           )}
           </div>
         </>

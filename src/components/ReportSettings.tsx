@@ -21,7 +21,7 @@ import {
   type ReportConfig,
   type ReportTools,
 } from "../lib/report";
-import { Checkbox, Select, Spinner, Tooltip } from "../ui";
+import { Checkbox, Select, SetField, SetSection, Spinner, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 
@@ -200,17 +200,16 @@ export function ReportSettings() {
   ];
 
   return (
-    <section className="set-section">
-      <div className="set-head">
-        <span className="set-eyebrow">{t("report.title")}</span>
-        <span className="spacer" />
+    <SetSection
+      title={t("report.title")}
+      desc={t("report.set.desc")}
+      action={
         <button className="btn btn-sm" onClick={() => void redetect()} disabled={detecting}>
           <Icon name="refresh" size={13} />
           {detecting ? t("report.set.detecting") : t("report.set.redetect")}
         </button>
-      </div>
-      <p className="set-desc">{t("report.set.desc")}</p>
-
+      }
+    >
       <div className="rep-src-list">
         {rows.map((s) => {
           const st = statusFor(s.id);
@@ -351,19 +350,20 @@ export function ReportSettings() {
       {/* MCP 서버 — 앱이 목록을 고정하지 않는다. claude 에 등록된 걸 그대로 낸다.
           체크한 서버는 리포트와 투두 후보가 함께 쓴다(같은 질문을 두 번 묻지 않는다). */}
       <div className="rep-mcp-sec">
-        <div className="set-head">
-          <span className="set-eyebrow">{t("report.mcp.sectionTitle")}</span>
-          <span className="spacer" />
-          <button
-            className="btn btn-sm"
-            onClick={() => void redetectMcp()}
-            disabled={mcpLoading || !isClaude}
-          >
-            <Icon name="refresh" size={13} />
-            {mcpLoading ? t("report.set.detecting") : t("report.mcp.redetect")}
-          </button>
-        </div>
-        <p className="set-desc">{t("report.mcp.sectionDesc")}</p>
+        <SetSection
+          title={t("report.mcp.sectionTitle")}
+          desc={t("report.mcp.sectionDesc")}
+          action={
+            <button
+              className="btn btn-sm"
+              onClick={() => void redetectMcp()}
+              disabled={mcpLoading || !isClaude}
+            >
+              <Icon name="refresh" size={13} />
+              {mcpLoading ? t("report.set.detecting") : t("report.mcp.redetect")}
+            </button>
+          }
+        >
         {!isClaude ? (
           <div className="hint">
             {t("report.mcp.claudeOnlyPre", { name: "MCP" })}
@@ -402,12 +402,12 @@ export function ReportSettings() {
             </div>
           </>
         )}
+        </SetSection>
       </div>
 
       {/* 사용자가 직접 적는 보정 컨텍스트 — 일간·주간 생성 프롬프트에 함께 실린다.
           수집기가 모르는 배경(레포가 무슨 서비스인지, 약어, 묶는 기준)을 여기서 채운다. */}
-      <div className="field rep-context">
-        <label>{t("report.context.label")}</label>
+      <SetField label={t("report.context.label")} hint={t("report.context.hint")}>
         <textarea
           className="textarea rep-context-input"
           rows={4}
@@ -415,21 +415,18 @@ export function ReportSettings() {
           placeholder={t("report.context.placeholder")}
           onChange={(e) => update({ ...cfg, context: e.target.value })}
         />
-        <div className="hint">{t("report.context.hint")}</div>
-      </div>
+      </SetField>
 
       {/* 주간 리포트 — 노션 공유 형식의 '@이름'. 비우면 이름 없이 낸다 */}
-      <div className="field rep-weekly-name">
-        <label>{t("report.weekly.nameLabel")}</label>
+      <SetField label={t("report.weekly.nameLabel")} hint={t("report.weekly.nameHint")}>
         <input
           className="input"
           value={cfg.displayName}
           placeholder={t("report.weekly.namePlaceholder")}
           onChange={(e) => update({ ...cfg, displayName: e.target.value })}
         />
-        <div className="hint">{t("report.weekly.nameHint")}</div>
-      </div>
-    </section>
+      </SetField>
+    </SetSection>
   );
 }
 

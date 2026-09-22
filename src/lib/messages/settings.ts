@@ -101,6 +101,7 @@ const ko = {
   "settings.theme.system": "시스템 설정 따름",
   "settings.theme.light": "라이트",
   "settings.theme.dark": "다크",
+  "settings.lang.hint": "바꾸면 앱을 다시 불러와요.",
   "settings.lang.label": "언어",
   "settings.lang.confirmTitle": "언어 변경",
   "settings.lang.confirmBody":
@@ -240,6 +241,7 @@ const en: Record<keyof typeof ko, string> = {
   "settings.theme.system": "Follow system setting",
   "settings.theme.light": "Light",
   "settings.theme.dark": "Dark",
+  "settings.lang.hint": "Changing this reloads the app.",
   "settings.lang.label": "Language",
   "settings.lang.confirmTitle": "Change language",
   "settings.lang.confirmBody":
