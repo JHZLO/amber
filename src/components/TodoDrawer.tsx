@@ -11,7 +11,7 @@
 // 그대로 반복된다. 그래서 카드 자체가 동작이다 — 누르면 오늘로 간다.
 
 import { useState } from "react";
-import { AiThinking } from "../ui";
+import { AiThinking, ConfirmDelete } from "../ui";
 import type { SuggestState } from "../lib/todoSuggest";
 import { Icon } from "../icons";
 import { Tooltip } from "../ui";
@@ -280,28 +280,30 @@ function ParkedCard({
       <span className="parked-card-age">
         {days === 0 ? t("todos.parked.age.zero") : t("todos.parked.age", { n: days })}
       </span>
+      {/* 확인은 카드 안 두 버튼이 아니라 **모달**이다(§3) — 자리마다 묻는 방식이 다르면
+          어떤 화면에서 무엇을 기대해야 하는지 매번 다시 배우게 된다 */}
       <span className="parked-card-actions" onClick={(e) => e.stopPropagation()}>
-        {confirming ? (
-          <>
-            <button className="btn btn-sm btn-danger-ghost" onClick={onDelete}>
-              {t("common.delete")}
-            </button>
-            <button className="btn btn-sm" onClick={() => setConfirming(false)}>
-              {t("common.cancel")}
-            </button>
-          </>
-        ) : (
-          <Tooltip label={t("common.delete")}>
-            <button
-              className="icon-btn sm danger"
-              aria-label={t("common.delete")}
-              onClick={() => setConfirming(true)}
-            >
-              <Icon name="trash" size={13} />
-            </button>
-          </Tooltip>
-        )}
+        <Tooltip label={t("common.delete")}>
+          <button
+            className="icon-btn sm danger"
+            aria-label={t("common.delete")}
+            onClick={() => setConfirming(true)}
+          >
+            <Icon name="trash" size={13} />
+          </button>
+        </Tooltip>
       </span>
+      <ConfirmDelete
+        open={confirming}
+        title={t("todos.parked.deleteTitle")}
+        name={todo.content}
+        body={t("todos.parked.deleteConfirm", { name: "{name}" })}
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => {
+          setConfirming(false);
+          onDelete();
+        }}
+      />
     </div>
   );
 }

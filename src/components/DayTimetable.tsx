@@ -27,6 +27,7 @@ import {
 import { formatDayLong, parseLocalDate, weekdaysShort } from "../lib/date";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
+import { ConfirmDelete } from "../ui";
 import {
   GHOST_ID,
   GUTTER,
@@ -423,6 +424,9 @@ export function DayTimetable({
     setEditingId(null);
   }
 
+  /** 시간표 블록 삭제 — 지우기 전에 한 번 더 묻는다(§3 파괴 동작) */
+  const [confirmDel, setConfirmDel] = useState<TimeBlock | null>(null);
+
   function removeBlock(b: TimeBlock) {
     void deleteBlock(b.id)
       .then(onChanged)
@@ -633,7 +637,7 @@ export function DayTimetable({
                           className="tt-del"
                           aria-label={t("todos.tt.deleteBlock")}
                           onMouseDown={(e) => e.stopPropagation()}
-                          onClick={() => removeBlock(b)}
+                          onClick={() => setConfirmDel(b)}
                         >
                           <Icon name="trash" size={11} />
                         </button>
@@ -711,6 +715,18 @@ export function DayTimetable({
           )}
         </div>
       )}
+      <ConfirmDelete
+        open={confirmDel !== null}
+        title={t("todos.tt.deleteBlockTitle")}
+        name={(confirmDel && blockTitle(confirmDel)) || t("todos.tt.untitled")}
+        body={t("todos.tt.deleteBlockConfirm", { name: "{name}" })}
+        onCancel={() => setConfirmDel(null)}
+        onConfirm={() => {
+          const target = confirmDel;
+          setConfirmDel(null);
+          if (target) removeBlock(target);
+        }}
+      />
     </div>
   );
 }

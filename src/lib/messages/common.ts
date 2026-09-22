@@ -7,6 +7,7 @@ const ko = {
   "common.done": "완료",
   "common.save": "저장",
   "common.delete": "삭제",
+  "common.irreversible": "되돌릴 수 없어요.",
   "common.resizePane": "드래그해서 좌측 너비 조절",
 
   // 미저장 초안 확인 (ui.tsx UnsavedModal) — 노트·다이어그램·개념·작업폴더 전환 공용
@@ -151,6 +152,7 @@ const en: Record<keyof typeof ko, string> = {
   "common.done": "Done",
   "common.save": "Save",
   "common.delete": "Delete",
+  "common.irreversible": "This can't be undone.",
   "common.resizePane": "Drag to resize the left pane",
 
   "common.unsaved.title": "Unsaved changes",

@@ -173,6 +173,59 @@ export function Checkbox({
   );
 }
 
+/** 삭제 확인 — **지우는 동작은 예외 없이 이 문을 지난다**(.claude/DESIGN.md §3 파괴 동작).
+ *  되돌릴 수 없는 일에 도달하는 길이 클릭 하나면 안 된다.
+ *
+ *  Modal 을 직접 짜지 말고 이걸 쓴다. 문구 자리, 버튼 순서, 강조, "되돌릴 수 없어요" 한 줄이
+ *  한 곳에 있어야 "어느 화면은 묻고 어느 화면은 안 묻는다"가 생기지 않는다 — 실제로
+ *  문답 스레드, 시간표 블록, 저장 프롬프트가 그렇게 조용히 빠져 있었다. */
+export function ConfirmDelete({
+  open,
+  title,
+  name,
+  body,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  title: string;
+  /** 무엇을 지우는지. 본문에서 굵게 나온다 — 이름 없이 "정말 삭제할까요?"만 묻지 않는다 */
+  name: string;
+  /** `{name}` 자리를 가진 한 문장. 함께 사라지는 것이 있으면 여기서 말한다 */
+  body: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const [before, after] = body.split("{name}");
+  return (
+    <Modal
+      open={open}
+      title={title}
+      narrow
+      onClose={onCancel}
+      footer={
+        <>
+          <span className="spacer" />
+          <button className="btn btn-sm" onClick={onCancel}>
+            {t("common.cancel")}
+          </button>
+          <button className="btn btn-sm btn-danger-ghost" onClick={onConfirm}>
+            {t("common.delete")}
+          </button>
+        </>
+      }
+    >
+      <p style={{ margin: 0 }}>
+        {before}
+        <b>{name}</b>
+        {after}
+        <br />
+        {t("common.irreversible")}
+      </p>
+    </Modal>
+  );
+}
+
 export function TagChip({
   label,
   active,

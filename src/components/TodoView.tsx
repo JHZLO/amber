@@ -64,7 +64,7 @@ import {
 } from "../lib/date";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
-import { Checkbox, Modal, Select, Tooltip } from "../ui";
+import { Checkbox, ConfirmDelete, Select, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { MiniCalendar } from "./MiniCalendar";
 import { PageFind } from "./PageFind";
@@ -81,17 +81,6 @@ import type { AppConfig } from "../lib/config";
 
 const errMsg = errText; // Rust 코드화 에러까지 번역 (lib/errors.ts)
 
-/** 번역 문자열의 {name} 자리에 <b>제목</b> 을 끼워 넣는다 — 어순(굵힘 위치)은 언어별 사전이 정한다 */
-function withBoldName(template: string, name: string) {
-  const [before, after] = template.split("{name}");
-  return (
-    <>
-      {before}
-      <b>{name}</b>
-      {after}
-    </>
-  );
-}
 
 const OVERDUE_LIMIT = 20;
 // 중첩 단계별 들여쓰기(px). 유닛 marginLeft 로 겹쳐 적용돼 단계마다 이만큼 더 들어간다.
@@ -182,6 +171,8 @@ export function TodoView({
     todo: Todo;
     count: number;
   } | null>(null);
+  /** 이월 기록 한 줄 지우기 — 할 일 자체는 안 지우지만 이것도 지우는 동작이라 묻는다 */
+  const [confirmRecord, setConfirmRecord] = useState<Todo | null>(null);
 
   const quickRef = useRef<HTMLInputElement>(null);
   const childInputRef = useRef<HTMLInputElement>(null);
@@ -726,17 +717,15 @@ export function TodoView({
 
   // 삭제는 서브트리째라 비가역이다 — 자손이 있을 때만 확인을 받는다(DESIGN §8: 확인 모달 남발 금지).
   // 홑 항목(대부분)은 예전처럼 원클릭. 자손 수는 트리 모듈이 세고, 밀린 스트립 행은 그 스트립에서 센다.
-  function askRemove(t: Todo, isOverdue: boolean) {
+  function askRemove(todo: Todo, isOverdue: boolean) {
     // 기록 줄(gone)은 이미 없는 행이라 지울 자손이 아니다 — 분모에서 빼야 확인 개수가 맞다
     const n = descendantCount(
       isOverdue ? overdue : todos.filter((x) => x.gone !== 1),
-      t.id,
+      todo.id,
     );
-    if (n === 0) {
-      void remove(t);
-      return;
-    }
-    setConfirmDelete({ todo: t, count: n });
+    // 하위가 없어도 묻는다. 예전엔 바로 지웠는데, **지우는 동작에 예외를 두는 순간**
+    // "어떤 건 묻고 어떤 건 안 묻는다"가 되어 손이 먼저 나간다(§3 파괴 동작).
+    setConfirmDelete({ todo, count: n });
   }
 
   async function remove(t: Todo) {
@@ -754,6 +743,7 @@ export function TodoView({
   // 이월 기록 한 줄 치우기 — 라이브 행은 이미 없으니 지울 대상은 '이 날짜의 기록'뿐이다.
   async function dropRecord(t: Todo) {
     try {
+      setConfirmRecord(null);
       await removeCarry(t.id, selected);
       refreshAll();
     } catch (e) {
@@ -931,7 +921,7 @@ export function TodoView({
               <button
                 aria-label={t("todos.row.removeRecord")}
                 className="icon-btn sm danger"
-                onClick={() => void dropRecord(todo)}
+                onClick={() => setConfirmRecord(todo)}
               >
                 <Icon name="trash" size={13} />
               </button>
@@ -1345,37 +1335,27 @@ export function TodoView({
         />
       )}
 
-      <Modal
+      <ConfirmDelete
         open={confirmDelete != null}
         title={t("todos.delete.title")}
-        narrow
-        onClose={() => setConfirmDelete(null)}
-        footer={
-          <>
-            <span className="spacer" />
-            <button className="btn btn-sm" onClick={() => setConfirmDelete(null)}>
-              {t("common.cancel")}
-            </button>
-            <button
-              className="btn btn-sm btn-danger-ghost"
-              onClick={() => confirmDelete && void remove(confirmDelete.todo)}
-            >
-              {t("common.delete")}
-            </button>
-          </>
+        name={confirmDelete?.todo.content ?? ""}
+        body={
+          confirmDelete && confirmDelete.count > 0
+            ? t("todos.delete.confirm", { name: "{name}", n: confirmDelete.count })
+            : t("todos.delete.confirmOne", { name: "{name}" })
         }
-      >
-        {confirmDelete && (
-          <p style={{ margin: 0 }}>
-            {withBoldName(
-              t("todos.delete.confirm", { n: confirmDelete.count }),
-              confirmDelete.todo.content,
-            )}
-            <br />
-            {t("todos.delete.irreversible")}
-          </p>
-        )}
-      </Modal>
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => confirmDelete && void remove(confirmDelete.todo)}
+      />
+
+      <ConfirmDelete
+        open={confirmRecord != null}
+        title={t("todos.record.deleteTitle")}
+        name={confirmRecord?.content ?? ""}
+        body={t("todos.record.deleteConfirm", { name: "{name}" })}
+        onCancel={() => setConfirmRecord(null)}
+        onConfirm={() => confirmRecord && void dropRecord(confirmRecord)}
+      />
     </div>
   );
 }

@@ -26,7 +26,7 @@ import {
   type NoteComment,
 } from "../lib/comments";
 import { Markdown } from "./Markdown";
-import { timeAgo, Tooltip } from "../ui";
+import { ConfirmDelete, timeAgo, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { blockRangeFromSelection } from "../lib/mdBlocks";
@@ -138,6 +138,8 @@ export function NoteCommentLayer({
     block: { start: number; end: number } | null;
   } | null>(null);
   const [pop, setPop] = useState<Pop | null>(null);
+  /** 지우기 전에 한 번 더 묻는다 — 이어 물은 것까지 같이 사라지는 동작이다 */
+  const [confirmDel, setConfirmDel] = useState<NoteComment | null>(null);
   /** 답을 기다리는 **그 자리**. `pop` 과 따로 산다 — 패널을 닫거나 본문을 클릭해도
    *  "여기 물어보는 중"이라는 표시(형광펜)는 남아야 하고, 그 자리를 다시 누르면
    *  진행 중인 패널이 그대로 돌아와야 한다. `restore` 가 그때 되돌릴 패널이다. */
@@ -875,7 +877,7 @@ export function NoteCommentLayer({
                       <button
                         className="icon-btn ghost sm danger"
                         aria-label={t("notes.cmt.deleteThread")}
-                        onClick={() => void deleteComment(cm.id)}
+                        onClick={() => setConfirmDel(cm)}
                       >
                         <Icon name="trash" size={12} />
                       </button>
@@ -887,6 +889,19 @@ export function NoteCommentLayer({
           )}
         </div>
       )}
+
+      <ConfirmDelete
+        open={confirmDel !== null}
+        title={t("notes.cmt.deleteTitle")}
+        name={confirmDel?.question ?? ""}
+        body={t("notes.cmt.deleteConfirm", { name: "{name}" })}
+        onCancel={() => setConfirmDel(null)}
+        onConfirm={() => {
+          const target = confirmDel;
+          setConfirmDel(null);
+          if (target) void deleteComment(target.id);
+        }}
+      />
 
       {pop && (
         <div ref={popRef} className="cmt-pop" style={popStyle}>
@@ -1087,7 +1102,7 @@ export function NoteCommentLayer({
                   <button
                     aria-label={t("notes.cmt.deleteThread")}
                     className="icon-btn ghost sm danger"
-                    onClick={() => void deleteComment(viewComment.id)}
+                    onClick={() => setConfirmDel(viewComment)}
                     disabled={asking}
                   >
                     <Icon name="trash" size={13} />

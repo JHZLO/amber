@@ -31,7 +31,7 @@ import {
   type Lang,
 } from "../lib/i18n";
 import { errText } from "../lib/errors";
-import { Modal, Select, Spinner, Tooltip } from "../ui";
+import { ConfirmDelete, Modal, Select, Spinner, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { ReportSettings } from "./ReportSettings";
 import { AiAuthModal } from "./AiAuthModal";
@@ -104,6 +104,8 @@ export function SettingsModal({
     connection: null,
   });
   const [dbDelete, setDbDelete] = useState<DbConnection | null>(null);
+  /** 저장 프롬프트 삭제도 한 번 더 묻는다 — 직접 쓴 글이고 되돌릴 길이 없다(§3) */
+  const [promptDel, setPromptDel] = useState<{ id: string; name: string } | null>(null);
   const [dbPw, setDbPw] = useState<DbConnection | null>(null);
   const [dbPwValue, setDbPwValue] = useState("");
   const [dbPwShow, setDbPwShow] = useState(false);
@@ -737,7 +739,12 @@ export function SettingsModal({
                       <button
                         aria-label={t("common.delete")}
                         className="icon-btn ghost sm danger prompt-del"
-                        onClick={() => removePrompt(p.id)}
+                        onClick={() =>
+                          setPromptDel({
+                            id: p.id,
+                            name: p.label.trim() || p.text.slice(0, 24),
+                          })
+                        }
                       >
                         <Icon name="trash" size={14} />
                       </button>
@@ -789,6 +796,19 @@ export function SettingsModal({
       connection={dbModal.connection}
       onClose={() => setDbModal({ open: false, connection: null })}
       onSaved={() => setDbRefresh((n) => n + 1)}
+    />
+
+    <ConfirmDelete
+      open={promptDel !== null}
+      title={t("settings.prompts.deleteTitle")}
+      name={promptDel?.name ?? ""}
+      body={t("settings.prompts.deleteConfirm", { name: "{name}" })}
+      onCancel={() => setPromptDel(null)}
+      onConfirm={() => {
+        const target = promptDel;
+        setPromptDel(null);
+        if (target) removePrompt(target.id);
+      }}
     />
 
     {/* 연결 삭제 — 프로필 + 키체인만. 파일은 남는다 */}

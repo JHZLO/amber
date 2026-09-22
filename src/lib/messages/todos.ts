@@ -67,6 +67,13 @@ const ko = {
   // 서브트리 삭제 확인 모달 — {name} 자리는 코드가 <b>제목</b> 으로 채운다(어순은 이 문자열이 결정)
   "todos.delete.title": "할 일 삭제",
   "todos.delete.confirm": "{name} 항목을 하위 {n}개와 함께 삭제할까요?",
+  "todos.delete.confirmOne": "{name} 항목을 삭제할까요?",
+  "todos.record.deleteTitle": "기록 지우기",
+  "todos.record.deleteConfirm": "이 날짜에 남은 {name} 기록만 지워요. 할 일 자체는 지금 있는 날짜에 그대로 남아요.",
+  "todos.parked.deleteTitle": "내려놓은 항목 삭제",
+  "todos.parked.deleteConfirm": "{name} 항목을 하위까지 삭제할까요?",
+  "todos.tt.deleteBlockTitle": "블록 삭제",
+  "todos.tt.deleteBlockConfirm": "{name} 블록을 시간표에서 지울까요?",
   "todos.delete.irreversible": "되돌릴 수 없어요.",
 
   // 이날 학습완료 개념 칩
@@ -192,6 +199,13 @@ const en: Record<keyof typeof ko, string> = {
 
   "todos.delete.title": "Delete to-do",
   "todos.delete.confirm": "Delete {name} and its {n} sub-item(s)?",
+  "todos.delete.confirmOne": "Delete {name}?",
+  "todos.record.deleteTitle": "Remove record",
+  "todos.record.deleteConfirm": "Removes only the {name} record left on this date. The to-do itself stays where it now lives.",
+  "todos.parked.deleteTitle": "Delete set-down item",
+  "todos.parked.deleteConfirm": "Delete {name} and everything under it?",
+  "todos.tt.deleteBlockTitle": "Delete block",
+  "todos.tt.deleteBlockConfirm": "Remove the {name} block from the timetable?",
   "todos.delete.irreversible": "This can't be undone.",
 
   "todos.learned.label": "{n} learned on this day",

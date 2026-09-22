@@ -92,6 +92,8 @@ const ko = {
   "notes.cmt.revising": "답변을 고쳐 쓰는 중…",
   "notes.cmt.followUpPh": "이어서 질문하기…",
   "notes.cmt.followUpSend": "후속 질문 보내기",
+  "notes.cmt.deleteTitle": "문답 삭제",
+  "notes.cmt.deleteConfirm": "{name} 문답을 삭제할까요? 이어 물은 것까지 함께 사라져요.",
   "notes.cmt.deleteThread": "질문 스레드 삭제",
   "notes.cmt.sidecarBroken":
     "이 노트의 질문 파일을 읽을 수 없어 저장을 멈췄습니다. 덮어쓰면 기존 문답이 사라집니다.",
@@ -286,6 +288,8 @@ const en: Record<keyof typeof ko, string> = {
   "notes.cmt.revising": "Rewriting the answer…",
   "notes.cmt.followUpPh": "Ask a follow-up…",
   "notes.cmt.followUpSend": "Send follow-up",
+  "notes.cmt.deleteTitle": "Delete thread",
+  "notes.cmt.deleteConfirm": "Delete the thread {name}? Everything you asked after it goes too.",
   "notes.cmt.deleteThread": "Delete this thread",
   "notes.cmt.sidecarBroken":
     "Stopped saving: this note's question file could not be read, and overwriting it would lose the existing threads.",
