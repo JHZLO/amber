@@ -79,6 +79,15 @@ const SETTING_TABS: { id: SetTab; label: string; icon: IconName }[] = [
   { id: "appearance", label: t("settings.tab.appearance"), icon: "sun" },
 ];
 
+/** `claude --version` 은 "2.1.263 (Claude Code)" 를 준다 — 카드에 이름이 이미 있으니
+ *  꼬리의 괄호가 제 이름을 되풀이하면 "Claude Code 2.1.263 (Claude Code)" 가 된다.
+ *  **이름과 같은 괄호만** 떼고 나머지는 CLI 가 말한 그대로 둔다(다른 CLI 의 정보까지 버리지 않게). */
+export function trimVersion(version: string, name: string): string {
+  const m = version.match(/^(.*?)\s*\(([^()]*)\)\s*$/);
+  if (!m) return version.trim();
+  return m[2].trim().toLowerCase() === name.trim().toLowerCase() ? m[1].trim() : version.trim();
+}
+
 export function SettingsModal({
   open,
   onClose,
@@ -522,6 +531,28 @@ export function SettingsModal({
                   · 로그인됨      → 체크 + 표준 버튼 '다시 로그인'(계정 교체용 탈출구)
                   · 만료됨        → 경고 + primary 버튼 (여기서만 눌러야 할 이유가 있다)
                   · 지원 안 함    → 터미널에서 로그인하라는 안내만 */}
+            {detecting && detected === null ? (
+              <div className="loading-box" style={{ padding: "22px 0" }}>
+                <Spinner />
+                <div className="hint">{t("settings.ai.searching")}</div>
+              </div>
+            ) : detected !== null && detected.length === 0 ? (
+              <div className="error-note">{t("settings.ai.notFound")}</div>
+            ) : (
+              <div className="onb-grid cols" role="radiogroup" aria-label={t("settings.ai.title")}>
+                {(detected ?? []).map((d) => (
+                  <OptionCard
+                    key={d.id}
+                    selected={provider === d.id}
+                    name={d.name}
+                    meta={trimVersion(d.version, d.name)}
+                    sub={d.path}
+                    onSelect={() => pickDetected(d)}
+                  />
+                ))}
+              </div>
+            )}
+
             {provider && (
               <div className="set-auth">
                 {auth === null ? (
@@ -569,30 +600,8 @@ export function SettingsModal({
               </div>
             )}
 
-            {detecting && detected === null ? (
-              <div className="loading-box" style={{ padding: "22px 0" }}>
-                <Spinner />
-                <div className="hint">{t("settings.ai.searching")}</div>
-              </div>
-            ) : detected !== null && detected.length === 0 ? (
-              <div className="error-note">{t("settings.ai.notFound")}</div>
-            ) : (
-              <div className="onb-grid" role="radiogroup" aria-label={t("settings.ai.title")}>
-                {(detected ?? []).map((d) => (
-                  <OptionCard
-                    key={d.id}
-                    selected={provider === d.id}
-                    name={d.name}
-                    meta={d.version}
-                    sub={d.path}
-                    onSelect={() => pickDetected(d)}
-                  />
-                ))}
-              </div>
-            )}
-
             {provider && (
-              <div className="set-provider">
+              <div className="set-sub">
                 <SetField
                   label={t("settings.ai.pathLabel", { name: PROVIDER_LABELS[provider] })}
                 >
@@ -618,7 +627,13 @@ export function SettingsModal({
                     </div>
                   )}
                 </SetField>
-
+              </div>
+            )}
+          </SetSection>
+          )}
+          {tab === "ai" && provider && (
+            <SetSection title={t("settings.ai.behaviorTitle")}>
+              <div className="set-cols">
                 <SetField
                   label={t("settings.ai.modelLabel")}
                   hint={showCustom ? t("settings.model.customHint") : t("settings.ai.creditHint")}
@@ -668,8 +683,7 @@ export function SettingsModal({
                   />
                 </SetField>
               </div>
-            )}
-          </SetSection>
+            </SetSection>
           )}
           {tab === "report" && <ReportSettings />}
           {tab === "databases" && (

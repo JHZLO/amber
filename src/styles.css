@@ -1155,6 +1155,23 @@ body.resizing-col .pane-resizer::after {
   overflow-y: auto;
   padding: 18px 22px 22px;
 }
+/* 판이 넓어졌으니 짧은 칸 둘은 나란히 둔다 — 모델과 응답 언어처럼 **같이 보고 정하는** 것들.
+   한 줄씩 쌓으면 드롭다운 하나가 980px 을 가로질러 길이만 남는다. */
+.set-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0 18px;
+}
+/* 딸린 칸 — 고른 것에 매달린 보조 설정(경로처럼 평소엔 건드릴 일 없는 것).
+   왼쪽 선 하나로 "위 선택의 세부"임을 말한다. 구획을 하나 더 파면 급이 같아져 버린다. */
+.set-sub {
+  margin-top: 12px;
+  padding-left: 14px;
+  border-left: 2px solid var(--border);
+}
+.set-sub .field label {
+  color: var(--text-3);
+}
 /* 넓어진 만큼 글줄이 늘어나면 안 된다 — 설명과 힌트는 읽는 글이라 폭에 상한을 준다 */
 .set-pane .set-desc,
 .set-pane .hint {
@@ -1290,7 +1307,9 @@ body.resizing-col .pane-resizer::after {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: -4px 0 14px;
+  /* 고른 카드 **아래**에 붙는다 — 그 CLI 의 로그인 상태이지 구획 전체의 상태가 아니다.
+     예전엔 카드 위에 있어서 어느 CLI 얘기인지 말하지 않은 채 떠 있었다. */
+  margin: 12px 0 0;
 }
 .set-auth-state {
   display: inline-flex;
@@ -4832,6 +4851,12 @@ html.widget-root #root {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+/* 설정의 넓은 판에서는 나란히 — 둘뿐인 선택지를 세로로 쌓아 판을 가로지르면
+   고르는 일이 아니라 읽는 일처럼 보인다(온보딩은 좁은 판이라 그대로 한 줄씩) */
+.onb-grid.cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 .onb-card {
   display: grid;
