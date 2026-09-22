@@ -5723,7 +5723,7 @@ body.resizing-tt * {
   transition: background 0.12s, color 0.12s, transform 0.16s var(--ease-out);
 }
 .cal-cell:hover .cal-num {
-  background: var(--surface-2);
+  background: var(--glass-fill);
 }
 .cal-cell:active .cal-num {
   transform: scale(0.92);
@@ -5757,10 +5757,15 @@ body.resizing-tt * {
 .cal-cell.adjacent.vac .cal-num {
   opacity: 0.5;
 }
-/* 선택=surface-3 원, 오늘=primary 반전 필 (색 아닌 채움/명암, §3).
+/* 고른 날 = **강조 유리 필**, 오늘 = **링**(§3 채움/아웃라인으로 둘을 가른다).
+   예전엔 선택이 surface-3 원, 오늘이 불투명 흰 필이라 화면에서 오늘이 제일 크게 소리쳤다 —
+   정작 손으로 움직이는 건 선택인데. 그리고 판이 전부 유리가 된 뒤로는 그 흰 원이 혼자
+   스티커로 얹혔다. 이제 둘은 **다른 축**이라 겹치면 링 안에 필이 들어온다(오늘을 고른 날).
    ↑ 주말 색과 명시도가 같고 뒤에 오므로 오늘/선택 표시가 색을 이긴다 — 의도된 우선순위다. */
 .cal-cell.selected .cal-num {
-  background: var(--surface-3);
+  background: var(--glass-fill-accent);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat),
+    inset 0 0 0 1px var(--glass-edge-accent);
   font-weight: 600;
 }
 /* 휴가인 날을 고르면 회색 필 대신 링으로 표시한다 — 앰버 글자는 --surface-3 필 위에서
@@ -5770,11 +5775,18 @@ body.resizing-tt * {
   background: transparent;
   box-shadow: 0 0 0 2px var(--text-3);
 }
-.cal-cell.today .cal-num,
-.cal-cell.today:hover .cal-num {
-  background: var(--primary-bg);
-  color: var(--primary-fg);
+/* 오늘 = 링. 날짜를 옮겨 다녀도 늘 그 자리에 있는 표식이라 **테두리**가 맞다 —
+   채움은 "지금 보고 있는 것"의 몫이다. 글자는 --text 그대로라 대비 걱정이 없다
+   (예전 primary 필 위의 --primary-fg 는 테마마다 뒤집혀 늘 조마조마했다). */
+.cal-cell.today .cal-num {
+  box-shadow: inset 0 0 0 1.5px var(--text);
+  color: var(--text);
   font-weight: 700;
+}
+/* 오늘이면서 고른 날 — 링(오늘) 위에 유리(선택)가 들어온다. 둘 다 보여야 한다 */
+.cal-cell.today.selected .cal-num {
+  background: var(--glass-fill-accent);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat), inset 0 0 0 1.5px var(--text);
 }
 /* 월/연 선택 판 — 12칸 3×4 (연은 앞뒤 한 칸이 옆 판의 해라 10+2). 일 그리드와 같은
    .cal-grid 위에 열 수만 바꾼다. 총 높이 361px = 요일 헤더 25px + 6행 × 56px 로, 판을
@@ -5797,7 +5809,7 @@ body.resizing-tt * {
   transition: background 0.12s, color 0.12s, transform 0.16s var(--ease-out);
 }
 .cal-pick:hover {
-  background: var(--surface-2);
+  background: var(--glass-fill);
 }
 .cal-pick:active {
   transform: scale(0.96);
@@ -5805,15 +5817,21 @@ body.resizing-tt * {
 .cal-pick.adjacent {
   color: var(--text-3);
 }
+/* 일 그리드와 같은 문법 — 고른 것은 유리 필, 오늘(이번 달/올해)은 링 */
 .cal-pick.selected {
-  background: var(--surface-3);
+  background: var(--glass-fill-accent);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat),
+    inset 0 0 0 1px var(--glass-edge-accent);
   font-weight: 600;
 }
-.cal-pick.today,
-.cal-pick.today:hover {
-  background: var(--primary-bg);
-  color: var(--primary-fg);
+.cal-pick.today {
+  box-shadow: inset 0 0 0 1.5px var(--text);
+  color: var(--text);
   font-weight: 700;
+}
+.cal-pick.today.selected {
+  background: var(--glass-fill-accent);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat), inset 0 0 0 1.5px var(--text);
 }
 /* 날짜 점: 미완료 남음=빈 점(아웃라인), 전부 완료=채운 점 (.dot 문법과 동일) */
 .cal-dot {
@@ -6446,6 +6464,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
    주 안에서 오늘이 어디인지, 어느 날이 휴가인지는 주를 골라도 계속 필요한 정보다. */
 .cal-grid.by-week .cal-cell.selected:not(.today):not(.vac) .cal-num {
   background: transparent;
+  box-shadow: none;
 }
 
 .report-weekly {
