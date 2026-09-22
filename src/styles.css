@@ -486,14 +486,12 @@ select {
    면이 생기는 순간이 곧 유리를 쓰는 순간이라는 규칙이 그대로 지켜진다. */
 .tab.active {
   background: var(--glass-fill), var(--glass-raise);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   color: var(--text);
   box-shadow: var(--glass-sheen), var(--shadow-sm);
 }
 .tab:hover:not(.active) {
   background: var(--glass-fill);
-  box-shadow: var(--glass-sheen);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
 }
 .tab .count {
   color: var(--text-3);
@@ -687,6 +685,15 @@ body.resizing-col .pane-resizer::after {
     rgba(255, 255, 255, 0.2)
   );
   --glass-edge-accent: rgba(255, 255, 255, 0.3);
+  /* 접촉 그림자 — **면에 앉은** 컨트롤이 바닥과 닿는 자리. 물건이 면에 닿으면 바로 아래에
+     짧고 진한 그늘이 생긴다. 이게 없으면 반투명한 사각형이 허공에 뜬 것으로 읽힌다
+     ("예쁜데 붕 뜬 느낌"의 정체가 이거였다). 손이 닿으면 한 단 들린다.
+
+     겹이 둘인 이유: 거의 검은 판 위에서는 **바깥 그림자가 안 보인다**(검정 위의 검정).
+     그래서 안쪽 아래 모서리를 한 줄 어둡게 깔아 유리 자체에 두께를 준다 — 위의 빛줄기와
+     짝이 되어 '위에서 빛을 받아 면에 놓인 물건'이 된다. 바깥 그림자는 밝은 판에서 일한다. */
+  --glass-seat: inset 0 -0.5px 0 rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.5);
+  --glass-seat-hover: inset 0 -0.5px 0 rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.55);
   /* 켜진 탭처럼 '면이 떠오르는' 상태 */
   --glass-raise: color-mix(in srgb, var(--surface) 78%, transparent);
 }
@@ -719,6 +726,8 @@ body.resizing-col .pane-resizer::after {
     rgba(24, 24, 27, 0.185)
   );
   --glass-edge-accent: rgba(24, 24, 27, 0.34);
+  --glass-seat: inset 0 -0.5px 0 rgba(24, 24, 27, 0.08), 0 1px 2px rgba(24, 24, 27, 0.1);
+  --glass-seat-hover: inset 0 -0.5px 0 rgba(24, 24, 27, 0.08), 0 2px 6px rgba(24, 24, 27, 0.14);
   --glass-sheen: inset 0 0.5px 0 rgba(255, 255, 255, 0.6);
   --glass-sheen-hover: inset 0 0.5px 0 rgba(255, 255, 255, 0.8);
 }
@@ -732,9 +741,7 @@ body.resizing-col .pane-resizer::after {
   border: 1px solid var(--glass-edge);
   border-radius: 6px;
   background: var(--glass-fill);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-sheen);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
   color: var(--text);
   font-weight: 600;
   font-size: 13px;
@@ -750,7 +757,7 @@ body.resizing-col .pane-resizer::after {
 .btn:hover:not(:disabled) {
   background: var(--glass-fill-hover);
   border-color: var(--glass-edge-hover);
-  box-shadow: var(--glass-sheen-hover);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat-hover);
 }
 /* press 피드백 — 인터페이스가 듣고 있다는 즉각 반응 (pointer-down 순간, §8) */
 .btn:active:not(:disabled) {
@@ -771,14 +778,14 @@ body.resizing-col .pane-resizer::after {
 .btn-primary {
   background: var(--glass-fill-accent);
   border-color: var(--glass-edge-accent);
-  box-shadow: var(--glass-sheen-hover);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat-hover);
   color: var(--text);
   font-weight: 700;
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--glass-fill-accent-hover);
   border-color: var(--glass-edge-accent);
-  box-shadow: var(--glass-sheen-hover);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat-hover);
 }
 /* 삭제(파괴 액션)도 색 없이, 명암으로만 구분.
    평소엔 다른 버튼과 똑같은 유리고, 손이 닿을 때만 선이 살아나 빨강을 두른다 */
@@ -805,9 +812,7 @@ body.resizing-col .pane-resizer::after {
   border: 1px solid var(--glass-edge);
   border-radius: 6px;
   background: var(--glass-fill);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-sheen);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
   color: var(--text-2);
   font-size: 15px;
   transition: background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.12s,
@@ -816,7 +821,7 @@ body.resizing-col .pane-resizer::after {
 .icon-btn:hover:not(:disabled) {
   background: var(--glass-fill-hover);
   border-color: var(--glass-edge-hover);
-  box-shadow: var(--glass-sheen-hover);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat-hover);
   color: var(--text);
 }
 .icon-btn:active:not(:disabled) {
@@ -877,9 +882,7 @@ body.resizing-col .pane-resizer::after {
   border-radius: 6px;
   padding: 3px 9px;
   background: var(--glass-fill);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-sheen);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
   transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
 .chip.active {
@@ -887,7 +890,7 @@ body.resizing-col .pane-resizer::after {
   color: var(--text);
   font-weight: 600;
   border-color: var(--glass-edge-accent);
-  box-shadow: var(--glass-sheen-hover);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat-hover);
 }
 .chip .x {
   cursor: pointer;
@@ -902,7 +905,7 @@ body.resizing-col .pane-resizer::after {
 .chip.btn-like:hover {
   background: var(--glass-fill-hover);
   border-color: var(--glass-edge-hover);
-  box-shadow: var(--glass-sheen-hover);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat-hover);
 }
 
 /* ---- 상세 ---- */
@@ -1836,7 +1839,7 @@ body.resizing-col .pane-resizer::after {
 .todo-parked-toggle.on {
   background: var(--glass-fill-hover), var(--glass-raise);
   border-color: var(--glass-edge-hover);
-  box-shadow: var(--glass-sheen-hover);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat-hover);
   color: var(--text);
 }
 .todo-parked-n {
@@ -2397,9 +2400,7 @@ html.widget-root #root {
 }
 .widget-btn:hover {
   background: var(--glass-fill-hover);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-sheen);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
   color: var(--text);
 }
 .widget-btn:disabled {
@@ -2436,9 +2437,7 @@ html.widget-root #root {
   border: 1px solid var(--glass-edge);
   border-radius: 6px;
   background: var(--glass-fill);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-sheen);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
   color: var(--text);
   font-weight: 600;
   font-size: 13px;
@@ -2452,7 +2451,7 @@ html.widget-root #root {
 .select-trigger:hover {
   background: var(--glass-fill-hover);
   border-color: var(--glass-edge-hover);
-  box-shadow: var(--glass-sheen-hover);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat-hover);
 }
 /* 아직 고르지 않음(placeholder) — 값이 아니라 안내문이라 한 단계 흐리게.
    클래스 이름에 select- 를 붙인다: 전역 `.empty`(빈 상태 블록 — column·height:100%)와
@@ -3042,9 +3041,7 @@ html.widget-root #root {
 }
 .icon-btn.ghost:hover {
   background: var(--glass-fill-hover);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-sheen);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
   color: var(--text);
 }
 
@@ -3079,7 +3076,7 @@ html.widget-root #root {
 .chip.chip-choice:hover {
   background: var(--glass-fill-hover);
   border-color: var(--glass-edge-hover);
-  box-shadow: var(--glass-sheen-hover);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat-hover);
 }
 .chip.chip-choice:has(button:active) {
   transform: scale(0.97);
@@ -5564,67 +5561,26 @@ body.resizing-tt * {
 /* 인라인 추가 (Todoist 풍 — 큰 입력창 대신 은은한 plus + 무테 입력) */
 /* 입력란임이 항상 보이도록 기본에서 이미 채워 둔다(빈 줄처럼 보이지 않게).
    포커스는 한 단계 더 진한 surface-3 로 구분 — §3 의 surface-2→surface-3 문법 */
-/* 채운 판이 아니라 밑줄 한 줄이다 — 목록 맨 위에서 가장 무거운 덩어리가 입력칸이면
-   눈이 할 일보다 빈칸을 먼저 본다. 포커스를 받을 때만 판이 올라온다. */
-/* 빠른 추가 — 유리 캡슐(§2 유리 규약, 면 농도). 밑줄을 걷어냈다: 선은 '여기까지가 한 덩어리'를
-   말하는 물건인데 여기서는 입력칸과 목록을 갈라 놓기만 했다. 유리는 스스로 면이 되므로
-   경계를 선으로 그릴 필요가 없다. 포커스는 색이 아니라 **유리가 짙어지는 것**으로 말한다. */
+/* 빠른 추가 — 면에 앉은 유리 캡슐(§2). 토큰만 쓴다: 예전엔 여기 rgba 를 손으로 적어 뒀는데,
+   그게 바로 규약이 금지하는 일이었다(화면마다 유리 농도가 어긋난다).
+   밑줄을 걷어낸 이유는 그대로다 — 선이 입력칸을 제 목록에서 갈라 놓기만 했다.
+   포커스는 색이 아니라 **유리가 짙어지고 한 단 들리는 것**으로 말한다. */
 .todo-quick {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 9px 16px 10px 14px;
   margin-bottom: 12px;
-  border: none;
+  border: 1px solid var(--glass-edge);
   border-radius: 999px;
-  backdrop-filter: blur(10px) saturate(170%);
-  -webkit-backdrop-filter: blur(10px) saturate(170%);
-  background: linear-gradient(
-    150deg,
-    rgba(255, 255, 255, 0.05),
-    rgba(255, 255, 255, 0.015) 46%,
-    rgba(255, 255, 255, 0.04)
-  );
-  box-shadow:
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.1),
-    inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
-  transition: background 0.16s, box-shadow 0.16s;
+  background: var(--glass-fill);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
+  transition: background 0.16s, border-color 0.16s, box-shadow 0.16s;
 }
 .todo-quick:focus-within {
-  background: linear-gradient(
-    150deg,
-    rgba(255, 255, 255, 0.1),
-    rgba(255, 255, 255, 0.03) 46%,
-    rgba(255, 255, 255, 0.075)
-  );
-  box-shadow:
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.22),
-    inset 0 0 0 0.5px rgba(255, 255, 255, 0.12),
-    0 2px 10px rgba(0, 0, 0, 0.18);
-}
-/* 밝은 판에서는 흰 유리가 사라진다 — 같은 네 겹을 연기처럼 어둡게(빛줄기는 그대로) */
-:root:not([data-theme="dark"]) .todo-quick {
-  background: linear-gradient(
-    150deg,
-    rgba(24, 24, 27, 0.05),
-    rgba(24, 24, 27, 0.015) 46%,
-    rgba(24, 24, 27, 0.04)
-  );
-  box-shadow:
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.6),
-    inset 0 0 0 0.5px rgba(24, 24, 27, 0.07);
-}
-:root:not([data-theme="dark"]) .todo-quick:focus-within {
-  background: linear-gradient(
-    150deg,
-    rgba(24, 24, 27, 0.1),
-    rgba(24, 24, 27, 0.035) 46%,
-    rgba(24, 24, 27, 0.075)
-  );
-  box-shadow:
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.75),
-    inset 0 0 0 0.5px rgba(24, 24, 27, 0.14),
-    0 2px 10px rgba(0, 0, 0, 0.1);
+  background: var(--glass-fill-hover);
+  border-color: var(--glass-edge-hover);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat-hover);
 }
 .todo-quick-ico {
   display: inline-flex;
@@ -6570,9 +6526,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   background: var(--glass-fill-accent);
   color: var(--text);
   border-color: var(--glass-edge-accent);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-sheen-hover);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat-hover);
 }
 
 /* 연결 상태 점 — 채움/아웃라인(§3)에 색(§2 결과 색)을 얹은 2중 채널.
