@@ -1918,6 +1918,12 @@ body.resizing-col .pane-resizer::after {
   z-index: 25; /* 본문 위, 질문 팝오버(40+) 아래 */
   pointer-events: none;
 }
+/* 패널을 닫아 둔 채 진행 중일 때만 — 빛나는 구간이 곧 되돌아가는 문이 된다.
+   평소에는 클릭을 통과시킨다(본문 드래그를 막으면 안 된다). */
+.sel-sweep.clickable .sel-sweep-line {
+  pointer-events: auto;
+  cursor: pointer;
+}
 .sel-sweep-line {
   position: fixed;
   overflow: hidden;
@@ -4390,21 +4396,23 @@ html.widget-root #root {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 2px 1px;
+  /* 턴 사이는 **넉넉히** — 말풍선 둘이 한 덩어리(문답)라 그 덩어리끼리는 확실히 떨어져야
+     어디서 한 대화가 끝났는지 보인다. 안쪽(질문↔답) 간격의 두 배쯤이 기준이다. */
+  gap: 24px;
+  padding: 2px 1px 4px;
 }
 .cmt-turn {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 11px;
 }
 /* 꼬리 — 말풍선이 나온 쪽 모서리만 각지게. 한 겹으로 '어디서 왔나'를 말한다 */
 .cmt-q,
 .cmt-a {
   max-width: 88%;
-  padding: 9px 12px;
+  padding: 11px 14px;
   font-size: 13px;
-  line-height: 1.62;
+  line-height: 1.68;
   border: 1px solid var(--glass-edge);
   box-shadow: var(--glass-sheen), var(--glass-seat);
   overflow-wrap: anywhere;
@@ -4464,7 +4472,7 @@ html.widget-root #root {
   /* 이 동작은 **답**에 하는 일이라 답과 같은 쪽에 선다. 오른쪽에 두면 내가 한 말에
      달린 것처럼 읽힌다(메신저에서 자리는 곧 화자다). */
   justify-content: flex-start;
-  margin-top: -2px;
+  margin-top: -4px;
   padding-left: 4px;
   min-height: 18px;
 }

@@ -115,6 +115,14 @@ export function NoteCommentLayer({
     block: { start: number; end: number } | null;
   } | null>(null);
   const [pop, setPop] = useState<Pop | null>(null);
+  /** 답을 기다리는 **그 자리**. `pop` 과 따로 산다 — 패널을 닫거나 본문을 클릭해도
+   *  "여기 물어보는 중"이라는 표시(형광펜)는 남아야 하고, 그 자리를 다시 누르면
+   *  진행 중인 패널이 그대로 돌아와야 한다. `restore` 가 그때 되돌릴 패널이다. */
+  const [askingAt, setAskingAt] = useState<{
+    anchor: string;
+    occurrence: number;
+    restore: Pop;
+  } | null>(null);
   // 질문 목록 — 본문 오른쪽 여백의 트리거로 열고 닫는다(노트를 옮기면 key 로 리마운트돼 닫힌다)
   const [listOpen, setListOpen] = useState(false);
   const [question, setQuestion] = useState("");
@@ -347,6 +355,9 @@ export function NoteCommentLayer({
   useEffect(() => {
     if (!pop) return;
     const down = (e: MouseEvent) => {
+      // 답을 기다리는 동안에는 바깥을 눌러도 닫지 않는다 — 진행 중인 일을 클릭 한 번으로
+      // 잃으면 어디까지 갔는지 알 길이 없다. 새로 드래그해 묻는 건 openAsk 가 덮어쓴다.
+      if (asking) return;
       if (popRef.current && !popRef.current.contains(e.target as Node))
         setPop(null);
     };
@@ -478,6 +489,7 @@ export function NoteCommentLayer({
     const rel = noteRel;
     const { anchor, occurrence } = pop;
     setAsking(true);
+    setAskingAt({ anchor, occurrence, restore: { kind: "ask", anchor, occurrence } });
     setAskError(null);
     try {
       const { answer, meta } = await aiNoteAsk({
@@ -511,6 +523,7 @@ export function NoteCommentLayer({
       setAskError(friendlyError(e));
     } finally {
       setAsking(false);
+      setAskingAt(null);
     }
   }
 
@@ -530,6 +543,11 @@ export function NoteCommentLayer({
       })),
     ];
     setAsking(true);
+    setAskingAt({
+      anchor: target.anchor,
+      occurrence: target.occurrence,
+      restore: { kind: "view", id: target.id },
+    });
     setAskError(null);
     setPendingQ({ id: target.id, q });
     setQuestion("");
@@ -577,6 +595,7 @@ export function NoteCommentLayer({
       setQuestion(q); // 실패한 질문은 입력으로 되돌려 바로 다시 보낼 수 있게
     } finally {
       setAsking(false);
+      setAskingAt(null);
       setPendingQ(null);
     }
   }
@@ -689,13 +708,15 @@ export function NoteCommentLayer({
 
   if (!active) return null;
 
-  // 답을 기다리는 동안 물어본 그 자리를 훑는다 — 새 질문이면 드래그한 구간, 스레드 안이면 그 앵커
+  // 답을 기다리는 동안 물어본 그 자리를 훑는다.
+  // **askingAt 이 먼저다** — 패널을 닫았어도 진행 중인 자리는 계속 빛나야 한다.
   const sweepAt =
-    pop?.kind === "ask"
+    askingAt ??
+    (pop?.kind === "ask"
       ? { anchor: pop.anchor, occurrence: pop.occurrence }
       : viewComment
         ? { anchor: viewComment.anchor, occurrence: viewComment.occurrence }
-        : null;
+        : null);
 
   return createPortal(
     <>
@@ -705,6 +726,9 @@ export function NoteCommentLayer({
           anchor={sweepAt.anchor}
           occurrence={sweepAt.occurrence}
           active={asking}
+          // 패널을 닫아 둔 채 진행 중이면 **빛나는 그 구간이 곧 되돌아가는 문**이다.
+          // 그게 없으면 한 번 닫은 뒤로는 답이 올 때까지 진행 상황을 볼 길이 없다.
+          onClick={askingAt && !pop ? () => setPop(askingAt.restore) : undefined}
         />
       )}
       {selInfo && !pop && (

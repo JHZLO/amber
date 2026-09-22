@@ -19,6 +19,7 @@ export function SelectionSweep({
   anchor,
   occurrence,
   active,
+  onClick,
 }: {
   containerRef: React.RefObject<HTMLElement | null>;
   /** 질문을 건 본문 조각 */
@@ -26,6 +27,9 @@ export function SelectionSweep({
   occurrence: number;
   /** 답을 기다리는 중인가 */
   active: boolean;
+  /** 주면 빛나는 구간이 눌리는 물건이 된다 — 패널을 닫아 둔 채 진행 중일 때
+   *  **되돌아가는 문**이다. 안 주면 예전처럼 클릭을 통과시킨다(본문 선택을 막지 않는다). */
+  onClick?: () => void;
 }) {
   const [boxes, setBoxes] = useState<Rect[]>([]);
 
@@ -78,11 +82,13 @@ export function SelectionSweep({
   const seconds = Math.min(3.2, Math.max(1, (total + BAND) / 560));
 
   return (
-    <div className="sel-sweep" aria-hidden="true">
+    <div className={`sel-sweep ${onClick ? "clickable" : ""}`} aria-hidden={!onClick}>
       {boxes.map((b, i) => (
         <span
           key={i}
           className="sel-sweep-line"
+          role={onClick ? "button" : undefined}
+          onClick={onClick}
           style={
             {
               top: b.top,
