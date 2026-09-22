@@ -1229,6 +1229,27 @@ body.resizing-col .pane-resizer::after {
   border-top: 1px solid var(--border);
 }
 
+/* ==== 한 줄에 선 버튼은 키가 같다 — 크기는 **자리**가 정한다 ====
+   호출부가 `btn` 이냐 `btn btn-sm` 이냐를 고르게 두면 반드시 어긋난다. 실제로 앱의 모든
+   모달 푸터가 그랬다: 닫기는 `btn-sm`(28px), 저장은 `btn`(34px) 이라 나란히 선 두 버튼의
+   키가 6px 달랐다. 열여덟 군데를 손으로 맞추면 다음에 또 어긋나므로, **줄이 이기게** 한다.
+   선택자가 한 단 더 구체적이라(0,2,0 > 0,1,0) 안쪽 클래스가 무엇이든 이 값이 이긴다. */
+.modal-foot .btn {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 12.5px;
+}
+/* 폼 안의 줄은 한 단 작다 — 구획 머리의 동작, 입력칸 옆 동작, 카드 위 동작 */
+.set-head .btn,
+.set-inline .btn,
+.set-auth .btn,
+.cmt-actions .btn,
+.parked-card-actions .btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 /* ---- 설정 모달: 카테고리 탭 (한 화면에 다 쌓지 않게 갈래로) ---- */
 /* ---- 설정 모달: 섹션 레이아웃 (평평한 필드 나열 대신 구획으로 묶음) ---- */
 .set-section {
