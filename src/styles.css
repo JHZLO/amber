@@ -309,11 +309,14 @@ select {
   border-radius: 7px; /* 스쿼클 모서리와 일치 — 서브픽셀 삐져나옴 방지 */
   box-shadow: var(--shadow-sm);
 }
+/* 설정의 왼쪽 내비(.set-nav-item)와 **같은 물건**이다 — 둘 다 세로로 선 최상위 이동 목록이라
+   같은 문법을 쓴다: 테두리가 없으니 평소엔 유리가 없고, 면이 될 때만(hover, 활성) 유리가 된다.
+   1px 투명 테두리는 자리를 잡아 두는 것이다 — 유리가 켜질 때 글자가 밀리지 않게(§2). */
 .rail-item {
   position: relative;
   width: 54px;
   padding: 9px 0 7px;
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   border-radius: 12px;
   display: flex;
@@ -325,18 +328,24 @@ select {
   font-weight: 600;
   letter-spacing: -0.01em;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, transform 0.16s var(--ease-out);
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, color 0.15s,
+    transform 0.16s var(--ease-out);
 }
 .rail-item:hover {
-  background: var(--surface-2);
+  background: var(--glass-fill);
+  border-color: var(--glass-edge);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
   color: var(--text-2);
 }
 .rail-item:active {
   transform: scale(0.96);
 }
-/* 활성 = hover(surface-2)보다 한 단계 진한 배경으로 확실히 구분 */
+/* 활성 = 강조 유리(§2) — 손이 닿은 것(면 유리)보다 한 단 두껍다.
+   예전엔 surface-2 / surface-3 두 단계 회색이라 어느 쪽이 켜진 건지 한눈에 안 갈렸다. */
 .rail-item.active {
-  background: var(--surface-3);
+  background: var(--glass-fill-accent);
+  border-color: var(--glass-edge-accent);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat);
   color: var(--text);
 }
 .rail-item:focus-visible {
