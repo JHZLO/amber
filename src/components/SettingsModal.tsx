@@ -41,6 +41,7 @@ import {
   SetSection,
   Spinner,
   Tooltip,
+  UnsavedModal,
 } from "../ui";
 import { Icon, type IconName } from "../icons";
 import { ReportSettings } from "./ReportSettings";
@@ -88,6 +89,17 @@ export function trimVersion(version: string, name: string): string {
   return m[2].trim().toLowerCase() === name.trim().toLowerCase() ? m[1].trim() : version.trim();
 }
 
+/** 저장 대상 네 값의 지문 — 닫을 때 "안 저장된 게 있나"를 이걸로 판정한다.
+ *  경로는 trim 한 값으로 비교한다: 저장이 trim 해서 넣으므로, 공백만 더 친 것은 변경이 아니다. */
+export function aiSnapshot(
+  provider: AiProvider | null,
+  cliPath: string,
+  model: string,
+  lang: AiLang,
+): string {
+  return JSON.stringify([provider, cliPath.trim(), model, lang]);
+}
+
 export function SettingsModal({
   open,
   onClose,
@@ -128,6 +140,10 @@ export function SettingsModal({
   const [dbDelete, setDbDelete] = useState<DbConnection | null>(null);
   /** 경로 직접 지정을 펼쳤나 — 감지가 실패했으면 처음부터 열어 둔다(그때는 꼭 봐야 한다) */
   const [pathOpen, setPathOpen] = useState(false);
+  /** 마지막으로 저장된 AI 설정. 닫기가 **무엇을 버리는지** 알려면 기준이 필요하다 */
+  const saved = useRef("");
+  /** 미저장 변경을 안고 닫으려 할 때의 확인 */
+  const [confirmClose, setConfirmClose] = useState(false);
   /** 저장 프롬프트 삭제도 한 번 더 묻는다 — 직접 쓴 글이고 되돌릴 길이 없다(§3) */
   const [promptDel, setPromptDel] = useState<{ id: string; name: string } | null>(null);
   const [dbPw, setDbPw] = useState<DbConnection | null>(null);
@@ -210,6 +226,8 @@ export function SettingsModal({
         setPath(c.cliPath);
         setModel(c.model);
         setAiLang(c.aiLang);
+        // 연 시점의 값을 그대로 떠 둔다 — 닫을 때 이것과 달라졌으면 '안 저장된 것'이 있다
+        saved.current = aiSnapshot(c.provider, c.cliPath, c.model, c.aiLang);
         setTestResult(null);
       });
       codexModels()
@@ -313,6 +331,7 @@ export function SettingsModal({
   async function save() {
     // 응답 언어는 연결 여부와 무관하게 저장한다(saveConfig 가 provider 없어도 처리)
     await saveConfig({ provider, onboarded: true, cliPath: path.trim(), model, aiLang });
+    saved.current = aiSnapshot(provider, path.trim(), model, aiLang);
     if (provider) {
       const c = await connectProvider(provider, path.trim(), model);
       onSaved(c);
@@ -402,8 +421,21 @@ export function SettingsModal({
   // 에디터 화면일 땐 X/ESC/바깥클릭이 편집만 취소(한 단계 뒤로), 아니면 설정 닫기.
   // 언어 확인 모달이 위에 떠 있으면 그것만 닫는다 — Esc 는 두 모달 리스너에 모두 닿으므로
   // 여기서 가드하지 않으면 설정까지 한 번에 닫혀버린다.
+  // 설정의 `Save` 가 쓰는 값은 이 넷뿐이다 — 프롬프트·테마·리포트·DB 는 고치는 즉시 저장되므로
+  // '안 저장된 것'에 들어가지 않는다. 있지도 않은 변경으로 확인 창을 띄우면 그 창이 무시당한다.
+  const dirty = saved.current !== "" && aiSnapshot(provider, path, model, aiLang) !== saved.current;
+
+  // 닫기는 **아무것도 잃지 않아야 한다**. 예전엔 모델을 바꾸고 닫으면 말없이 버려졌다 —
+  // 그래서 "닫기를 빨강으로 해야 하나"는 물음이 나왔는데, 색을 칠할 게 아니라
+  // 잃지 않게 만드는 게 맞다(§2: 빨강은 잃는 쪽에만, 그리고 잃는 길이 클릭 하나면 안 된다).
   const handleClose = () =>
-    langPending ? setLangPending(null) : editing ? cancelEdit() : onClose();
+    langPending
+      ? setLangPending(null)
+      : editing
+        ? cancelEdit()
+        : dirty
+          ? setConfirmClose(true)
+          : onClose();
 
   const footer = editing ? (
     <>
@@ -800,6 +832,16 @@ export function SettingsModal({
         </>
       )}
     </Modal>
+
+    {/* 저장 안 한 변경을 안고 닫으려 할 때. 버리는 쪽만 빨강이다(§2) */}
+    <UnsavedModal
+      open={confirmClose}
+      onKeep={() => setConfirmClose(false)}
+      onDiscard={() => {
+        setConfirmClose(false);
+        onClose();
+      }}
+    />
 
     {/* 언어 변경 확인 — 적용 = 리로드라서 즉시 바꾸지 않고 한 번 묻는다.
         설정 모달 위에 겹쳐 뜨는 좁은 확인 모달(나중에 마운트 = 위에 그려짐). */}

@@ -2,7 +2,7 @@
 // CLI 가 말한 것을 함부로 자르지 않는다는 쪽과, 같은 말을 두 번 하지 않는다는 쪽의 경계.
 
 import { describe, expect, it } from "vitest";
-import { trimVersion } from "./SettingsModal";
+import { aiSnapshot, trimVersion } from "./SettingsModal";
 
 describe("trimVersion", () => {
   it("제 이름을 되풀이하는 괄호만 뗀다", () => {
@@ -23,5 +23,32 @@ describe("trimVersion", () => {
 
   it("공백만 붙은 것도 정리한다", () => {
     expect(trimVersion("  2.1.263  ", "Claude Code")).toBe("2.1.263");
+  });
+});
+
+describe("aiSnapshot", () => {
+  it("네 값이 그대로면 같은 지문 — 없는 변경으로 확인 창을 띄우지 않는다", () => {
+    expect(aiSnapshot("claude", "/bin/claude", "opus", "ko")).toBe(
+      aiSnapshot("claude", "/bin/claude", "opus", "ko"),
+    );
+  });
+
+  it("경로의 앞뒤 공백은 변경이 아니다 — 저장이 trim 해서 넣는다", () => {
+    expect(aiSnapshot("claude", "  /bin/claude  ", "opus", "ko")).toBe(
+      aiSnapshot("claude", "/bin/claude", "opus", "ko"),
+    );
+  });
+
+  it("프로바이더, 모델, 언어가 바뀌면 각각 다른 지문", () => {
+    const base = aiSnapshot("claude", "/bin/claude", "opus", "ko");
+    expect(aiSnapshot("codex", "/bin/claude", "opus", "ko")).not.toBe(base);
+    expect(aiSnapshot("claude", "/bin/claude", "sonnet", "ko")).not.toBe(base);
+    expect(aiSnapshot("claude", "/bin/claude", "opus", "en")).not.toBe(base);
+  });
+
+  it("연결 해제(null)도 변경이다", () => {
+    expect(aiSnapshot(null, "", "", "auto")).not.toBe(
+      aiSnapshot("claude", "", "", "auto"),
+    );
   });
 });
