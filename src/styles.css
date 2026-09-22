@@ -4467,7 +4467,9 @@ html.widget-root #root {
 /* 꼬리 — 아바타 쪽 **위** 모서리만 각지게. 한 겹으로 '누구에게서 나왔나'를 말한다 */
 .cmt-q,
 .cmt-a {
-  max-width: calc(100% - 20px);
+  /* 두 아바타가 각자 **차선**을 갖는다: 말풍선은 제 아바타(24+8)도, 건너편 아바타 자리(32)도
+     넘지 않는다. 안 막으면 긴 답이 사람 아이콘 밑까지 뻗어 두 사람의 자리가 섞인다. */
+  max-width: calc(100% - 64px);
   padding: 11px 14px;
   font-size: 13px;
   line-height: 1.68;
@@ -4476,9 +4478,6 @@ html.widget-root #root {
   overflow-wrap: anywhere;
 }
 .cmt-q {
-  /* 답보다 한 뼘 좁게 — 반대쪽에 여백이 남아야 '한쪽으로 몰린 말'로 읽힌다.
-     답과 같은 폭을 주면 긴 질문에서 좌우가 꽉 차 메신저의 비대칭이 사라진다. */
-  max-width: calc(100% - 44px);
   border-radius: 14px 4px 14px 14px;
   background: var(--glass-fill-accent);
   border-color: var(--glass-edge-accent);
@@ -4510,7 +4509,7 @@ html.widget-root #root {
 }
 /* 답이 길면 말풍선이 거의 꽉 찬다 — 긴 글을 88% 에 가두면 줄이 잘게 쪼개져 읽기 나쁘다 */
 .cmt-a.markdown {
-  max-width: 100%;
+  max-width: calc(100% - 64px);
 }
 /* 말풍선 안의 대기 한 줄 — 바가 없다(§9.1: 한 대기 상태에 모션은 하나, 그 하나는 본문의 형광펜).
    AiThinking compact 가 차지하던 높이와 비슷하게 잡아 표시가 바뀔 때 말풍선이 튀지 않게 한다. */
