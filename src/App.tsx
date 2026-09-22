@@ -328,9 +328,10 @@ function App() {
     <div className="app">
       {/* 좌측 레일 = 최상위 작업공간 전환(세로축). 상단 필터 탭(가로축)과 축을 분리해 계층 혼동 제거 */}
       <nav className="rail">
+        {/* 글자를 지웠다 — 아래 탭 이름들과 같은 크기의 흰 글씨가 하나 더 있으면 표식이
+            메뉴 항목처럼 읽힌다. 이름은 툴팁과 aria-label 이 갖는다(잃는 정보 없음). */}
         <div className="rail-brand" title="Amber">
-          <AmberMark size={30} />
-          <span>Amber</span>
+          <AmberMark size={40} />
         </div>
         {RAIL.map((r) => {
           // 백그라운드 실행 표시 — 할 일은 리포트 생성, 노트는 AI 전문 작성. 어느 탭에서든 점이 보인다

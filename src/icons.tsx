@@ -363,8 +363,16 @@ export function Icon({
   );
 }
 
-/** Amber 브랜드 마크 — 앱 아이콘과 동일한 지오메트리(스쿼클 + 호박 방울 + 인클루전 점).
- *  테마 토큰(primary)을 따라 라이트=다크 스쿼클/밝은 방울, 다크=반전. */
+/** Amber 브랜드 마크 — **모양 자체가 유리다**(§2 표식 규약). 타일도 테두리도 없다:
+ *  판을 깔고 테를 두르는 건 컨트롤의 문법이라 로고가 활성 탭처럼 읽힌다.
+ *
+ *  유리 네 겹을 물방울이 직접 갖는다.
+ *   1 채움  — 150° 사선 그라디언트(--glass-fill 과 같은 각도, 같은 램프)
+ *   2 하이라이트 — 왼쪽 위에 번지는 타원 빛무리. 유리를 '덩어리'로 만드는 건 이거다
+ *   3 림     — 윤곽 획. 위쪽 호만 한 겹 더 밝게 얹어 **빛 받는 쪽**을 만든다
+ *   4 코어   — 가운데 점. 그 둘레의 옅은 링이 빛이 모인 자리(caustic)를 흉내 낸다
+ *
+ *  전부 currentColor 라 테마 토큰 하나(.rail-brand svg 의 color)만 따라간다 — 색이 없다. */
 export function AmberMark({
   size = 28,
   className,
@@ -372,6 +380,9 @@ export function AmberMark({
   size?: number;
   className?: string;
 }) {
+  const drop =
+    "M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 " +
+    "C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z";
   return (
     <svg
       className={className}
@@ -379,38 +390,53 @@ export function AmberMark({
       height={size}
       viewBox="0 0 32 32"
       fill="none"
-      aria-hidden="true"
+      role="img"
+      aria-label="Amber"
     >
-      {/* 판을 그리지 않는다. **물방울 자체가 유리다** — 뒤에 타일을 깔면 그건 컨트롤의 문법이고
-          (활성 탭과 같은 면), 표식이 선택된 탭처럼 보인다. 여기서는 모양이 곧 표면이다:
-          안은 옅은 채움, 위쪽에 빛 한 줄, 윤곽은 currentColor 획. 테두리 사각형은 없다. */}
       <defs>
-        <linearGradient id="amber-glass" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="currentColor" stopOpacity="0.28" />
-          <stop offset="0.52" stopColor="currentColor" stopOpacity="0.08" />
-          <stop offset="1" stopColor="currentColor" stopOpacity="0.2" />
+        <linearGradient id="amber-body" x1="0.12" y1="0" x2="0.88" y2="1">
+          <stop offset="0" stopColor="currentColor" stopOpacity="0.3" />
+          <stop offset="0.46" stopColor="currentColor" stopOpacity="0.08" />
+          <stop offset="1" stopColor="currentColor" stopOpacity="0.22" />
         </linearGradient>
+        <radialGradient id="amber-spec" cx="0.34" cy="0.3" r="0.55">
+          <stop offset="0" stopColor="currentColor" stopOpacity="0.4" />
+          <stop offset="1" stopColor="currentColor" stopOpacity="0" />
+        </radialGradient>
+        {/* 빛무리를 방울 밖으로 새지 않게 가둔다 — 유리 안에서 도는 빛이다 */}
+        <clipPath id="amber-clip">
+          <path d={drop} />
+        </clipPath>
       </defs>
+
+      <path d={drop} fill="url(#amber-body)" />
+      <g clipPath="url(#amber-clip)">
+        <ellipse cx="13.6" cy="14.6" rx="6.2" ry="7.4" fill="url(#amber-spec)" />
+      </g>
       <path
-        d="M 16 8.8
-           C 13.9 11.6 11.8 14.96 11.8 18.74
-           C 11.8 21.06 13.68 22.94 16 22.94
-           C 18.32 22.94 20.2 21.06 20.2 18.74
-           C 20.2 14.96 18.1 11.6 16 8.8 Z"
-        fill="url(#amber-glass)"
+        d={drop}
         stroke="currentColor"
+        strokeOpacity="0.72"
         strokeWidth="1.5"
         strokeLinejoin="round"
         strokeLinecap="round"
       />
-      {/* 유리에 걸리는 빛 한 줄 — 왼쪽 위 어깨. 물방울을 '속이 빈 선'이 아니라 '덩어리'로 만든다 */}
+      {/* 빛 받는 쪽 — 위쪽 호만 한 겹 더 밝게. 림 전체를 밝히면 방향이 사라진다 */}
       <path
-        d="M 14.6 12.4 C 13.5 14.2 12.8 16.1 12.8 17.9"
+        d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74"
         stroke="currentColor"
-        strokeOpacity="0.5"
-        strokeWidth="1.1"
+        strokeWidth="1.5"
         strokeLinecap="round"
       />
+      {/* 유리 안쪽에 한 줄 더 — 어깨를 따라 흐르는 반사 */}
+      <path
+        d="M 14.9 12.2 C 13.7 14.1 13.0 16.1 13.0 17.9"
+        stroke="currentColor"
+        strokeOpacity="0.45"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      <circle cx="16" cy="18.2" r="2.5" fill="currentColor" fillOpacity="0.12" />
       <circle cx="16" cy="18.2" r="1.15" fill="currentColor" />
     </svg>
   );

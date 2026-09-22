@@ -298,17 +298,12 @@ select {
   border-right: 1px solid var(--border);
   background: var(--surface);
 }
+/* 표식 한 개뿐이다 — 글자를 지웠으므로 세로 스택도 필요 없다 */
 .rail-brand {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 5px;
-  font-weight: 800;
-  font-size: 11px;
-  letter-spacing: -0.01em;
-  /* 이름은 표식이지 메뉴가 아니다 — 흰 글자로 두면 바로 아래 탭 이름들보다 앞으로 나온다 */
-  color: var(--text-3);
-  margin-bottom: 14px;
+  justify-content: center;
+  margin-bottom: 16px;
   user-select: none;
 }
 /* 앱 표식 — **표면이 아니라 모양이 유리다**(icons.tsx 의 amber-glass 그라디언트).
