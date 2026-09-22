@@ -5775,18 +5775,22 @@ body.resizing-tt * {
   background: transparent;
   box-shadow: 0 0 0 2px var(--text-3);
 }
-/* 오늘 = 링. 날짜를 옮겨 다녀도 늘 그 자리에 있는 표식이라 **테두리**가 맞다 —
-   채움은 "지금 보고 있는 것"의 몫이다. 글자는 --text 그대로라 대비 걱정이 없다
-   (예전 primary 필 위의 --primary-fg 는 테마마다 뒤집혀 늘 조마조마했다). */
+/* 오늘 = **유리 링**. 날짜를 옮겨 다녀도 늘 그 자리에 있는 표식이라 테두리가 맞다 —
+   채움은 "지금 보고 있는 것"의 몫이다. 단, --text 로 그은 단단한 흰 원은 유리가 아니라
+   그어 놓은 선이었다(브랜드 마크에서 걷어낸 것과 같은 것). 유리 두께로 그린다:
+   테는 --glass-edge-accent, 위쪽에 빛 한 줄, 채움은 없다.
+   글자는 --text 그대로라 대비 걱정이 없다(예전 primary 필 위의 --primary-fg 는
+   테마마다 뒤집혀 늘 조마조마했다). */
 .cal-cell.today .cal-num {
-  box-shadow: inset 0 0 0 1.5px var(--text);
+  box-shadow: inset 0 0 0 1.5px var(--glass-edge-accent), var(--glass-sheen-hover);
   color: var(--text);
   font-weight: 700;
 }
-/* 오늘이면서 고른 날 — 링(오늘) 위에 유리(선택)가 들어온다. 둘 다 보여야 한다 */
+/* 오늘이면서 고른 날 — 유리 링(오늘) 안에 유리 필(선택)이 들어온다. 둘 다 보여야 한다 */
 .cal-cell.today.selected .cal-num {
   background: var(--glass-fill-accent);
-  box-shadow: var(--glass-sheen-hover), var(--glass-seat), inset 0 0 0 1.5px var(--text);
+  box-shadow: inset 0 0 0 1.5px var(--glass-edge-accent), var(--glass-sheen-hover),
+    var(--glass-seat);
 }
 /* 월/연 선택 판 — 12칸 3×4 (연은 앞뒤 한 칸이 옆 판의 해라 10+2). 일 그리드와 같은
    .cal-grid 위에 열 수만 바꾼다. 총 높이 361px = 요일 헤더 25px + 6행 × 56px 로, 판을
@@ -5825,13 +5829,14 @@ body.resizing-tt * {
   font-weight: 600;
 }
 .cal-pick.today {
-  box-shadow: inset 0 0 0 1.5px var(--text);
+  box-shadow: inset 0 0 0 1.5px var(--glass-edge-accent), var(--glass-sheen-hover);
   color: var(--text);
   font-weight: 700;
 }
 .cal-pick.today.selected {
   background: var(--glass-fill-accent);
-  box-shadow: var(--glass-sheen-hover), var(--glass-seat), inset 0 0 0 1.5px var(--text);
+  box-shadow: inset 0 0 0 1.5px var(--glass-edge-accent), var(--glass-sheen-hover),
+    var(--glass-seat);
 }
 /* 날짜 점: 미완료 남음=빈 점(아웃라인), 전부 완료=채운 점 (.dot 문법과 동일) */
 .cal-dot {
