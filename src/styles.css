@@ -306,13 +306,16 @@ select {
   font-weight: 800;
   font-size: 11px;
   letter-spacing: -0.01em;
-  color: var(--text);
+  /* 이름은 표식이지 메뉴가 아니다 — 흰 글자로 두면 바로 아래 탭 이름들보다 앞으로 나온다 */
+  color: var(--text-3);
   margin-bottom: 14px;
   user-select: none;
 }
+/* 앱 표식 — **표면이 아니라 모양이 유리다**(icons.tsx 의 amber-glass 그라디언트).
+   타일도 테두리도 없다: 판을 깔면 그건 컨트롤의 문법이라 표식이 활성 탭처럼 보이고,
+   흰 1px 테는 유리가 아니라 그어 놓은 선으로 읽힌다. */
 .rail-brand svg {
-  border-radius: 7px; /* 스쿼클 모서리와 일치 — 서브픽셀 삐져나옴 방지 */
-  box-shadow: var(--shadow-sm);
+  color: var(--text-2);
 }
 /* 설정의 왼쪽 내비(.set-nav-item)와 **같은 물건**이다 — 둘 다 세로로 선 최상위 이동 목록이라
    같은 문법을 쓴다: 테두리가 없으니 평소엔 유리가 없고, 면이 될 때만(hover, 활성) 유리가 된다.

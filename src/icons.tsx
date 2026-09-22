@@ -381,19 +381,37 @@ export function AmberMark({
       fill="none"
       aria-hidden="true"
     >
-      <rect x="0" y="0" width="32" height="32" rx="7.2" fill="var(--primary-bg)" />
+      {/* 판을 그리지 않는다. **물방울 자체가 유리다** — 뒤에 타일을 깔면 그건 컨트롤의 문법이고
+          (활성 탭과 같은 면), 표식이 선택된 탭처럼 보인다. 여기서는 모양이 곧 표면이다:
+          안은 옅은 채움, 위쪽에 빛 한 줄, 윤곽은 currentColor 획. 테두리 사각형은 없다. */}
+      <defs>
+        <linearGradient id="amber-glass" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="currentColor" stopOpacity="0.28" />
+          <stop offset="0.52" stopColor="currentColor" stopOpacity="0.08" />
+          <stop offset="1" stopColor="currentColor" stopOpacity="0.2" />
+        </linearGradient>
+      </defs>
       <path
         d="M 16 8.8
            C 13.9 11.6 11.8 14.96 11.8 18.74
            C 11.8 21.06 13.68 22.94 16 22.94
            C 18.32 22.94 20.2 21.06 20.2 18.74
            C 20.2 14.96 18.1 11.6 16 8.8 Z"
-        stroke="var(--primary-fg)"
+        fill="url(#amber-glass)"
+        stroke="currentColor"
         strokeWidth="1.5"
         strokeLinejoin="round"
         strokeLinecap="round"
       />
-      <circle cx="16" cy="18.2" r="1.15" fill="var(--primary-fg)" />
+      {/* 유리에 걸리는 빛 한 줄 — 왼쪽 위 어깨. 물방울을 '속이 빈 선'이 아니라 '덩어리'로 만든다 */}
+      <path
+        d="M 14.6 12.4 C 13.5 14.2 12.8 16.1 12.8 17.9"
+        stroke="currentColor"
+        strokeOpacity="0.5"
+        strokeWidth="1.1"
+        strokeLinecap="round"
+      />
+      <circle cx="16" cy="18.2" r="1.15" fill="currentColor" />
     </svg>
   );
 }
