@@ -841,7 +841,10 @@ export function NoteCommentLayer({
                     ? cm.followUps[cm.followUps.length - 1].createdAt
                     : cm.createdAt;
                 return (
-                  <div className="cmt-list-row" key={cm.id}>
+                  <div
+                    className={`cmt-list-row ${anchors.missing.has(cm.id) ? "gone" : ""}`}
+                    key={cm.id}
+                  >
                     <button
                       className="cmt-list-main"
                       onClick={() => openThread(cm.id, true)}
@@ -850,15 +853,20 @@ export function NoteCommentLayer({
                       <span className="cmt-anchor">“{cm.anchor}”</span>
                       <span className="cmt-list-meta">
                         {timeAgo(last)}
-                        {turnCount > 1 && (
-                          <> · {t("notes.qlist.turns", { n: turnCount })}</>
-                        )}
                         {anchors.missing.has(cm.id) && (
                           <span
                             className="cmt-list-gone"
                             title={t("notes.qlist.missingTip")}
                           >
                             {t("notes.qlist.missing")}
+                          </span>
+                        )}
+                        {/* 이어 물은 게 있을 때만 — 하나뿐인 문답에 "문답 1" 을 달면
+                            모든 카드에 같은 딱지가 붙어 아무것도 구분하지 못한다 */}
+                        {turnCount > 1 && (
+                          <span className="cmt-list-turns">
+                            <Icon name="message" size={9} />
+                            {turnCount}
                           </span>
                         )}
                       </span>
