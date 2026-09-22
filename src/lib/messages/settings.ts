@@ -31,6 +31,8 @@ const ko = {
   "settings.ai.searching": "설치된 AI CLI 를 찾는 중…",
   "settings.ai.notFound":
     "설치된 AI CLI 를 찾지 못했어요. claude · codex 중 하나를 설치하고 로그인한 뒤 다시 감지하세요.",
+  "settings.ai.advanced": "경로 직접 지정",
+  "settings.ai.advancedHint": "감지가 못 찾거나 다른 설치본을 쓰고 싶을 때만 열면 돼요.",
   "settings.ai.pathLabel": "{name} 경로",
   "settings.ai.test": "연결 테스트",
   "settings.ai.testOk": "연결 성공 — {version}",
@@ -175,6 +177,8 @@ const en: Record<keyof typeof ko, string> = {
   "settings.ai.searching": "Looking for installed AI CLIs…",
   "settings.ai.notFound":
     "Couldn't find an installed AI CLI. Install and log in to one of claude · codex, then detect again.",
+  "settings.ai.advanced": "Set the path myself",
+  "settings.ai.advancedHint": "Only needed when detection misses it or you want a different install.",
   "settings.ai.pathLabel": "{name} path",
   "settings.ai.test": "Test connection",
   "settings.ai.testOk": "Connected — {version}",

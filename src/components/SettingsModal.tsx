@@ -126,6 +126,8 @@ export function SettingsModal({
     connection: null,
   });
   const [dbDelete, setDbDelete] = useState<DbConnection | null>(null);
+  /** 경로 직접 지정을 펼쳤나 — 감지가 실패했으면 처음부터 열어 둔다(그때는 꼭 봐야 한다) */
+  const [pathOpen, setPathOpen] = useState(false);
   /** 저장 프롬프트 삭제도 한 번 더 묻는다 — 직접 쓴 글이고 되돌릴 길이 없다(§3) */
   const [promptDel, setPromptDel] = useState<{ id: string; name: string } | null>(null);
   const [dbPw, setDbPw] = useState<DbConnection | null>(null);
@@ -322,7 +324,11 @@ export function SettingsModal({
   async function redetect() {
     setDetecting(true);
     try {
-      setDetected(await detectAiClis());
+      const found = await detectAiClis();
+      setDetected(found);
+      // 아무것도 못 찾았으면 경로 칸을 **열어 둔다** — 그때는 접어 둘 게 아니라
+      // 유일하게 할 수 있는 일이다. 찾았을 때만 접는 게 이 접기의 뜻이다.
+      if (found.length === 0) setPathOpen(true);
     } finally {
       if (alive.current) setDetecting(false);
     }
@@ -601,9 +607,22 @@ export function SettingsModal({
             )}
 
             {provider && (
-              <div className="set-sub">
+              <>
+                {/* 경로는 접어 둔다 — 감지가 찾아 준 값이라 보통 영영 안 연다.
+                    펼쳐 두면 한 번도 안 만지는 칸이 이 구획에서 가장 큰 물건이 된다. */}
+                <button
+                  className="set-more"
+                  aria-expanded={pathOpen}
+                  onClick={() => setPathOpen((v) => !v)}
+                >
+                  <Icon name="chevron-right" size={13} />
+                  {t("settings.ai.advanced")}
+                </button>
+                {pathOpen && (
+                  <div className="set-sub">
                 <SetField
                   label={t("settings.ai.pathLabel", { name: PROVIDER_LABELS[provider] })}
+                  hint={t("settings.ai.advancedHint")}
                 >
                   <SetInline>
                     <input
@@ -627,7 +646,9 @@ export function SettingsModal({
                     </div>
                   )}
                 </SetField>
-              </div>
+                  </div>
+                )}
+              </>
             )}
           </SetSection>
           )}

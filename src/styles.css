@@ -1162,10 +1162,41 @@ body.resizing-col .pane-resizer::after {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 0 18px;
 }
-/* 딸린 칸 — 고른 것에 매달린 보조 설정(경로처럼 평소엔 건드릴 일 없는 것).
-   왼쪽 선 하나로 "위 선택의 세부"임을 말한다. 구획을 하나 더 파면 급이 같아져 버린다. */
+/* 평소엔 접어 두는 칸 — 감지가 잘 되면 영영 열 일이 없는 것(경로 지정).
+   예전엔 펼쳐진 채 전체 폭 입력칸이라 **이 구획에서 가장 큰 물건**이었다: 한 번도 안 만지는
+   설정이 모델과 언어보다 커 보였다. 여는 손잡이는 글자 한 줄이고, 열었을 때만 자리를 먹는다. */
+.set-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 14px;
+  padding: 3px 6px 3px 0;
+  border: none;
+  background: none;
+  color: var(--text-3);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.12s;
+}
+.set-more:hover {
+  color: var(--text-2);
+}
+.set-more:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: 5px;
+}
+.set-more svg {
+  color: var(--text-3);
+  transition: transform 0.16s var(--ease-out);
+}
+.set-more[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
 .set-sub {
-  margin-top: 12px;
+  margin-top: 10px;
   padding-left: 14px;
   border-left: 2px solid var(--border);
 }
@@ -4913,6 +4944,12 @@ html.widget-root #root {
   grid-area: name;
   font-weight: 700;
   font-size: 13.5px;
+  color: var(--text-2);
+  transition: color 0.12s;
+}
+/* 고른 것만 또렷하다 — 유리 농도만으로는 둘이 거의 같아 보였다(§3: 상태는 명암으로도 말한다) */
+.onb-card.selected .onb-name {
+  color: var(--text);
 }
 .onb-version {
   grid-area: version;
