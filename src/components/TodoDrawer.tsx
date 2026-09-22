@@ -86,10 +86,12 @@ export function TodoDrawer({
   const now = Date.now();
   const roots = parkedRoots(rows);
   const kidCount = (id: number) => rows.filter((r) => r.parent_id === id).length;
-  if (!open) return null;
+  // 닫혀도 **언마운트하지 않는다** — 사라지는 순간이 있어야 닫히는 모션이 있다.
+  // 접힌 동안에는 inert 로 탭 순서와 클릭에서 통째로 빠진다(보이지 않는 걸 누를 수 없게).
   const busy = suggest.phase === "running";
   return (
-    <aside className="parked">
+    <aside className="parked" data-open={open} aria-hidden={!open} inert={!open || undefined}>
+      <div className="parked-inner">
       <div className="parked-head">
         <div className="parked-tabs" role="tablist">
           <button
@@ -198,6 +200,7 @@ export function TodoDrawer({
           {roots.length > 0 && <p className="parked-note">{t("todos.parked.hint")}</p>}
         </>
       )}
+      </div>
     </aside>
   );
 }

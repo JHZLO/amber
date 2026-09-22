@@ -91,6 +91,8 @@ const TT_VIEW_KEY = "amber.todo.tt-view";
 const UNIT_KEY = "amber.todo.unit";
 /** '언젠가' 서랍을 열어 뒀는가 — 창 폭이 기기마다 달라 앱 설정이 아니라 로컬에 둔다 */
 const PARKED_KEY = "amber.todo.parked-open";
+/** 서랍 폭 — 여기와 `.parked-inner` 가 같은 값을 써야 접히는 동안 속이 안 줄어든다 */
+const PARKED_W = 296;
 
 /** 뷰별 블록 로드 범위 [from, to] — 일=선택일, 주=일~토, 월=그 달 1일~말일 */
 function ttRange(view: TtView, selected: string): [string, string] {
@@ -1050,7 +1052,15 @@ export function TodoView({
   }
 
   return (
-    <div className="body todo-body" {...pane.bodyProps}>
+    <div
+      className="body todo-body"
+      {...pane.bodyProps}
+      style={{
+        ...pane.bodyProps.style,
+        // 서랍 칸을 **명시**해야 여닫기를 전이할 수 있다 — 암묵 트랙은 전이할 대상이 없다
+        gridTemplateColumns: `${pane.width}px 1fr ${parkedOpen ? PARKED_W : 0}px`,
+      }}
+    >
       <aside className="list todo-cal-pane">
         <MiniCalendar
           year={cursor.year}

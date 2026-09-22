@@ -571,6 +571,15 @@ select {
   grid-template-columns: minmax(300px, 380px) 1fr;
   min-height: 0;
 }
+/* 서랍 여닫기 — 트랙 하나만 움직인다(§9.2 grid 예외). 나머지 칸은 알아서 따라 밀린다 */
+.todo-body {
+  transition: grid-template-columns 0.24s var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .todo-body {
+    transition: none;
+  }
+}
 .list {
   border-right: 1px solid var(--border);
   overflow-y: auto;
@@ -1821,13 +1830,24 @@ body.resizing-col .pane-resizer::after {
   grid-row: 1;
   grid-column: 3;
 }
+/* 서랍은 **그리드 칸이 열리고 닫힌다**(.todo-body 의 3번째 트랙 0 ↔ 296px).
+   §9.2 의 "펼침은 grid 트랙으로" 와 같은 수법이다 — 높이/폭을 재지 않고 트랙만 바꾸므로
+   안의 내용은 다시 흐르지 않는다. 그래서 속은 296px 로 **고정**하고 칸이 그걸 깎아 낸다:
+   폭을 같이 줄이면 글자가 매 프레임 줄바꿈되어 닫히는 내내 글이 출렁인다. */
 .parked {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface);
+}
+.parked-inner {
   width: 296px;
+  height: 100%;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* 선도 함께 접힌다 — .parked 에 두면 칸이 0 이어도 1px 이 남아 줄이 하나 그어진다 */
   border-left: 1px solid var(--border);
-  background: var(--surface);
 }
 .parked-head {
   display: flex;
