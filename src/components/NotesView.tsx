@@ -1386,7 +1386,7 @@ export function NotesView({
               {t("notes.keepEditing")}
             </button>
             <button
-              className="btn btn-sm"
+              className="btn btn-sm btn-danger-ghost"
               onClick={() => {
                 const p = conflict?.path;
                 setConflict(null);

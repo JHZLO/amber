@@ -1349,12 +1349,21 @@ body.resizing-col .pane-resizer::after {
   font-size: 12.5px;
   color: var(--text-3);
 }
+/* 성공은 초록이다 — §2 '색은 결과를 말할 때만'. 여기만 무채색으로 두었더니 같은 '됐다'를
+   .ok-note 와 .db-dot.ok 는 초록으로, 이 줄은 회색으로 말해 앱 안에서 뜻이 갈렸다. */
 .set-auth-state.ok {
-  color: var(--text-2);
+  color: var(--success-text);
 }
+.set-auth-state.ok svg {
+  color: var(--success);
+}
+/* 만료 = 내 손이 필요한 상태(실패가 아니다) — 그래서 danger 가 아니라 warning 이다(§2) */
 .set-auth-state.warn {
   color: var(--text);
   font-weight: 600;
+}
+.set-auth-state.warn svg {
+  color: var(--warning);
 }
 /* 선택된 프로바이더의 경로·모델 — 카드 아래에 점선으로 구분해 딸린 설정임을 보인다 */
 .set-provider {
@@ -6663,9 +6672,10 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   padding: 2px 9px;
   white-space: nowrap;
 }
+/* 붙었다 = 초록. 면적이 작은 자리라 선과 글자에만 쓴다(danger 3종 세트와 같은 나눔) */
 .rep-status.ok {
-  color: var(--text-2);
-  border-color: var(--border-strong);
+  color: var(--success-text);
+  border-color: var(--success);
 }
 .rep-src-body {
   padding: 12px;

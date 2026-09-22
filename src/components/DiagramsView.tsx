@@ -1624,7 +1624,7 @@ export function DiagramsView({
               {t("common.unsaved.keep")}
             </button>
             <button
-              className="btn btn-sm"
+              className="btn btn-sm btn-danger-ghost"
               onClick={() => {
                 const p = conflict?.path;
                 setConflict(null);
