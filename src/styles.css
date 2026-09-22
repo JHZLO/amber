@@ -4376,35 +4376,74 @@ html.widget-root #root {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-/* 문답 스레드 — 패널 안에서 이 영역만 스크롤 */
+/* 문답 스레드 — 패널 안에서 이 영역만 스크롤.
+ *
+ * 메신저 형태다: **방향이 곧 화자**다. 오른쪽에서 온 것은 내가 물은 것, 왼쪽은 답이다.
+ * 그래서 질문 앞의 말풍선 아이콘도, 턴을 가르던 점선도 없앴다 — 둘 다 "여기서부터 누가
+ * 말한다"를 말하려던 물건인데, 자리와 색이 이미 그걸 말하고 있어 남으면 중복이다.
+ *
+ * 말풍선은 §2 유리를 그대로 쓴다: 내 말은 강조 유리(밝게), 답은 면 유리(차분하게).
+ * 둘 다 **앉은 유리**라 blur 가 없다 — 스레드 안에서 서로 떠다니면 안 된다. */
 .cmt-thread {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 2px 1px;
 }
-.cmt-turn + .cmt-turn {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--border);
+.cmt-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* 꼬리 — 말풍선이 나온 쪽 모서리만 각지게. 한 겹으로 '어디서 왔나'를 말한다 */
+.cmt-q,
+.cmt-a {
+  max-width: 88%;
+  padding: 9px 12px;
+  font-size: 13px;
+  line-height: 1.62;
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
+  overflow-wrap: anywhere;
 }
 .cmt-q {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-.cmt-q svg {
-  flex-shrink: 0;
-  margin-top: 3px;
-  color: var(--text-3);
+  align-self: flex-end;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--glass-fill-accent);
+  border-color: var(--glass-edge-accent);
+  color: var(--text);
+  /* 굵게 하지 않는다 — 자리와 밝기가 이미 '내 말'이라고 말했다. 여기서 굵기까지 더하면
+     세 번 말하는 셈이고, 스레드에서 내 질문만 소리치게 된다. */
+  font-weight: 500;
 }
 .cmt-a {
-  font-size: 13px;
+  align-self: flex-start;
+  border-radius: 14px 14px 14px 4px;
+  background: var(--glass-fill);
+  color: var(--text);
+}
+/* 말풍선 안쪽 첫·끝 여백은 패딩이 맡는다 — 마크다운 p 여백이 겹쳐 위아래가 뚱뚱해졌다 */
+.cmt-a > *:first-child {
+  margin-top: 0;
+}
+.cmt-a > *:last-child {
+  margin-bottom: 0;
 }
 .cmt-a p {
   margin: 6px 0;
+}
+/* 코드블록처럼 폭을 고집하는 것은 말풍선 밖으로 새지 않게 가둔다 */
+.cmt-a pre,
+.cmt-a .code-win,
+.cmt-a table {
+  max-width: 100%;
+}
+/* 답이 길면 말풍선이 거의 꽉 찬다 — 긴 글을 88% 에 가두면 줄이 잘게 쪼개져 읽기 나쁘다 */
+.cmt-a.markdown {
+  max-width: 96%;
 }
 /* 말풍선 안의 대기 한 줄 — 바가 없다(§9.1: 한 대기 상태에 모션은 하나, 그 하나는 본문의 형광펜).
    AiThinking compact 가 차지하던 높이와 비슷하게 잡아 표시가 바뀔 때 말풍선이 튀지 않게 한다. */
@@ -4413,15 +4452,21 @@ html.widget-root #root {
   font-size: 12.5px;
   color: var(--text-3);
 }
+.cmt-a > .cmt-waiting {
+  padding: 0;
+}
 
 /* 후속 질문 입력 줄 (스레드 아래 고정) */
 /* 답변마다 붙는 '고쳐 쓰기' — 평소엔 조용히 두고 hover 에서 드러낸다(매 답변에 버튼이
    또렷하면 스레드가 시끄러워진다). 지시 입력줄은 후속 질문 줄과 같은 치수를 쓴다. */
 .cmt-turn-actions {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 2px;
-  min-height: 20px;
+  /* 이 동작은 **답**에 하는 일이라 답과 같은 쪽에 선다. 오른쪽에 두면 내가 한 말에
+     달린 것처럼 읽힌다(메신저에서 자리는 곧 화자다). */
+  justify-content: flex-start;
+  margin-top: -2px;
+  padding-left: 4px;
+  min-height: 18px;
 }
 .cmt-turn-act {
   display: inline-flex;

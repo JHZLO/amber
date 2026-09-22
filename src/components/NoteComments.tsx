@@ -924,10 +924,8 @@ export function NoteCommentLayer({
               <div className="cmt-thread" ref={threadRef}>
                 {turns.map((turnItem, i) => (
                   <div className="cmt-turn" key={i}>
-                    <div className="cmt-q">
-                      <Icon name="message" size={12} />
-                      {turnItem.question}
-                    </div>
+                    {/* 아이콘이 없다 — 오른쪽에 붙은 말풍선이 이미 '내가 물었다'를 말한다 */}
+                    <div className="cmt-q">{turnItem.question}</div>
                     <div className="cmt-a markdown">
                       <Markdown>{turnItem.answer}</Markdown>
                     </div>
@@ -988,10 +986,7 @@ export function NoteCommentLayer({
                 ))}
                 {pendingQ?.id === viewComment.id && (
                   <div className="cmt-turn">
-                    <div className="cmt-q">
-                      <Icon name="message" size={12} />
-                      {pendingQ.q}
-                    </div>
+                    <div className="cmt-q">{pendingQ.q}</div>
                     <div className="cmt-a">
                       <CmtWaiting label={t("notes.cmt.thinking")} />
                     </div>
