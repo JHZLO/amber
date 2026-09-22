@@ -69,6 +69,29 @@ function highlightRegistry(): HighlightRegistry | null {
  *  도는 것이 둘이라 어디를 봐야 할지 흐려지고, 정작 "어느 문장인가"를 말하는 쪽이 묻힌다.
  *  글자는 남긴다 — 형광펜은 `aria-hidden` 이라 이 줄이 유일한 라이브 리전이고,
  *  구간이 화면 밖으로 스크롤됐을 때 기다리는 중이라고 말해 주는 것도 여기뿐이다. */
+/** 말풍선 한 개 — 아바타에서 뻗어 나온다.
+ *  `who` 가 자리(왼/오), 색(면/강조 유리), 꼬리 방향, 아이콘을 한꺼번에 정한다. 호출부가
+ *  네 가지를 따로 맞추게 두면 언젠가 하나가 어긋나 '누가 말했는지'가 갈라진다. */
+function CmtMsg({
+  who,
+  markdown,
+  children,
+}: {
+  who: "me" | "ai";
+  markdown?: boolean;
+  children: React.ReactNode;
+}) {
+  const me = who === "me";
+  return (
+    <div className={`cmt-msg ${me ? "me" : "ai"}`}>
+      <span className="cmt-avatar" aria-hidden="true">
+        <Icon name={me ? "user" : "sparkles"} size={12} />
+      </span>
+      <div className={`${me ? "cmt-q" : "cmt-a"} ${markdown ? "markdown" : ""}`}>{children}</div>
+    </div>
+  );
+}
+
 function CmtWaiting({ label }: { label: string }) {
   return (
     <div className="cmt-waiting" role="status" aria-live="polite">
@@ -948,11 +971,10 @@ export function NoteCommentLayer({
               <div className="cmt-thread" ref={threadRef}>
                 {turns.map((turnItem, i) => (
                   <div className="cmt-turn" key={i}>
-                    {/* 아이콘이 없다 — 오른쪽에 붙은 말풍선이 이미 '내가 물었다'를 말한다 */}
-                    <div className="cmt-q">{turnItem.question}</div>
-                    <div className="cmt-a markdown">
+                    <CmtMsg who="me">{turnItem.question}</CmtMsg>
+                    <CmtMsg who="ai" markdown>
                       <Markdown>{turnItem.answer}</Markdown>
-                    </div>
+                    </CmtMsg>
                     {/* 고쳐 쓰기 — 답변을 새 문답으로 덧붙이지 않고 **이 자리에서 교체**한다.
                         "한국어로 바꿔줘", "더 짧게" 처럼 나온 답을 다듬는 용도. */}
                     {revising === i ? (
@@ -1010,10 +1032,10 @@ export function NoteCommentLayer({
                 ))}
                 {pendingQ?.id === viewComment.id && (
                   <div className="cmt-turn">
-                    <div className="cmt-q">{pendingQ.q}</div>
-                    <div className="cmt-a">
+                    <CmtMsg who="me">{pendingQ.q}</CmtMsg>
+                    <CmtMsg who="ai">
                       <CmtWaiting label={t("notes.cmt.thinking")} />
-                    </div>
+                    </CmtMsg>
                   </div>
                 )}
               </div>

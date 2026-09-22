@@ -35,6 +35,7 @@ export type IconName =
   | "moon"
   | "workflow"
   | "message"
+  | "user"
   | "calendar-check"
   | "copy"
   | "grip"
@@ -271,6 +272,14 @@ const PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   message: <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />,
+  // 문답 스레드의 '나' 표식 — AI 쪽(sparkles)과 짝이다. 어깨선을 둥글게 닫아 24px 원 안에서
+  // 아래가 잘린 것처럼 보이지 않게 했다
+  user: (
+    <>
+      <circle cx="12" cy="8" r="3.6" />
+      <path d="M5.4 20a6.6 6.6 0 0 1 13.2 0" />
+    </>
+  ),
   // 마크다운 알림(NOTE/TIP/WARNING…) 표식 — 색을 못 쓰는 판이라 아이콘이 종류를 나른다
   info: (
     <>

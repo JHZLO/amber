@@ -4411,9 +4411,10 @@ html.widget-root #root {
 }
 /* 문답 스레드 — 패널 안에서 이 영역만 스크롤.
  *
- * 메신저 형태다: **방향이 곧 화자**다. 오른쪽에서 온 것은 내가 물은 것, 왼쪽은 답이다.
- * 그래서 질문 앞의 말풍선 아이콘도, 턴을 가르던 점선도 없앴다 — 둘 다 "여기서부터 누가
- * 말한다"를 말하려던 물건인데, 자리와 색이 이미 그걸 말하고 있어 남으면 중복이다.
+ * 메신저 형태다: 말풍선이 **아바타에서 뻗어 나온다**. 오른쪽 사람 아이콘에서 나온 것은 내가
+ * 물은 것, 왼쪽 sparkles 에서 나온 것은 AI 의 답이다. 꼬리(각진 모서리)는 **위쪽**에 둬서
+ * 아바타를 가리킨다 — 긴 답에서 아바타는 첫 줄 옆에 서므로 꼬리도 거기 있어야 한다.
+ * 턴을 가르던 점선은 없앴다: 아바타와 간격이 이미 "여기서부터 다른 사람"을 말한다.
  *
  * 말풍선은 §2 유리를 그대로 쓴다: 내 말은 강조 유리(밝게), 답은 면 유리(차분하게).
  * 둘 다 **앉은 유리**라 blur 가 없다 — 스레드 안에서 서로 떠다니면 안 된다. */
@@ -4433,10 +4434,40 @@ html.widget-root #root {
   flex-direction: column;
   gap: 11px;
 }
-/* 꼬리 — 말풍선이 나온 쪽 모서리만 각지게. 한 겹으로 '어디서 왔나'를 말한다 */
+/* 한 줄 = 아바타 + 말풍선. 아바타는 **첫 줄에 맞춰 선다**(bottom 이 아니라 top) —
+   답이 길면 아래에 붙은 아바타는 말풍선 한참 뒤에서 혼자 떠 있게 된다. */
+.cmt-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.cmt-msg.me {
+  flex-direction: row-reverse;
+}
+.cmt-avatar {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-top: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-fill);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
+  color: var(--text-3);
+}
+/* 내 아바타는 내 말풍선과 같은 농도 — 한 사람의 것은 한 톤으로 읽혀야 한다 */
+.cmt-msg.me .cmt-avatar {
+  background: var(--glass-fill-accent);
+  border-color: var(--glass-edge-accent);
+  color: var(--text-2);
+}
+/* 꼬리 — 아바타 쪽 **위** 모서리만 각지게. 한 겹으로 '누구에게서 나왔나'를 말한다 */
 .cmt-q,
 .cmt-a {
-  max-width: 88%;
+  max-width: calc(100% - 20px);
   padding: 11px 14px;
   font-size: 13px;
   line-height: 1.68;
@@ -4445,8 +4476,10 @@ html.widget-root #root {
   overflow-wrap: anywhere;
 }
 .cmt-q {
-  align-self: flex-end;
-  border-radius: 14px 14px 4px 14px;
+  /* 답보다 한 뼘 좁게 — 반대쪽에 여백이 남아야 '한쪽으로 몰린 말'로 읽힌다.
+     답과 같은 폭을 주면 긴 질문에서 좌우가 꽉 차 메신저의 비대칭이 사라진다. */
+  max-width: calc(100% - 44px);
+  border-radius: 14px 4px 14px 14px;
   background: var(--glass-fill-accent);
   border-color: var(--glass-edge-accent);
   color: var(--text);
@@ -4455,8 +4488,7 @@ html.widget-root #root {
   font-weight: 500;
 }
 .cmt-a {
-  align-self: flex-start;
-  border-radius: 14px 14px 14px 4px;
+  border-radius: 4px 14px 14px 14px;
   background: var(--glass-fill);
   color: var(--text);
 }
@@ -4478,7 +4510,7 @@ html.widget-root #root {
 }
 /* 답이 길면 말풍선이 거의 꽉 찬다 — 긴 글을 88% 에 가두면 줄이 잘게 쪼개져 읽기 나쁘다 */
 .cmt-a.markdown {
-  max-width: 96%;
+  max-width: 100%;
 }
 /* 말풍선 안의 대기 한 줄 — 바가 없다(§9.1: 한 대기 상태에 모션은 하나, 그 하나는 본문의 형광펜).
    AiThinking compact 가 차지하던 높이와 비슷하게 잡아 표시가 바뀔 때 말풍선이 튀지 않게 한다. */
@@ -4500,7 +4532,8 @@ html.widget-root #root {
      달린 것처럼 읽힌다(메신저에서 자리는 곧 화자다). */
   justify-content: flex-start;
   margin-top: -4px;
-  padding-left: 4px;
+  /* 아바타(24) + 간격(8) 만큼 들여 답 말풍선의 왼쪽 선에 맞춘다 */
+  padding-left: 36px;
   min-height: 18px;
 }
 .cmt-turn-act {
