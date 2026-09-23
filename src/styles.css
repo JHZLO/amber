@@ -5254,14 +5254,21 @@ html.widget-root #root {
 }
 
 /* ---- 데이 타임테이블 (캘린더 하단, 구글 캘린더식 time-blocking — DayTimetable.tsx) ---- */
+/* 시간표도 **판 위의 물건**이다(달력과 같은 규칙) — 예전엔 선 하나로 위쪽과 갈라 둔 열린
+   영역이라, 빈 하루엔 시간 눈금만 허공에 떠 있었다. 달력과 나란한 카드로 세운다:
+   왼쪽 판이 "달력 / 시간표" 두 덩어리로 읽힌다. 모서리가 둥그니 스크롤도 안에서 잘린다. */
 .day-tt {
   --tt-hour: 44px; /* px/시간 — DayTimetable.tsx TT_HOUR_H 와 동기 */
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  margin-top: 12px;
-  border-top: 1px solid var(--border);
+  margin: 12px 14px 14px;
+  overflow: hidden;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  background: var(--glass-fill);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
 }
 /* 섹션 헤더 밴드 — 캘린더↔시간축 전환을 알리는 조용한 구분(eyebrow 라벨 + 계획 합계).
    스크롤 콘텐츠가 이 밴드 밑으로 지나가도록 border-bottom 으로 뷰포트를 프레임한다. */
@@ -5271,7 +5278,7 @@ html.widget-root #root {
   align-items: center;
   gap: 8px;
   padding: 6px 10px 6px 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-edge);
 }
 .day-tt-label {
   font-size: 11px;
@@ -5386,10 +5393,11 @@ html.widget-root #root {
   bottom: 8px;
   left: 46px;
   right: 10px;
-  border-left: 1px solid var(--border);
+  /* 눈금도 유리 어휘로 — --border 는 판을 가르는 선이고, 이건 판 **안의** 결이다 */
+  border-left: 1px solid var(--glass-edge);
   background: repeating-linear-gradient(
     to bottom,
-    var(--border) 0 1px,
+    var(--glass-edge) 0 1px,
     transparent 1px var(--tt-hour)
   );
 }
@@ -5538,21 +5546,25 @@ html.widget-root #root {
 }
 /* '지금' 라인 — 모노톤(§2: 빨간 선 금지), 좌측 점 + 1px 라인. 좌표(left/width)는
    오늘 컬럼에만 걸치도록 인라인 스타일로 준다(주 뷰에선 1/7 폭). */
+/* 지금 — **점이 말하고 선은 실어 나른다.** 예전엔 --text 로 그은 1px 이 판을 가로질러
+   빈 하루에서 가장 큰 물건이었다(달력의 흰 링과 같은 문제). 선은 옅게 깔고 왼쪽 끝 점만
+   또렷하게 남긴다: 정확한 시각은 점이 가리키고, 선은 그 높이를 오른쪽으로 잇는 역할이다. */
 .tt-now {
   position: absolute;
-  border-top: 1px solid var(--text);
+  border-top: 1px solid var(--glass-edge-accent);
   z-index: 4;
   pointer-events: none;
 }
 .tt-now::before {
   content: "";
   position: absolute;
-  left: -3px;
-  top: -3.5px;
-  width: 6px;
-  height: 6px;
+  left: -3.5px;
+  top: -4px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--text);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 16%, transparent);
 }
 /* 월 뷰 아젠다 — 그 달의 블록을 날짜별로 (읽기 전용, 클릭=날짜 선택) */
 .day-tt-agenda {
