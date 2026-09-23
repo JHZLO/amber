@@ -153,8 +153,7 @@ const ko = {
     "예: Rust 변수와 가변성(mut, shadowing)을 예제 코드와 함께 정리해줘 · 지금 노트에 소유권과의 관계 섹션을 추가해줘…",
   "notes.ai.hint":
     "현재 노트가 비어 있으면 처음부터 작성하고, 내용이 있으면 문체·구조를 보존하며 보강해요. 결과는 에디터 초안으로 들어가니 확인 후 ⌘S로 저장하세요.",
-  "notes.ai.savedPrompts": "내 프롬프트",
-  "notes.ai.presets": "빠른 지시",
+  "notes.ai.addLabel": "지시 더하기",
   "notes.ai.preset1": "이 주제로 처음부터 정리",
   "notes.ai.preset2": "구체적인 예시·코드 추가",
   "notes.ai.preset3": "더 깊고 자세하게",
@@ -345,8 +344,7 @@ const en: Record<keyof typeof ko, string> = {
     "e.g. Cover Rust variables and mutability (mut, shadowing) with example code · Add a section on how this relates to ownership…",
   "notes.ai.hint":
     "An empty note is written from scratch; existing content is expanded while keeping its style and structure. The result becomes an editor draft — review it, then save with ⌘S.",
-  "notes.ai.savedPrompts": "My prompts",
-  "notes.ai.presets": "Quick instructions",
+  "notes.ai.addLabel": "Add to your instruction",
   "notes.ai.preset1": "Write this topic from scratch",
   "notes.ai.preset2": "Add concrete examples and code",
   "notes.ai.preset3": "Go deeper and more detailed",

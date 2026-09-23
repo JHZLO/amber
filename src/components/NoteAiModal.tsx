@@ -291,26 +291,22 @@ export function NoteAiModal({
             />
             <div className="hint">{t("notes.ai.hint")}</div>
           </div>
-          {savedUsable.length > 0 && (
-            <div className="field">
-              <label>{t("notes.ai.savedPrompts")}</label>
-              <div className="chip-row">
-                {savedUsable.map((p) => (
-                  <ChoiceChip
-                    key={p.id}
-                    label={p.label.trim() || p.text.slice(0, 20)}
-                    on={chosen.has(`s:${p.id}`)}
-                    onToggle={() => toggle(`s:${p.id}`)}
-                    icon="sparkles"
-                    peek={{ label: t("notes.ai.promptPeek.open"), onOpen: () => setPeek(p) }}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+          {/* 저장 프롬프트와 기본 지시는 **같은 물건**이다 — 둘 다 켜면 지시문에 덧붙는 칩이고,
+              차이는 "내가 저장했나 / 처음부터 있었나"뿐이다. 라벨 두 개와 줄 두 개로 갈라 두니
+              고를 게 두 배로 보였다. 한 줄로 합치되 **내 것이 앞**에 온다. */}
           <div className="field">
-            <label>{t("notes.ai.presets")}</label>
+            <label>{t("notes.ai.addLabel")}</label>
             <div className="chip-row">
+              {savedUsable.map((p) => (
+                <ChoiceChip
+                  key={p.id}
+                  label={p.label.trim() || p.text.slice(0, 20)}
+                  on={chosen.has(`s:${p.id}`)}
+                  onToggle={() => toggle(`s:${p.id}`)}
+                  icon="sparkles"
+                  peek={{ label: t("notes.ai.promptPeek.open"), onOpen: () => setPeek(p) }}
+                />
+              ))}
               {PRESETS.map((p, i) => (
                 <ChoiceChip
                   key={p}
