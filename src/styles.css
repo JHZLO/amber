@@ -5244,10 +5244,14 @@ html.widget-root #root {
 
 /* ==== 할 일 탭 ==== */
 
+/* 두 카드(달력·시간표)는 **같은 자**를 쓴다 — 좌우 여백은 판이 주고, 폭 상한과 가운데
+   정렬은 카드가 공유한다(--pane-card). 각자 margin 을 들고 있으면 반드시 어긋난다. */
 .todo-cal-pane {
+  --pane-card: 520px;
   display: flex;
   flex-direction: column;
   overflow: hidden; /* 캘린더는 상단 고정, 스크롤은 타임테이블 내부로 위임 */
+  padding: 0 14px 14px;
 }
 .todo-cal-pane .todo-cal {
   flex-shrink: 0;
@@ -5263,7 +5267,9 @@ html.widget-root #root {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  margin: 12px 14px 14px;
+  width: 100%;
+  max-width: var(--pane-card);
+  margin: 12px auto 0;
   overflow: hidden;
   border: 1px solid var(--glass-edge);
   border-radius: var(--radius-lg);
@@ -5643,7 +5649,7 @@ body.resizing-tt * {
    없으면 깊이가 생기지 않는다. 앉은 유리 한 겹으로 면을 만든다(§2). */
 .todo-cal {
   width: 100%;
-  max-width: 520px;
+  max-width: var(--pane-card);
   margin: 14px auto 0; /* 가로 중앙, 상단 정렬 */
   padding: 16px 14px 10px;
   display: flex;
