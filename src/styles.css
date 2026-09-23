@@ -5626,15 +5626,22 @@ body.resizing-tt * {
 }
 /* 좌: 미니 캘린더 — Notion/Linear 풍 미니멀 월. 고정 행 높이라 넓어져도 세로로 안 커지고,
    적정 폭으로 캡 + 가운데 정렬해 화면을 꽉 채우지 않는다. */
+/* 달력은 **판 위에 놓인 하나의 물건**이다. 예전엔 투명한 패딩 블록이라 숫자들이 패널 위에
+   그냥 떠 있었고, 그래서 평평했다 — 날짜에 유리를 입혀도 그 유리가 **어디에 놓였는지**가
+   없으면 깊이가 생기지 않는다. 앉은 유리 한 겹으로 면을 만든다(§2). */
 .todo-cal {
   width: 100%;
   max-width: 520px;
-  margin: 0 auto; /* 가로 중앙, 상단 정렬 */
-  padding: 20px 16px;
+  margin: 14px auto 0; /* 가로 중앙, 상단 정렬 */
+  padding: 16px 14px 10px;
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  background: var(--glass-fill);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
 }
 /* 3분할 그리드 — 좌: 단위 토글, 중앙: 제목, 우: 이동 화살표.
    `1fr auto 1fr` 이라 양옆 컨트롤 폭이 달라도 제목은 판 정중앙에 온다(flex 로는 한쪽으로 밀린다).
@@ -5681,10 +5688,14 @@ body.resizing-tt * {
   box-shadow: var(--focus-ring);
 }
 /* 요일 헤더 + 그리드: minmax(0,1fr) 로 7열이 폭 안에서 항상 균등 분할(좁아도 안 넘침) */
+/* 요일 줄은 머리글이다 — 가는 선 하나로 날짜 판과 나눈다. 그래야 6행이 '표'가 아니라
+   머리글을 가진 한 덩어리로 읽힌다(선을 더 긋지는 않는다 — 칸마다 그으면 스프레드시트다) */
 .cal-dow {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--glass-edge);
 }
 .cal-dow span {
   text-align: center;
