@@ -121,11 +121,6 @@ p { margin: 0 0 16px; color: var(--text-2); }
 .panel-shot img { width: 100%; border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5); }
 .panel-shot.small { display: flex; justify-content: center; }
 .panel-shot.small img { width: min(100%, 460px); }
-.report-card { max-width: 520px; margin: 0 auto; padding: 28px 30px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border-strong); box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5); }
-.report-card h4 { font-family: var(--display); font-size: 22px; letter-spacing: -0.02em; margin: 12px 0 14px; line-height: 1.2; }
-.report-card p { font-size: 15px; margin-bottom: 10px; }
-.report-card b { color: var(--text); font-weight: 600; }
-.report-card .dim { margin-top: 16px; }
 
 /* strata */
 .strata { padding: 140px var(--pad) 120px; max-width: 1360px; margin: 0 auto; }

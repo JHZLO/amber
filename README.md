@@ -112,6 +112,26 @@ changed the file while you had it open, Amber tells you before overwriting.
 <tr>
 <td width="50%" valign="middle">
 
+### ✨ Write with AI
+
+Tell the AI what the note should cover, or leave the box empty and pick from your saved prompts:
+each chip adds one instruction, and the eye icon shows the full prompt before you use it. Point it
+at **reference folders** (a service repo, a docs folder) and it reads them read-only before
+writing. An empty note is written from scratch; an existing one is expanded in its own style and
+structure.
+
+The draft writes **in the background**. Close the window and keep working; a banner, a dot on the
+note in the tree and a dot on the rail tell you when it is ready. The result lands as an editor
+draft you review and save with `⌘S`, never straight into the file.
+
+</td>
+<td width="50%">
+  <img src="docs/assets/ai-write.png" alt="The Write note with AI dialog with an instruction box, saved prompt chips and reference folders" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
 ### 📊 Mermaid diagram studio
 
 Keep ERDs, flowcharts and sequence diagrams as plain `.mmd` files organized in folders. Pan/zoom
@@ -174,7 +194,7 @@ the next free slot with one click.
 </td>
 </tr>
 <tr>
-<td colspan="2" valign="middle">
+<td width="50%" valign="middle">
 
 ### 📋 Daily & weekly reports
 
@@ -191,6 +211,25 @@ you can edit by hand.
 Switch the calendar to **week** and a weekly report rolls that week’s daily reports up into the
 nested plain-text format that pastes cleanly into Notion.
 
+</td>
+<td width="50%">
+  <img src="docs/assets/report.png" alt="A daily report written as summary, done items and notes, under the day's to-do card" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### ⚙️ One settings window
+
+Everything is set in one place, grouped in a sidebar: **AI** (which CLI to use, sign-in status,
+model and response language), **Prompts** (the saved instructions that show up as chips),
+**Daily report** (which sources to read and in what order), **Databases** (connections and their
+status) and **Appearance** (theme and UI language). Backups and the data folder sit at the bottom
+of every tab.
+
+</td>
+<td width="50%">
+  <img src="docs/assets/settings.png" alt="Settings with a sidebar of tabs and the AI tab open, Claude Code connected" width="100%" />
 </td>
 </tr>
 </table>
