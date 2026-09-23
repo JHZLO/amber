@@ -1102,6 +1102,12 @@ export function TodoView({
 
       <section className="detail" ref={detailRef}>
         <PageFind containerRef={detailRef} active={active} />
+        {error && <div className="error-note">{error}</div>}
+
+        {/* 할 일 카드 — 왼쪽의 달력/시간표 카드와 같은 문법이다. **날짜 줄이 카드의 머리 띠**다:
+            달력 카드가 월 제목과 ‹ › 를 카드 안에 두듯, 이 날짜의 제목과 이동도 카드 안에 둔다.
+            카드 밖 맨바닥에 두면 판 위에서 이 줄만 혼자 떠 보인다(카드 판 §7). */}
+        <div className="todo-card">
         <div className="detail-head todo-head">
           <h1 className="detail-title">
             {unit === "week"
@@ -1181,8 +1187,6 @@ export function TodoView({
           )}
         </div>
 
-        {error && <div className="error-note">{error}</div>}
-
         {/* 밀린 할 일은 '오늘 계획의 재료'라 날짜 바로 아래. 입력창과 그 입력이 들어갈 목록
             사이에 끼우면 타이핑한 것이 무관한 블록 아래에 나타나 매핑이 깨진다(DESIGN §7) */}
         {unit === "day" && isToday && overdue.length > 0 && (
@@ -1229,9 +1233,6 @@ export function TodoView({
           </div>
         )}
 
-        {/* 할 일 카드 — 왼쪽의 달력/시간표 카드와 같은 문법이다. 머리 줄이 빠른 추가인 건
-            시간표 카드의 머리 띠와 같은 자리라서다: 카드의 첫 줄은 그 카드에서 하는 일이다. */}
-        <div className="todo-card">
         <div className="todo-quick">
           <span className="todo-quick-ico">
             <Icon name="plus" size={15} />

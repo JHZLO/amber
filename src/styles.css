@@ -2105,7 +2105,7 @@ body.resizing-col .pane-resizer::after {
    예전엔 왼쪽을 각지게 깎고 세로선을 그어 날짜 이동 묶음에 붙여 뒀는데, 유리가 되고 나니
    그 선은 유리 위에 그은 남의 선이 되고 각진 왼쪽만 깨져 보였다. 가르는 일은 공백이 한다. */
 .todo-parked-toggle {
-  margin-left: 16px;
+  margin-left: 8px;
 }
 .todo-parked-toggle.on {
   background: var(--glass-fill-hover), var(--glass-raise);
@@ -6032,19 +6032,56 @@ body.resizing-tt * {
   }
 }
 /* 우: 상세 헤더(날짜 + 이동) — 기본 detail-head 는 flex-start 라 여기선 center + wrap */
-/* 읽는 열의 자(尺) — **패널이 아니라 패널 안의 것들**을 묶는다.
-   `.detail` 은 스크롤 컨테이너다. 여기에 max-width 를 걸면 스크롤바까지 같이 좁아져
-   화면 한가운데 막대가 떠 있고, 그 오른쪽은 아무것도 없는 판이 된다(실제로 그렇게 나왔다).
-   자식들만 묶으면 스크롤바는 창 끝에 남고 내용만 한 열로 선다 — 머리글도 같이 묶이므로
-   [Today ‹ ›] 가 본문에서 떨어져 혼자 떠 있던 것도 함께 풀린다. */
-.todo-body .detail > * {
-  max-width: 880px;
-}
+/* 오른쪽 카드는 **판을 끝까지 채운다**(DESIGN §7 카드 판 - 겉 자). 예전엔 카드에 880px 자를 걸어
+   넓은 창에서 오른쪽에 맨바닥이 남았다 — 선을 걷고 나니 그 빈 띠가 판 하나처럼 보였다.
+   폭은 가운데 손잡이가 정한다: 왼쪽을 넓히면 줄고, 좁히면 늘어난다. */
 .detail-head.todo-head {
   align-items: center;
   flex-wrap: wrap;
   row-gap: 8px;
   margin-bottom: 18px;
+}
+/* 카드의 머리 띠가 된 날짜 줄 (DESIGN §7 카드 판) — 달력 카드의 머리(월 제목 + ‹ ›)와 같은 급.
+   카드 가장자리까지 띠를 펴고 아래 선 하나로 끝낸다. 제목도 판의 제목(23px)이 아니라
+   카드 머리의 제목이라 달력 월 제목 쪽으로 내린다. */
+.todo-card > .todo-head {
+  gap: 4px;
+  min-height: 48px;
+  margin: -4px -14px 0;
+  padding: 8px 10px 8px 18px;
+  border-bottom: 1px solid var(--glass-edge);
+}
+.todo-card > .todo-head .detail-title {
+  margin-right: 6px;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+/* 띠 안의 컨트롤은 **유리를 또 입지 않는다**(유리 위의 유리는 탁하다) — 테두리와 면을 벗긴
+   고스트로 두고, 올렸을 때만 유리가 비친다(.icon-btn.ghost 와 같은 문법). 버튼 다섯 개가
+   각자 테두리를 들고 있던 게 이 줄을 복잡하게 만든 원인이었다. */
+.todo-card > .todo-head .todo-vac .select-trigger,
+.todo-card > .todo-head .todo-nav .btn,
+.todo-card > .todo-head .todo-parked-toggle:not(.on) {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-2);
+}
+.todo-card > .todo-head .todo-vac .select-trigger:hover,
+.todo-card > .todo-head .todo-nav .btn:hover:not(:disabled),
+.todo-card > .todo-head .todo-parked-toggle:not(.on):hover {
+  background: var(--glass-fill-hover);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
+  color: var(--text);
+}
+/* 오늘이면 [오늘]은 누를 게 없다 — 흐린 글자로만 남긴다(자리는 지켜 이동 버튼이 안 흔들린다) */
+.todo-card > .todo-head .todo-nav .btn:disabled {
+  color: var(--text-3);
+  opacity: 0.6;
+}
+.todo-card > .todo-head .todo-vac.on .select-trigger {
+  color: var(--vacation);
 }
 /* 휴가 컨트롤 — 날짜 제목 바로 옆(왼쪽 그룹). 꺼짐/켜짐이 같은 자리·같은 크기의 `Select`
    하나다: 꺼짐 = 표준 트리거(테두리 + surface, hover 는 테두리만 진해짐), 켜짐 = 노랑 필(§2).
@@ -6065,7 +6102,7 @@ body.resizing-tt * {
 .todo-nav {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
 /* 빠른 추가 */
@@ -6493,6 +6530,20 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
 .todo-overdue-inner .todo-row:hover {
   background: var(--surface-2);
 }
+/* 카드 안의 밀린 할 일 — 상자 속 상자가 아니라 날짜 띠와 빠른 추가 사이의 **띠 하나**다 */
+.todo-card > .todo-overdue {
+  margin: 0 -14px;
+  border: none;
+  border-bottom: 1px solid var(--glass-edge);
+  border-radius: 0;
+  background: transparent;
+}
+.todo-card > .todo-overdue .todo-overdue-head {
+  padding: 9px 14px 9px 18px;
+}
+.todo-card > .todo-overdue .todo-overdue-inner .todo-row:hover {
+  background: var(--glass-fill);
+}
 .todo-overdue-actions {
   display: inline-flex;
   align-items: center;
@@ -6604,7 +6655,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   padding: 12px 18px 12px 16px;
   border: none;
   border-bottom: 1px solid var(--glass-edge);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-radius: 0; /* 날짜 띠 아래 두 번째 띠다 — 카드 모서리는 날짜 띠가 갖는다 */
   background: transparent;
   box-shadow: none;
 }
