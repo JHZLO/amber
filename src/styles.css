@@ -5254,7 +5254,7 @@ html.widget-root #root {
   display: flex;
   flex-direction: column;
   overflow: hidden; /* 캘린더는 상단 고정, 스크롤은 타임테이블 내부로 위임 */
-  padding: 0 14px 14px;
+  padding: 0 var(--board-gutter) var(--board-gutter);
 }
 .todo-cal-pane .todo-cal {
   flex-shrink: 0;
@@ -5272,7 +5272,7 @@ html.widget-root #root {
   flex-direction: column;
   width: 100%;
   max-width: var(--pane-card);
-  margin: 12px auto 0;
+  margin: var(--board-gap) auto 0;
   overflow: hidden;
   border: 1px solid var(--glass-edge);
   border-radius: var(--radius-lg);
@@ -5653,7 +5653,7 @@ body.resizing-tt * {
 .todo-cal {
   width: 100%;
   max-width: var(--pane-card);
-  margin: 14px auto 0; /* 가로 중앙, 상단 정렬 */
+  margin: var(--board-gutter) auto 0; /* 가로 중앙, 상단 정렬 */
   padding: 16px 14px 10px;
   display: flex;
   flex-direction: column;
@@ -6454,7 +6454,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
 }
 /* 그날 배운 개념도 같은 판 위의 한 장이다 */
 .todo-body .todo-learned {
-  margin-top: 14px;
+  margin-top: var(--board-gap);
   padding: 14px 16px 16px;
   border: 1px solid var(--glass-edge);
   border-radius: var(--radius-lg);
@@ -6489,6 +6489,14 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
    두 판 사이의 경계는 색 차이가 아니라 .list 의 세로선 하나가 맡는다. */
 .todo-body .detail {
   background: var(--surface);
+  /* 가운데 선 양쪽 여백이 같아야 한다 — 왼쪽 판은 14px, 오른쪽은 .detail 기본값 40px 이라
+     선이 오른쪽으로 쏠려 보였다. 좌우 여백은 판 여백 토큰 하나(--board-gutter)가 갖는다. */
+  padding-inline: var(--board-gutter);
+}
+/* 카드 판의 자 — 판 가장자리 여백과 카드 사이 간격. 두 판이 **같은 값**을 읽는다 */
+.todo-body {
+  --board-gutter: 20px;
+  --board-gap: 14px;
 }
 /* ---- 오른쪽 판의 카드 — 왼쪽(달력/시간표)과 같은 문법(§2 앉은 유리) ----
    왼쪽을 카드로 세우고 나니 오른쪽만 맨바닥에 글이 흩어져 있어 **두 반쪽이 다른 말**을 했다.
@@ -6527,11 +6535,11 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
 }
 /* 카드가 된 리포트 — 윗선 대신 카드의 안쪽 여백이 경계를 갖는다 */
 .todo-body .report {
-  margin-top: 14px;
+  margin-top: var(--board-gap);
   padding: 14px 16px 16px;
 }
 .todo-body .report.report-weekly {
-  margin-top: 14px;
+  margin-top: var(--board-gap);
 }
 .report-head {
   display: flex;
