@@ -6042,14 +6042,18 @@ body.resizing-tt * {
   margin-bottom: 18px;
 }
 /* 카드의 머리 띠가 된 날짜 줄 (DESIGN §7 카드 판) — 달력 카드의 머리(월 제목 + ‹ ›)와 같은 급.
-   카드 가장자리까지 띠를 펴고 아래 선 하나로 끝낸다. 제목도 판의 제목(23px)이 아니라
-   카드 머리의 제목이라 달력 월 제목 쪽으로 내린다. */
+   아래 선은 긋지 않는다: 날짜와 빠른 추가는 "이 날에 적는다"는 한 덩어리라, 사이에 선을
+   그으면 제목이 입력칸과 떨어진 남의 줄이 된다(달력도 월 제목 아래 선이 없다). 선은 빠른
+   추가 아래 하나 — 머리와 목록 사이에만 남는다. 제목도 판의 제목(23px)이 아니라 카드 머리의
+   제목이라 달력 월 제목 쪽으로 내린다. */
 .todo-card > .todo-head {
   gap: 4px;
   min-height: 48px;
   margin: -4px -14px 0;
-  padding: 8px 10px 8px 18px;
-  border-bottom: 1px solid var(--glass-edge);
+  padding: 8px 10px 0 18px;
+}
+.todo-card > .todo-head + .todo-quick {
+  padding-top: 8px;
 }
 .todo-card > .todo-head .detail-title {
   margin-right: 6px;
@@ -6659,8 +6663,10 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   background: transparent;
   box-shadow: none;
 }
+/* 포커스는 면을 칠하지 않는다 — 날짜 줄과 사이에 선이 없어서, 칠한 면의 윗변이 곧 선이 된다.
+   아래 선이 한 단계 진해지는 것과 캐럿이 신호다. */
 .todo-card .todo-quick:focus-within {
-  background: var(--glass-fill);
+  background: transparent;
   border-bottom-color: var(--glass-edge-hover);
   box-shadow: none;
 }
