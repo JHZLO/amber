@@ -6050,10 +6050,12 @@ body.resizing-tt * {
   gap: 4px;
   min-height: 48px;
   margin: -4px -14px 0;
-  padding: 8px 10px 0 18px;
+  padding: 8px 10px 4px 18px;
 }
+/* 선이 없으니 **간격이 경계를 대신한다** — 제목과 입력칸이 한 덩어리로 읽히되 붙어 보이진
+   않게, 입력칸 위를 아래(12px)보다 조금 더 연다. */
 .todo-card > .todo-head + .todo-quick {
-  padding-top: 8px;
+  padding-top: 14px;
 }
 .todo-card > .todo-head .detail-title {
   margin-right: 6px;
