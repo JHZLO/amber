@@ -295,7 +295,7 @@ select {
   align-items: center;
   gap: 4px;
   padding: 14px 0 12px;
-  border-right: 1px solid var(--border);
+  /* 선을 긋지 않는다 — 레일도 판과 같은 바닥이고, 카드가 뜨는 틈이 경계다 */
   background: var(--surface);
 }
 /* 표식 한 개뿐이다 — 글자를 지웠으므로 세로 스택도 필요 없다 */
@@ -414,10 +414,15 @@ select {
 
 /* 레일 오른쪽 = 현재 작업공간(상단바 + 섹션) */
 .workspace {
+  /* 판의 자 (DESIGN §7 카드 판) — 머리 줄, 판, 서랍이 같은 값을 읽는다.
+     IntelliJ 식으로 좁게 간다: 카드와 카드, 카드와 창 끝 사이가 **같은 한 줄 틈**이다. */
+  --board-gutter: 8px;
+  --board-gap: 8px;
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  background: var(--surface);
 }
 
 /* 섹션 진입 트랜지션 (display:none→flex 시 재생).
@@ -444,8 +449,8 @@ select {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 13px 20px;
-  border-bottom: 1px solid var(--border);
+  /* 아래 선 없음 — 바로 밑에 카드가 떠 있어 틈이 경계를 긋는다. 좌우는 카드 모서리에 맞춘다 */
+  padding: 10px calc(var(--board-gutter) + 6px) 2px;
   background: var(--surface);
 }
 .brand {
@@ -489,12 +494,13 @@ select {
   flex: 1;
 }
 
+/* 머리 줄들(탭, 태그)도 판 위에 선을 긋지 않는다 — 카드 판에선 카드가 뜨는 틈이 경계다.
+   좌우 여백은 카드 모서리에 맞춘다(.topbar 와 같은 값). */
 .tabsbar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 18px;
-  border-bottom: 1px solid var(--border);
+  padding: 6px calc(var(--board-gutter) + 6px) 2px;
   background: var(--surface);
 }
 .segmented {
@@ -556,8 +562,7 @@ select {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 10px 18px;
-  border-bottom: 1px solid var(--border);
+  padding: 6px calc(var(--board-gutter) + 6px) 0;
   background: var(--surface);
 }
 .tagbar:empty {
@@ -581,7 +586,6 @@ select {
   }
 }
 .list {
-  border-right: 1px solid var(--border);
   overflow-y: auto;
   min-width: 0;
   background: var(--surface);
@@ -613,30 +617,27 @@ select {
    판 안에 덩어리가 하나뿐이면 카드를 따로 넣지 않고 판을 카드로 세운다 — 스크롤도 카드
    안에서 돌아 윗모서리가 늘 그 자리에 있다(떠 있는 창처럼). 할 일처럼 덩어리가 여럿인
    판은 판은 그대로 두고 안에 카드를 세운다(.todo-body 가 아래에서 되돌린다).
-   자는 둘뿐이다: 판 가장자리 --board-gutter, 카드 사이 --board-gap. */
+   **판 사이에 선을 긋지 않는다.** 경계는 카드와 카드 사이의 틈(--board-gap) 하나다.
+   그래서 가운데 칸 경계 양쪽은 틈의 절반씩만 비운다 — 둘 다 gutter 를 들면 틈이 두 배다. */
 .body {
-  --board-gutter: 20px;
-  --board-gap: 14px;
+  --half-gap: calc(var(--board-gap) / 2);
   background: var(--surface);
 }
 .body > .list,
 .body > .detail {
-  margin: var(--board-gutter);
   border: 1px solid var(--glass-edge);
   border-radius: var(--radius-lg);
   background: var(--glass-fill);
   box-shadow: var(--glass-sheen), var(--glass-seat);
 }
-/* 가운데 선 — 두 카드 사이 **한가운데**(칸 경계)에 손잡이의 선이 선다. 판 가장자리 여백이
-   양쪽 같으니 선 양쪽도 늘 같다. 쉬는 동안에도 보여야 잡을 곳이 보인다. */
-.body:not(.todo-body) > .pane-resizer::after {
-  background: var(--border);
+.body > .list {
+  margin: var(--board-gutter) var(--half-gap) var(--board-gutter) var(--board-gutter);
 }
-.body:not(.todo-body) > .pane-resizer:hover::after {
-  background: var(--border-strong);
+.body > .detail {
+  margin: var(--board-gutter) var(--board-gutter) var(--board-gutter) var(--half-gap);
 }
 /* 할 일은 판 안에 카드가 여럿이라 **판은 카드가 아니다** — 기본형을 되돌린다.
-   선은 .list 의 세로선이 그대로 긋는다. */
+   여백은 판이 padding 으로 주고, 가운데 쪽은 역시 틈의 절반이다. */
 .todo-body > .list,
 .todo-body > .detail {
   margin: 0;
@@ -644,9 +645,6 @@ select {
   border-radius: 0;
   box-shadow: none;
   background: var(--surface);
-}
-.todo-body > .list {
-  border-right: 1px solid var(--border);
 }
 .pane-resizer {
   grid-row: 1;
@@ -665,17 +663,15 @@ select {
   background: transparent;
   transition: background 0.12s;
 }
-.pane-resizer:hover::after {
-  background: var(--border-strong);
-}
 body.resizing-col {
   cursor: col-resize;
 }
 body.resizing-col * {
   user-select: none !important;
 }
+/* 끄는 동안만 선을 보인다 — 쉴 때는 틈이 곧 손잡이다(커서가 col-resize 로 알린다) */
 body.resizing-col .pane-resizer::after {
-  background: var(--text-3);
+  background: var(--border-strong);
 }
 
 /* ---- 리스트 행 ---- */
@@ -1905,8 +1901,19 @@ body.resizing-col .pane-resizer::after {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  /* 선도 함께 접힌다 — .parked 에 두면 칸이 0 이어도 1px 이 남아 줄이 하나 그어진다 */
-  border-left: 1px solid var(--border);
+}
+/* 서랍도 판 위의 카드다 — 예전엔 왼쪽 세로선 하나로 갈랐다. 속은 296px 고정 그대로 두고
+   카드를 그 안에 세우므로, 칸이 접히면 카드도 오른쪽 끝부터 함께 잘려 나간다. */
+.parked-inner {
+  box-sizing: border-box;
+  height: calc(100% - 2 * var(--board-gutter));
+  width: calc(296px - var(--board-gutter));
+  margin: var(--board-gutter) var(--board-gutter) var(--board-gutter) 0;
+  overflow: hidden;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  background: var(--glass-fill);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
 }
 .parked-head {
   display: flex;
@@ -1914,7 +1921,7 @@ body.resizing-col .pane-resizer::after {
   gap: 8px;
   flex-shrink: 0;
   padding: 12px 10px 10px 14px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-edge);
 }
 /* 탭 둘 — 머리글 자리를 그대로 쓴다. 제목을 따로 두면 탭까지 세 줄이 된다 */
 .parked-tabs {
@@ -5337,7 +5344,7 @@ html.widget-root #root {
   display: flex;
   flex-direction: column;
   overflow: hidden; /* 캘린더는 상단 고정, 스크롤은 타임테이블 내부로 위임 */
-  padding: 0 var(--board-gutter) var(--board-gutter);
+  padding: 0 var(--half-gap) var(--board-gutter) var(--board-gutter);
 }
 .todo-cal-pane .todo-cal {
   flex-shrink: 0;
@@ -6569,12 +6576,11 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
 }
 /* 카드를 얹는 판은 **양쪽이 같은 바닥**이다(DESIGN §7 카드 판). 왼쪽은 --surface, 오른쪽은
    배경이 없어 앱 바닥(--bg)이 비쳐서, 같은 유리 카드가 두 반쪽에서 다른 농도로 보였다.
-   두 판 사이의 경계는 색 차이가 아니라 .list 의 세로선 하나가 맡는다. */
+   두 판 사이에는 선이 없다 — 왼쪽 카드와 오른쪽 카드 사이의 틈이 경계다. */
 .todo-body .detail {
   background: var(--surface);
-  /* 가운데 선 양쪽 여백이 같아야 한다 — 왼쪽 판은 14px, 오른쪽은 .detail 기본값 40px 이라
-     선이 오른쪽으로 쏠려 보였다. 좌우 여백은 판 여백 토큰 하나(--board-gutter)가 갖는다. */
-  padding-inline: var(--board-gutter);
+  /* 가운데 쪽은 틈의 절반(왼쪽 판도 절반을 비운다), 바깥은 판 여백 */
+  padding: var(--board-gutter) var(--board-gutter) var(--board-gutter) var(--half-gap);
 }
 
 /* ---- 오른쪽 판의 카드 — 왼쪽(달력/시간표)과 같은 문법(§2 앉은 유리) ----
