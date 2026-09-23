@@ -87,10 +87,13 @@ export function TodoDrawer({
   const roots = parkedRoots(rows);
   const kidCount = (id: number) => rows.filter((r) => r.parent_id === id).length;
   // 닫혀도 **언마운트하지 않는다** — 사라지는 순간이 있어야 닫히는 모션이 있다.
-  // 접힌 동안에는 inert 로 탭 순서와 클릭에서 통째로 빠진다(보이지 않는 걸 누를 수 없게).
+  // 접힌 동안 탭 순서와 클릭에서 빼는 건 CSS 가 한다(.parked[data-open="false"] 의 visibility).
+  // `inert` 는 쓰지 않는다 — 이걸 넣은 뒤로 WKWebView 에서 커서(손 모양, 가운데 선의
+  // col-resize)가 안 바뀌었다. 실측으로 판정과 계산값은 멀쩡했고 새로 들어온 건 inert 하나라
+  // 걷어냈다. 같은 효과(탭 순서·클릭에서 빼기)는 CSS visibility 로 낸다.
   const busy = suggest.phase === "running";
   return (
-    <aside className="parked" data-open={open} aria-hidden={!open} inert={!open || undefined}>
+    <aside className="parked" data-open={open} aria-hidden={!open}>
       <div className="parked-inner">
       <div className="parked-head">
         <div className="parked-tabs" role="tablist">

@@ -1839,6 +1839,15 @@ body.resizing-col .pane-resizer::after {
   min-height: 0;
   overflow: hidden;
   background: var(--surface);
+  /* 접히는 게 **끝난 뒤** 숨긴다(0.24s 지연) — 바로 숨기면 닫히는 동안 속이 먼저 사라진다.
+     열 때는 지연 없이 바로 보인다. visibility:hidden 은 탭 순서와 클릭에서도 빠진다. */
+  transition: visibility 0s linear 0.24s;
+}
+.parked[data-open="false"] {
+  visibility: hidden;
+}
+.parked[data-open="true"] {
+  transition-delay: 0s;
 }
 .parked-inner {
   width: 296px;
