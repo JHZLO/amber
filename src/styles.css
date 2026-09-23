@@ -607,6 +607,47 @@ select {
   grid-row: 1;
   grid-column: 2;
 }
+
+/* ==== 카드 판 — 2-pane 의 기본형 (DESIGN §7 카드 판) ====
+   바닥은 --surface 하나, 그 위에 **판 자체가 카드로 뜬다**(노트, 암기노트, 다이어그램).
+   판 안에 덩어리가 하나뿐이면 카드를 따로 넣지 않고 판을 카드로 세운다 — 스크롤도 카드
+   안에서 돌아 윗모서리가 늘 그 자리에 있다(떠 있는 창처럼). 할 일처럼 덩어리가 여럿인
+   판은 판은 그대로 두고 안에 카드를 세운다(.todo-body 가 아래에서 되돌린다).
+   자는 둘뿐이다: 판 가장자리 --board-gutter, 카드 사이 --board-gap. */
+.body {
+  --board-gutter: 20px;
+  --board-gap: 14px;
+  background: var(--surface);
+}
+.body > .list,
+.body > .detail {
+  margin: var(--board-gutter);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  background: var(--glass-fill);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
+}
+/* 가운데 선 — 두 카드 사이 **한가운데**(칸 경계)에 손잡이의 선이 선다. 판 가장자리 여백이
+   양쪽 같으니 선 양쪽도 늘 같다. 쉬는 동안에도 보여야 잡을 곳이 보인다. */
+.body:not(.todo-body) > .pane-resizer::after {
+  background: var(--border);
+}
+.body:not(.todo-body) > .pane-resizer:hover::after {
+  background: var(--border-strong);
+}
+/* 할 일은 판 안에 카드가 여럿이라 **판은 카드가 아니다** — 기본형을 되돌린다.
+   선은 .list 의 세로선이 그대로 긋는다. */
+.todo-body > .list,
+.todo-body > .detail {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--surface);
+}
+.todo-body > .list {
+  border-right: 1px solid var(--border);
+}
 .pane-resizer {
   grid-row: 1;
   grid-column: 1;
@@ -647,12 +688,19 @@ body.resizing-col .pane-resizer::after {
   gap: 5px;
   transition: background 0.1s;
 }
+/* hover 와 선택이 둘 다 surface-2 라 **배경만으론 구별이 안 됐다**(트리 행과 같은 문제).
+   트리와 같은 사다리를 쓴다: hover = 틴트, 선택 = 강조 유리 + 왼쪽 바. 행이 이어 붙은
+   목록이라 선택 행에 테두리나 그림자는 두지 않는다(떠오르면 위아래 행과 어긋난다). */
 .row:hover {
-  background: var(--surface-2);
+  background: var(--glass-fill);
 }
 .row.selected {
-  background: var(--surface-2);
+  background: var(--glass-fill-accent);
   box-shadow: inset 2px 0 0 var(--text);
+}
+/* 카드 안의 행 구분선은 판 안의 결이다 */
+.body:not(.todo-body) .row {
+  border-bottom-color: var(--glass-edge);
 }
 .row-top {
   display: flex;
@@ -924,6 +972,8 @@ body.resizing-col .pane-resizer::after {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  /* 칩 안에서 글자가 꺾이면 "#message-" / "queue" 두 줄 알약이 된다 — 칩은 통째로 줄을 넘긴다 */
+  white-space: nowrap;
   font-size: 12px;
   color: var(--text-2);
   border: 1px solid var(--glass-edge);
@@ -2078,6 +2128,11 @@ body.resizing-col .pane-resizer::after {
 /* ---- 트리에서 찾기(⌘F) — 본문 검색과 같은 색 언어를 쓴다: 맞은 것은 회색, 지금 것은 노랑.
    다른 점은 자리다. 본문 검색은 글 위에 떠 있는 알약이지만 트리는 폭이 좁아 뜬 알약이 행을 덮는다
    → 머리 아래 한 줄로 눕히고 본문을 그만큼 밀어낸다. ---- */
+/* 카드 안의 찾기 띠 — 불투명 띠를 깔지 않고 한 단 짙은 유리로 */
+.body:not(.todo-body) .tree-find {
+  border-bottom-color: var(--glass-edge);
+  background: var(--glass-fill-hover);
+}
 .tree-find {
   position: static;
   width: auto;
@@ -2751,6 +2806,13 @@ html.widget-root #root {
   display: none;
 }
 
+/* 카드 안의 첫 줄 — 아래 선은 판 안의 결이라 --glass-edge 다(§7 카드 판) */
+.body:not(.todo-body) .notes-tree-head {
+  border-bottom-color: var(--glass-edge);
+  /* sticky 라 아래로 행이 지나간다 — 비울 수는 없고, 카드와 **같은 겹**(유리 채움 + 바닥)을
+     깔아 카드 색 그대로 보이게 한다. --surface 만 깔면 카드보다 한 단 어두운 띠가 된다. */
+  background: var(--glass-fill), var(--surface);
+}
 .notes-tree-head {
   display: flex;
   align-items: center;
@@ -4884,7 +4946,12 @@ html.widget-root #root {
 /* ---- 다이어그램: 풀블리드 — 캔버스가 우측 pane 모서리까지 ---- */
 .detail.dgm {
   padding: 0;
-  overflow: hidden; /* 스크롤은 캔버스(팬/줌)가 담당 */
+  overflow: hidden; /* 스크롤은 캔버스(팬/줌)가 담당 — 카드 모서리에서 함께 잘린다 */
+}
+/* 카드 안의 위아래 막대 — 불투명 --surface 띠를 벗기고 선은 --glass-edge 로 */
+.detail.dgm .dgm-head {
+  border-bottom-color: var(--glass-edge);
+  background: transparent;
 }
 /* 헤더 = 슬림 바 (보더로 구분) */
 .dgm-head {
@@ -4927,8 +4994,8 @@ html.widget-root #root {
 .detail.dgm .detail-meta {
   margin-top: 0;
   padding: 6px 14px 7px;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
+  border-top: 1px solid var(--glass-edge);
+  background: transparent;
 }
 
 /* ---- AI 온보딩 / 연결 카드 ---- */
@@ -5100,6 +5167,13 @@ html.widget-root #root {
 }
 .root-path svg {
   flex-shrink: 0;
+}
+/* 경로는 툴팁 래퍼(.tip-wrap) 안에 있는데, 래퍼는 기본이 flex-shrink:0 이다(아이콘 버튼이
+   찌그러지지 않게). 그래서 **경로가 줄지 못해** 판이 좁아지면 머리 줄이 통째로 넘쳐 오른쪽
+   아이콘이 잘렸다(카드 판으로 탐색기가 40px 좁아지며 드러났다). 경로 래퍼만 줄게 한다. */
+.tip-wrap:has(> .root-path) {
+  flex-shrink: 1;
+  min-width: 0;
 }
 /* 넘치면 앞을 자르고 끝(폴더명 쪽)을 남긴다 — 문자열의 LRM 접두어와 짝(RootPicker.tsx 참고) */
 .root-path-text {
@@ -6502,11 +6576,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
      선이 오른쪽으로 쏠려 보였다. 좌우 여백은 판 여백 토큰 하나(--board-gutter)가 갖는다. */
   padding-inline: var(--board-gutter);
 }
-/* 카드 판의 자 — 판 가장자리 여백과 카드 사이 간격. 두 판이 **같은 값**을 읽는다 */
-.todo-body {
-  --board-gutter: 20px;
-  --board-gap: 14px;
-}
+
 /* ---- 오른쪽 판의 카드 — 왼쪽(달력/시간표)과 같은 문법(§2 앉은 유리) ----
    왼쪽을 카드로 세우고 나니 오른쪽만 맨바닥에 글이 흩어져 있어 **두 반쪽이 다른 말**을 했다.
    할 일과 리포트를 각각 한 장씩 세운다. 날짜 제목 줄은 카드 밖에 둔다 — 그건 판의 제목이지
