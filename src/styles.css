@@ -6452,6 +6452,15 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   padding-top: 18px;
   border-top: 1px solid var(--border);
 }
+/* 그날 배운 개념도 같은 판 위의 한 장이다 */
+.todo-body .todo-learned {
+  margin-top: 14px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  background: var(--glass-fill);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
+}
 .todo-learned-label {
   margin-bottom: 10px;
   font-size: 11px;
@@ -6475,10 +6484,48 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   padding-top: 0;
   border-top: none;
 }
+/* ---- 오른쪽 판의 카드 — 왼쪽(달력/시간표)과 같은 문법(§2 앉은 유리) ----
+   왼쪽을 카드로 세우고 나니 오른쪽만 맨바닥에 글이 흩어져 있어 **두 반쪽이 다른 말**을 했다.
+   할 일과 리포트를 각각 한 장씩 세운다. 날짜 제목 줄은 카드 밖에 둔다 — 그건 판의 제목이지
+   어느 한 카드의 머리가 아니다(왼쪽 위 "To-dos" 와 같은 급). */
+.todo-card,
+.todo-body .report {
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  background: var(--glass-fill);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
+}
+.todo-card {
+  padding: 4px 14px 14px;
+}
+/* 카드 안의 빠른 추가는 **카드의 머리 띠**다 — 유리 캡슐을 또 얹으면 유리 위의 유리라 탁해진다.
+   면·테두리를 벗기고 아래에 가는 선 하나만 남긴다(시간표 카드의 .day-tt-head 와 같은 모양). */
+.todo-card .todo-quick {
+  margin: 0 -14px 10px;
+  padding: 12px 18px 12px 16px;
+  border: none;
+  border-bottom: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: transparent;
+  box-shadow: none;
+}
+.todo-card .todo-quick:focus-within {
+  background: var(--glass-fill);
+  border-bottom-color: var(--glass-edge-hover);
+  box-shadow: none;
+}
 .report {
   margin-top: 22px;
   padding-top: 18px;
   border-top: 1px solid var(--border);
+}
+/* 카드가 된 리포트 — 윗선 대신 카드의 안쪽 여백이 경계를 갖는다 */
+.todo-body .report {
+  margin-top: 14px;
+  padding: 14px 16px 16px;
+}
+.todo-body .report.report-weekly {
+  margin-top: 14px;
 }
 .report-head {
   display: flex;

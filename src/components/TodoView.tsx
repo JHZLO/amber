@@ -1229,6 +1229,9 @@ export function TodoView({
           </div>
         )}
 
+        {/* 할 일 카드 — 왼쪽의 달력/시간표 카드와 같은 문법이다. 머리 줄이 빠른 추가인 건
+            시간표 카드의 머리 띠와 같은 자리라서다: 카드의 첫 줄은 그 카드에서 하는 일이다. */}
+        <div className="todo-card">
         <div className="todo-quick">
           <span className="todo-quick-ico">
             <Icon name="plus" size={15} />
@@ -1281,6 +1284,7 @@ export function TodoView({
             </div>
           )
         )}
+        </div>
 
         {/* key={selected} — 날짜별로 패널을 격리. 생성 중 다른 날짜로 넘어가도 로딩/스트리밍 상태가
             새 날짜로 새지 않는다(진행 중 생성은 백그라운드에서 계속 저장됨) */}
