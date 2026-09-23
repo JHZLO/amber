@@ -5250,6 +5250,7 @@ html.widget-root #root {
    (예전엔 달력만 520px 에서 멈춰 가운데 떠 있었다). */
 .todo-cal-pane {
   --pane-card: none;
+  --cal-measure: 520px;
   display: flex;
   flex-direction: column;
   overflow: hidden; /* 캘린더는 상단 고정, 스크롤은 타임테이블 내부로 위임 */
@@ -5708,6 +5709,14 @@ body.resizing-tt * {
   box-shadow: var(--focus-ring);
 }
 /* 요일 헤더 + 그리드: minmax(0,1fr) 로 7열이 폭 안에서 항상 균등 분할(좁아도 안 넘침) */
+/* **겉과 속의 자는 다르다.** 카드(테두리·면)는 시간표와 같은 판 전체 폭을 쓰고, 속의 달력은
+   520px 에서 멈춰 가운데 선다 — 칸까지 넓히면 날짜 사이가 벌어져 한 주를 한눈에 못 읽고
+   눈이 좌우로 오간다. 겉은 옆 카드와 줄을 맞추는 몫, 속은 읽기 편한 폭의 몫이다. */
+.todo-cal > * {
+  width: 100%;
+  max-width: var(--cal-measure);
+  margin-inline: auto;
+}
 /* 요일 줄은 머리글이다 — 가는 선 하나로 날짜 판과 나눈다. 그래야 6행이 '표'가 아니라
    머리글을 가진 한 덩어리로 읽힌다(선을 더 긋지는 않는다 — 칸마다 그으면 스프레드시트다) */
 .cal-dow {
