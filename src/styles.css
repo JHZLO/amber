@@ -3493,6 +3493,36 @@ html.widget-root #root {
   margin: 0 auto;
 }
 
+/* 노트에 붙인 이미지(스크린샷). 캡처는 배경이 판과 같은 색인 경우가 많아 테두리로 경계를 준다.
+   .md-svg 와 같은 바깥 여백과 모서리라 그림과 사진이 한 벌로 읽힌다. */
+.markdown img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 14px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+/* 파일을 읽는 동안에는 src 가 없다 — 빈 테두리 한 줄이 번쩍이지 않게 숨긴다 */
+.markdown img.md-img:not([src]) {
+  display: none;
+}
+.md-img-missing {
+  display: block;
+  margin: 14px 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text-3);
+  font-size: 12px;
+  word-break: break-all;
+}
+/* Finder 에서 이미지를 끌어 편집 칸 위에 올렸을 때 — 놓을 수 있는 자리라는 표시 */
+.note-textarea.is-drop {
+  border-color: var(--text-2);
+  border-style: dashed;
+}
+
 .mermaid-rendered {
   position: relative;
   display: flex;

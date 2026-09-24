@@ -253,12 +253,15 @@ export interface VaultTreeConfig {
   exts: string[];
   /** 새 파일 초기 내용 (파일명 기반) */
   template: (title: string) => string;
+  /** 트리에 보이지 않을 폴더 이름 — 노트 옆에 두는 부속 폴더(이미지 `_assets` 등) */
+  hiddenDirs?: string[];
 }
 
 export function createVaultTree(cfg: VaultTreeConfig) {
   const rootOf = typeof cfg.root === "function" ? cfg.root : () => cfg.root as string;
   const full = (rel: string) => (rel ? `${rootOf()}/${rel}` : rootOf());
   const mainExt = cfg.exts[0];
+  const hiddenDirs = new Set(cfg.hiddenDirs ?? []);
 
   const stripExt = (name: string) => {
     const low = name.toLowerCase();
@@ -298,6 +301,7 @@ export function createVaultTree(cfg: VaultTreeConfig) {
         .filter(
           (e) =>
             !e.name.startsWith(".") && // .DS_Store 등
+            !(e.isDirectory && hiddenDirs.has(e.name)) &&
             (e.isDirectory || (e.isFile && hasExt(e.name))),
         )
         .map(async (e): Promise<VaultNode> => {

@@ -16,6 +16,7 @@ import {
   invalidPathReason,
   listNoteTree,
   moveEntry,
+  noteDirPath,
   noteMtime,
   parentOf,
   readNoteFile,
@@ -58,6 +59,14 @@ import {
 import { loadNoteConcepts, type NoteConceptLink } from "../lib/noteConcepts";
 import { openConceptInApp, OPEN_NOTE } from "../lib/nav";
 import { emit } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import {
+  imageInsertText,
+  imageMarkdown,
+  importImageFile,
+  mimeForName,
+  saveNoteImage,
+} from "../lib/noteAssets";
 
 // 이동/생성 위치 Select 값 인코딩 (루트 '' ↔ '/')
 const encodeDir = (d: string) => (d ? `/${d}` : "/");
@@ -165,6 +174,107 @@ export function NotesView({
   // WORKSPACE_EVENT 리스너가 [] 성격으로 붙으므로 ref 로 최신 dirty 를 본다
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
+
+  // ── 이미지(스크린샷) 넣기 ─────────────────────────────────────────
+  // 붙여넣기(⌘V)와 Finder 드래그 둘 다 노트 폴더의 _assets/ 에 파일로 쓰고, 커서 자리에
+  // `![](_assets/…)` 를 끼운다. 저장은 여전히 ⌘S — 이미지 파일만 먼저 디스크에 생긴다.
+  const [dropHot, setDropHot] = useState(false);
+
+  /** 커서(선택) 자리에 링크들을 끼운다. execCommand 로 넣어야 ⌘Z 로 되돌릴 수 있다
+   *  (value 를 직접 바꾸면 textarea 의 되돌리기 이력이 끊긴다). */
+  const insertAtCaret = useCallback((links: string[]) => {
+    const el = srcRef.current;
+    if (!el || !links.length) return;
+    el.focus();
+    const { selectionStart: s, selectionEnd: e, value } = el;
+    const text = imageInsertText(value, s, e, links);
+    if (!document.execCommand("insertText", false, text)) {
+      el.setRangeText(text, s, e, "end");
+      setDraft(el.value);
+    }
+  }, []);
+
+  /** 저장 작업들을 차례로 돌려 성공한 것만 끼운다. 하나가 실패해도 나머지는 넣는다 */
+  const addImages = useCallback(
+    async (jobs: Array<() => Promise<string>>) => {
+      const links: string[] = [];
+      let failure: unknown = null;
+      for (const job of jobs) {
+        try {
+          links.push(imageMarkdown(await job()));
+        } catch (e) {
+          failure = e;
+        }
+      }
+      insertAtCaret(links);
+      setOpError(
+        failure ? t("notes.image.saveFailed", { msg: errMsg(failure) }) : null,
+      );
+    },
+    [insertAtCaret],
+  );
+
+  const onSrcPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!selected) return;
+    const files = Array.from(e.clipboardData.files).filter((f) =>
+      f.type.startsWith("image/"),
+    );
+    if (!files.length) return; // 글자 붙여넣기는 그대로 둔다
+    e.preventDefault();
+    const dir = noteDirPath(selected);
+    void addImages(
+      files.map(
+        (f) => async () =>
+          saveNoteImage(dir, new Uint8Array(await f.arrayBuffer()), f.type),
+      ),
+    );
+  };
+
+  // Finder 에서 끌어다 놓기 — 파일 드롭은 Tauri 가 창 단위로 가로채서 HTML drop 이벤트로는
+  // 파일이 오지 않는다. 그래서 웹뷰 드롭 이벤트를 받고, 놓은 자리가 편집 칸일 때만 받는다.
+  useEffect(() => {
+    if (!editing || !selected) return;
+    const dir = noteDirPath(selected);
+    const inside = (pos: { x: number; y: number }) => {
+      const el = srcRef.current;
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      const k = window.devicePixelRatio || 1; // 좌표는 물리 픽셀로 온다
+      const x = pos.x / k;
+      const y = pos.y / k;
+      return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    };
+    let alive = true;
+    let unlisten: (() => void) | undefined;
+    getCurrentWebview()
+      .onDragDropEvent((ev) => {
+        const p = ev.payload;
+        if (p.type === "enter" || p.type === "over") {
+          setDropHot(inside(p.position));
+        } else if (p.type === "leave") {
+          setDropHot(false);
+        } else if (p.type === "drop") {
+          setDropHot(false);
+          if (!inside(p.position)) return;
+          const images = p.paths.filter((path) => mimeForName(path));
+          if (!images.length) {
+            setOpError(t("notes.image.unsupported"));
+            return;
+          }
+          void addImages(images.map((path) => () => importImageFile(dir, path)));
+        }
+      })
+      .then((fn) => {
+        if (alive) unlisten = fn;
+        else fn();
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+      unlisten?.();
+      setDropHot(false);
+    };
+  }, [editing, selected, addImages]);
 
   // 본문 렌더 후 DOM 에서 헤딩 수집 — 소스 정규식과 달리 코드블록 안 '#' 오탐이 없다.
   // id 는 인덱스 기반이라 같은 제목이 중복돼도 안전.
@@ -752,6 +862,8 @@ export function NotesView({
     ? selected.slice(selected.lastIndexOf("/") + 1).replace(/\.md$/i, "")
     : "";
   const crumbDirs = selected ? parentOf(selected).split("/").filter(Boolean) : [];
+  // 본문의 `![](_assets/…)` 를 풀 기준 폴더
+  const assetBase = selected ? noteDirPath(selected) : undefined;
 
   // 삭제 확인 문구 — 언어별 어순이 달라 "{name}" 자리에 <b>이름</b>을 끼워 넣는다
   const delMsg = t(
@@ -1034,8 +1146,9 @@ export function NotesView({
                 <div className="note-src-wrap">
                   <textarea
                     ref={srcRef}
-                    className="textarea note-textarea"
+                    className={`textarea note-textarea${dropHot ? " is-drop" : ""}`}
                     value={draft}
+                    onPaste={onSrcPaste}
                     onChange={(e) => {
                       setDraft(e.target.value);
                       // 글자를 고치면 앞서 잡아 둔 구간의 오프셋이 밀린다 — 그 자리에 그대로
@@ -1056,13 +1169,13 @@ export function NotesView({
                   />
                 </div>
                 <div className="markdown note-preview" ref={previewRef}>
-                  <Markdown>{previewMd}</Markdown>
+                  <Markdown assetBase={assetBase}>{previewMd}</Markdown>
                 </div>
               </div>
             ) : (
               <div className="note-read-wrap">
                 <div className="markdown" ref={mdRef}>
-                  <Markdown>{body}</Markdown>
+                  <Markdown assetBase={assetBase}>{body}</Markdown>
                 </div>
                 {/* 드래그 → 질문(AI 답변) / 개념으로(승격). 본문 밖 사이드카에 저장 */}
                 <NoteCommentLayer

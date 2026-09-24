@@ -3,9 +3,10 @@
 // 노트에는 인라인 질문 사이드카(<이름>.comments.json)가 붙을 수 있어,
 // 이름변경/삭제 시 사이드카가 함께 따라가도록 여기서 감싼다.
 
-import { BaseDirectory, exists, rename } from "@tauri-apps/plugin-fs";
+import { BaseDirectory, exists, readTextFile, rename } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
-import { createVaultTree } from "./vaultTree";
+import { createVaultTree, parentOf } from "./vaultTree";
+import { ASSET_DIR, copyAssetsForMove } from "./noteAssets";
 import { commentsPathFor } from "./comments";
 import { conceptsPathFor } from "./noteConcepts";
 import { getRoot } from "./workspace";
@@ -27,7 +28,15 @@ const tree = createVaultTree({
   root: () => getRoot("notes"),
   exts: [".md"],
   template: (title) => `# ${title}\n\n`,
+  // 붙여 넣은 이미지 폴더 — 노트 옆에 있지만 트리에는 안 보인다(lib/noteAssets.ts)
+  hiddenDirs: [ASSET_DIR],
 });
+
+/** 노트가 들어 있는 폴더의 경로(워크스페이스 루트 포함) — 이미지 저장/해석의 기준 */
+export function noteDirPath(noteRel: string): string {
+  const parent = parentOf(noteRel);
+  return parent ? full(parent) : getRoot("notes");
+}
 
 export const listNoteTree = tree.listTree;
 export const readNoteFile = tree.readFile;
@@ -82,6 +91,15 @@ export async function moveEntry(
   const newRel = await tree.moveEntry(relPath, targetDir);
   await repointConceptSource(relPath, newRel, !/\.md$/i.test(relPath)).catch(() => {});
   if (/\.md$/i.test(relPath)) {
+    // 본문의 `![](_assets/…)` 는 노트 폴더 기준 상대경로다. 폴더를 옮기면 _assets 가 따라가지만
+    // 노트 하나만 옮기면 그림이 옛 폴더에 남아 깨진다 — 가리키는 파일만 새 폴더로 복사한다.
+    // 실패해도 이동 자체는 이미 끝났으니 되돌리지 않는다(그림만 깨진 채로 남는다).
+    try {
+      const md = await readTextFile(full(newRel), { baseDir: BASE });
+      await copyAssetsForMove(md, noteDirPath(relPath), noteDirPath(newRel));
+    } catch {
+      /* 그림 복사 실패가 이동을 실패로 만들지 않는다 */
+    }
     for (const sc of sidecarsFor(relPath)) {
       const oldSc = full(sc);
       if (await exists(oldSc, { baseDir: BASE })) {

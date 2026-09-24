@@ -1,7 +1,7 @@
 // 앱 공용 마크다운 렌더러: GFM + ```mermaid``` 코드펜스를 다이어그램으로, ```svg 펜스를 인라인 그래픽으로 렌더.
 // 호출부는 기존처럼 .markdown 컨테이너로 감싸서 쓴다 (여긴 래퍼를 추가하지 않음).
 
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -14,6 +14,7 @@ import { looksLikeMermaid } from "../lib/mdMermaid";
 import { remarkSvgHtml, sanitizeSvg } from "../lib/mdSvg";
 // 블록마다 소스 좌표를 심는다 — 읽기 모드 드래그를 마크다운 구간으로 되돌리는 좌표계(§7)
 import { srcAttrs } from "../lib/mdBlocks";
+import { loadImageUrl, resolveLocalSrc } from "../lib/noteAssets";
 
 // pre>code 의 AST 노드에서 mermaid 여부/원문을 뽑기 위한 최소 형태
 type HastNode = { tagName?: string; value?: string; children?: HastNode[] };
@@ -66,12 +67,45 @@ function alertKind(props: unknown): AlertKind | null {
   return kind && kind in ALERT_ICONS ? (kind as AlertKind) : null;
 }
 
+/** 노트 폴더 기준 상대경로 이미지(`![](_assets/…)`)를 fs 로 읽어 Blob URL 로 띄운다.
+ *  웹뷰는 로컬 파일 경로를 그대로 못 여니(앱 화면 주소 기준으로 풀려 깨진다) 여기서 바꿔 준다.
+ *  원격 URL 이나 기준 폴더가 없는 곳(AI 미리보기 등)은 평범한 <img> 로 둔다. */
+function MdImage({ base, src, alt }: { base?: string; src?: string; alt?: string }) {
+  const local = base && src ? resolveLocalSrc(base, src) : null;
+  const [state, setState] = useState<{ path: string; url: string | null } | null>(null);
+  useEffect(() => {
+    if (!local) return;
+    let alive = true;
+    loadImageUrl(local).then(
+      (url) => alive && setState({ path: local, url }),
+      () => alive && setState({ path: local, url: null }),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [local]);
+  if (!local) return <img src={src} alt={alt ?? ""} loading="lazy" />;
+  // 이전 이미지의 결과가 남아 있으면 쓰지 않는다 — 경로가 바뀐 직후엔 아직 읽는 중이다
+  const cur = state?.path === local ? state : null;
+  if (cur && cur.url === null) {
+    return (
+      <span className="md-img-missing">
+        {t("notes.image.missing")}: {src}
+      </span>
+    );
+  }
+  return <img src={cur?.url ?? undefined} alt={alt ?? ""} className="md-img" />;
+}
+
 // memo: 부모(예: NotesView 스크롤 스파이)가 재렌더돼도 본문 문자열이 그대로면
 // 마크다운 재파싱/mermaid 재렌더를 건너뛴다 → 스크롤 시 깜빡임 제거.
 export const Markdown = memo(function Markdown({
   children,
+  assetBase,
 }: {
   children: string;
+  /** 본문의 상대경로 이미지를 풀 기준 폴더(워크스페이스 루트 포함). 노트 화면만 넘긴다 */
+  assetBase?: string;
 }) {
   return (
     <ReactMarkdown
@@ -84,6 +118,9 @@ export const Markdown = memo(function Markdown({
         [rehypeHighlight, { detect: false, ignoreMissing: true, plainText: ["svg", "mermaid"] }],
       ]}
       components={{
+        img(props) {
+          return <MdImage base={assetBase} src={props.src} alt={props.alt} />;
+        },
         // `> [!NOTE]` 인용구 → 콜아웃. 종류는 remarkAlerts 가 data-alert 로 넘긴다.
         blockquote(props) {
           const kind = alertKind(props);

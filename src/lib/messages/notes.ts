@@ -62,6 +62,12 @@ const ko = {
   "notes.delete.confirmNote": "{name} 노트를 삭제할까요?",
   "notes.delete.confirmFolder": "{name} 폴더와 안의 모든 노트를 삭제할까요?",
   "notes.delete.trashHint": "휴지통으로 옮겨져요 — Finder 에서 되돌릴 수 있어요.",
+
+  // 이미지(스크린샷) 붙여넣기 — 노트 폴더의 _assets/ 에 저장된다
+  "notes.image.unsupported": "PNG, JPG, GIF, WebP 이미지만 넣을 수 있어요.",
+  "notes.image.tooLarge": "이미지가 너무 커요 — 한 장에 20MB 까지 넣을 수 있어요.",
+  "notes.image.saveFailed": "이미지를 저장하지 못했어요: {msg}",
+  "notes.image.missing": "이미지를 찾을 수 없어요",
   "notes.deleting": "삭제 중…",
 
   // 저장 안 된 변경 모달
@@ -260,6 +266,11 @@ const en: Record<keyof typeof ko, string> = {
   "notes.delete.confirmNote": "Delete the note {name}?",
   "notes.delete.confirmFolder": "Delete the folder {name} and all notes inside?",
   "notes.delete.trashHint": "It moves to the Trash — you can restore it in Finder.",
+
+  "notes.image.unsupported": "Only PNG, JPG, GIF and WebP images can be added.",
+  "notes.image.tooLarge": "That image is too large — up to 20MB per image.",
+  "notes.image.saveFailed": "Couldn't save the image: {msg}",
+  "notes.image.missing": "Image not found",
   "notes.deleting": "Deleting…",
 
   "notes.keepEditing": "Keep editing",

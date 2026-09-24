@@ -203,3 +203,34 @@ describe("writeAtomic — 저장이 파일을 잃는 유일한 지점", () => {
     await expect(writeAtomic("vault/notes/a.md", "본문")).rejects.toBe(boom);
   });
 });
+
+describe("listTree — 숨길 폴더", () => {
+  // 노트 옆의 _assets(붙여 넣은 이미지)는 폴더지만 트리에 보이면 안 된다. 점으로 시작하는
+  // 이름은 fs 스코프 때문에 못 쓰니(noteAssets.ts) 이름으로 거른다.
+  it("hiddenDirs 에 든 폴더는 트리에서 뺀다", async () => {
+    const withHidden = createVaultTree({
+      root: ROOT,
+      exts: [".md"],
+      template: (title) => `# ${title}\n`,
+      hiddenDirs: ["_assets"],
+    });
+    fs.readDir.mockImplementation((async (p: string) =>
+      p === ROOT
+        ? [
+            { name: "_assets", isDirectory: true, isFile: false },
+            { name: "TIL", isDirectory: true, isFile: false },
+            { name: "a.md", isDirectory: false, isFile: true },
+            { name: "shot.png", isDirectory: false, isFile: true },
+          ]
+        : []) as never);
+    const nodes = await withHidden.listTree();
+    expect(nodes.map((n) => n.path)).toEqual(["TIL", "a.md"]);
+  });
+
+  it("설정하지 않으면 같은 이름 폴더도 그대로 보인다(다이어그램 트리)", async () => {
+    fs.readDir.mockImplementation((async (p: string) =>
+      p === ROOT ? [{ name: "_assets", isDirectory: true, isFile: false }] : []) as never);
+    const nodes = await tree.listTree();
+    expect(nodes.map((n) => n.path)).toEqual(["_assets"]);
+  });
+});

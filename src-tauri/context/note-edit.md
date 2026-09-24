@@ -16,6 +16,8 @@ Output ONLY the replacement text for "[선택한 부분]".
   명시하지 않는 한 svg 를 mermaid 로, mermaid 를 svg 로 옮기지 않는다. 새로 넣을 때는 뜻이 관계에 있으면 mermaid,
   크기/시간/위치나 도형 자체에 있으면 ```svg 다.
   raw <svg> 를 펜스 밖에 두지 않는다.
+- 조각을 지나가는 `![...](...)` 이미지 줄은 사용자가 붙인 스크린샷이다. 경로와 파일 이름을 바꾸지 않고 그대로 둔다.
+  새 이미지 줄을 지어내지 않는다 — 없는 파일을 가리키면 깨진 그림이 된다.
 - Heading hierarchy is strict unless the request explicitly asks otherwise: a `##` may only appear under the nearest preceding `#`, and a `###` only under the nearest preceding `##` — never skip a level and never open a sub-level before its parent exists. Numbering follows the ancestors: `## N-M` sits under `# N`, `### N-M-K` under `## N-M`. `## 3-1` under `# 2` is wrong; it needs `# 3` first.
 - Do not restate or re-emit any part of the note outside the fragment. The note is context you read,
   not output you produce. Emitting the whole note is the single worst failure here: it costs the user

@@ -15,6 +15,9 @@ Rules:
   svg 로 옮기지 않는다. 사용자가 직접 그린 svg 를 mermaid 로 바꾸는 것은 다듬기가 아니라 그 사람의 작업을 버리는 일이다.
   다듬어 달라는 요청은 **문장을 손보라**는 뜻이지 그림을 다시 그리라는 뜻이 아니다. 그림 안의 오타나 라벨을 고치는 것은
   같은 형식 안에서 한다.
+- **이미지 줄은 그대로 둔다.** `![...](_assets/...)` 같은 이미지 줄은 사용자가 붙인 스크린샷이다.
+  경로와 파일 이름을 한 글자도 바꾸지 않고, 지우지 않고, 그 이미지가 보여 주는 내용을 설명하는 문단 곁에 남긴다.
+  새 이미지 줄을 지어내지 않는다 — 없는 파일을 가리키면 깨진 그림이 된다.
 - 새 그림을 어느 형식으로 그릴지는 아래 "시각화" 절이 정한다. 어느 쪽이든 raw <svg> 를 펜스 밖에 두지 않는다.
 - In a mermaid code block, when a label needs double quotes, use #quot;. A backslash escape (\") is not supported by mermaid and breaks rendering.
 - Write in the language given by the [Output language] section. Keep code and technical terms as-is.
