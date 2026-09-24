@@ -12,9 +12,10 @@
 </p>
 
 <p align="center">
-  <strong>Keep what you learn from fading — preserved like amber.</strong><br/>
-  Concept flashcards, markdown notes, mermaid diagrams, a day planner and AI-written daily
-  reports<br/> in one local-first macOS app, powered by the AI CLIs you already pay for.
+  <strong>The desk for your engineering day.</strong><br/>
+  Plan the day in to-dos and time blocks, think it through in markdown notes, read every schema
+  as an ERD<br/> synced from your database, and let AI write the day up. Local-first, on the
+  Claude Code and Codex CLIs you already pay for.
 </p>
 
 <p align="center">
@@ -29,20 +30,20 @@
   under docs/assets/ autoplays and loops instead, but is capped at 10 MB too.
 -->
 <p align="center">
-  <img src="docs/assets/hero.png" alt="Amber — a markdown note with an inline AI question thread open" width="960" />
+  <img src="docs/assets/todo.png" alt="Amber: a day of grouped to-dos beside the calendar, a time-blocked timetable and the daily report" width="960" />
 </p>
 
 ## At a glance
 
 | Workspace | What it does |
 |---|---|
-| 🧠 **Concepts** | Turn an AI chat transcript into a flashcard. Confidence dots and a “learned” model keep the deck focused on what you haven’t internalized. |
-| 📌 **Desktop widget** | An always-on-top sticker cycles through the cards you’re still learning, weakest first. |
+| ✅ **To-dos & timetable** | Nested checklists per day or per week, a Google-Calendar-style time-blocking grid, Korean public holidays and time-off marks. |
 | 📝 **Notes** | Real markdown files in real folders. Live preview, scroll-spy TOC, inline AI Q&A, and AI edits scoped to a sentence, a section or the whole note — always as a reviewable diff. |
 | 📊 **Diagrams** | Mermaid `.mmd` files on a pan/zoom canvas with table search, focus mode and two layout engines. Paste DDL and get a house-style ERD. |
 | 🗄️ **Database sync** | Connect MySQL. Amber reads `information_schema`, writes one deterministic ERD per schema without AI, and shows a diff when the live schema drifts. |
-| ✅ **To-dos & timetable** | Nested checklists per day or per week, a Google-Calendar-style time-blocking grid, Korean public holidays and time-off marks. |
 | 📋 **Daily & weekly reports** | The AI writes your day as “problem → fix” from your to-dos, GitHub activity and local Claude Code / Codex sessions. Weekly rolls the dailies up into Notion-ready text. |
+| 🧠 **Concepts** | On the side: turn an AI chat that taught you something into a flashcard. Confidence dots and a “learned” model keep the deck focused on what you haven’t internalized. |
+| 📌 **Desktop widget** | An always-on-top sticker cycles through the cards you’re still learning, weakest first. |
 
 Works fully **without AI** — notes, diagrams, to-dos and database sync never need a connection.
 
@@ -52,34 +53,22 @@ Works fully **without AI** — notes, diagrams, to-dos and database sync never n
 <tr>
 <td width="50%" valign="middle">
 
-### 🧠 Concept flashcards
+### ✅ To-dos & day timetable
 
-Paste a raw AI Q&A transcript and your connected AI turns it into a reviewable card — title,
-summary, detailed note, tags — that you edit before saving. Or select a passage in any note and
-**promote it to a concept** in place; the note remembers which concepts came from it.
-Confidence dots (`● ○ ○`) and a graduation (“learned”) model keep the deck focused on what you
-haven’t internalized yet. The canonical order is *lowest confidence, least recently seen first*,
-so a card you just saw moves to the back of the line. Augment any card later with a one-line
-instruction like *“add example code”* or *“pitfalls”*.
-
-</td>
-<td width="50%">
-  <img src="docs/assets/concepts.png" alt="Concept card detail" width="100%" />
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
-### 📌 Desktop sticker widget
-
-An always-on-top mini window on every Space cycles through the cards you’re still learning,
-lowest-confidence first — so new knowledge keeps reappearing until it sticks. Flip through cards,
-bump confidence, or mark one learned right from the widget, entirely from the keyboard
-(`←` `→` · `↑` `↓` · `Enter`). A menu-bar icon toggles the widget and brings the main window back.
+A per-day checklist with unlimited nesting and drag reordering across levels, plus a per-week
+list for things that have no day yet. Top-level items with children read as headed groups with
+their own progress, and anything that isn’t for today can be parked in the drawer and pulled
+back later. Overdue items carry into today while the original day
+keeps a faded record of what moved. The mini calendar drills up to month and year pickers, marks
+weekends and **Korean public holidays** (computed offline — lunar table plus substitute-holiday
+rules, no API key), and lets you mark a day as time off. Below it, a Google-Calendar-style
+timetable: drag to create time blocks (15-minute snap), drag or resize to adjust, hold `⌥` to
+plan on top of an existing block, day/week/month views and a live “now” line. Put any to-do into
+the next free slot with one click.
 
 </td>
 <td width="50%">
-  <img src="docs/assets/widget.png" alt="Desktop widget" width="100%" />
+  <img src="docs/assets/todo-week.png" alt="The timetable in week view with time blocks across five days, beside the day's grouped to-dos" width="100%" />
 </td>
 </tr>
 <tr>
@@ -106,7 +95,7 @@ changed the file while you had it open, Amber tells you before overwriting.
 
 </td>
 <td width="50%">
-  <img src="docs/assets/notes.png" alt="Markdown note in edit mode with the live preview beside the source" width="100%" />
+  <img src="docs/assets/notes-qa.png" alt="A markdown note with a diagram, highlighted questions, a code block and an AI question thread open beside the outline" width="100%" />
 </td>
 </tr>
 <tr>
@@ -177,25 +166,6 @@ shows as a live green dot in the tree and in *Settings › Databases*.
 <tr>
 <td width="50%" valign="middle">
 
-### ✅ To-dos & day timetable
-
-A per-day checklist with unlimited nesting and drag reordering across levels, plus a per-week
-list for things that have no day yet. Overdue items carry into today while the original day
-keeps a faded record of what moved. The mini calendar drills up to month and year pickers, marks
-weekends and **Korean public holidays** (computed offline — lunar table plus substitute-holiday
-rules, no API key), and lets you mark a day as time off. Below it, a Google-Calendar-style
-timetable: drag to create time blocks (15-minute snap), drag or resize to adjust, hold `⌥` to
-plan on top of an existing block, day/week/month views and a live “now” line. Put any to-do into
-the next free slot with one click.
-
-</td>
-<td width="50%">
-  <img src="docs/assets/todo.png" alt="A day of nested to-dos beside the calendar and a time-blocked timetable" width="100%" />
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
 ### 📋 Daily & weekly reports
 
 One click at the bottom of a day’s checklist and the AI writes what you actually did — as
@@ -230,6 +200,39 @@ of every tab.
 </td>
 <td width="50%">
   <img src="docs/assets/settings.png" alt="Settings with a sidebar of tabs and the AI tab open, Claude Code connected" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### 🧠 Concept flashcards
+
+For the things worth remembering, on the side of the day’s work. Paste a raw AI Q&A transcript and your connected AI turns it into a reviewable card — title,
+summary, detailed note, tags — that you edit before saving. Or select a passage in any note and
+**promote it to a concept** in place; the note remembers which concepts came from it.
+Confidence dots (`● ○ ○`) and a graduation (“learned”) model keep the deck focused on what you
+haven’t internalized yet. The canonical order is *lowest confidence, least recently seen first*,
+so a card you just saw moves to the back of the line. Augment any card later with a one-line
+instruction like *“add example code”* or *“pitfalls”*.
+
+</td>
+<td width="50%">
+  <img src="docs/assets/concepts.png" alt="Concept card detail" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### 📌 Desktop sticker widget
+
+An always-on-top mini window on every Space cycles through the cards you’re still learning,
+lowest-confidence first — so new knowledge keeps reappearing until it sticks. Flip through cards,
+bump confidence, or mark one learned right from the widget, entirely from the keyboard
+(`←` `→` · `↑` `↓` · `Enter`). A menu-bar icon toggles the widget and brings the main window back.
+
+</td>
+<td width="50%">
+  <img src="docs/assets/widget.png" alt="Desktop widget" width="100%" />
 </td>
 </tr>
 </table>

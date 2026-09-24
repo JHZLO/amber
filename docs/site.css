@@ -52,7 +52,7 @@ p { margin: 0 0 16px; color: var(--text-2); }
 .hero:hover .glow { opacity: 1; }
 .hero-grid { position: relative; width: 100%; max-width: 1360px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 6fr); gap: 32px; align-items: center; }
 .hero-copy { position: relative; z-index: 2; }
-.headline { font-size: clamp(56px, 9.2vw, 152px); font-weight: 700; letter-spacing: -0.045em; line-height: 0.92; margin: 0 0 30px; }
+.headline { font-size: clamp(48px, 6.4vw, 112px); font-weight: 700; letter-spacing: -0.045em; line-height: 0.92; margin: 0 0 30px; }
 /* 단어마다 올라오는 등장 애니메이션의 가림창. 상자가 글자보다 작아 overflow:hidden 이 두 군데를 잘랐다:
    세로는 line-height 0.92 가 글립 상자보다 낮아 y·p 의 아래꼬리를(132px 에서 18px), 가로는 음수 자간
    (-0.045em)이 마지막 글자의 advance 만 줄여 마침표 오른쪽 잉크를. 네 방향으로 여유를 주고 같은 만큼
@@ -176,7 +176,7 @@ p { margin: 0 0 16px; color: var(--text-2); }
   .hero { padding-top: 96px; }
   .hero-grid { grid-template-columns: 1fr; }
   .hero-gem { order: -1; height: 42vh; }
-  .headline { font-size: clamp(48px, 15vw, 96px); }
+  .headline { font-size: clamp(40px, 12vw, 80px); }
   .cards { grid-template-columns: 1fr; gap: 40px; min-height: 0; padding: 96px var(--pad); }
   .card3d { width: 100%; }
   .hscroll { height: auto; }

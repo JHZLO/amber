@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Amber — keep what you learn</title>
-<meta name="description" content="A local-first macOS study desk that runs on the Claude Code and Codex CLIs you already pay for. Flashcards, markdown notes, mermaid diagrams and AI-written daily reports — no server, no accounts, no API keys.">
-<meta property="og:title" content="Amber — keep what you learn">
-<meta property="og:description" content="A local-first study desk for engineers. Cards, notes, diagrams, planner and daily reports on your Mac, written with the AI CLIs you already have.">
-<meta property="og:image" content="https://jhzlo.github.io/amber/assets/hero.png">
+<title>Amber — the desk for your engineering day</title>
+<meta name="description" content="A local-first macOS desk for engineers, running on the Claude Code and Codex CLIs you already pay for. To-dos and time blocks, markdown notes, ERDs synced from your database and AI-written daily reports — no server, no accounts, no API keys.">
+<meta property="og:title" content="Amber — the desk for your engineering day">
+<meta property="og:description" content="A local-first desk for your engineering day. Plan in to-dos and time blocks, write markdown notes, read every schema as an ERD and let AI write the day up, all on your Mac.">
+<meta property="og:image" content="https://jhzlo.github.io/amber/assets/todo.png">
 <meta property="og:url" content="https://jhzlo.github.io/amber/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Amber">
@@ -31,7 +31,7 @@
   "softwareVersion": "0.22.49",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "author": { "@type": "Person", "name": "JHZLO", "url": "https://github.com/JHZLO" },
-  "description": "Concept flashcards, markdown notes, mermaid diagrams, a day planner and AI-written daily reports in one local-first macOS app, powered by the Claude Code and Codex CLIs you already pay for."
+  "description": "Plan the day in to-dos and time blocks, think it through in markdown notes, read every schema as an ERD synced from your database, and let AI write the day up. Local-first, on the Claude Code and Codex CLIs you already pay for."
 }
 </script>
 <!-- 파비콘: .ico(16/32/48) 를 먼저 둔다 — 검색결과와 옛 브라우저가 이걸 찾는다. svg 는 현대 브라우저용 -->
@@ -52,8 +52,8 @@
     <span>Amber</span>
   </a>
   <nav aria-label="Sections">
-    <a href="#cards">Cards</a>
     <a href="#features">Workspaces</a>
+    <a href="#cards">Cards</a>
     <a href="#strata">Changelog</a>
     <a href="#install">Install</a>
     <a href="https://github.com/JHZLO/amber" target="_blank" rel="noopener">GitHub</a>
@@ -67,8 +67,8 @@
     <div class="hero-grid">
       <div class="hero-copy">
         <p class="eyebrow mono rise" style="--i:0">Local-first · macOS · MIT · <span data-latest>v0.22.49</span></p>
-        <h1 class="display headline" data-split>Keep what you learn.</h1>
-        <p class="lede rise" style="--i:5">Concept flashcards, markdown notes, mermaid diagrams, a day planner and AI-written daily reports in one local-first macOS app, powered by the Claude Code and Codex CLIs you already pay for.</p>
+        <h1 class="display headline" data-split>The desk for your engineering day.</h1>
+        <p class="lede rise" style="--i:5">Plan the day in to-dos and time blocks, think it through in markdown notes, read every schema as an ERD synced from your database, and let AI write the day up. Local-first, on the Claude Code and Codex CLIs you already pay for.</p>
         <div class="cta rise" style="--i:6">
           <a class="btn btn-primary magnetic" data-tarball href="https://github.com/JHZLO/amber/archive/refs/tags/v0.22.49.tar.gz">Get the source <span class="mono ver" data-latest>v0.22.49</span></a>
           <a class="btn btn-ghost" href="#install">How to build</a>
@@ -84,12 +84,65 @@
     <div class="scroll-cue mono" aria-hidden="true"><span>Scroll</span><i></i></div>
   </section>
 
-  <!-- 02 · one chat becomes one card -->
+  <!-- 02: workspaces, horizontal on scroll -->
+  <section class="hscroll" id="features" style="--panels: 5">
+    <div class="hscroll-sticky">
+      <div class="hbar">
+        <span class="mono">01 — Workspaces</span>
+        <div class="rail" aria-hidden="true"><i id="hprog"></i></div>
+        <span class="mono"><b id="hidx">1</b> / 5</span>
+      </div>
+      <div class="track" id="track">
+        <article class="panel">
+          <div class="panel-copy">
+            <p class="eyebrow mono">To-dos and timetable</p>
+            <h2 class="display">Plan the day in blocks, not lists.</h2>
+            <p>Nested checklists grouped under headings, next to a calendar-style time-blocking grid. Park what isn't for today in the drawer, carry overdue work forward, and mark holidays and time off.</p>
+          </div>
+          <figure class="panel-shot"><img src="assets/todo-week.png" alt="The timetable in week view with time blocks across five days, beside the day's grouped to-dos" loading="lazy"></figure>
+        </article>
+        <article class="panel">
+          <div class="panel-copy">
+            <p class="eyebrow mono">Notes and AI</p>
+            <h2 class="display">Real markdown files. AI you review as a diff.</h2>
+            <p>Live preview and a scroll-spy outline. Ask about any sentence and the answer stays beside it. AI edits scoped to a sentence, a section or the whole note arrive as a reviewable diff, and whole-note drafts write in the background.</p>
+          </div>
+          <figure class="panel-shot"><img src="assets/notes.png" alt="Notes workspace: markdown source and live preview side by side" loading="lazy"></figure>
+        </article>
+        <article class="panel">
+          <div class="panel-copy">
+            <p class="eyebrow mono">Diagrams</p>
+            <h2 class="display">Paste DDL, get an ERD you can actually read.</h2>
+            <p>Mermaid .mmd files on a pan/zoom canvas. Search tables and columns, click one to focus it and its neighbours, and switch between two layout engines.</p>
+          </div>
+          <figure class="panel-shot"><img src="assets/diagrams.png" alt="Diagram studio: an order ERD with the orders table focused and its column card open" loading="lazy"></figure>
+        </article>
+        <article class="panel">
+          <div class="panel-copy">
+            <p class="eyebrow mono">Database sync</p>
+            <h2 class="display">Connect MySQL, get every schema drawn.</h2>
+            <p>Amber reads information_schema in a read-only session and writes one deterministic ERD per schema without AI. When the live schema drifts, a banner shows the diff before anything is regenerated.</p>
+          </div>
+          <figure class="panel-shot"><img src="assets/db-sync.png" alt="A synced schema ERD with the drift banner and its View changes and Regenerate actions" loading="lazy"></figure>
+        </article>
+        <article class="panel">
+          <div class="panel-copy">
+            <p class="eyebrow mono">Daily and weekly reports</p>
+            <h2 class="display">Your day, written as problem → fix.</h2>
+            <p>At the end of the day the AI reads your to-dos, GitHub activity and local Claude Code or Codex sessions and writes the report. Weekly rolls the dailies up into Notion-ready text.</p>
+          </div>
+          <figure class="panel-shot"><img src="assets/report.png" alt="A daily report written as summary, done items and notes, under the day's to-do card" loading="lazy"></figure>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03: on the side, concept cards -->
   <section class="cards" id="cards">
     <div class="cards-copy">
-      <p class="eyebrow mono reveal">01 — Concept cards</p>
-      <h2 class="display reveal">One chat becomes one card.</h2>
-      <p class="reveal">Paste an AI transcript and Amber turns it into a flashcard with a detail note. Three confidence dots and a “learned” state keep the deck down to what you haven't internalized yet. An always-on-top widget cycles the weakest cards first.</p>
+      <p class="eyebrow mono reveal">02 — On the side</p>
+      <h2 class="display reveal">And what the day taught you, kept.</h2>
+      <p class="reveal">When a chat teaches you something worth keeping, paste it and Amber turns it into a flashcard with a detail note. Three confidence dots and a “learned” state keep the deck down to what you haven't internalized yet, and an always-on-top widget cycles the weakest cards between tasks.</p>
       <p class="hint mono reveal">Move your pointer over the card · click to flip</p>
     </div>
     <div class="card3d reveal" id="card3d" tabindex="0" role="button" aria-label="Flip the sample card">
@@ -113,58 +166,6 @@
     </div>
   </section>
 
-  <!-- 03 · workspaces, horizontal on scroll -->
-  <section class="hscroll" id="features" style="--panels: 5">
-    <div class="hscroll-sticky">
-      <div class="hbar">
-        <span class="mono">02 — Workspaces</span>
-        <div class="rail" aria-hidden="true"><i id="hprog"></i></div>
-        <span class="mono"><b id="hidx">1</b> / 5</span>
-      </div>
-      <div class="track" id="track">
-        <article class="panel">
-          <div class="panel-copy">
-            <p class="eyebrow mono">Notes and AI</p>
-            <h2 class="display">Real markdown files. AI you review as a diff.</h2>
-            <p>Live preview and a scroll-spy outline. AI edits scoped to a sentence, a section or the whole note always arrive as a reviewable diff, and whole-note drafts write in the background while you do something else.</p>
-          </div>
-          <figure class="panel-shot"><img src="assets/notes.png" alt="Notes workspace: markdown source and live preview side by side" loading="lazy"></figure>
-        </article>
-        <article class="panel">
-          <div class="panel-copy">
-            <p class="eyebrow mono">Diagrams and databases</p>
-            <h2 class="display">Paste DDL, get an ERD. Connect MySQL, get every schema drawn.</h2>
-            <p>Mermaid .mmd files on a pan/zoom canvas with table search and focus mode. Connect a database and Amber draws one deterministic ERD per schema without AI, then shows a diff when the live schema drifts.</p>
-          </div>
-          <figure class="panel-shot"><img src="assets/diagrams.png" alt="Diagram studio: a mermaid ERD on the pan/zoom canvas" loading="lazy"></figure>
-        </article>
-        <article class="panel">
-          <div class="panel-copy">
-            <p class="eyebrow mono">Desktop widget</p>
-            <h2 class="display">A sticker that quizzes you between tasks.</h2>
-            <p>An always-on-top card in the corner of your screen cycles through what you're still learning, weakest first. Arrow keys raise or lower confidence; Enter marks it learned.</p>
-          </div>
-          <figure class="panel-shot small"><img src="assets/widget.png" alt="The always-on-top desktop widget showing a concept card" loading="lazy"></figure>
-        </article>
-        <article class="panel">
-          <div class="panel-copy">
-            <p class="eyebrow mono">To-dos and timetable</p>
-            <h2 class="display">Plan the day in blocks, not lists.</h2>
-            <p>Nested checklists per day or per week next to a calendar-style time-blocking grid, with Korean public holidays and time-off marks built in.</p>
-          </div>
-          <figure class="panel-shot"><img src="assets/todo.png" alt="To-dos with the day timetable" loading="lazy"></figure>
-        </article>
-        <article class="panel">
-          <div class="panel-copy">
-            <p class="eyebrow mono">Daily and weekly reports</p>
-            <h2 class="display">Your day, written as problem → fix.</h2>
-            <p>At the end of the day the AI reads your to-dos, GitHub activity and local Claude Code or Codex sessions and writes the report. Weekly rolls the dailies up into Notion-ready text.</p>
-          </div>
-          <figure class="panel-shot"><img src="assets/report.png" alt="A daily report written as summary, done items and notes, under the day's to-do card" loading="lazy"></figure>
-        </article>
-      </div>
-    </div>
-  </section>
 
   <!-- 04 · strata -->
   <section class="strata" id="strata">
