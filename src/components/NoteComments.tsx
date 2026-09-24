@@ -26,7 +26,7 @@ import {
   type NoteComment,
 } from "../lib/comments";
 import { Markdown } from "./Markdown";
-import { ConfirmDelete, timeAgo, Tooltip } from "../ui";
+import { ConfirmDelete, DiscardModal, timeAgo, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { blockRangeFromSelection } from "../lib/mdBlocks";
@@ -375,44 +375,36 @@ export function NoteCommentLayer({
     return () => document.removeEventListener("click", onClick);
   }, [containerRef, openThread]);
 
-  // 패널 닫기: 바깥 클릭 / Esc (답변 생성 중 Esc 는 무시).
-  // 우측에 고정된 패널이라 스크롤로는 닫지 않는다 — 본문을 훑으며 스레드를 이어갈 수 있게.
+  // 패널 닫기: X / 취소 / Esc (답변 생성 중 Esc 는 무시).
+  // 바깥 클릭으로는 닫지 않는다 — 쓰던 질문이 본문을 한 번 누른 것으로 날아갔다(ui.tsx Modal 과 같은 규약).
+  // 다른 구간을 새로 드래그해 묻거나 표시된 구간을 누르면 openAsk/openThread 가 이 패널을 바꿔 끼운다.
+  // 우측에 고정된 패널이라 스크롤로도 닫지 않는다 — 본문을 훑으며 스레드를 이어갈 수 있게.
+  // 쓰던 질문이 있으면 Esc 한 번으로 버리지 않고 묻는다(Modal 과 같은 규약)
+  const [askDiscard, setAskDiscard] = useState(false);
   useEffect(() => {
     if (!pop) return;
-    const down = (e: MouseEvent) => {
-      // 답을 기다리는 동안에는 바깥을 눌러도 닫지 않는다 — 진행 중인 일을 클릭 한 번으로
-      // 잃으면 어디까지 갔는지 알 길이 없다. 새로 드래그해 묻는 건 openAsk 가 덮어쓴다.
-      if (asking) return;
-      if (popRef.current && !popRef.current.contains(e.target as Node))
-        setPop(null);
-    };
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !asking) setPop(null);
+      if (e.key !== "Escape" || asking) return;
+      // 위에 창이 떠 있으면(확인 창 등) 그쪽이 Esc 를 받는다 — 패널까지 같이 닫히면 안 된다
+      if (document.querySelector(".overlay")) return;
+      if (question.trim() || reviseText.trim()) {
+        setAskDiscard(true);
+        return;
+      }
+      setPop(null);
     };
-    document.addEventListener("mousedown", down);
     window.addEventListener("keydown", key);
-    return () => {
-      document.removeEventListener("mousedown", down);
-      window.removeEventListener("keydown", key);
-    };
-  }, [pop, asking]);
+    return () => window.removeEventListener("keydown", key);
+  }, [pop, asking, question, reviseText]);
 
-  // 목록 닫기: 바깥 클릭 / Esc (여는 트리거는 목록이 닫혀 있을 때만 렌더돼 경합이 없다)
+  // 목록 닫기: X / Esc (여는 트리거는 목록이 닫혀 있을 때만 렌더돼 경합이 없다). 바깥 클릭은 위와 같은 이유로 뺀다
   useEffect(() => {
     if (!listOpen || pop) return;
-    const down = (e: MouseEvent) => {
-      if (listRef.current && !listRef.current.contains(e.target as Node))
-        setListOpen(false);
-    };
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") setListOpen(false);
     };
-    document.addEventListener("mousedown", down);
     window.addEventListener("keydown", key);
-    return () => {
-      document.removeEventListener("mousedown", down);
-      window.removeEventListener("keydown", key);
-    };
+    return () => window.removeEventListener("keydown", key);
   }, [listOpen, pop]);
 
   // 자리 실측 — 트리거·패널이 공통으로 쓴다.
@@ -900,6 +892,18 @@ export function NoteCommentLayer({
           const target = confirmDel;
           setConfirmDel(null);
           if (target) void deleteComment(target.id);
+        }}
+      />
+
+      <DiscardModal
+        open={askDiscard}
+        onKeep={() => setAskDiscard(false)}
+        onDiscard={() => {
+          setAskDiscard(false);
+          setQuestion("");
+          setReviseText("");
+          setRevising(null);
+          setPop(null);
         }}
       />
 

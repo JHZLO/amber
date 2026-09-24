@@ -488,6 +488,32 @@ export function Modal({
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  // 이 창을 연 뒤 사용자가 직접 입력했는가 — Esc 로 닫기 전에 한 번 묻는 기준.
+  // input 이벤트는 **사람이 친 것**에만 난다(React 가 value 를 바꾸는 건 안 난다). 그래서 저장값을 늦게
+  // 불러와 채우는 창도 헛경보가 없고, 호출부마다 dirty 를 넘길 필요가 없다.
+  const typedRef = useRef(false);
+  const [askDiscard, setAskDiscard] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    typedRef.current = false;
+    setAskDiscard(false);
+    const box = boxRef.current;
+    if (!box) return;
+    const mark = (e: Event) => {
+      const el = e.target;
+      if (
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        el instanceof HTMLSelectElement ||
+        (el instanceof HTMLElement && el.isContentEditable)
+      ) {
+        typedRef.current = true;
+      }
+    };
+    box.addEventListener("input", mark);
+    return () => box.removeEventListener("input", mark);
+  }, [open]);
 
   // 열릴 때 초기 포커스 — 확인 모달이 Esc 로 취소만 되고 Enter 로 승인이 안 되던 문제.
   // 입력이 있는 모달은 손대지 않는다: 이미 autoFocus 로 입력을 잡거나(이름 변경·설정),
@@ -519,6 +545,13 @@ export function Modal({
   useEffect(() => {
     if (!open) return;
     const h = (e: KeyboardEvent) => {
+      // 모달 위에 모달이 떠 있으면(설정 위의 로그인 창, 입력 버리기 확인 등) 맨 위 것만 키를 받는다 —
+      // 한 번의 Esc 로 아래 것까지 같이 닫히면 진행 중이던 작업이 통째로 날아가고,
+      // 아래 것이 Tab 을 가두면 포커스가 위 창을 벗어나 뒤로 빠진다
+      const overlays = document.querySelectorAll(".overlay");
+      if (overlays.length > 1 && overlays[overlays.length - 1] !== boxRef.current?.parentElement) {
+        return;
+      }
       // 포커스가 모달 밖으로 새지 않게 가둔다 — 뒤에 있는 화면의 버튼이 Tab 으로 잡히면 안 된다
       if (e.key === "Tab") {
         const box = boxRef.current;
@@ -540,16 +573,17 @@ export function Modal({
         return;
       }
       if (e.key !== "Escape") return;
-      // 모달 위에 모달이 떠 있으면(설정 위의 로그인 창 등) 맨 위 것만 닫힌다 —
-      // 한 번의 Esc 로 아래 것까지 같이 닫히면 진행 중이던 작업이 통째로 날아간다
-      const overlays = document.querySelectorAll(".overlay");
-      if (overlays.length > 1 && overlays[overlays.length - 1] !== boxRef.current?.parentElement) {
-        return;
-      }
       // 커스텀 Select 드롭다운이 열려 있으면 그쪽이 먼저 닫히도록 모달은 유지
       if (document.querySelector(".select-menu")) return;
       // mermaid 확대 뷰어가 위에 떠 있으면 그쪽만 닫히게 모달은 유지
       if (document.querySelector(".mmd-zoom-overlay")) return;
+      // 입력한 게 있으면 Esc 한 번으로 버리지 않는다 — 한 번 더 묻는다. X 와 취소는 누른 것 자체가
+      // 뜻이라 묻지 않는다(키 하나는 실수로 눌리지만 버튼은 겨냥해야 눌린다).
+      if (typedRef.current) {
+        e.preventDefault();
+        setAskDiscard(true);
+        return;
+      }
       onClose();
     };
     window.addEventListener("keydown", h);
@@ -560,13 +594,11 @@ export function Modal({
   // body 로 portal — 호출한 자리에 그리면 `.section-wrap.hidden { display: none }` 에 걸려,
   // ⌘1~4 로 섹션을 바꾸는 순간 모달이 **화면에서만 사라지고 state 는 열린 채** 남는다.
   // 다른 오버레이 primitive(Tooltip·Select·TreeDragOverlay·MermaidZoom)와 규약도 맞춰진다.
+  // 바깥(배경판)을 눌러도 닫지 않는다 — 닫기는 X, 취소 버튼, Esc 뿐이다.
+  // AI 작성 지시처럼 길게 쓰던 입력이 창 밖을 한 번 잘못 누른 것으로 통째로 날아갔다.
+  // 입력칸에서 드래그로 글을 고르다 커서가 창 밖에서 떨어져도 같은 일이 난다.
   return createPortal(
-    <div
-      className="overlay"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
+    <div className="overlay">
       <div
         ref={boxRef}
         tabIndex={-1}
@@ -586,8 +618,49 @@ export function Modal({
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-foot">{footer}</div>}
       </div>
+      {/* 자기 자신을 한 겹 더 띄운다 — Esc 는 맨 위 창만 받으니(위 overlays 검사) 여기서 Esc 는 '계속 편집'이다 */}
+      <DiscardModal
+        open={askDiscard}
+        onKeep={() => setAskDiscard(false)}
+        onDiscard={() => {
+          setAskDiscard(false);
+          onClose();
+        }}
+      />
     </div>,
     document.body,
+  );
+}
+
+/** 입력한 내용이 있는 창을 닫으려 할 때의 확인. 파괴적 확인이라 초기 포커스는 '계속 편집'에 간다 */
+export function DiscardModal({
+  open,
+  onKeep,
+  onDiscard,
+}: {
+  open: boolean;
+  onKeep: () => void;
+  onDiscard: () => void;
+}) {
+  return (
+    <Modal
+      open={open}
+      title={t("common.closeDirty.title")}
+      narrow
+      onClose={onKeep}
+      footer={
+        <>
+          <button className="btn btn-sm" onClick={onKeep}>
+            {t("common.unsaved.keep")}
+          </button>
+          <button className="btn btn-sm btn-danger-ghost" onClick={onDiscard}>
+            {t("common.closeDirty.discard")}
+          </button>
+        </>
+      }
+    >
+      <p>{t("common.closeDirty.body")}</p>
+    </Modal>
   );
 }
 

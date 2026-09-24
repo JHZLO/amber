@@ -176,12 +176,9 @@ export function MermaidZoom({
   };
 
   return createPortal(
-    <div
-      className="mmd-zoom-overlay"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
+    // 배경을 눌러도 닫지 않는다 — 닫기는 X 와 Esc 뿐(ui.tsx Modal 과 같은 규약).
+    // 확대한 그림을 끌어 옮기다 커서가 판 밖에서 떨어지면 뷰어가 닫혀 버렸다.
+    <div className="mmd-zoom-overlay">
       <div className="mmd-zoom-modal">
         <div className="mmd-zoom-toolbar">
           <span className="mmd-zoom-pct">{Math.round(scale * 100)}%</span>

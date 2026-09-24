@@ -15,6 +15,10 @@ const ko = {
   "common.unsaved.body": "저장하지 않은 변경이 있어요. 버리고 이동할까요?",
   "common.unsaved.keep": "계속 편집",
   "common.unsaved.discard": "버리고 이동",
+  // 입력한 게 있는 창을 Esc 로 닫으려 할 때
+  "common.closeDirty.title": "입력한 내용을 버릴까요?",
+  "common.closeDirty.body": "이 창에서 입력한 내용이 사라져요.",
+  "common.closeDirty.discard": "버리고 닫기",
   // AI 결과 버리기 확인 — 결과가 떠 있거나 생성 중인 AI 모달을 닫을 때
   "common.aiDiscard.title": "AI 결과를 버릴까요?",
   "common.aiDiscard.body": "지금 닫으면 AI 가 쓴 내용이 사라져요. 남기려면 먼저 반영하세요.",
@@ -159,6 +163,9 @@ const en: Record<keyof typeof ko, string> = {
   "common.unsaved.body": "There are unsaved changes. Discard them and switch?",
   "common.unsaved.keep": "Keep editing",
   "common.unsaved.discard": "Discard & switch",
+  "common.closeDirty.title": "Discard what you typed?",
+  "common.closeDirty.body": "What you entered in this window will be lost.",
+  "common.closeDirty.discard": "Discard & close",
   "common.aiDiscard.title": "Discard the AI result?",
   "common.aiDiscard.body": "Closing now throws away what the AI wrote. Apply it first if you want to keep it.",
   "common.aiDiscard.bodyRunning": "The AI is still writing. Closing stops it and throws away what it has written so far.",
