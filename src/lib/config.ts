@@ -20,9 +20,12 @@ export const PROVIDER_LABELS: Record<AiProvider, string> = {
  *  있으면 그쪽이 이 목록을 대체한다(lib/modelOptions.ts). 여기 없는 id 는 설정의 '직접 입력'으로 쓴다 —
  *  새 모델이 나왔다고 앱을 고칠 필요가 없게. 모델명은 고유명사라 그대로 두고 괄호 수식어만 언어를 따른다. */
 export const PROVIDER_MODELS: Record<AiProvider, { id: string; label: string }[]> = {
+  // Opus 5.5 는 Claude Code 2.1.280 이상에서만 돈다(그 아래는 API 가 400 으로 막는다). 그래서 Opus 5 를
+  // 남겨 둔다 — CLI 를 올리기 전에는 그게 쓸 수 있는 최신 Opus 다.
   claude: [
-    { id: "claude-fable-5-1", label: `Fable 5.1 (${t("settings.model.latestQuality")})` },
-    { id: "claude-opus-5", label: `Opus 5 (${t("settings.model.quality")})` },
+    { id: "claude-fable-5-1", label: `Fable 5.1 (${t("settings.model.quality")})` },
+    { id: "claude-opus-5-5", label: `Opus 5.5 (${t("settings.model.latest")})` },
+    { id: "claude-opus-5", label: `Opus 5 (${t("settings.model.previousOpus")})` },
     { id: "claude-sonnet-5", label: `Sonnet 5 (${t("settings.model.balanced")})` },
     {
       id: "claude-haiku-4-5-20251001",
@@ -30,8 +33,10 @@ export const PROVIDER_MODELS: Record<AiProvider, { id: string; label: string }[]
     },
     { id: "", label: t("settings.model.cliDefault") },
   ],
+  // 카탈로그(~/.codex/models_cache.json)를 못 읽을 때만 쓰는 대체 목록 — 평소엔 카탈로그가 대신한다
   codex: [
-    { id: "gpt-5.6-sol", label: `GPT-5.6 (${t("settings.model.latest")})` },
+    { id: "gpt-6-astra", label: `GPT-6-Astra (${t("settings.model.latest")})` },
+    { id: "gpt-5.6-sol", label: "GPT-5.6-Sol" },
     { id: "gpt-5.5", label: "GPT-5.5" },
     { id: "", label: t("settings.model.cliDefault") },
   ],

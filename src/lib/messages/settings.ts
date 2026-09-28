@@ -72,11 +72,11 @@ const ko = {
   "settings.auth.rowAction": "로그인",
 
   // 모델 라벨 수식어 (config.ts 의 PROVIDER_MODELS 에서 조합)
-  "settings.model.latestQuality": "최신·품질 우선",
   "settings.model.quality": "품질 우선",
   "settings.model.balanced": "균형",
   "settings.model.fast": "속도·비용 절약",
   "settings.model.latest": "최신",
+  "settings.model.previousOpus": "이전 Opus",
   "settings.model.cliDefault": "CLI 기본 모델",
   "settings.model.custom": "직접 입력…",
   "settings.model.customPh": "예: claude-fable-5-1",
@@ -217,11 +217,11 @@ const en: Record<keyof typeof ko, string> = {
   "settings.auth.rowUnknown": "Can't tell",
   "settings.auth.rowAction": "Sign in",
 
-  "settings.model.latestQuality": "latest · best quality",
   "settings.model.quality": "best quality",
   "settings.model.balanced": "balanced",
   "settings.model.fast": "fast · lower cost",
   "settings.model.latest": "latest",
+  "settings.model.previousOpus": "previous Opus",
   "settings.model.cliDefault": "CLI default model",
   "settings.model.custom": "Custom model id…",
   "settings.model.customPh": "e.g. claude-fable-5-1",
