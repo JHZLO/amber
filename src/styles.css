@@ -6696,10 +6696,25 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
 .todo-body .detail > * {
   flex-shrink: 0;
 }
+/* 카드 묶음(할 일 / 리포트 / 배운 개념) — 판의 남은 높이를 차지하고 **카드와 같은 둥근 틀로 자른다.**
+   리포트를 굴리면 할 일 카드가 이 틀 위로 밀려 올라가 리포트가 커진다(lib/useStackCollapse.ts).
+   밀려 나가는 카드가 틀의 둥근 윗변에서 잘리니 네모로 끊기지 않는다.
+   clip 이지 hidden 이 아니다 — hidden 은 scrollIntoView(⌘F)가 몰래 굴려서 카드 배치가 어긋난다. */
+.todo-body .detail > .todo-stack {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: clip;
+  border-radius: var(--radius-lg);
+}
+.todo-stack > * {
+  flex-shrink: 0;
+}
 /* 할 일 카드 — 머리 띠(날짜, 밀린 할 일, 빠른 추가)와 요약 줄은 서고, 목록만 구른다.
    둘 다 길면 리포트가 먼저 줄어든다(아래 .report 의 flex-shrink) — 오늘 할 일이 이 판의 주인공이다.
    160px 은 빈 날의 카드 높이쯤이라 짧은 카드를 부풀리지 않는다. */
-.todo-body .detail > .todo-card {
+.todo-stack > .todo-card {
   flex: 0 1 auto;
   min-height: 160px;
   display: flex;
@@ -6775,7 +6790,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
    flex 수축은 '가중치 × 원래 높이'로 나뉘어서, 가중치가 작으면 할 일이 세 개뿐인 날에도 목록이
    함께 눌려 스크롤이 생겼다. 가중치를 크게 줘 리포트가 거의 전부를 먼저 떠안고, 최소 높이에
    닿은 뒤에야 할 일이 줄어든다. 최소 높이는 둘 다 긴 날에 리포트가 한두 줄로 납작해지지 않을 만큼. */
-.todo-body .detail > .report:has(.report-body, .note-stream-body, .report-edit-split) {
+.todo-stack > .report:has(.report-body, .note-stream-body, .report-edit-split) {
   flex: 1 1000 auto;
   min-height: min(40%, 300px);
 }

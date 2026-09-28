@@ -70,6 +70,7 @@ import { MiniCalendar } from "./MiniCalendar";
 import { PageFind } from "./PageFind";
 import { DayTimetable, type TtView } from "./DayTimetable";
 import { DailyReportPanel } from "./DailyReportPanel";
+import { useStackCollapse } from "../lib/useStackCollapse";
 import { WeeklyReportPanel } from "./WeeklyReportPanel";
 import { TodoDrawer } from "./TodoDrawer";
 import { useReportGeneratingDates } from "../lib/reportRun";
@@ -188,6 +189,10 @@ export function TodoView({
   const childDone = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLElement | null>(null); // ⌘F 검색 대상(체크리스트·리포트 전체)
+  const stackRef = useRef<HTMLDivElement | null>(null);
+  const todoCardRef = useRef<HTMLDivElement | null>(null);
+  // 리포트를 굴리면 할 일 카드가 밀려 올라가고 리포트가 커진다 — 날짜/단위가 바뀌면 펼친다
+  useStackCollapse(stackRef, todoCardRef, `${unit}:${selected}`);
   // 드래그 모델 소스 = **지금 그려진 목록**(일: todos·주: weekTodos) — 아래 rows 계산 뒤 대입.
   // 일 목록에 고정하면 주 모드에서 startDrag 가 행을 못 찾아 grip 이 조용히 죽는다.
   const dragRowsRef = useRef<Todo[]>([]);
@@ -1113,7 +1118,10 @@ export function TodoView({
         {/* 할 일 카드 — 왼쪽의 달력/시간표 카드와 같은 문법이다. **날짜 줄이 카드의 머리 띠**다:
             달력 카드가 월 제목과 ‹ › 를 카드 안에 두듯, 이 날짜의 제목과 이동도 카드 안에 둔다.
             카드 밖 맨바닥에 두면 판 위에서 이 줄만 혼자 떠 보인다(카드 판 §7). */}
-        <div className="todo-card">
+        {/* 카드 묶음 — 둥근 틀 하나로 자른다. 리포트를 읽으려고 굴리면 할 일 카드가 이 틀 위로 밀려
+            올라가고(useStackCollapse) 리포트가 그만큼 커진다. 밀려 나가는 카드도 둥근 모서리로 잘린다 */}
+        <div className="todo-stack" ref={stackRef}>
+        <div className="todo-card" ref={todoCardRef}>
         <div className="detail-head todo-head">
           <h1 className="detail-title">
             {unit === "week"
@@ -1336,6 +1344,7 @@ export function TodoView({
             </div>
           </div>
         )}
+        </div>
       </section>
 
       {/* '언젠가' 서랍 — .body 그리드의 **암묵 3열**에 얹는다(grid-column: 3).
