@@ -5538,14 +5538,18 @@ html.widget-root #root {
     transparent 1px var(--tt-hour)
   );
 }
-/* 시간 블록 — 미완료=아웃라인+좌측 바(선택 시그니처 §3), 진행 중=primary 필, 완료=흐림+취소선 */
+/* 시간 블록 — 앉은 유리(DESIGN.md §2 유리). 테두리가 있는 면이라 유리다.
+   미완료=면 유리 + 좌측 바(선택 시그니처 §3), 진행 중=강조 유리, 완료=흐림+취소선.
+   채움 아래에 --surface 를 깐다 — 판의 시간 눈금이 블록 안으로 비치면 줄이 글자를 가른다
+   (sticky 머리와 같은 처리). 예전엔 불투명 --surface 에 --border-strong 선이라 유리 카드 위에서
+   혼자 스티커였다. */
 .tt-block {
   position: absolute;
   min-width: 28px; /* lane 이 아무리 좁아져도 잡을 수 있게 (폭 하한 — ttLayout.boxWidth 주석) */
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--glass-edge);
   border-radius: var(--radius-sm);
-  background: var(--surface);
-  box-shadow: inset 2px 0 0 var(--text);
+  background: var(--glass-fill), var(--surface);
+  box-shadow: inset 2px 0 0 var(--text), var(--glass-sheen), var(--glass-seat);
   padding: 3px 8px 3px 10px;
   font-size: 12px;
   line-height: 1.35;
@@ -5558,11 +5562,15 @@ html.widget-root #root {
   /* left/width 는 lane 밀림 전용 — 드래그가 남의 시간대를 침범하는 순간 이웃이 실시간으로
      밀려 2열이 된다. transform 으로는 폭이 안 바뀌어(글자가 찌그러진다) 예외로 둔다:
      블록은 position:absolute 라 형제 레이아웃을 다시 흘리지 않는다. (DESIGN.md §9.2) */
-  transition: background 0.12s, box-shadow 0.12s,
+  transition: border-color 0.12s, box-shadow 0.12s,
     left 0.18s var(--ease-out), width 0.18s var(--ease-out);
 }
+/* hover 는 유리가 짙어지는 것 — 채움, 테, 빛줄기, 접촉 그림자가 함께 움직인다 */
 .tt-block:hover {
-  background: var(--surface-2);
+  background: var(--glass-fill-hover), var(--surface);
+  border-color: var(--glass-edge-hover);
+  box-shadow: inset 2px 0 0 var(--text), var(--glass-sheen-hover),
+    var(--glass-seat-hover);
 }
 .tt-title {
   overflow: hidden;
@@ -5577,44 +5585,57 @@ html.widget-root #root {
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
 }
+/* 진행 중 = 켜짐. 흰 필 대신 두꺼운 유리로 말한다(§2 강조 유리) — 글자는 늘 --text 다 */
 .tt-block.now {
-  background: var(--primary-bg);
-  border-color: var(--primary-bg);
-  color: var(--primary-fg);
-  box-shadow: none;
+  background: var(--glass-fill-accent), var(--surface);
+  border-color: var(--glass-edge-accent);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
+  font-weight: 700;
 }
 .tt-block.now:hover {
-  background: var(--primary-bg-hover);
+  background: var(--glass-fill-accent-hover), var(--surface);
+  border-color: var(--glass-edge-accent);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat-hover);
 }
 .tt-block.now .tt-time {
-  color: var(--primary-fg);
-  opacity: 0.72;
+  color: var(--text-2);
+  font-weight: 400;
 }
 .tt-block.done {
   color: var(--text-3);
-  box-shadow: inset 2px 0 0 var(--text-3);
+  box-shadow: inset 2px 0 0 var(--text-3), var(--glass-sheen), var(--glass-seat);
+}
+.tt-block.done:hover {
+  box-shadow: inset 2px 0 0 var(--text-3), var(--glass-sheen-hover),
+    var(--glass-seat-hover);
 }
 .tt-block.done .tt-title {
   text-decoration: line-through;
 }
 /* 캐스케이드 = 큰 블록 '안'의 일정. 색이 아니라 고도로 말한다(§3) — 들여쓰기(인라인 style)
-   + 그림자로 떠 있고, --surface 링으로 아래 블록의 테두리와 붙지 않게 뗀다. */
+   + 뜬 그림자, --surface 링으로 아래 블록의 테두리와 붙지 않게 뗀다. 바탕이 --surface 라
+   아래 블록의 글자가 비쳐 올라오지 않는다. */
 .tt-block.cascade {
-  box-shadow: inset 2px 0 0 var(--text), 0 0 0 1px var(--surface), var(--shadow);
+  box-shadow: inset 2px 0 0 var(--text), var(--glass-sheen),
+    0 0 0 1px var(--surface), var(--shadow);
 }
 .tt-block.cascade.done {
-  box-shadow: inset 2px 0 0 var(--text-3), 0 0 0 1px var(--surface),
-    var(--shadow);
+  box-shadow: inset 2px 0 0 var(--text-3), var(--glass-sheen),
+    0 0 0 1px var(--surface), var(--shadow);
 }
 .tt-block.cascade.now {
-  box-shadow: 0 0 0 1px var(--surface), var(--shadow);
+  box-shadow: var(--glass-sheen), 0 0 0 1px var(--surface), var(--shadow);
 }
-/* 잡고 있는 것과 만드는 중인 것은 커서를 1:1 로 따른다 — 밀리는 건 이웃뿐(§8) */
+/* 잡고 있는 것과 만드는 중인 것은 커서를 1:1 로 따른다 — 밀리는 건 이웃뿐(§8).
+   들린 블록은 앉은 그림자 대신 뜬 그림자다 */
 .tt-block.dragging {
-  box-shadow: var(--shadow);
+  box-shadow: inset 2px 0 0 var(--text), var(--glass-sheen-hover), var(--shadow);
   z-index: 6;
   cursor: grabbing;
   transition: none;
+}
+.tt-block.now.dragging {
+  box-shadow: var(--glass-sheen-hover), var(--shadow);
 }
 /* 커서로 제스처를 알린다: 맨 그리드(컬럼 우측 거터 포함) = 끌어서 만들기,
    블록 = 잡아서 옮기기. ⌥ 를 누르고 있으면 블록 위도 '겹쳐 만들기'로 바뀐다. */
@@ -5624,17 +5645,24 @@ html.widget-root #root {
 .day-tt.alt .tt-block {
   cursor: crosshair;
 }
-/* 생성 고스트 — 드래그 중 범위 미리보기 */
+/* 생성 고스트 — 드래그 중 범위 미리보기. 커서 밑에 떠 있는 판이라 뜬 유리다(§2 판 유리):
+   뒤가 흐려 비쳐서 눈금과 이웃 블록 위에 떠 있는 게 읽히고, 강조 테로 '지금 만드는 것'을 말한다.
+   예전 점선 + 불투명 --surface-2 는 유리 카드 위에 뚫린 회색 구멍이었다. */
 .tt-ghost {
-  border-style: dashed;
-  background: var(--surface-2);
-  box-shadow: none;
+  background: var(--glass-fill-accent), var(--glass-panel);
+  border-color: var(--glass-edge-accent);
+  -webkit-backdrop-filter: var(--glass-blur-panel);
+  backdrop-filter: var(--glass-blur-panel);
+  box-shadow: var(--glass-sheen), var(--shadow);
   pointer-events: none;
   z-index: 5;
   transition: none;
 }
 .tt-ghost.cascade {
-  box-shadow: 0 0 0 1px var(--surface), var(--shadow);
+  box-shadow: var(--glass-sheen), 0 0 0 1px var(--surface), var(--shadow);
+}
+.tt-ghost .tt-time {
+  color: var(--text-2);
 }
 /* 아래 가장자리 리사이즈 핸들 */
 .tt-resize {
@@ -5666,9 +5694,6 @@ html.widget-root #root {
 .tt-del:hover {
   color: var(--danger);
   background: var(--danger-soft);
-}
-.tt-block.now .tt-del {
-  color: var(--primary-fg);
 }
 /* 블록 제목 인라인 편집 */
 .tt-edit {
