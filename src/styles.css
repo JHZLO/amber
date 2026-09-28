@@ -2985,11 +2985,20 @@ html.widget-root #root {
 .tree-row .row-actions .icon-btn {
   border: none;
   background: transparent;
+  box-shadow: none; /* .icon-btn 의 유리 그림자까지 걷어야 고스트다(할 일 행과 같은 이유) */
   color: var(--text-3);
 }
 .tree-row .row-actions .icon-btn:hover {
-  background: var(--surface-3);
+  background: var(--glass-fill-hover);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
   color: var(--text);
+}
+/* 삭제는 danger 시그니처 — 위 톤다운 규칙이 .icon-btn.danger:hover 보다 특이도가 높아
+   트리의 삭제 버튼만 빨갛게 안 바뀌던 것을 할 일 행과 같게 맞춘다 */
+.tree-row .row-actions .icon-btn.danger:hover {
+  background: var(--danger-soft);
+  box-shadow: none;
+  color: var(--danger);
 }
 /* 트리 구역 라벨 — '내 다이어그램'(내가 만든 것)과 '데이터베이스'(연결이 채우는 것)를 가른다.
    폴더가 아니라 성격이 다르다는 신호라 행이 아닌 eyebrow(§4)로 쓴다. 연결이 없으면 렌더되지 않는다. */
@@ -6260,11 +6269,15 @@ body.resizing-tt * {
   border-radius: var(--radius); /* 구분선 없이 여백+hover 로만 구분 (선 과다 방지) */
   transition: background 0.12s, box-shadow 0.12s, transform 0.12s;
 }
+/* 목록 행 hover 는 **틴트만**(DESIGN §2 유리 — 목록 행). 예전엔 불투명 --surface-2 판이라
+   넓은 카드에서 행 전체 폭의 회색 띠가 떠올라 '선택됨'처럼 읽혔다. 트리 행과 같은 농도다. */
 .todo-row:hover {
-  background: var(--surface-2);
+  background: var(--glass-fill);
 }
-.todo-row:hover .checkbox:not(.checked) {
-  color: var(--text-3); /* hover 시 옅은 체크 힌트 (Todoist) */
+/* 체크 힌트는 **체크박스에 올렸을 때만**(Todoist). 행 어디에든 올리면 켜지던 탓에
+   손이 지나간 할 일마다 체크 표시가 떠서 완료된 것과 구별이 안 됐다. */
+.todo-row .checkbox:not(.checked):hover {
+  color: var(--text-3);
 }
 /* 드래그 순서 조정 핸들 — 좌측 여백에 hover 시만 표시(레이아웃 안 밀림) */
 .todo-grip {
@@ -6499,19 +6512,25 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   opacity: 1;
   pointer-events: auto;
 }
+/* 행 위의 버튼은 .icon-btn.ghost 와 같은 문법 — 쉴 때 면이 없고, 올렸을 때만 유리가 비친다.
+   테두리와 배경만 지우고 그림자(.icon-btn 의 glass-sheen/seat)를 남겨 둔 탓에 버튼마다
+   윗면 하이라이트와 아래 그림자가 붙어 행 위에 작은 상자 셋이 떠 있었다. */
 .todo-row .row-actions .icon-btn {
   border: none;
   background: transparent;
+  box-shadow: none;
   color: var(--text-3);
 }
 .todo-row .row-actions .icon-btn:hover {
-  background: var(--surface-3);
+  background: var(--glass-fill-hover);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
   color: var(--text);
 }
 /* 삭제(파괴)는 danger 시그니처 유지 — 오버레이 톤다운 규칙(위)보다 높은 특이도로 이겨야 함.
    밀린-스트립 삭제 버튼(.todo-overdue-actions)과 hover 색을 일치시킨다(§8). */
 .todo-row .row-actions .icon-btn.danger:hover {
   background: var(--danger-soft);
+  box-shadow: none;
   color: var(--danger);
 }
 
@@ -6564,7 +6583,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   padding: 0 6px 6px;
 }
 .todo-overdue-inner .todo-row:hover {
-  background: var(--surface-2);
+  background: var(--glass-fill);
 }
 /* 카드 안의 밀린 할 일 — 상자 속 상자가 아니라 날짜 띠와 빠른 추가 사이의 **띠 하나**다 */
 .todo-card > .todo-overdue {
