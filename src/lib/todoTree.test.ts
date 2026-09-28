@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  dayProgress,
   ancestorPath,
   childrenOf,
   clampDropDepth,
@@ -328,5 +329,46 @@ describe("ancestorPath", () => {
       { id: 2, content: "B", parent_id: 1 },
     ];
     expect(ancestorPath(loop, 1)).toEqual(["B", "A"]);
+  });
+});
+
+describe("dayProgress — 달력 칸과 목록 요약이 같이 쓰는 하루 진행률", () => {
+  const row = (id: number, parent_id: number | null, done: number, gone?: 0 | 1) => ({
+    id,
+    parent_id,
+    done,
+    gone,
+  });
+
+  it("다른 날로 넘긴 줄도 센다 — 반만 끝내고 넘긴 날이 다 끝낸 날로 보이면 안 된다", () => {
+    // 9/23: 묶음 둘(머리글) 아래 끝낸 것 셋, 9/28 로 넘긴 미완료 둘(고스트)
+    const rows = [
+      row(1, null, 1),
+      row(2, 1, 1),
+      row(3, 1, 1),
+      row(4, null, 0),
+      row(5, 4, 1),
+      row(6, 4, 0), // 고스트
+      row(7, 4, 0), // 고스트
+    ];
+    expect(dayProgress(rows)).toEqual({ done: 3, total: 5 });
+  });
+
+  it("묶음 머리글은 세지 않고, 하위가 달린 일반 항목은 센다", () => {
+    const rows = [row(1, null, 0), row(2, 1, 1), row(3, 2, 0)];
+    expect(dayProgress(rows)).toEqual({ done: 1, total: 2 });
+  });
+
+  it("자식 없는 최상위 줄은 일이다", () => {
+    expect(dayProgress([row(1, null, 1), row(2, null, 0)])).toEqual({ done: 1, total: 2 });
+  });
+
+  it("부모가 다른 날에 있으면 그 줄이 루트가 된다 — 자식이 있으면 머리글", () => {
+    const rows = [row(10, 99, 0), row(11, 10, 1)];
+    expect(dayProgress(rows)).toEqual({ done: 1, total: 1 });
+  });
+
+  it("지워진 기록(gone)은 세지 않는다", () => {
+    expect(dayProgress([row(1, null, 1, 1), row(2, null, 0)])).toEqual({ done: 0, total: 1 });
   });
 });

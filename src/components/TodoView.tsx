@@ -13,7 +13,7 @@ import type { DayTodoCount, TimeBlock, Todo, TodoAncestor, TodoUnit } from "../t
 import {
   createTodo,
   deleteTodo,
-  listMonthCounts,
+  listRangeRows,
   createTodo as createTodoRow,
   listOverdueOpen,
   listParked,
@@ -34,6 +34,7 @@ import {
 import {
   childrenOf as childrenIn,
   clampDropDepth,
+  dayProgress,
   descendantCount,
   flattenSubset,
   resolveDrop,
@@ -571,11 +572,21 @@ export function TodoView({
     try {
       const dates = monthGridDates(cursor.year, cursor.month);
       const [from, to] = [dates[0], dates[dates.length - 1]];
-      const rows = await listMonthCounts(from, to);
+      const rows = await listRangeRows(from, to);
       const vac = await listVacations(from, to);
       if (seq !== countsSeq.current) return; // 달을 연달아 넘겼다 — 옛 응답은 버린다
+      // 날짜별로 묶어 목록 아래 요약과 같은 규칙(dayProgress)으로 센다
+      const byDay = new Map<string, typeof rows>();
+      for (const r of rows) {
+        const list = byDay.get(r.day);
+        if (list) list.push(r);
+        else byDay.set(r.day, [r]);
+      }
       const map: Record<string, DayTodoCount> = {};
-      for (const r of rows) map[r.due_date] = r;
+      for (const [day, list] of byDay) {
+        const p = dayProgress(list);
+        if (p.total > 0) map[day] = { due_date: day, ...p };
+      }
       setCounts(map);
       setVacations(vac);
       // 주 표식은 그 주 첫 칸에만 찍으므로 주 시작일 키로 따로 센다
@@ -812,10 +823,9 @@ export function TodoView({
   const rows = unit === "week" ? weekTodos : todos;
   dragRowsRef.current = rows;
   const childrenOf = (pid: number) => childrenIn(rows, pid);
-  // 하단 진행률은 **이 날짜가 맡은 일**만 센다 — 고스트는 다른 날로 넘긴 기록이라 제외한다.
-  // (캘린더 점·월 요약도 due_date 기준이라 listMonthCounts 와 같은 기준이 된다)
-  const ownTop = topLevel.filter((t) => t.carried !== 1);
-  const doneTop = ownTop.filter((t) => t.done === 1).length;
+  // 하단 진행률은 달력 칸과 같은 규칙으로 센다(todoTree.dayProgress) — 넘긴 줄도 그 날 한 일이고,
+  // 묶음 머리글은 일이 아니라 제목이다. 최상위 줄만 세던 때는 묶음 셋인 날이 '1 of 1'로 나왔다.
+  const progress = dayProgress(todos);
   // 밀린 목록도 본문처럼 계층으로 — 부모가 빠질 수 있는 부분 집합이라 flattenSubset
   // 렌더 본문에서 계산하면 빠른 추가 입력의 키 입력마다 재계산된다 (overdue 는 안 바뀌는데도)
   const overdueRows = useMemo(() => flattenSubset(overdue), [overdue]);
@@ -1293,9 +1303,9 @@ export function TodoView({
             {t("todos.week.hint")}
           </div>
         ) : (
-          ownTop.length > 0 && (
+          progress.total > 0 && (
             <div className="detail-meta">
-              {t("todos.meta.done", { total: ownTop.length, done: doneTop })}
+              {t("todos.meta.done", progress)}
             </div>
           )
         )}

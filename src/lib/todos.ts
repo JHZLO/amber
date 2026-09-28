@@ -58,18 +58,26 @@ export async function listTodos(date: string): Promise<Todo[]> {
   );
 }
 
-/** 날짜 범위(캘린더 그리드) 날짜별 개수 — 점·월 요약용 */
-export async function listMonthCounts(
+/** 날짜 범위(캘린더 그리드)의 줄 — 날짜별로 listTodos 와 **같은 줄**을 돌려준다.
+ *  달력 칸의 진행률을 목록과 같은 규칙(todoTree.dayProgress)으로 세려고 개수 대신 줄을 받는다.
+ *  예전엔 due_date 로만 COUNT 해서 넘긴 줄이 빠졌고, 반만 끝낸 날이 다 끝낸 날처럼 보였다.
+ *  고스트의 조건과 조인은 listTodos 와 똑같이 둔다 — 한쪽만 고치면 칸과 목록이 다시 어긋난다. */
+export async function listRangeRows(
   from: string,
   to: string,
-): Promise<DayTodoCount[]> {
+): Promise<(Pick<Todo, "id" | "parent_id" | "done" | "gone"> & { day: string })[]> {
   const db = await getDb();
-  return db.select<DayTodoCount[]>(
-    `SELECT due_date, COUNT(*) AS total, COALESCE(SUM(done), 0) AS done
-       FROM todos
-      WHERE due_date BETWEEN $1 AND $2 AND scope = 'day' AND parked_at IS NULL
-      GROUP BY due_date`,
-    [from, to],
+  return db.select(
+    `SELECT t.due_date AS day, t.id, t.parent_id, t.done, 0 AS gone
+       FROM todos t
+      WHERE t.due_date BETWEEN $1 AND $2 AND t.scope = 'day' AND t.parked_at IS NULL
+     UNION ALL
+     SELECT c.date AS day, c.todo_id AS id, c.parent_id, COALESCE(t.done, c.done) AS done,
+            CASE WHEN t.id IS NULL THEN 1 ELSE 0 END AS gone
+       FROM todo_carries c
+       LEFT JOIN todos t ON t.id = c.todo_id AND t.scope = 'day' AND t.parked_at IS NULL
+      WHERE c.date BETWEEN $3 AND $4 AND (t.id IS NULL OR t.due_date <> c.date)`,
+    [from, to, from, to],
   );
 }
 

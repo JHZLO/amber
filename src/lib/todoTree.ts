@@ -176,3 +176,26 @@ export function resolveDrop(
   }
   return { newParentId, newSortOrder, orderedSiblingIds };
 }
+
+/** 하루의 진행률 — 달력 칸과 목록 아래 요약이 **같은 규칙**으로 센다.
+ *
+ *  - 그 날 목록에 보이는 줄을 센다. 다른 날로 넘긴 줄(고스트)도 그 날 하던 일이라 넣는다 —
+ *    빼면 반만 끝내고 나머지를 넘긴 날이 '다 끝낸 날'(6/6)로 보인다.
+ *  - 지워진 기록(gone)은 뺀다. 이제 없는 일이다.
+ *  - 묶음 머리글(자식이 있는 최상위 줄)은 뺀다 — 일이 아니라 제목이고, 자식이 끝나면 저절로
+ *    체크되므로 넣으면 같은 일을 두 번 센다. 목록이 머리글로 그리는 규칙(visibleRoots)과 같다. */
+export function dayProgress<T extends TodoNode & { done: number; gone?: 0 | 1 }>(
+  rows: readonly T[],
+): { done: number; total: number } {
+  const live = rows.filter((r) => r.gone !== 1);
+  const withKids = new Set(live.map((r) => r.parent_id).filter((p) => p != null));
+  const roots = new Set(visibleRoots(live).map((r) => r.id));
+  let done = 0;
+  let total = 0;
+  for (const r of live) {
+    if (roots.has(r.id) && withKids.has(r.id)) continue;
+    total++;
+    if (r.done === 1) done++;
+  }
+  return { done, total };
+}
