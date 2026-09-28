@@ -62,9 +62,28 @@ export function thumbLength(
 export function ScrollDroplet() {
   const [drop, setDrop] = useState<Drop | null>(null);
   const timer = useRef<number | null>(null);
+  // 지금 표시가 따라가는 칸 — 떠 있는 동안 그 칸이 아직 화면에 있는지 본다
+  const target = useRef<HTMLElement | null>(null);
+  const raf = useRef<number | null>(null);
 
   useEffect(() => {
-    const hide = () => setDrop(null);
+    const hide = () => {
+      setDrop(null);
+      target.current = null;
+      if (raf.current !== null) cancelAnimationFrame(raf.current);
+      raf.current = null;
+    };
+    // 굴리던 칸이 사라지거나 숨겨지면 표시도 그 자리에서 거둔다. 드롭다운은 열릴 때 고른 항목으로
+    // 스스로 스크롤해서(ui.tsx Select) 표시를 띄우는데, 닫히면 목록만 없어지고 표시는 사라지기까지
+    // 900ms 동안 허공에 떠 있었다. 모달이 닫힐 때도 같다. 떠 있는 동안만(최대 900ms) 프레임마다 본다.
+    const watch = () => {
+      const el = target.current;
+      if (!el || !el.isConnected || el.getClientRects().length === 0) {
+        hide();
+        return;
+      }
+      raf.current = requestAnimationFrame(watch);
+    };
     const onScroll = (e: Event) => {
       const el = e.target;
       // document 스크롤(창 전체)은 amber 에 없다 — 패널 안에서만 구른다
@@ -79,6 +98,8 @@ export function ScrollDroplet() {
         top: rect.top + INSET + (track - height) * p,
         height,
       });
+      target.current = el;
+      if (raf.current === null) raf.current = requestAnimationFrame(watch);
       if (timer.current) clearTimeout(timer.current);
       timer.current = window.setTimeout(hide, FADE_AFTER_MS);
     };
@@ -87,6 +108,7 @@ export function ScrollDroplet() {
     return () => {
       document.removeEventListener("scroll", onScroll, true);
       if (timer.current) clearTimeout(timer.current);
+      if (raf.current !== null) cancelAnimationFrame(raf.current);
     };
   }, []);
 
