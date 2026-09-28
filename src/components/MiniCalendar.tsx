@@ -172,7 +172,10 @@ export function MiniCalendar({
             ))}
           </div>
 
-          <div className={`cal-grid ${unit === "week" ? "by-week" : ""}`}>
+          {/* 날짜 칸은 **타일**이다 — 판이 넓어지면 칸 사이가 벌어지는 대신 면이 커지고, 그 안에
+              완료 진행 막대와 (넓을 때) 개수, 공휴일/휴가 이름이 들어간다. 상한을 걸어 가운데 세우면
+              좌우가 비고, 원을 칸만 넓히면 날짜 사이가 벌어진다 — 둘 다 판을 휑하게 만들었다. */}
+          <div className={`cal-grid cal-days ${unit === "week" ? "by-week" : ""}`}>
             {monthGridDates(year, month).map((date) => {
               const d = parseLocalDate(date);
               const inMonth =
@@ -211,7 +214,8 @@ export function MiniCalendar({
                         ? ""
                         : "adjacent";
               // 쉬는 날은 일요일과 같은 빨강 — 공휴일이 곧 '일요일 취급'이라는 관례를 따른다.
-              // 이름은 칸에 그리지 않는다(그리면 판이 복잡해 보인다) — hover tooltip 으로만.
+              // 이름은 판이 넓을 때만 칸 오른쪽 위에 적는다(styles.css .cal-label, 컨테이너 쿼리).
+              // 좁을 때는 적을 자리가 없어 hover tooltip 으로만 — 그래서 tooltip 은 늘 남겨 둔다.
               //
               // 휴가는 노랑 필로 따로 센다: 공휴일은 모두에게 같은 사실이고 휴가는 내가 정한
               // 것이라 뜻이 다르다. 겹치면 휴가가 이긴다 — 내가 표시한 것이 안 보이면 표시의
@@ -235,17 +239,36 @@ export function MiniCalendar({
               // 감싸는 건 칸이 아니라 **날짜 원** — 칸(56px) 기준으로 띄우면 원에서 한참
               // 떨어져 다음 행 높이에 떠서 아랫줄 날짜의 라벨처럼 읽힌다.
               const num = <span className="cal-num">{d.getDate()}</span>;
+              // 진행 막대 — 점(있다/없다)보다 '얼마나 했나'를 말한다. 다 끝낸 날은 톤을 낮춘다:
+              // 지난 날들이 줄지어 하얗게 서면 정작 오늘보다 눈에 띈다. AI 가 리포트를 만드는
+              // 날은 할 일이 없어도 빈 막대를 띄워 깜빡인다(어느 날이 도는지 보여야 한다).
+              const pct = c && c.total > 0 ? Math.round((c.done / c.total) * 100) : 0;
               return (
                 <button
                   key={date}
-                  className={`cal-cell ${cls}${tone}`}
+                  className={`cal-cell cal-tile ${cls}${tone}`}
                   onClick={() => onSelect(date)}
                 >
                   {tip ? <Tooltip label={tip}>{num}</Tooltip> : num}
-                  <span
-                    className={`cal-dot ${!c ? "none" : hasOpen ? "" : "on"}${gen ? " gen" : ""}`}
-                    aria-hidden="true"
-                  />
+                  {label && inMonth && (
+                    <span className="cal-label" aria-hidden="true">
+                      {label}
+                    </span>
+                  )}
+                  {(c || gen) && (
+                    <span className="cal-prog" aria-hidden="true">
+                      <span
+                        className={`cal-bar${c && !hasOpen ? " full" : ""}${gen ? " gen" : ""}`}
+                      >
+                        <i style={{ width: `${c && c.done > 0 ? Math.max(pct, 6) : 0}%` }} />
+                      </span>
+                      {c && (
+                        <span className="cal-count">
+                          {c.done}/{c.total}
+                        </span>
+                      )}
+                    </span>
+                  )}
                   {wc && wc.total > 0 && (
                     <span
                       className={`cal-week-mark ${wc.done < wc.total ? "" : "on"}`}
