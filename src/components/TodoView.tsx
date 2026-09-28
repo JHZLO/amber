@@ -719,6 +719,13 @@ export function TodoView({
     setEditText(t.content);
   }
 
+  /** 편집 칸을 글 높이에 맞춘다. 이 WebView 에는 field-sizing 이 없어 직접 잰다 */
+  function growToFit(el: HTMLTextAreaElement | null) {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + (el.offsetHeight - el.clientHeight)}px`;
+  }
+
   /** 편집 취소(Esc) — 저장하지 않고 닫는다 */
   function cancelEdit() {
     editDone.current = true;
@@ -884,14 +891,28 @@ export function TodoView({
           />
         )}
         {editingId === todo.id && !readOnly ? (
-          <input
+          // textarea — Shift+Enter 로 줄을 바꾼다(Enter 는 저장). 글이 늘면 칸도 따라 자란다
+          <textarea
+            ref={growToFit}
             className="input todo-edit"
             autoFocus
+            rows={1}
             value={editText}
-            onChange={(e) => setEditText(e.target.value)}
+            onChange={(e) => {
+              setEditText(e.target.value);
+              growToFit(e.target);
+            }}
+            onFocus={(e) => {
+              // 끝에 커서 — 여러 줄 글을 열면 첫 줄 맨 앞에 서 있어서 이어 쓰려면 끝까지 가야 했다
+              const n = e.target.value.length;
+              e.target.setSelectionRange(n, n);
+            }}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing) return;
-              if (e.key === "Enter") void saveEdit(todo);
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void saveEdit(todo);
+              }
               if (e.key === "Escape") cancelEdit();
             }}
             // 바깥을 클릭해도 편집 내용을 버리지 않는다 — 취소는 Esc

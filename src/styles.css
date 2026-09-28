@@ -2078,6 +2078,7 @@ body.resizing-col .pane-resizer::after {
   line-height: 1.45;
   color: var(--text);
   overflow-wrap: anywhere;
+  white-space: pre-wrap; /* 목록에서 넣은 줄바꿈을 서랍에서도 그대로 */
 }
 .parked-card-kids,
 .parked-card-age {
@@ -6535,8 +6536,10 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
 .todo-text {
   flex: 1;
   min-width: 0;
-  /* 길면 잘라내지 않고 줄바꿈해서 전부 보여준다 (긴 토큰·URL 도 끊어서) */
+  /* 길면 잘라내지 않고 줄바꿈해서 전부 보여준다 (긴 토큰·URL 도 끊어서).
+     pre-wrap — Shift+Enter 로 넣은 줄바꿈을 저장한 모양 그대로 보여 준다 */
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
   font-size: 14px;
   line-height: 1.5;
   color: var(--text);
@@ -6571,6 +6574,14 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   height: 30px;
   padding: 4px 8px;
   font-size: 13.5px;
+}
+/* 줄을 바꿀 수 있는 편집 칸 — 높이는 growToFit 이 글에 맞춘다. 손잡이와 속 스크롤은 없다 */
+textarea.todo-edit {
+  display: block;
+  resize: none;
+  overflow: hidden;
+  line-height: 1.5;
+  font-family: inherit;
 }
 /* 메인 목록 액션: 행 위에 겹쳐 페이드인 (tree-row 오버레이와 동일 패턴) */
 /* 흐름 안에 두어 항상 자리를 확보 → 줄바꿈된 텍스트가 아이콘을 피해 접힌다(덮이지 않음).
