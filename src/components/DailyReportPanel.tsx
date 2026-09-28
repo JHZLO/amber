@@ -297,6 +297,9 @@ export function DailyReportPanel({
         ) : null}
       </div>
 
+      {/* 머리 띠 아래는 카드 **안에서** 스크롤한다 — 오른쪽 판 전체가 구르면 카드 모서리가 화면 밖으로
+          밀려 네모난 글 덩어리만 남았다(왼쪽 시간표 카드와 같은 문법, styles.css .report-scroll) */}
+      <div className="report-scroll">
       {/* ① 미생성 */}
       {phase === "idle" && (
         <p className="report-hint">
@@ -417,6 +420,7 @@ export function DailyReportPanel({
       {phase === "error" && error && <div className="error-note">{error}</div>}
       {opError && <div className="error-note">{opError}</div>}
       {savedFlash && <div className="ok-note">{t("report.editSaved")}</div>}
+      </div>
 
       {/* 다시 생성 실패 — 직전 리포트는 화면에 그대로 두고 실패만 알린다.
           닫으면 실행 상태를 비워 디스크 리포트가 정본으로 남는다. */}

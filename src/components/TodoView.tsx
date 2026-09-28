@@ -254,6 +254,12 @@ export function TodoView({
     const others = rows.filter((r) => !subtree.has(r.id) && els.has(r.id));
     const rects = new Map<number, DOMRect>();
     let listRect = listEl.getBoundingClientRect();
+    // 목록은 카드 안의 스크롤 칸이고 손잡이 자리만큼 좌우로 넓혀 둔 여백이 있다(styles.css
+    // .todo-card > .todo-listing). 삽입선은 이 칸 안의 absolute 라 좌표를 여백과 스크롤만큼 되돌린다.
+    const listCss = getComputedStyle(listEl);
+    const padL = parseFloat(listCss.paddingLeft) || 0;
+    const padR = parseFloat(listCss.paddingRight) || 0;
+    const padT = parseFloat(listCss.paddingTop) || 0;
 
     const startX = e.clientX;
     const startY = e.clientY;
@@ -321,10 +327,10 @@ export function TodoView({
         ? rects.get(below.id)!.top + gapH / 2
         : above
           ? rects.get(above.id)!.bottom + 4
-          : listRect.top + 2;
-      const lx = 10 + depth * INDENT;
-      line.style.width = `${Math.max(0, listRect.width - lx - 8)}px`;
-      line.style.transform = `translate(${lx}px, ${y - listRect.top - 1}px)`;
+          : listRect.top + padT + 2;
+      const lx = padL + 10 + depth * INDENT;
+      line.style.width = `${Math.max(0, listRect.width - padR - lx - 8)}px`;
+      line.style.transform = `translate(${lx}px, ${y - listRect.top + listEl.scrollTop - 1}px)`;
       if (!line.isConnected) {
         listEl.appendChild(line); // 첫 배치 — 좌표를 갖고 붙어 그 자리에서 페이드인만
         requestAnimationFrame(() => line?.classList.add("on"));

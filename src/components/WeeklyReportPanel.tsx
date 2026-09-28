@@ -234,6 +234,8 @@ export function WeeklyReportPanel({
         )}
       </div>
 
+      {/* 머리 띠 아래는 카드 안에서 스크롤한다(DailyReportPanel 과 같은 구조, styles.css .report-scroll) */}
+      <div className="report-scroll">
       {/* ① 커버리지 — 어느 날이 재료로 들어가고 어느 날이 빠지는지 먼저 밝힌다.
           주간 요약이 조용히 빈약해지는 걸 막는 유일한 장치다. */}
       {phase !== "streaming" && sources && (
@@ -321,6 +323,7 @@ export function WeeklyReportPanel({
       )}
       {phase === "error" && error && <div className="error-note">{error}</div>}
       {opError && <div className="error-note">{opError}</div>}
+      </div>
 
       <Modal
         open={confirmRegen}

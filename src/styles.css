@@ -6687,6 +6687,37 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   background: var(--surface);
   /* 가운데 쪽은 틈의 절반(왼쪽 판도 절반을 비운다), 바깥은 판 여백 */
   padding: var(--board-gutter) var(--board-gutter) var(--board-gutter) var(--half-gap);
+  /* 판은 구르지 않는다 — 카드가 **자기 안에서** 구른다(왼쪽 .todo-cal-pane 과 같은 문법).
+     판 전체가 구르면 카드의 둥근 윗변/아랫변이 화면 밖으로 밀려 네모난 글 덩어리만 남았다. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.todo-body .detail > * {
+  flex-shrink: 0;
+}
+/* 할 일 카드 — 머리 띠(날짜, 밀린 할 일, 빠른 추가)와 요약 줄은 서고, 목록만 구른다.
+   둘 다 길면 리포트가 먼저 줄어든다(아래 .report 의 flex-shrink) — 오늘 할 일이 이 판의 주인공이다.
+   160px 은 빈 날의 카드 높이쯤이라 짧은 카드를 부풀리지 않는다. */
+.todo-body .detail > .todo-card {
+  flex: 0 1 auto;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+}
+.todo-body .todo-card > * {
+  flex-shrink: 0;
+}
+/* 스크롤 칸은 가로도 자른다 — 행 왼쪽 밖(-16px)의 드래그 손잡이가 잘리지 않게 칸을 좌우 16px 넓히고
+   같은 만큼 안쪽 여백으로 되돌린다(행 위치는 그대로). 위 여백 10px 은 빠른 추가 띠의 아래 여백을
+   옮겨 온 것이다 — 글이 띠의 선 바로 아래까지 올라와 사라지게. */
+.todo-body .todo-card > .todo-listing {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  margin: 0 -16px;
+  padding: 10px 16px 0;
 }
 
 /* ---- 오른쪽 판의 카드 — 왼쪽(달력/시간표)과 같은 문법(§2 앉은 유리) ----
@@ -6706,7 +6737,7 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
 /* 카드 안의 빠른 추가는 **카드의 머리 띠**다 — 유리 캡슐을 또 얹으면 유리 위의 유리라 탁해진다.
    면·테두리를 벗기고 아래에 가는 선 하나만 남긴다(시간표 카드의 .day-tt-head 와 같은 모양). */
 .todo-card .todo-quick {
-  margin: 0 -14px 10px;
+  margin: 0 -14px; /* 아래 여백은 목록(.todo-listing)의 위 여백으로 옮겼다 — 스크롤이 띠 선에서 잘리게 */
   padding: 12px 18px 12px 16px;
   border: none;
   border-bottom: 1px solid var(--glass-edge);
@@ -6726,10 +6757,40 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   padding-top: 18px;
   border-top: 1px solid var(--border);
 }
-/* 카드가 된 리포트 — 윗선 대신 카드의 안쪽 여백이 경계를 갖는다 */
+/* 카드가 된 리포트 — 머리 띠(제목 + 동작)는 서고 아래(.report-scroll)만 카드 안에서 구른다.
+   머리 아래 선은 다른 카드의 머리 띠와 같은 한 줄이다(DESIGN §7) — 구르는 글이 사라지는 자리가
+   허공이면 잘린 것처럼 보인다. overflow: hidden 은 구르는 글이 둥근 모서리 밖으로 새지 않게 한다. */
 .todo-body .report {
   margin-top: var(--board-gap);
-  padding: 14px 16px 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+/* 생성 전/빈 리포트는 한두 줄이라 줄이지 않는다. 본문이 생기면(작성 중 포함) 할 일보다 먼저 줄어든다.
+   flex 수축은 '가중치 × 원래 높이'로 나뉘어서, 가중치가 작으면 할 일이 세 개뿐인 날에도 목록이
+   함께 눌려 스크롤이 생겼다. 가중치를 크게 줘 리포트가 거의 전부를 먼저 떠안고, 최소 높이에
+   닿은 뒤에야 할 일이 줄어든다. 최소 높이는 둘 다 긴 날에 리포트가 한두 줄로 납작해지지 않을 만큼. */
+.todo-body .detail > .report:has(.report-body, .note-stream-body, .report-edit-split) {
+  flex: 0 1000 auto;
+  min-height: min(40%, 300px);
+}
+.todo-body .report > .report-head {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--glass-edge);
+}
+.todo-body .report > .report-scroll {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px 16px;
+}
+/* 스크롤 칸 안의 첫 요소가 들고 온 윗여백이 띠 아래 틈을 두 배로 벌리지 않게 */
+.todo-body .report-scroll > :first-child {
+  margin-top: 0;
 }
 .todo-body .report.report-weekly {
   margin-top: var(--board-gap);
