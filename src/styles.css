@@ -6767,13 +6767,16 @@ body.dragging-rows .tree-row.drop-target .tree-ico {
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
+  /* 판의 마지막 카드라 남은 높이를 채운다 — 왼쪽 시간표 카드처럼 바닥까지 가서 두 반쪽의 아랫변이
+     한 줄로 맞는다. 리포트가 짧은 날 오른쪽만 중간에서 끝나 판 아래가 비어 보였다. */
+  flex: 1 0 auto;
 }
 /* 생성 전/빈 리포트는 한두 줄이라 줄이지 않는다. 본문이 생기면(작성 중 포함) 할 일보다 먼저 줄어든다.
    flex 수축은 '가중치 × 원래 높이'로 나뉘어서, 가중치가 작으면 할 일이 세 개뿐인 날에도 목록이
    함께 눌려 스크롤이 생겼다. 가중치를 크게 줘 리포트가 거의 전부를 먼저 떠안고, 최소 높이에
    닿은 뒤에야 할 일이 줄어든다. 최소 높이는 둘 다 긴 날에 리포트가 한두 줄로 납작해지지 않을 만큼. */
 .todo-body .detail > .report:has(.report-body, .note-stream-body, .report-edit-split) {
-  flex: 0 1000 auto;
+  flex: 1 1000 auto;
   min-height: min(40%, 300px);
 }
 .todo-body .report > .report-head {
