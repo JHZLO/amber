@@ -1,16 +1,27 @@
-<svg width="128" height="128" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Amber 로고 — 앱 아이콘과 동일한 지오메트리 (스쿼클 + 호박 방울 + 인클루전 점) -->
-  <rect x="0" y="0" width="32" height="32" rx="7.2" fill="#18181b"/>
-  <path
-    d="M 16 8.8
-       C 13.9 11.6 11.8 14.96 11.8 18.74
-       C 11.8 21.06 13.68 22.94 16 22.94
-       C 18.32 22.94 20.2 21.06 20.2 18.74
-       C 20.2 14.96 18.1 11.6 16 8.8 Z"
-    stroke="#fafafa"
-    stroke-width="1.5"
-    stroke-linejoin="round"
-    stroke-linecap="round"
-  />
-  <circle cx="16" cy="18.2" r="1.15" fill="#fafafa"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="128" height="128" fill="none"><defs>
+  <linearGradient id="atile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#27272c"/><stop offset="1" stop-color="#121214"/></linearGradient>
+  <linearGradient id="asheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".11"/><stop offset=".42" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <radialGradient id="awarm" cx=".5" cy=".58" r=".5"><stop offset="0" stop-color="#D08A2A" stop-opacity=".22"/><stop offset="1" stop-color="#D08A2A" stop-opacity="0"/></radialGradient>
+  <linearGradient id="aglass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".55" stop-color="#fff" stop-opacity=".05"/><stop offset="1" stop-color="#fff" stop-opacity=".14"/></linearGradient>
+  <linearGradient id="arim" x1=".15" y1="0" x2=".85" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".55" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity=".42"/></linearGradient>
+  <radialGradient id="aorb" cx=".38" cy=".34" r=".72"><stop offset="0" stop-color="#FFE3A8"/><stop offset=".38" stop-color="#E8B45A"/><stop offset=".78" stop-color="#D08A2A"/><stop offset="1" stop-color="#8F5314"/></radialGradient>
+  <clipPath id="aclip"><path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z"/></clipPath>
+  <filter id="ab03" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation=".3"/></filter>
+  <filter id="ab04" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation=".4"/></filter>
+  <filter id="ab06" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation=".6"/></filter>
+  <filter id="ab14" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.4"/></filter>
+</defs><rect x="0" y="0" width="32" height="32" rx="7.2" fill="url(#atile)"/>
+<rect x="0" y="0" width="32" height="32" rx="7.2" fill="url(#awarm)"/>
+<rect x="0" y="0" width="32" height="32" rx="7.2" fill="url(#asheen)"/>
+<rect x=".15" y=".15" width="31.7" height="31.7" rx="7.05" fill="none" stroke="#fff" stroke-opacity=".09" stroke-width=".3"/><g transform="translate(16 16) scale(1.2) translate(-16 -16)">
+    <path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z" fill="url(#aglass)"/>
+    <g clip-path="url(#aclip)">
+      <path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z" fill="none" stroke="#000" stroke-opacity=".22" stroke-width="1.2" filter="url(#ab06)" transform="translate(0 .45)"/>
+      <circle cx="16" cy="18.5" r="3.8000000000000003" fill="#D08A2A" fill-opacity=".6" filter="url(#ab14)"/>
+      <ellipse cx="16.3" cy="22.1" rx="3.3" ry="1.1" fill="#fff" fill-opacity=".38" filter="url(#ab04)"/>
+      <ellipse cx="14.05" cy="13.5" rx="1.0" ry="2.9" transform="rotate(28 14.05 13.5)" fill="#fff" fill-opacity=".82" filter="url(#ab03)"/>
+    </g>
+    <circle cx="16" cy="18.5" r="2.2" fill="url(#aorb)"/>
+    <ellipse cx="15.34" cy="17.80" rx="0.53" ry="0.40" fill="#fff" fill-opacity=".85"/>
+    <path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z" fill="none" stroke="url(#arim)" stroke-width="0.42" stroke-linejoin="round"/>
+    </g></svg>

@@ -48,7 +48,33 @@
 
 <header class="nav" id="nav">
   <a class="brand" href="#top" aria-label="Amber">
-    <svg width="26" height="26" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="0.5" y="0.5" width="31" height="31" rx="7.2" fill="#18181b" stroke="#3a3a40"/><path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z" fill="#D08A2A"/><circle cx="16" cy="18.2" r="1.15" fill="#f4f4f5"/></svg>
+    <svg width="26" height="26" viewBox="0 0 32 32" fill="none" aria-hidden="true"><defs>
+  <linearGradient id="nvtile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#27272c"/><stop offset="1" stop-color="#121214"/></linearGradient>
+  <linearGradient id="nvsheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".11"/><stop offset=".42" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <radialGradient id="nvwarm" cx=".5" cy=".58" r=".5"><stop offset="0" stop-color="#D08A2A" stop-opacity=".22"/><stop offset="1" stop-color="#D08A2A" stop-opacity="0"/></radialGradient>
+  <linearGradient id="nvglass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".55" stop-color="#fff" stop-opacity=".05"/><stop offset="1" stop-color="#fff" stop-opacity=".14"/></linearGradient>
+  <linearGradient id="nvrim" x1=".15" y1="0" x2=".85" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".55" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity=".42"/></linearGradient>
+  <radialGradient id="nvorb" cx=".38" cy=".34" r=".72"><stop offset="0" stop-color="#FFE3A8"/><stop offset=".38" stop-color="#E8B45A"/><stop offset=".78" stop-color="#D08A2A"/><stop offset="1" stop-color="#8F5314"/></radialGradient>
+  <clipPath id="nvclip"><path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z"/></clipPath>
+  <filter id="nvb03" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation=".3"/></filter>
+  <filter id="nvb04" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation=".4"/></filter>
+  <filter id="nvb06" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation=".6"/></filter>
+  <filter id="nvb14" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.4"/></filter>
+</defs><rect x="0" y="0" width="32" height="32" rx="7.2" fill="url(#nvtile)"/>
+<rect x="0" y="0" width="32" height="32" rx="7.2" fill="url(#nvwarm)"/>
+<rect x="0" y="0" width="32" height="32" rx="7.2" fill="url(#nvsheen)"/>
+<rect x=".15" y=".15" width="31.7" height="31.7" rx="7.05" fill="none" stroke="#fff" stroke-opacity=".09" stroke-width=".3"/><g transform="translate(16 16) scale(1.38) translate(-16 -16)">
+    <path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z" fill="url(#nvglass)"/>
+    <g clip-path="url(#nvclip)">
+      <path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z" fill="none" stroke="#000" stroke-opacity=".22" stroke-width="1.2" filter="url(#nvb06)" transform="translate(0 .45)"/>
+      <circle cx="16" cy="18.5" r="4.5" fill="#D08A2A" fill-opacity=".6" filter="url(#nvb14)"/>
+      <ellipse cx="16.3" cy="22.1" rx="3.3" ry="1.1" fill="#fff" fill-opacity=".38" filter="url(#nvb04)"/>
+      <ellipse cx="14.05" cy="13.5" rx="1.0" ry="2.9" transform="rotate(28 14.05 13.5)" fill="#fff" fill-opacity=".82" filter="url(#nvb03)"/>
+    </g>
+    <circle cx="16" cy="18.5" r="2.9" fill="url(#nvorb)"/>
+    <ellipse cx="15.13" cy="17.57" rx="0.70" ry="0.52" fill="#fff" fill-opacity=".85"/>
+    <path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z" fill="none" stroke="url(#nvrim)" stroke-width="0.95" stroke-linejoin="round"/>
+    </g></svg>
     <span>Amber</span>
   </a>
   <nav aria-label="Sections">
@@ -217,7 +243,33 @@
 
 <footer class="foot">
   <div class="foot-brand">
-    <svg width="20" height="20" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="0.5" y="0.5" width="31" height="31" rx="7.2" fill="#18181b" stroke="#3a3a40"/><path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z" fill="#D08A2A"/><circle cx="16" cy="18.2" r="1.15" fill="#f4f4f5"/></svg>
+    <svg width="20" height="20" viewBox="0 0 32 32" fill="none" aria-hidden="true"><defs>
+  <linearGradient id="fttile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#27272c"/><stop offset="1" stop-color="#121214"/></linearGradient>
+  <linearGradient id="ftsheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".11"/><stop offset=".42" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <radialGradient id="ftwarm" cx=".5" cy=".58" r=".5"><stop offset="0" stop-color="#D08A2A" stop-opacity=".22"/><stop offset="1" stop-color="#D08A2A" stop-opacity="0"/></radialGradient>
+  <linearGradient id="ftglass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".55" stop-color="#fff" stop-opacity=".05"/><stop offset="1" stop-color="#fff" stop-opacity=".14"/></linearGradient>
+  <linearGradient id="ftrim" x1=".15" y1="0" x2=".85" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".55" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity=".42"/></linearGradient>
+  <radialGradient id="ftorb" cx=".38" cy=".34" r=".72"><stop offset="0" stop-color="#FFE3A8"/><stop offset=".38" stop-color="#E8B45A"/><stop offset=".78" stop-color="#D08A2A"/><stop offset="1" stop-color="#8F5314"/></radialGradient>
+  <clipPath id="ftclip"><path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z"/></clipPath>
+  <filter id="ftb03" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation=".3"/></filter>
+  <filter id="ftb04" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation=".4"/></filter>
+  <filter id="ftb06" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation=".6"/></filter>
+  <filter id="ftb14" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.4"/></filter>
+</defs><rect x="0" y="0" width="32" height="32" rx="7.2" fill="url(#fttile)"/>
+<rect x="0" y="0" width="32" height="32" rx="7.2" fill="url(#ftwarm)"/>
+<rect x="0" y="0" width="32" height="32" rx="7.2" fill="url(#ftsheen)"/>
+<rect x=".15" y=".15" width="31.7" height="31.7" rx="7.05" fill="none" stroke="#fff" stroke-opacity=".09" stroke-width=".3"/><g transform="translate(16 16) scale(1.38) translate(-16 -16)">
+    <path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z" fill="url(#ftglass)"/>
+    <g clip-path="url(#ftclip)">
+      <path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z" fill="none" stroke="#000" stroke-opacity=".22" stroke-width="1.2" filter="url(#ftb06)" transform="translate(0 .45)"/>
+      <circle cx="16" cy="18.5" r="4.5" fill="#D08A2A" fill-opacity=".6" filter="url(#ftb14)"/>
+      <ellipse cx="16.3" cy="22.1" rx="3.3" ry="1.1" fill="#fff" fill-opacity=".38" filter="url(#ftb04)"/>
+      <ellipse cx="14.05" cy="13.5" rx="1.0" ry="2.9" transform="rotate(28 14.05 13.5)" fill="#fff" fill-opacity=".82" filter="url(#ftb03)"/>
+    </g>
+    <circle cx="16" cy="18.5" r="2.9" fill="url(#ftorb)"/>
+    <ellipse cx="15.13" cy="17.57" rx="0.70" ry="0.52" fill="#fff" fill-opacity=".85"/>
+    <path d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z" fill="none" stroke="url(#ftrim)" stroke-width="0.95" stroke-linejoin="round"/>
+    </g></svg>
     <span>Amber</span>
   </div>
   <div class="mono">Built by <a href="https://github.com/JHZLO" target="_blank" rel="noopener">JHZLO</a> · MIT · source distribution · <a href="https://github.com/JHZLO/amber" target="_blank" rel="noopener">github.com/JHZLO/amber</a></div>
