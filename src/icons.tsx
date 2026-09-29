@@ -363,16 +363,14 @@ export function Icon({
   );
 }
 
-/** Amber 브랜드 마크 — **모양 자체가 유리다**(§2 표식 규약). 타일도 테두리도 없다:
- *  판을 깔고 테를 두르는 건 컨트롤의 문법이라 로고가 활성 탭처럼 읽힌다.
+/** Amber 브랜드 마크 — **유리 속 호박 한 알**(앱 아이콘과 같은 그림에서 타일만 뺀 것).
+ *  타일도 테두리도 없다: 판을 깔고 테를 두르는 건 컨트롤의 문법이라 로고가 활성 탭처럼 읽힌다.
  *
- *  유리 네 겹을 물방울이 직접 갖는다.
- *   1 채움  — 150° 사선 그라디언트(--glass-fill 과 같은 각도, 같은 램프)
- *   2 하이라이트 — 왼쪽 위에 번지는 타원 빛무리. 유리를 '덩어리'로 만드는 건 이거다
- *   3 림     — 윤곽 획. 위쪽 호만 한 겹 더 밝게 얹어 **빛 받는 쪽**을 만든다
- *   4 코어   — 가운데 점. 그 둘레의 옅은 링이 빛이 모인 자리(caustic)를 흉내 낸다
- *
- *  전부 currentColor 라 테마 토큰 하나(.rail-brand svg 의 color)만 따라간다 — 색이 없다. */
+ *  두 재질이 한 몸이다.
+ *   유리 — 방울. 채움, 윤곽, 안쪽 두께 그늘, 왼쪽 위 반사, 바닥에 모인 빛. 전부 currentColor 라
+ *          테마 토큰 하나(.rail-brand svg 의 color)만 따라간다(반사만 흰색 — 빛은 테마를 안 탄다)
+ *   호박 — 가운데 구슬. 레일에서 **색이 있는 유일한 것**이라 로고가 로고로 읽힌다.
+ *          구슬 빛이 유리 안에 번지되 밖으로는 새지 않는다(clip). */
 export function AmberMark({
   size = 28,
   className,
@@ -394,50 +392,53 @@ export function AmberMark({
       aria-label="Amber"
     >
       <defs>
-        <linearGradient id="amber-body" x1="0.12" y1="0" x2="0.88" y2="1">
+        <linearGradient id="amber-glass" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="currentColor" stopOpacity="0.3" />
-          <stop offset="0.46" stopColor="currentColor" stopOpacity="0.08" />
-          <stop offset="1" stopColor="currentColor" stopOpacity="0.22" />
+          <stop offset="0.55" stopColor="currentColor" stopOpacity="0.07" />
+          <stop offset="1" stopColor="currentColor" stopOpacity="0.18" />
         </linearGradient>
-        <radialGradient id="amber-spec" cx="0.34" cy="0.3" r="0.55">
-          <stop offset="0" stopColor="currentColor" stopOpacity="0.4" />
-          <stop offset="1" stopColor="currentColor" stopOpacity="0" />
+        <linearGradient id="amber-rim" x1="0.15" y1="0" x2="0.85" y2="1">
+          <stop offset="0" stopColor="currentColor" stopOpacity="1" />
+          <stop offset="0.55" stopColor="currentColor" stopOpacity="0.3" />
+          <stop offset="1" stopColor="currentColor" stopOpacity="0.6" />
+        </linearGradient>
+        <radialGradient id="amber-orb" cx="0.38" cy="0.34" r="0.72">
+          <stop offset="0" stopColor="#FFE3A8" />
+          <stop offset="0.38" stopColor="#E8B45A" />
+          <stop offset="0.78" stopColor="#D08A2A" />
+          <stop offset="1" stopColor="#8F5314" />
         </radialGradient>
-        {/* 빛무리를 방울 밖으로 새지 않게 가둔다 — 유리 안에서 도는 빛이다 */}
         <clipPath id="amber-clip">
           <path d={drop} />
         </clipPath>
+        <filter id="amber-soft" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="0.35" />
+        </filter>
+        <filter id="amber-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="1.3" />
+        </filter>
       </defs>
 
-      <path d={drop} fill="url(#amber-body)" />
-      <g clipPath="url(#amber-clip)">
-        <ellipse cx="13.6" cy="14.6" rx="6.2" ry="7.4" fill="url(#amber-spec)" />
+      <g transform="translate(16 16) scale(1.22) translate(-16 -16)">
+        <path d={drop} fill="url(#amber-glass)" />
+        <g clipPath="url(#amber-clip)">
+          <circle cx="16" cy="18.5" r="3.6" fill="#D08A2A" fillOpacity="0.55" filter="url(#amber-glow)" />
+          <ellipse cx="16.3" cy="22.1" rx="3.2" ry="1" fill="currentColor" fillOpacity="0.35" filter="url(#amber-soft)" />
+          <ellipse
+            cx="14.05"
+            cy="13.5"
+            rx="0.95"
+            ry="2.8"
+            transform="rotate(28 14.05 13.5)"
+            fill="#fff"
+            fillOpacity="0.75"
+            filter="url(#amber-soft)"
+          />
+        </g>
+        <circle cx="16" cy="18.5" r="2.25" fill="url(#amber-orb)" />
+        <ellipse cx="15.35" cy="17.8" rx="0.55" ry="0.42" fill="#fff" fillOpacity="0.85" />
+        <path d={drop} stroke="url(#amber-rim)" strokeWidth="0.85" strokeLinejoin="round" />
       </g>
-      <path
-        d={drop}
-        stroke="currentColor"
-        strokeOpacity="0.72"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-      {/* 빛 받는 쪽 — 위쪽 호만 한 겹 더 밝게. 림 전체를 밝히면 방향이 사라진다 */}
-      <path
-        d="M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      {/* 유리 안쪽에 한 줄 더 — 어깨를 따라 흐르는 반사 */}
-      <path
-        d="M 14.9 12.2 C 13.7 14.1 13.0 16.1 13.0 17.9"
-        stroke="currentColor"
-        strokeOpacity="0.45"
-        strokeWidth="1"
-        strokeLinecap="round"
-      />
-      <circle cx="16" cy="18.2" r="2.5" fill="currentColor" fillOpacity="0.12" />
-      <circle cx="16" cy="18.2" r="1.15" fill="currentColor" />
     </svg>
   );
 }
