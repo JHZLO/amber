@@ -225,7 +225,7 @@
         <li>Node.js 20+ and pnpm</li>
         <li class="opt">Optional: Claude Code or Codex CLI for AI features, <code>gh</code> for reports, a MySQL account for database sync</li>
       </ul>
-      <p class="reveal dim">The first build compiles the Rust side and takes a few minutes. First launch detects the AI CLIs you have signed in.</p>
+      <p class="reveal dim">The first build compiles the Rust side and takes a few minutes. First launch detects the AI CLIs you have signed in. The app doesn't update itself: after a new release, <code>git pull</code>, build again, quit Amber and swap the app. Your data lives outside the app and stays put.</p>
     </div>
     <div class="terminal reveal" id="terminal">
       <div class="term-bar"><i></i><i></i><i></i><span class="mono">zsh — amber</span><button class="copy-all" type="button" id="copyall" aria-label="Copy every command">Copy all</button></div>
@@ -234,8 +234,9 @@
         <div class="line"><span class="p">❯</span><span class="cmd" data-cmd="curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"></span><button class="copy" type="button" data-copy="curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh">copy</button></div>
         <div class="line"><span class="p">❯</span><span class="cmd" data-cmd="corepack enable && corepack prepare pnpm@latest --activate"></span><button class="copy" type="button" data-copy="corepack enable && corepack prepare pnpm@latest --activate">copy</button></div>
         <div class="line"><span class="p">❯</span><span class="cmd" data-cmd="git clone https://github.com/JHZLO/amber && cd amber"></span><button class="copy" type="button" data-copy="git clone https://github.com/JHZLO/amber && cd amber">copy</button></div>
-        <div class="line"><span class="p">❯</span><span class="cmd" data-cmd="pnpm install && pnpm tauri build"></span><button class="copy" type="button" data-copy="pnpm install && pnpm tauri build">copy</button></div>
-        <div class="line done"><span class="p ok">✓</span><span class="cmd" data-cmd="src-tauri/target/release/bundle/macos/Amber.app"></span></div>
+        <div class="line"><span class="p">❯</span><span class="cmd" data-cmd="pnpm install && pnpm tauri build --bundles app"></span><button class="copy" type="button" data-copy="pnpm install && pnpm tauri build --bundles app">copy</button></div>
+        <div class="line"><span class="p">❯</span><span class="cmd" data-cmd="ditto src-tauri/target/release/bundle/macos/Amber.app /Applications/Amber.app"></span><button class="copy" type="button" data-copy="ditto src-tauri/target/release/bundle/macos/Amber.app /Applications/Amber.app">copy</button></div>
+        <div class="line done"><span class="p ok">✓</span><span class="cmd" data-cmd="/Applications/Amber.app"></span></div>
       </div>
     </div>
   </section>

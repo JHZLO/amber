@@ -322,14 +322,50 @@ corepack enable && corepack prepare pnpm@latest --activate      # pnpm (or: brew
 Open a new terminal afterwards so `cargo` is on your `PATH`. The Tauri CLI is a dev dependency,
 so `pnpm install` brings it in — nothing to install globally.
 
-**Run**
+**Build and install**
 
 ```bash
+git clone https://github.com/JHZLO/amber && cd amber
 pnpm install
-pnpm tauri dev      # development — the first run compiles the Rust side and takes a few minutes
-pnpm tauri build    # production .app
+pnpm tauri build --bundles app      # the first build compiles the Rust side and takes a few minutes
+ditto src-tauri/target/release/bundle/macos/Amber.app /Applications/Amber.app
+```
+
+Then open Amber from Applications, Spotlight or Launchpad like any other app. `--bundles app`
+builds only the `.app` and skips the `.dmg` installer. An app you built on your own Mac isn’t
+quarantined, so it opens without a Gatekeeper warning even though it isn’t signed.
+
+**Update**
+
+The installed app doesn’t update itself: every new tag means building again. Pull the latest
+source and rebuild:
+
+```bash
+git pull
+pnpm install
+pnpm tauri build --bundles app
+```
+
+Quit Amber (`⌘Q`), then swap the app:
+
+```bash
+rm -rf /Applications/Amber.app && ditto src-tauri/target/release/bundle/macos/Amber.app /Applications/Amber.app
+```
+
+Your data doesn’t live inside the app. Notes, diagrams, to-dos and settings stay in
+`~/Library/Application Support/dev.jhzlo.amber/`, so replacing the app keeps everything. To stay
+on a specific release instead of the latest commit, check out its tag (`git checkout v0.22.60`)
+before building.
+
+**Develop**
+
+```bash
+pnpm tauri dev      # hot-reloading development build
 pnpm test           # vitest + cargo test
 ```
+
+The development build reads and writes the same data folder as the installed app, so don’t run
+both at the same time.
 
 > First launch shows an onboarding that auto-detects installed AI CLIs.
 > The widget’s transparent window uses `macOSPrivateApi`, so Amber is not
