@@ -88,6 +88,29 @@ export async function saveMcpCache(servers: McpServer[]): Promise<void> {
   await setSetting(MCP_CACHE_KEY, JSON.stringify(servers));
 }
 
+/** GitHub 수집 준비 상태 — 실제 수집과 같은 단계(prepare_github)를 돌린 결과 */
+export type GhCheckCode =
+  | "GH_NOT_FOUND"
+  | "GH_ACCOUNT"
+  | "GH_AUTH"
+  | "GH_SSO"
+  | "GH_ERROR"
+  | "REPORT_TIMEOUT";
+export interface GhCheck {
+  ok: boolean;
+  path: string | null;
+  version: string | null;
+  login: string | null;
+  code: GhCheckCode | null;
+  message: string | null;
+}
+export function reportCheckGithub(path: string, account: string): Promise<GhCheck> {
+  return invoke<GhCheck>("report_check_github", {
+    path: path.trim() || null,
+    account: account.trim() || null,
+  });
+}
+
 /** gh 에 로그인된 계정 목록 (여러 계정일 때 조회 계정 선택용) */
 export interface GhAccount {
   login: string;

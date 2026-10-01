@@ -13,17 +13,19 @@ import {
   detectReportTools,
   loadMcpCache,
   loadReportConfig,
+  reportCheckGithub,
   reportGhAccounts,
   reportMcpServers,
   saveMcpCache,
   saveReportConfig,
   type GhAccount,
+  type GhCheck,
   type ReportConfig,
   type ReportTools,
 } from "../lib/report";
 import { Checkbox, Select, SetField, SetSection, Spinner, Tooltip } from "../ui";
 import { Icon } from "../icons";
-import { t } from "../lib/i18n";
+import { t, type MsgKey } from "../lib/i18n";
 
 // 앱이 직접 긁는 소스 둘. MCP 서버는 등록된 것을 그대로 아래에 목록으로 낸다
 const ALL_SOURCES: ReportSourceId[] = ["github", "ai_sessions"];
@@ -45,11 +47,107 @@ const MCP_STATUS: Record<string, string> = {
   unknown: "",
 };
 
+// 준비가 안 됐을 때 배지 — 무엇이 문제인지 한 낱말로. 할 일은 펼친 안내(GhGuide)가 말한다
+const GH_STATUS: Record<string, MsgKey> = {
+  GH_NOT_FOUND: "report.status.ghMissing",
+  GH_ACCOUNT: "report.status.ghAccount",
+  GH_AUTH: "report.status.ghLogin",
+  GH_SSO: "report.status.ghSso",
+  GH_ERROR: "report.status.ghFailed",
+  REPORT_TIMEOUT: "report.status.ghTimeout",
+};
+
+/** GitHub 이 안 붙을 때 사용자가 할 일 — 단계마다 터미널 명령 하나 */
+function GhGuide({
+  check,
+  account,
+  customPath,
+  checking,
+  onRecheck,
+}: {
+  check: GhCheck;
+  account: string;
+  customPath: boolean;
+  checking: boolean;
+  onRecheck: () => void;
+}) {
+  const steps: { text: string; cmd?: string }[] = (() => {
+    switch (check.code) {
+      case "GH_NOT_FOUND":
+        return customPath
+          ? [{ text: t("report.gh.fix.badPath") }]
+          : [
+              { text: t("report.gh.fix.install"), cmd: "brew install gh" },
+              { text: t("report.gh.fix.login"), cmd: "gh auth login" },
+            ];
+      case "GH_ACCOUNT":
+        return [
+          { text: t("report.gh.fix.accountLogin", { account }), cmd: "gh auth login" },
+          { text: t("report.gh.fix.accountPick") },
+        ];
+      case "GH_AUTH":
+        return [{ text: t("report.gh.fix.login"), cmd: "gh auth login" }];
+      case "GH_SSO":
+        return [{ text: t("report.gh.fix.sso"), cmd: "gh auth refresh -h github.com" }];
+      default:
+        return [{ text: check.message ?? t("report.status.ghFailed") }];
+    }
+  })();
+  return (
+    <div className="warn-note rep-gh-guide">
+      <ol>
+        {steps.map((s, i) => (
+          <li key={i}>
+            <span>{s.text}</span>
+            {s.cmd && <CopyCmd cmd={s.cmd} />}
+          </li>
+        ))}
+      </ol>
+      <div className="rep-gh-guide-foot">
+        <span className="hint">{t("report.gh.fix.after")}</span>
+        <button className="btn btn-sm" onClick={onRecheck} disabled={checking}>
+          <Icon name="refresh" size={13} />
+          {checking ? t("report.status.checking") : t("report.gh.fix.recheck")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CopyCmd({ cmd }: { cmd: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <span className="rep-cmd-row">
+      <code className="rep-mcp-cmd">{cmd}</code>
+      <Tooltip label={copied ? t("report.gh.copied") : t("report.copy")}>
+        <button
+          className="icon-btn sm"
+          aria-label={t("report.copy")}
+          onClick={() => {
+            void navigator.clipboard.writeText(cmd).then(() => {
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1400);
+            });
+          }}
+        >
+          <Icon name={copied ? "check" : "copy"} size={13} />
+        </button>
+      </Tooltip>
+    </span>
+  );
+}
+
 export function ReportSettings() {
   const [cfg, setCfg] = useState<ReportConfig | null>(null);
   const [appCfg, setAppCfg] = useState<AppConfig | null>(null);
   const [tools, setTools] = useState<ReportTools | null>(null);
   const [ghAccounts, setGhAccounts] = useState<GhAccount[] | null>(null);
+  // GitHub 준비 상태 — 수집과 같은 함수로 확인한다(설정에서 초록이면 리포트도 붙는다)
+  const [ghCheck, setGhCheck] = useState<GhCheck | null>(null);
+  const [ghChecking, setGhChecking] = useState(false);
+  const ghSeq = useRef(0);
+  const cfgRef = useRef<ReportConfig | null>(null);
+  cfgRef.current = cfg;
   const [detecting, setDetecting] = useState(false);
   const [mcpServers, setMcpServers] = useState<McpServer[] | null>(null);
   const [mcpLoading, setMcpLoading] = useState(false);
@@ -94,8 +192,21 @@ export function ReportSettings() {
       // gh 로그인 계정 목록도 함께 (여러 계정일 때 조회 계정 선택용)
       const accts = await reportGhAccounts(t.gh?.path ?? null);
       if (alive.current) setGhAccounts(accts);
+      await recheckGh(cfgRef.current ?? (await loadReportConfig()));
     } finally {
       if (alive.current) setDetecting(false);
+    }
+  }
+
+  async function recheckGh(c: ReportConfig) {
+    const seq = ++ghSeq.current;
+    setGhChecking(true);
+    try {
+      const r = await reportCheckGithub(c.githubPath, c.githubAccount);
+      // 계정을 연달아 바꾸면 늦게 온 옛 결과가 새 결과를 덮지 않게
+      if (alive.current && seq === ghSeq.current) setGhCheck(r);
+    } finally {
+      if (alive.current && seq === ghSeq.current) setGhChecking(false);
     }
   }
 
@@ -172,9 +283,9 @@ export function ReportSettings() {
 
   function statusFor(id: ReportSourceId): { label: string; ok: boolean } {
     if (id === "github") {
-      return tools?.gh
-        ? { label: `gh ${tools.gh.version.replace(/^gh version\s*/, "")}`, ok: true }
-        : { label: t("report.status.ghMissing"), ok: false };
+      if (!ghCheck) return { label: t("report.status.checking"), ok: false };
+      if (ghCheck.ok) return { label: `@${ghCheck.login}`, ok: true };
+      return { label: t(GH_STATUS[ghCheck.code ?? "GH_ERROR"] ?? "report.status.ghFailed"), ok: false };
     }
     const has = !!(tools?.claude_sessions || tools?.codex_sessions);
     return has
@@ -261,6 +372,24 @@ export function ReportSettings() {
                 <div className="rep-src-body">
                   {s.id === "github" ? (
                     <>
+                      {ghCheck && !ghCheck.ok && (
+                        <GhGuide
+                          check={ghCheck}
+                          account={cfg.githubAccount}
+                          customPath={!!cfg.githubPath.trim()}
+                          checking={ghChecking}
+                          onRecheck={() => void recheckGh(cfg)}
+                        />
+                      )}
+                      {ghCheck?.ok && (
+                        <div className="hint" style={{ marginBottom: 12 }}>
+                          {t("report.gh.ready", {
+                            login: ghCheck.login ?? "",
+                            version: (ghCheck.version ?? "").replace(/^gh version\s*/, "").split(" ")[0],
+                            path: ghCheck.path ?? "",
+                          })}
+                        </div>
+                      )}
                       {ghAccounts && ghAccounts.length > 0 && (
                         <div className="field">
                           <label>{t("report.gh.accountLabel")}</label>
@@ -276,7 +405,11 @@ export function ReportSettings() {
                                   : a.login,
                               })),
                             ]}
-                            onChange={(v) => update({ ...cfg, githubAccount: v })}
+                            onChange={(v) => {
+                              const next = { ...cfg, githubAccount: v };
+                              update(next);
+                              void recheckGh(next);
+                            }}
                           />
                           <div className="hint">{t("report.gh.accountHint")}</div>
                         </div>
@@ -288,6 +421,7 @@ export function ReportSettings() {
                           value={cfg.githubPath}
                           placeholder={tools?.gh?.path ?? "/opt/homebrew/bin/gh"}
                           onChange={(e) => update({ ...cfg, githubPath: e.target.value })}
+                          onBlur={() => void recheckGh(cfg)}
                         />
                         <div className="hint">{t("report.gh.pathHint")}</div>
                       </div>

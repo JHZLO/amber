@@ -18,7 +18,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::ipc::Channel;
 use tokio::io::AsyncWriteExt;
-use tokio::process::{ChildStdin, Command};
+use tokio::process::ChildStdin;
 use tokio::time::timeout;
 
 use crate::ai::{default_binary, provider_kind, AiError, LiveGuard, ProviderKind};
@@ -107,7 +107,7 @@ pub async fn ai_auth_status(provider: Option<String>, cli_path: Option<String>) 
     };
     let Ok(Ok(out)) = timeout(
         Duration::from_secs(STATUS_TIMEOUT_SECS),
-        Command::new(&program).args(args).kill_on_drop(true).output(),
+        crate::shellenv::command(&program).await.args(args).kill_on_drop(true).output(),
     )
     .await
     else {
@@ -149,7 +149,7 @@ pub async fn ai_auth_login(
     // 이전 시도가 남아 있으면 먼저 끝낸다 — 코드를 엉뚱한 프로세스에 넣지 않게.
     cancel_running();
 
-    let mut child = Command::new(&program)
+    let mut child = crate::shellenv::command(&program).await
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

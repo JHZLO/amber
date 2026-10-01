@@ -12,7 +12,6 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tauri::ipc::Channel;
 use tokio::io::AsyncBufReadExt;
-use tokio::process::Command;
 use tokio::time::timeout;
 
 use crate::ai::{
@@ -448,7 +447,7 @@ fn truncate_line(s: &str, max: usize) -> String {
 
 // token 이 Some 이면 GH_TOKEN 으로 그 계정 인증(전역 활성 계정을 바꾸지 않고 특정 계정으로 조회).
 async fn run_gh(program: &str, args: &[&str], token: Option<&str>) -> Result<Vec<u8>, AiError> {
-    let mut cmd = Command::new(program);
+    let mut cmd = crate::shellenv::command(program).await;
     cmd.args(args);
     if let Some(t) = token {
         cmd.env("GH_TOKEN", t);
@@ -465,7 +464,10 @@ async fn run_gh(program: &str, args: &[&str], token: Option<&str>) -> Result<Vec
     })?;
     if !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr).to_lowercase();
-        let (code, msg) = if err.contains("auth") || err.contains("logged") || err.contains("token")
+        // 조직 SSO 미승인은 403 + "SAML enforcement" — 로그인은 됐는데 그 조직만 막힌 것이라 안내가 다르다
+        let (code, msg) = if err.contains("saml") {
+            ("GH_SSO", "조직의 SSO 승인이 필요합니다. github.com/settings/tokens 에서 이 토큰의 조직 접근을 승인하세요.")
+        } else if err.contains("auth") || err.contains("logged") || err.contains("token")
         {
             ("GH_AUTH", "gh 인증이 필요합니다. 터미널에서 `gh auth login` 후 다시 시도하세요.")
         } else {
@@ -509,13 +511,6 @@ fn body_snippet(v: Option<&serde_json::Value>, max: usize) -> Option<String> {
 }
 
 async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDigest {
-    // 경로를 비워 두면 맨 이름 "gh" 로는 못 찾는다 — Dock·Finder 로 뜬 앱의 PATH 엔 Homebrew 가 없다.
-    // 설정 화면이 보여 주는 것과 같은 길(로그인 셸)로 찾는다.
-    let program = match cfg.path.clone().filter(|p| !p.is_empty()) {
-        Some(p) => p,
-        None => resolve_gh_path().await.unwrap_or_else(|| "gh".to_string()),
-    };
-
     let mk_err = |e: AiError| SourceDigest {
         id: "github".into(),
         rank: cfg.rank,
@@ -525,38 +520,12 @@ async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDi
         error: Some(e.message),
     };
 
-    // 1) 조회할 로그인 + 토큰 결정.
-    //    account 지정 시: 그 계정 토큰을 GH_TOKEN 으로 써 전역 활성 계정을 안 바꾸고 조회(private 포함).
-    //    미지정 시: 활성 계정 (gh api user).
-    let account = cfg.account.as_deref().map(str::trim).filter(|a| !a.is_empty());
-    let (login, token) = if let Some(acc) = account {
-        let tok_out = match run_gh(&program, &["auth", "token", "--user", acc], None).await {
-            Ok(o) => o,
-            // 못 찾은 것과 못 꺼낸 것은 다르다 — 인증 안내로 덮으면 엉뚱한 곳(gh auth login)을 보게 된다
-            Err(e) if e.code != "GH_AUTH" && e.code != "GH_ERROR" => return mk_err(e),
-            Err(_) => {
-                return mk_err(AiError::new(
-                    "GH_AUTH",
-                    format!("gh 계정 '{acc}' 의 토큰을 가져오지 못했어요. `gh auth login` 으로 그 계정에 로그인했는지 확인하세요."),
-                ))
-            }
-        };
-        let token = String::from_utf8_lossy(&tok_out).trim().to_string();
-        if token.is_empty() {
-            return mk_err(AiError::new("GH_AUTH", format!("gh 계정 '{acc}' 토큰이 비어 있어요.")));
-        }
-        (acc.to_string(), Some(token))
-    } else {
-        let login_out = match run_gh(&program, &["api", "user", "--jq", ".login"], None).await {
-            Ok(o) => o,
+    // 1) 실행 파일 + 계정 + 토큰 — 설정 화면의 [다시 감지]도 이 함수 하나를 지난다
+    let GhReady { program, login, token, .. } =
+        match prepare_github(cfg.path.as_deref(), cfg.account.as_deref()).await {
+            Ok(r) => r,
             Err(e) => return mk_err(e),
         };
-        let login = String::from_utf8_lossy(&login_out).trim().to_string();
-        if login.is_empty() {
-            return mk_err(AiError::new("GH_AUTH", "gh 로그인 계정을 확인하지 못했습니다."));
-        }
-        (login, None)
-    };
 
     // 2) 계정 활동 이벤트 (private 포함 — 해당 계정 인증 상태)
     let path = format!("/users/{login}/events?per_page=100");
@@ -680,6 +649,116 @@ async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDi
         digest_md: clamp_lines(digest, budget_for(cfg.rank)),
         error: None,
     }
+}
+
+/// gh 로 조회할 준비가 된 상태 — 실행 파일, 조회 로그인, 계정 지정 시 그 계정 토큰
+struct GhReady {
+    program: String,
+    login: String,
+    token: Option<String>,
+}
+
+/// gh 를 찾고 계정을 확인한다. 실패는 사용자가 할 일 단위로 코드를 나눈다:
+/// GH_NOT_FOUND(설치), GH_ACCOUNT(그 계정 로그인), GH_AUTH(로그인), GH_SSO(조직 승인), 그 외.
+/// 수집과 설정 화면 확인이 같은 함수를 지나야 "설정에선 초록인데 리포트는 실패"가 생기지 않는다.
+async fn prepare_github(path: Option<&str>, account: Option<&str>) -> Result<GhReady, AiError> {
+    let custom = path.map(str::trim).filter(|p| !p.is_empty());
+    let program = match custom {
+        Some(p) => crate::shellenv::which(p).await.ok_or_else(|| {
+            AiError::new("GH_NOT_FOUND", format!("지정한 gh 경로에 실행 파일이 없습니다: {p}"))
+        })?,
+        None => crate::shellenv::which("gh")
+            .await
+            .ok_or_else(|| AiError::new("GH_NOT_FOUND", "gh CLI 를 찾을 수 없습니다."))?,
+    };
+
+    let account = account.map(str::trim).filter(|a| !a.is_empty());
+    let token = match account {
+        Some(acc) => {
+            let out = run_gh(&program, &["auth", "token", "--user", acc], None)
+                .await
+                .map_err(|e| match e.code.as_str() {
+                    "GH_AUTH" | "GH_ERROR" => AiError::new(
+                        "GH_ACCOUNT",
+                        format!("gh 에 '{acc}' 계정이 로그인돼 있지 않습니다."),
+                    ),
+                    _ => e,
+                })?;
+            let t = String::from_utf8_lossy(&out).trim().to_string();
+            if t.is_empty() {
+                return Err(AiError::new("GH_ACCOUNT", format!("gh 계정 '{acc}' 토큰이 비어 있습니다.")));
+            }
+            Some(t)
+        }
+        None => None,
+    };
+
+    // 토큰이 실제로 통하는지까지 본다 — 만료되거나 철회된 토큰은 여기서 걸러야 이벤트 조회가 엉뚱하게 실패하지 않는다
+    let out = run_gh(&program, &["api", "user", "--jq", ".login"], token.as_deref()).await?;
+    let login = String::from_utf8_lossy(&out).trim().to_string();
+    if login.is_empty() {
+        return Err(AiError::new("GH_AUTH", "gh 로그인 계정을 확인하지 못했습니다."));
+    }
+    Ok(GhReady { program, login, token })
+}
+
+#[derive(Debug, Serialize)]
+pub struct GhCheck {
+    pub ok: bool,
+    /// 찾은 gh 절대경로 (못 찾았으면 None)
+    pub path: Option<String>,
+    pub version: Option<String>,
+    /// 조회에 쓰일 로그인
+    pub login: Option<String>,
+    /// 실패 코드 — GH_NOT_FOUND | GH_ACCOUNT | GH_AUTH | GH_SSO | GH_ERROR | REPORT_TIMEOUT
+    pub code: Option<String>,
+    pub message: Option<String>,
+}
+
+/// 설정 화면의 GitHub 상태 — 실제 수집과 같은 준비 단계(prepare_github)를 그대로 돌린다
+#[tauri::command]
+pub async fn report_check_github(path: Option<String>, account: Option<String>) -> GhCheck {
+    let found = match path.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
+        Some(p) => crate::shellenv::which(p).await,
+        None => resolve_gh_path().await,
+    };
+    let version = match &found {
+        Some(p) => gh_version(p).await,
+        None => None,
+    };
+    match prepare_github(path.as_deref(), account.as_deref()).await {
+        Ok(r) => GhCheck {
+            ok: true,
+            path: Some(r.program),
+            version,
+            login: Some(r.login),
+            code: None,
+            message: None,
+        },
+        Err(e) => GhCheck {
+            ok: false,
+            path: found,
+            version,
+            login: None,
+            code: Some(e.code),
+            message: Some(e.message),
+        },
+    }
+}
+
+async fn gh_version(path: &str) -> Option<String> {
+    let out = timeout(
+        Duration::from_secs(8),
+        crate::shellenv::command(path).await.arg("--version").kill_on_drop(true).output(),
+    )
+    .await
+    .ok()?
+    .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let first = String::from_utf8_lossy(&out.stdout).lines().next()?.trim().to_string();
+    (!first.is_empty()).then_some(first)
 }
 
 /// 리뷰/리뷰코멘트 이벤트면 그 PR 번호. 아니면 None (묶기 대상 판별용)
@@ -1642,63 +1721,19 @@ pub struct ReportTools {
     pub codex_sessions: bool,
 }
 
-/// 로그인 셸에서 gh 를 찾고, 셸이 못 찾으면 Homebrew 기본 위치를 본다
 async fn resolve_gh_path() -> Option<String> {
-    if let Some(p) = resolve_gh_in_shell().await {
-        return Some(p);
-    }
-    ["/opt/homebrew/bin/gh", "/usr/local/bin/gh"]
-        .into_iter()
-        .find(|p| std::path::Path::new(p).is_file())
-        .map(str::to_string)
-}
-
-async fn resolve_gh_in_shell() -> Option<String> {
-    for shell in ["/bin/zsh", "/bin/bash"] {
-        if let Ok(Ok(out)) = timeout(
-            Duration::from_secs(8),
-            Command::new(shell)
-                .args(["-lc", "command -v gh"])
-                .kill_on_drop(true)
-                .output(),
-        )
-        .await
-        {
-            if out.status.success() {
-                let p = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if p.starts_with('/') {
-                    return Some(p);
-                }
-            }
-        }
-    }
-    None
+    crate::shellenv::which("gh").await
 }
 
 /// gh 설치/버전 + AI 세션 디렉터리 존재 여부 (설정 화면 상태 표시용)
 #[tauri::command]
 pub async fn detect_report_tools() -> ReportTools {
-    let gh = if let Some(path) = resolve_gh_path().await {
-        let version = timeout(
-            Duration::from_secs(8),
-            Command::new(&path).arg("--version").kill_on_drop(true).output(),
-        )
-        .await
-        .ok()
-        .and_then(|r| r.ok())
-        .filter(|o| o.status.success())
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .next()
-                .unwrap_or("")
-                .trim()
-                .to_string()
-        })
-        .unwrap_or_default();
-        Some(GhInfo { path, version })
-    } else {
-        None
+    let gh = match resolve_gh_path().await {
+        Some(path) => {
+            let version = gh_version(&path).await.unwrap_or_default();
+            Some(GhInfo { path, version })
+        }
+        None => None,
     };
 
     let (claude_sessions, codex_sessions) = home_dir()
@@ -1782,7 +1817,7 @@ pub async fn report_mcp_servers(cli_path: Option<String>) -> Vec<McpServer> {
     // 조금만 느려도 빈 목록 → "등록된 서버가 없어요" 로 보인다. 넉넉히 잡는다(끝나면 즉시 반환).
     match timeout(
         Duration::from_secs(60),
-        Command::new(&program)
+        crate::shellenv::command(&program).await
             .args(["mcp", "list"])
             .kill_on_drop(true)
             .output(),
@@ -1834,12 +1869,16 @@ fn parse_gh_accounts(text: &str) -> Vec<GhAccount> {
 /// gh 에 로그인된 계정 목록 (설정에서 리포트 조회 계정 선택용). gh 없거나 미인증이면 빈 목록.
 #[tauri::command]
 pub async fn report_gh_accounts(cli_path: Option<String>) -> Vec<GhAccount> {
-    let program = cli_path
-        .filter(|p| !p.is_empty())
-        .unwrap_or_else(|| "gh".to_string());
+    let program = match cli_path.filter(|p| !p.is_empty()) {
+        Some(p) => p,
+        None => match resolve_gh_path().await {
+            Some(p) => p,
+            None => return Vec::new(),
+        },
+    };
     match timeout(
         Duration::from_secs(15),
-        Command::new(&program)
+        crate::shellenv::command(&program).await
             .args(["auth", "status"])
             .kill_on_drop(true)
             .output(),

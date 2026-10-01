@@ -1,12 +1,11 @@
 // 로컬 AI CLI 자동 감지 (온보딩/설정용).
-// GUI 앱은 로그인 셸 PATH 를 상속받지 않으므로, 로그인 셸(-lc)로 `command -v` 를 실행해
-// 사용자가 터미널에서 쓰는 그 바이너리를 찾는다. 각 후보는 --version 으로 동작까지 확인.
+// GUI 앱은 로그인 셸 PATH 를 상속받지 않으므로 shellenv 가 읽어 둔 사용자 셸 PATH 에서
+// 터미널에서 쓰는 그 바이너리를 찾는다. 각 후보는 --version 으로 동작까지 확인.
 
 use serde::Serialize;
 use serde_json::Value;
 use std::path::PathBuf;
 use std::time::Duration;
-use tokio::process::Command;
 use tokio::time::timeout;
 
 #[derive(Debug, Clone, Serialize)]
@@ -26,41 +25,16 @@ const CANDIDATES: &[(&str, &str)] = &[
     ("codex", "OpenAI Codex CLI"),
 ];
 
-/// 로그인 셸로 바이너리 경로 해석 (zsh 기본, 실패 시 bash 폴백)
+/// 바이너리 경로 해석 — 앱 전체가 쓰는 셸 PATH(shellenv)에서 찾는다. 리포트의 gh 와 같은 길이다
 async fn resolve_path(bin: &str) -> Option<String> {
-    for shell in ["/bin/zsh", "/bin/bash"] {
-        let Ok(Ok(out)) = timeout(
-            Duration::from_secs(8),
-            Command::new(shell)
-                .args(["-ilc", &format!("command -v {bin}")])
-                .stdin(std::process::Stdio::null())
-                .kill_on_drop(true)
-                .output(),
-        )
-        .await
-        else {
-            continue;
-        };
-        if out.status.success() {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            if let Some(p) = stdout
-                .lines()
-                .rev()
-                .map(str::trim)
-                .find(|l| l.starts_with('/'))
-            {
-                return Some(p.to_string());
-            }
-        }
-    }
-    None
+    crate::shellenv::which(bin).await
 }
 
 /// 버전 확인 — 실제로 실행 가능한지 검증을 겸한다
 async fn probe_version(path: &str) -> Option<String> {
     let Ok(Ok(out)) = timeout(
         Duration::from_secs(8),
-        Command::new(path).arg("--version").kill_on_drop(true)
+        crate::shellenv::command(path).await.arg("--version").kill_on_drop(true)
         .output(),
     )
     .await

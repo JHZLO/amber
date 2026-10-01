@@ -11,7 +11,6 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::ipc::Channel;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::process::Command;
 use tokio::time::timeout;
 
 /// 살아 있는 CLI 자식 프로세스: cancel_key → pid.
@@ -283,7 +282,7 @@ async fn spawn_simple_cli_result(
     let combined = format!("[지시사항 — 반드시 그대로 따를 것]\n{system_prompt}\n\n{input}");
     let started = std::time::Instant::now();
 
-    let mut cmd = Command::new(&program);
+    let mut cmd = crate::shellenv::command(&program).await;
     // `-` = stdin 프롬프트. --ephemeral: 세션 파일 미저장, --skip-git-repo-check: repo 밖 실행 허용.
     // exec 기본 샌드박스는 read-only 라 순수 텍스트 변환에 안전.
     cmd.args(["exec", "-", "--ephemeral", "--skip-git-repo-check"]);
@@ -1302,7 +1301,7 @@ async fn stream_codex_result(
     let combined = format!("[지시사항 — 반드시 그대로 따를 것]\n{system_prompt}\n\n{input}");
     let started = std::time::Instant::now();
 
-    let mut cmd = Command::new(&program);
+    let mut cmd = crate::shellenv::command(&program).await;
     cmd.args(["exec", "-", "--json", "--ephemeral", "--skip-git-repo-check", "--sandbox"]);
     match write_dir {
         // 초안 폴더가 작업 루트: 그 안만 쓸 수 있고 읽기는 어디든(참고 폴더는 프롬프트의 [참고 폴더] 로 알린다)
@@ -1526,7 +1525,7 @@ pub(crate) async fn stream_claude_result_ext(
     on_activity: Option<&Channel<Activity>>,
     cancel_key: Option<&str>,
 ) -> Result<(String, MetaOut), AiError> {
-    let mut cmd = Command::new(&program);
+    let mut cmd = crate::shellenv::command(&program).await;
     cmd.arg("-p")
         .args(["--output-format", "stream-json"])
         .arg("--include-partial-messages")
@@ -1846,7 +1845,7 @@ async fn spawn_claude_result(
     // 추가 CLI 인자 — MCP 로 재료를 직접 긁는 실행에만 붙는다(나머지는 빈 슬라이스)
     extra_args: &[String],
 ) -> Result<(String, MetaOut), AiError> {
-    let mut cmd = Command::new(&program);
+    let mut cmd = crate::shellenv::command(&program).await;
     cmd.arg("-p").args(["--output-format", "json"]);
     if !model.is_empty() {
         cmd.args(["--model", &model]);
@@ -1987,7 +1986,7 @@ pub async fn ai_health(cli_path: Option<String>) -> Result<String, AiError> {
     let program = cli_path.unwrap_or_else(|| "claude".to_string());
     let res = timeout(
         Duration::from_secs(HEALTH_TIMEOUT_SECS),
-        Command::new(&program)
+        crate::shellenv::command(&program).await
             .arg("--version")
             .kill_on_drop(true)
             .output(),

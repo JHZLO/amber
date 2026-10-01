@@ -45,6 +45,8 @@ export const CODE_KEY: Record<string, MsgKey> = {
   // 데일리 리포트 수집(gh)
   GH_NOT_FOUND: "common.err.gh.notFound",
   GH_AUTH: "common.err.gh.auth",
+  GH_ACCOUNT: "common.err.gh.account",
+  GH_SSO: "common.err.gh.sso",
   GH_ERROR: "common.err.gh.generic",
   GH_WINDOW_TRUNCATED: "common.err.gh.windowTruncated",
   REPORT_TIMEOUT: "common.err.report.timeout",

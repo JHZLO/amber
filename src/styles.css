@@ -7225,6 +7225,39 @@ textarea.todo-edit {
   gap: 6px;
   margin: 12px 0 0;
 }
+/* GitHub 이 안 붙을 때 할 일 — 단계마다 명령 한 줄 + 복사. 손이 필요한 일이라 warn-note(§2) */
+.rep-gh-guide {
+  margin-bottom: 12px;
+  white-space: normal;
+}
+.rep-gh-guide ol {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rep-gh-guide li > span {
+  display: block;
+  margin-bottom: 4px;
+}
+.rep-cmd-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rep-cmd-row .rep-mcp-cmd {
+  flex: 1;
+  min-width: 0;
+  user-select: text;
+}
+.rep-gh-guide-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
 /* MCP 서버 미등록 시 등록 가이드 (복사용 커맨드) */
 .rep-mcp-guide {
   display: flex;

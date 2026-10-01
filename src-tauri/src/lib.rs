@@ -3,6 +3,7 @@ mod auth;
 mod dbconn;
 mod detect;
 mod report;
+mod shellenv;
 
 use ai::AiError;
 use std::path::{Path, PathBuf};
@@ -392,6 +393,8 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // 사용자 셸 PATH 를 미리 읽어 둔다 — Dock 으로 뜬 앱도 터미널과 같은 곳에서 CLI 를 찾게(shellenv.rs)
+            shellenv::prewarm();
             // 위젯은 모든 스페이스에 표시 — 데스크탑을 전환하거나 다른 앱이 전체화면이어도 사라지지 않는다
             // (PRD §8.1: JSON 키가 아니라 런타임 API). 메인 창에는 걸지 않는다.
             if let Some(w) = app.get_webview_window("widget") {
@@ -473,6 +476,7 @@ pub fn run() {
             report::detect_report_tools,
             report::report_mcp_servers,
             report::report_gh_accounts,
+            report::report_check_github,
             dbconn::db_secret_set,
             dbconn::db_secret_delete,
             dbconn::db_test,

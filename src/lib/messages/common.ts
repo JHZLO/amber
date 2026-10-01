@@ -77,6 +77,8 @@ const ko = {
   "common.err.empty.ddl": "스키마 DDL 을 붙여넣어 주세요.",
   "common.err.gh.notFound": "gh CLI 를 찾을 수 없어요.",
   "common.err.gh.auth": "gh 인증이 필요해요. 터미널에서 `gh auth login` 후 다시 시도하세요.",
+  "common.err.gh.account": "리포트에 고른 gh 계정이 로그인돼 있지 않아요. 설정의 데일리 리포트에서 확인하세요.",
+  "common.err.gh.sso": "조직의 SSO 승인이 필요해요. 터미널에서 `gh auth refresh -h github.com` 으로 다시 인증하세요.",
   "common.err.gh.generic": "gh 호출이 실패했어요 — {detail}",
   // GitHub 활동 피드는 한 페이지(최근 {detail}건)까지만 온다 — 그보다 오래된 날짜는 조회 자체가 불가능
   "common.err.gh.windowTruncated":
@@ -222,6 +224,8 @@ const en: Record<keyof typeof ko, string> = {
   "common.err.empty.ddl": "Paste the schema DDL.",
   "common.err.gh.notFound": "Couldn't find the gh CLI.",
   "common.err.gh.auth": "gh needs authentication. Run `gh auth login` in a terminal, then retry.",
+  "common.err.gh.account": "The gh account chosen for reports isn't signed in. Check the Daily report section in Settings.",
+  "common.err.gh.sso": "Your organization requires SSO approval. Run `gh auth refresh -h github.com` in a terminal.",
   "common.err.gh.generic": "The gh call failed — {detail}",
   "common.err.gh.windowTruncated":
     "GitHub's activity feed doesn't reach back to this date (only the latest {detail} events are available).",
