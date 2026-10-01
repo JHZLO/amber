@@ -509,11 +509,12 @@ fn body_snippet(v: Option<&serde_json::Value>, max: usize) -> Option<String> {
 }
 
 async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDigest {
-    let program = cfg
-        .path
-        .clone()
-        .filter(|p| !p.is_empty())
-        .unwrap_or_else(|| "gh".to_string());
+    // 경로를 비워 두면 맨 이름 "gh" 로는 못 찾는다 — Dock·Finder 로 뜬 앱의 PATH 엔 Homebrew 가 없다.
+    // 설정 화면이 보여 주는 것과 같은 길(로그인 셸)로 찾는다.
+    let program = match cfg.path.clone().filter(|p| !p.is_empty()) {
+        Some(p) => p,
+        None => resolve_gh_path().await.unwrap_or_else(|| "gh".to_string()),
+    };
 
     let mk_err = |e: AiError| SourceDigest {
         id: "github".into(),
@@ -531,6 +532,8 @@ async fn collect_github(cfg: &GithubCfg, start_ms: i64, end_ms: i64) -> SourceDi
     let (login, token) = if let Some(acc) = account {
         let tok_out = match run_gh(&program, &["auth", "token", "--user", acc], None).await {
             Ok(o) => o,
+            // 못 찾은 것과 못 꺼낸 것은 다르다 — 인증 안내로 덮으면 엉뚱한 곳(gh auth login)을 보게 된다
+            Err(e) if e.code != "GH_AUTH" && e.code != "GH_ERROR" => return mk_err(e),
             Err(_) => {
                 return mk_err(AiError::new(
                     "GH_AUTH",
@@ -1639,7 +1642,18 @@ pub struct ReportTools {
     pub codex_sessions: bool,
 }
 
+/// 로그인 셸에서 gh 를 찾고, 셸이 못 찾으면 Homebrew 기본 위치를 본다
 async fn resolve_gh_path() -> Option<String> {
+    if let Some(p) = resolve_gh_in_shell().await {
+        return Some(p);
+    }
+    ["/opt/homebrew/bin/gh", "/usr/local/bin/gh"]
+        .into_iter()
+        .find(|p| std::path::Path::new(p).is_file())
+        .map(str::to_string)
+}
+
+async fn resolve_gh_in_shell() -> Option<String> {
     for shell in ["/bin/zsh", "/bin/bash"] {
         if let Ok(Ok(out)) = timeout(
             Duration::from_secs(8),
