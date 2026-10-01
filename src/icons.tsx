@@ -50,9 +50,14 @@ export type IconName =
   | "table"
   | "key"
   | "eye"
-  | "eye-off";
+  | "eye-off"
+  | "star";
 
 const PATHS: Record<IconName, ReactNode> = {
+  // 즐겨찾기 — 켜짐은 같은 획에 채움만 더한다(.icon-fill, DESIGN §3 채움/아웃라인)
+  star: (
+    <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
+  ),
   // DB 연동 — 연결 폴더(database)·스키마 폴더(table)·키체인 표식(key). 폴더 아이콘과 나란히 서므로 획을 단순하게
   database: (
     <>

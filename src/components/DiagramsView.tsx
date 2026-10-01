@@ -20,7 +20,7 @@ import {
   writeDiagramFile,
   type DiagramNode,
 } from "../lib/diagrams";
-import { ancestorPaths, remapPath, remapPaths, splitDbRoots } from "../lib/vaultTree";
+import { ancestorPaths, remapPath, remapPaths, splitDbRoots, starredFirst } from "../lib/vaultTree";
 import { TREE_ROW_ATTR, TreeFindBar, TreeLabel, useTreeFind } from "./TreeFind";
 import { useTreeDnd } from "../lib/useTreeDnd";
 import { usePaneResize } from "../lib/usePaneResize";
@@ -63,6 +63,7 @@ import {
   remapConnectionFolders,
   schemaFolder,
   setSchemaAudit,
+  setSchemaStarred,
   syncSchema,
   type DbConnection,
   type DbSchemaPref,
@@ -391,6 +392,30 @@ export function DiagramsView({
     window.addEventListener(DB_CONNECTIONS_EVENT, h);
     return () => window.removeEventListener(DB_CONNECTIONS_EVENT, h);
   }, [loadConnections]);
+
+  /** 즐겨찾기 토글 — 트리 순서가 바로 바뀌도록 화면 상태를 먼저 고치고 저장한다 */
+  async function toggleStar(conn: DbConnection, pref: DbSchemaPref) {
+    const starred = !pref.starred;
+    const patch = (c: DbConnection): DbConnection =>
+      c.id !== conn.id
+        ? c
+        : {
+            ...c,
+            schemas: c.schemas.map((p) => (p.name === pref.name ? { ...p, starred } : p)),
+          };
+    setConnections((prev) => prev.map(patch));
+    setSelectedSchema((cur) => {
+      if (!cur || cur.conn.id !== conn.id) return cur;
+      const c2 = patch(cur.conn);
+      return { conn: c2, pref: c2.schemas.find((p) => p.name === cur.pref.name) ?? cur.pref };
+    });
+    try {
+      await setSchemaStarred(conn, pref.name, starred);
+    } catch (e) {
+      setDbError(errMsg(e));
+    }
+    await refreshConnectionRows();
+  }
 
   /** 감사 테이블 포함 토글 — 스키마 설정에 저장하고, 화면의 선택(pref)도 새 값으로 바꾼다.
    *  열린 ERD 가 있으면 헤더의 표식과 달라져 변경 배너가 뜬다(다시 생성은 사용자가 고른다). */
@@ -899,8 +924,13 @@ export function DiagramsView({
                 {schemaHit && isQueued && (
                   <span className="tree-count">{t("diagrams.db.tree.queued")}</span>
                 )}
-                {schemaHit && !isSyncing && !isQueued && schemaSnap && (
-                  <span className="tree-count">{schemaSnap.tables.length}</span>
+                {schemaHit && !isSyncing && !isQueued && (schemaSnap || schemaHit.pref.starred) && (
+                  <span className="tree-count">
+                    {schemaHit.pref.starred && (
+                      <Icon name="star" size={11} className="icon-fill tree-star" />
+                    )}
+                    {schemaSnap?.tables.length}
+                  </span>
                 )}
                 {/* 행마다 할 수 있는 일이 다르다 — 연결·스키마는 폴더가 아니라 **위치**라
                     새 파일·새 폴더·이름 변경이 뜻을 갖지 않는다. 그 자리에 연결의 동사를 둔다. */}
@@ -945,6 +975,22 @@ export function DiagramsView({
                     </>
                   ) : schemaHit ? (
                     <>
+                      <Tooltip
+                        label={t(schemaHit.pref.starred ? "diagrams.db.tree.unstar" : "diagrams.db.tree.star")}
+                      >
+                        <button
+                          aria-label={t(schemaHit.pref.starred ? "diagrams.db.tree.unstar" : "diagrams.db.tree.star")}
+                          aria-pressed={!!schemaHit.pref.starred}
+                          className="icon-btn sm"
+                          onClick={() => void toggleStar(schemaHit.conn, schemaHit.pref)}
+                        >
+                          <Icon
+                            name="star"
+                            size={13}
+                            className={schemaHit.pref.starred ? "icon-fill" : undefined}
+                          />
+                        </button>
+                      </Tooltip>
                       <Tooltip label={t("diagrams.db.tree.syncHere")}>
                         <button
                           aria-label={t("diagrams.db.tree.syncHere")}
@@ -1115,11 +1161,13 @@ export function DiagramsView({
     find.close();
   });
 
-  // 연결 폴더는 "내 다이어그램"에서 빼고 아래 구역에 뿌리로 세운다 — 같은 폴더가 두 번 보이지 않게
-  const { mine, dbRoots } = useMemo(
-    () => splitDbRoots(find.nodes, (p) => connIndex.byFolder.has(p)),
-    [find.nodes, connIndex],
-  );
+  // 연결 폴더는 "내 다이어그램"에서 빼고 아래 구역에 뿌리로 세운다 — 같은 폴더가 두 번 보이지 않게.
+  // 즐겨찾기 스키마는 따로 모으지 않고 제 연결 안에서 맨 위로 올린다(같은 이유 — 한 스키마가 두 줄이 되지 않게)
+  const { mine, dbRoots } = useMemo(() => {
+    const split = splitDbRoots(find.nodes, (p) => connIndex.byFolder.has(p));
+    const isStarred = (p: string) => !!connIndex.schemaByFolder.get(p)?.pref.starred;
+    return { mine: split.mine, dbRoots: split.dbRoots.map((r) => starredFirst(r, isStarred)) };
+  }, [find.nodes, connIndex]);
 
   const fileName = selected
     ? selected

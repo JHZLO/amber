@@ -31,6 +31,8 @@ export interface DbSchemaPref {
   enabled: boolean;
   /** ERD 에 감사 테이블(*_aud·revinfo)을 그리는가. 없으면 true (하우스 스타일 기본) */
   audit?: boolean;
+  /** 즐겨찾기 — 트리에서 연결 맨 위로 올라온다. 없으면 false */
+  starred?: boolean;
 }
 
 export const prefAudit = (p: DbSchemaPref): boolean => p.audit !== false;
@@ -103,6 +105,7 @@ function parseSchemas(json: string): DbSchemaPref[] {
         label: String(s.label ?? ""),
         enabled: s.enabled !== false,
         ...(s.audit === false ? { audit: false } : {}),
+        ...(s.starred === true ? { starred: true } : {}),
       }));
   } catch {
     return [];
@@ -311,6 +314,15 @@ export async function setSchemaAudit(c: DbConnection, schema: string, audit: boo
     if (p.name !== schema) return p;
     const { audit: _drop, ...rest } = p;
     return audit ? rest : { ...rest, audit: false };
+  });
+  await updateConnection(c.id, { schemas });
+}
+
+export async function setSchemaStarred(c: DbConnection, schema: string, starred: boolean): Promise<void> {
+  const schemas = c.schemas.map((p) => {
+    if (p.name !== schema) return p;
+    const { starred: _drop, ...rest } = p;
+    return starred ? { ...rest, starred: true } : rest;
   });
   await updateConnection(c.id, { schemas });
 }

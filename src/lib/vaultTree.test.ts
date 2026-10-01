@@ -13,6 +13,7 @@ import {
   remapPaths,
   searchFiles,
   splitDbRoots,
+  starredFirst,
   type VaultNode,
 } from "./vaultTree";
 
@@ -251,5 +252,24 @@ describe("remapPath", () => {
   it("집합 전체를 한 번에 옮긴다", () => {
     const out = remapPaths(["CS", "CS/net", "CS수업.md", "회고.md"], "CS", "X");
     expect([...out].sort()).toEqual(["X", "X/net", "CS수업.md", "회고.md"].sort());
+  });
+});
+
+describe("starredFirst", () => {
+  type N = { path: string; children?: N[] };
+  const conn: N = {
+    path: "MySQL",
+    children: [{ path: "MySQL/a" }, { path: "MySQL/b" }, { path: "MySQL/c" }, { path: "MySQL/d" }],
+  };
+
+  it("moves starred children to the top and keeps both groups in their original order", () => {
+    const out = starredFirst(conn, (p) => p === "MySQL/d" || p === "MySQL/b");
+    expect(out.children?.map((n) => n.path)).toEqual(["MySQL/b", "MySQL/d", "MySQL/a", "MySQL/c"]);
+  });
+
+  it("returns the same object when nothing would move", () => {
+    expect(starredFirst(conn, () => false)).toBe(conn);
+    expect(starredFirst(conn, () => true)).toBe(conn);
+    expect(starredFirst(conn, (p) => p === "MySQL/a")).toBe(conn);
   });
 });

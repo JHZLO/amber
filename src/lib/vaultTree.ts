@@ -230,6 +230,20 @@ export function splitDbRoots<T extends { path: string; isDir: boolean; children?
   return { mine: walk(nodes), dbRoots };
 }
 
+/** 연결 하나의 바로 아래 줄을 즐겨찾기가 먼저 오게 다시 세운다 — 그 안에서는 원래 순서(이름순)를 지킨다.
+ *  더 깊이는 건드리지 않는다: 즐겨찾기는 스키마(연결의 자식)에만 붙는다. 바꿀 게 없으면 원본을 돌려준다. */
+export function starredFirst<T extends { path: string; children?: T[] }>(
+  root: T,
+  isStarred: (path: string) => boolean,
+): T {
+  const kids = root.children;
+  if (!kids?.length) return root;
+  const top = kids.filter((n) => isStarred(n.path));
+  if (!top.length || top.length === kids.length) return root;
+  const sorted = [...top, ...kids.filter((n) => !isStarred(n.path))];
+  return sorted.every((n, i) => n === kids[i]) ? root : { ...root, children: sorted };
+}
+
 export function remapPath(path: string, oldPrefix: string, newPrefix: string): string {
   if (path === oldPrefix) return newPrefix;
   if (path.startsWith(`${oldPrefix}/`)) return newPrefix + path.slice(oldPrefix.length);

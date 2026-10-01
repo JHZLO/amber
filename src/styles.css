@@ -7816,6 +7816,13 @@ textarea.todo-edit {
   align-items: center;
   gap: 6px;
 }
+/* 즐겨찾기 — 켜짐은 같은 별에 채움만 더한다(DESIGN §3). 행에 늘 보이는 표식은 개수 앞에 작게 */
+.icon-fill {
+  fill: currentColor;
+}
+.tree-row .tree-star {
+  color: var(--text-2);
+}
 .tree-row.db-syncing .tree-ico {
   animation: spin 0.9s linear infinite;
 }
