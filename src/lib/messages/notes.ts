@@ -82,6 +82,12 @@ const ko = {
   "notes.conflict.reload": "내 편집 버리고 다시 읽기",
   "notes.conflict.overwrite": "그래도 덮어쓰기",
 
+  // 편집 중 밖에서 바뀐 노트(파일 감시) 배너
+  "notes.disk.changed": "밖에서 이 노트가 바뀌었어요.",
+  "notes.disk.detail": "저장하지 않은 편집이 있어서 자동으로 불러오지 않았어요.",
+  "notes.disk.keep": "내 편집 유지",
+  "notes.disk.load": "새 내용 불러오기",
+
   // 인라인 질문(코멘트) 레이어
   "notes.cmt.ask": "질문",
   "notes.cmt.askTip": "선택한 부분에 질문 달기",
@@ -282,6 +288,11 @@ const en: Record<keyof typeof ko, string> = {
   "notes.conflict.warn": "Overwriting will discard those changes.",
   "notes.conflict.reload": "Discard my edits and reload",
   "notes.conflict.overwrite": "Overwrite anyway",
+
+  "notes.disk.changed": "This note changed on disk.",
+  "notes.disk.detail": "You have unsaved edits, so it wasn't reloaded automatically.",
+  "notes.disk.keep": "Keep my edits",
+  "notes.disk.load": "Load new version",
 
   "notes.cmt.ask": "Ask",
   "notes.cmt.askTip": "Ask a question about the selection",
