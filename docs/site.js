@@ -50,6 +50,17 @@ const io = new IntersectionObserver(
 );
 $$(".reveal").forEach((el) => io.observe(el));
 
+/* ---- feature films: only the panel on screen plays; reduced motion keeps the poster and offers controls ---- */
+const films = $$(".panel-shot video");
+if (reduce) films.forEach((v) => (v.controls = true));
+else {
+  const fo = new IntersectionObserver(
+    (entries) => { for (const e of entries) e.isIntersecting ? e.target.play().catch(() => {}) : e.target.pause(); },
+    { threshold: 0.35 },
+  );
+  films.forEach((v) => fo.observe(v));
+}
+
 /* ---- pointer: one source for the hero glow, the magnetic button and the drop ---- */
 let px = innerWidth / 2, py = innerHeight / 2, gx = px, gy = py;
 addEventListener("pointermove", (e) => { px = e.clientX; py = e.clientY; }, { passive: true });

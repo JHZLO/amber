@@ -24,13 +24,13 @@
 </p>
 
 <!--
-  Hero. To swap this image for a video: drag an .mp4 (≤ 10 MB) into any GitHub comment box or
-  the README web editor, copy the generated https://github.com/user-attachments/assets/… URL and
-  put it here on its own line. GitHub renders it as an inline player (no autoplay). A GIF committed
-  under docs/assets/ autoplays and loops instead, but is capped at 10 MB too.
+  Hero: the brand film as an animated WebP, so it autoplays and loops (images are capped at 10 MB).
+  The landing page plays the per-feature films in docs/assets/films/. For a real player instead: drag
+  an .mp4 (≤ 10 MB) into the README web editor and put the generated
+  https://github.com/user-attachments/assets/… URL here on its own line (no autoplay).
 -->
 <p align="center">
-  <img src="docs/assets/todo.png" alt="Amber: a day of grouped to-dos beside the calendar, a time-blocked timetable and the daily report" width="960" />
+  <img src="docs/assets/films/desk.webp" alt="Amber in 18 seconds: plan the day in to-dos, write notes with AI, read the schema as an ERD and close the loop with a daily report" width="960" />
 </p>
 
 ## At a glance

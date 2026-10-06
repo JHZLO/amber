@@ -118,7 +118,8 @@ p { margin: 0 0 16px; color: var(--text-2); }
 .panel-copy p:last-child { max-width: 480px; }
 .panel h2 { margin: 0 0 18px; }
 .panel-shot { margin: 0; will-change: transform; }
-.panel-shot img { width: 100%; border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5); }
+.panel-shot img, .panel-shot video { width: 100%; border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5); }
+.panel-shot video { display: block; height: auto; aspect-ratio: 16 / 9; background: var(--bg); }
 .panel-shot.small { display: flex; justify-content: center; }
 .panel-shot.small img { width: min(100%, 460px); }
 
