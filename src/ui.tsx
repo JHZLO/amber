@@ -1,9 +1,7 @@
 // 공유 프레젠테이션 컴포넌트
 
 import {
-  useCallback,
   useEffect,
-  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -17,6 +15,21 @@ import { Icon, type IconName } from "./icons";
 import { dateLocale, t } from "./lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox as CheckboxUI } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select as SelectRoot,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Toggle } from "@/components/ui/toggle";
+import {
+  Tooltip as TooltipUI,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -168,18 +181,12 @@ export function Checkbox({
   disabled?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={checked}
+    <CheckboxUI
+      checked={checked}
+      onCheckedChange={() => onChange()}
       aria-label={label}
       disabled={disabled}
-      className={`checkbox ${checked ? "checked" : ""}`}
-      onClick={onChange}
-    >
-      {/* 항상 렌더하고 색으로 표시 — 체크 시 primary-fg, 미체크 hover 시 옅은 힌트 */}
-      <Icon name="check" size={12} />
-    </button>
+    />
   );
 }
 
@@ -236,31 +243,45 @@ export function SetInline({ children }: { children: ReactNode }) {
   return <div className="set-inline">{children}</div>;
 }
 
-/** 골라 쓰는 카드 한 장 — 라디오다(여럿 중 하나). 선택은 색이 아니라 채움/아웃라인(§3).
- *  AI 프로바이더 고르기와 온보딩이 같은 물건을 쓴다: 처음 본 모양이 설정에서도 같아야 한다. */
+/** 골라 쓰는 카드 묶음 — 라디오다(여럿 중 하나). 화살표로 고르고 Tab 은 고른 한 장에만 멈춘다.
+ *  AI 프로바이더 고르기(설정)와 온보딩이 같은 물건을 쓴다: 처음 본 모양이 설정에서도 같아야 한다. */
+export function OptionGroup({
+  value,
+  onValueChange,
+  label,
+  className,
+  children,
+}: {
+  value: string;
+  onValueChange: (v: string) => void;
+  label?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <RadioGroup value={value} onValueChange={onValueChange} aria-label={label} className={className}>
+      {children}
+    </RadioGroup>
+  );
+}
+
+/** 카드 한 장. 선택은 색이 아니라 채움/아웃라인(§3) — 고른 것 = 두꺼운 유리 + 채운 점.
+ *  고른 상태는 묶음(OptionGroup)의 값이 정하고, 모양은 `[data-state="checked"]` 가 받는다. */
 export function OptionCard({
-  selected,
+  value,
   name,
   meta,
   sub,
-  onSelect,
 }: {
-  selected: boolean;
+  value: string;
   name: string;
   /** 이름 옆 작은 글씨 (버전 등) */
   meta?: string;
   /** 아랫줄 (경로 등) */
   sub?: string;
-  onSelect: () => void;
 }) {
   return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      className={`onb-card ${selected ? "selected" : ""}`}
-      onClick={onSelect}
-    >
+    <RadioGroupItem value={value} className="onb-card">
       <span className="onb-dot" />
       <span className="onb-name">{name}</span>
       {meta && <span className="onb-version">{meta}</span>}
@@ -269,7 +290,7 @@ export function OptionCard({
           {sub}
         </span>
       )}
-    </button>
+    </RadioGroupItem>
   );
 }
 
@@ -374,16 +395,10 @@ export function ChoiceChip({
 }) {
   return (
     <span className={`chip chip-choice ${on ? "on" : ""}`}>
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={on}
-        className="chip-main"
-        onClick={onToggle}
-      >
+      <Toggle pressed={on} onPressedChange={() => onToggle()} className="chip-main">
         <Icon name={on ? "check" : icon} size={12} />
         <span className="chip-label">{label}</span>
-      </button>
+      </Toggle>
       {peek && (
         <Tooltip label={peek.label}>
           <button
@@ -407,52 +422,15 @@ export function Tooltip({
   label: string;
   children: ReactNode;
 }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
-
-  const place = () => {
-    const r = ref.current?.getBoundingClientRect();
-    if (r) setPos({ left: r.left + r.width / 2, top: r.bottom + 6 });
-  };
-  const show = () => {
-    timer.current = setTimeout(place, 350);
-  };
-  // 키보드 포커스는 dwell 없이 즉시 — 머무름은 마우스에만 있는 개념이다
-  const showNow = () => {
-    if (timer.current) clearTimeout(timer.current);
-    place();
-  };
-  const hide = () => {
-    if (timer.current) clearTimeout(timer.current);
-    setPos(null);
-  };
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
-
+  // 래퍼 span 이 트리거다 — 안쪽 버튼의 포커스(React onFocus 는 거품을 탄다)와 hover 를 함께 받는다.
+  // 래퍼는 레이아웃에도 쓰인다(styles.css .tip-wrap 의 flex-shrink).
   return (
-    <span
-      ref={ref}
-      className="tip-wrap"
-      onMouseEnter={show}
-      onMouseLeave={hide}
-      onMouseDown={hide}
-      onFocus={showNow}
-      onBlur={hide}
-    >
-      {children}
-      {pos &&
-        createPortal(
-          <span className="tip" style={{ left: pos.left, top: pos.top }}>
-            {label}
-          </span>,
-          document.body,
-        )}
-    </span>
+    <TooltipUI>
+      <TooltipTrigger asChild>
+        <span className="tip-wrap">{children}</span>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </TooltipUI>
   );
 }
 
@@ -561,8 +539,9 @@ export function Modal({
   // portal(아직 Radix 가 아닌 것)을 먼저 닫게 비켜 주고, 입력한 게 있으면 한 번 더 묻는다.
   // X 와 취소는 누른 것 자체가 뜻이라 묻지 않는다(키 하나는 실수로 눌리지만 버튼은 겨냥해야 눌린다).
   const onEscape = (e: KeyboardEvent) => {
-    // 커스텀 Select 드롭다운이나 mermaid 확대 뷰어가 위에 떠 있으면 그쪽만 닫히게 모달은 유지
-    if (document.querySelector(".select-menu, .mmd-zoom-overlay")) {
+    // mermaid 확대 뷰어(아직 Radix 가 아니다)가 위에 떠 있으면 그쪽만 닫히게 모달은 유지.
+    // 드롭다운(Select)은 Radix 레이어라 열려 있으면 이 창까지 Esc 가 오지 않는다
+    if (document.querySelector(".mmd-zoom-overlay")) {
       e.preventDefault();
       return;
     }
@@ -801,15 +780,17 @@ export function timeAgo(ms: number): string {
 }
 
 /** 드롭다운 메뉴 배치 상수 — `.select-menu`(styles.css)와 짝을 이룬다 */
-const MENU_MAX_H = 260; // 최대 높이. 뷰포트가 좁으면 아래에서 더 줄인다
 const MENU_GAP = 6; // 트리거와 메뉴 사이 간격
-const MENU_EDGE = 10; // 뷰포트 가장자리에 남길 최소 여백
-const MENU_MIN_H = 96; // 뒤집어도 좁을 때의 바닥값(≈항목 3개) — 그 아래로는 스크롤
+const MENU_EDGE = 10; // 뷰포트(또는 모달 본문) 가장자리에 남길 최소 여백
+/** Radix Select 는 빈 문자열을 항목 값으로 받지 않는다(빈 값 = '고르지 않음' 예약).
+ *  우리 목록엔 ''(기본값으로 두기)이 실제 선택지로 있어서 안에서만 표식으로 바꿔 쓴다 */
+const EMPTY_VALUE = "\u0000empty";
+const enc = (v: string) => (v === "" ? EMPTY_VALUE : v);
 
-/** 커스텀 드롭다운 (네이티브 select 대신).
- *  메뉴는 body 로 portal + position:fixed 로 띄워, 모달 등 overflow 컨테이너에
- *  잘리거나 스크롤 높이를 밀어 레이아웃을 흔드는 문제를 원천 차단한다.
- *  아래 공간이 모자라면 위로 뒤집어(flip) 모달 푸터의 저장/닫기 같은 하단 액션을 덮지 않는다. */
+/** 커스텀 드롭다운(네이티브 select 금지). 판과 키보드는 Radix Select(components/ui/select).
+ *  - 미설정은 `placeholder` 로 — '없음' 항목을 목록에 끼워 넣지 않는다(목록엔 고를 값만)
+ *  - 모달 안에서는 메뉴가 `.modal-body` 경계를 넘지 않는다 — 넘으면 푸터의 저장/닫기를 덮는다
+ *  - 트리거는 type="button" 이다(Radix 기본값) — <form> 안에서 열 때마다 제출되던 버그(DB 연결 모달) */
 export function Select<T extends string>({
   value,
   options,
@@ -827,199 +808,35 @@ export function Select<T extends string>({
    *  '없음' 항목을 목록에 끼워 넣지 않고도 빈 상태를 표현한다 — 목록은 고를 값만 담는다. */
   placeholder?: string;
 }) {
-  const [open, setOpen] = useState(false);
-  // 키보드 이동용 활성 인덱스 — 열릴 때 현재 값에서 시작한다
-  const [active, setActive] = useState(0);
-  const [pos, setPos] = useState<{
-    top?: number;
-    bottom?: number;
-    left?: number;
-    right?: number;
-    minWidth: number;
-    maxHeight: number;
-  } | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const listId = useId();
-
-  const place = useCallback(() => {
-    const el = triggerRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    // 메뉴가 벗어나면 안 되는 경계. 모달 안이면 '모달 본문' — 뷰포트 기준으로 재면 화면엔 들어가도
-    // 푸터의 저장/닫기를 덮어버린다. 모달 밖이면 뷰포트.
-    const host = el.closest(".modal-body")?.getBoundingClientRect();
-    const limitTop = Math.max(MENU_EDGE, host?.top ?? 0);
-    const limitBottom = Math.min(
-      window.innerHeight - MENU_EDGE,
-      host?.bottom ?? window.innerHeight,
-    );
-    const roomBelow = limitBottom - r.bottom - MENU_GAP;
-    const roomAbove = r.top - limitTop - MENU_GAP;
-    // 실제 내용 높이로 판단(메뉴는 open 과 동시에 마운트되므로 measure 가능).
-    // 아직 못 쟀으면 최대치로 가정해 보수적으로 뒤집는다.
-    const need = Math.min(menuRef.current?.scrollHeight || MENU_MAX_H, MENU_MAX_H);
-    // 아래가 모자라고 위가 더 넓을 때만 뒤집는다 — 공간이 되면 늘 아래(예측 가능한 기본값)
-    const up = roomBelow < need && roomAbove > roomBelow;
-    setPos({
-      ...(align === "right"
-        ? { right: window.innerWidth - r.right }
-        : { left: r.left }),
-      ...(up
-        ? { bottom: window.innerHeight - r.top + MENU_GAP }
-        : { top: r.bottom + MENU_GAP }),
-      minWidth: r.width,
-      maxHeight: Math.max(MENU_MIN_H, Math.min(MENU_MAX_H, up ? roomAbove : roomBelow)),
-    });
-  }, [align]);
-
-  // 배치는 paint 전에 끝낸다 — 잘못된 위치가 한 프레임 보이지 않게
-  useLayoutEffect(() => {
-    if (open) place();
-  }, [open, place]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (rootRef.current?.contains(t) || menuRef.current?.contains(t)) return;
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" || e.key === "Tab") {
-        setOpen(false);
-        if (e.key === "Escape") triggerRef.current?.focus();
-        return;
-      }
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        e.preventDefault();
-        setActive((i) => {
-          const n = options.length;
-          return n === 0 ? 0 : (i + (e.key === "ArrowDown" ? 1 : n - 1)) % n;
-        });
-        return;
-      }
-      if (e.key === "Home" || e.key === "End") {
-        e.preventDefault();
-        setActive(e.key === "Home" ? 0 : options.length - 1);
-        return;
-      }
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        const o = options[active];
-        if (o) onChange(o.value);
-        setOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
-    const onReflow = () => setOpen(false);
-    // 드롭다운 '내부' 스크롤(긴 목록)은 닫지 않는다 — 바깥(모달 본문 등) 스크롤에만 닫아 앵커 이탈 방지
-    const onScroll = (e: Event) => {
-      if (menuRef.current?.contains(e.target as Node)) return;
-      setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("resize", onReflow);
-    window.addEventListener("scroll", onScroll, true);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("resize", onReflow);
-      window.removeEventListener("scroll", onScroll, true);
-    };
-  }, [open, options, active, onChange]);
-
+  const [boundary, setBoundary] = useState<Element | null>(null);
   const cur = options.find((o) => o.value === value);
 
-  // 활성 항목이 보이게 스크롤 — 목록이 길면 화살표로 내려가다 시야를 벗어난다
-  useEffect(() => {
-    if (!open) return;
-    menuRef.current
-      ?.querySelectorAll<HTMLElement>(".select-item")
-      [active]?.scrollIntoView({ block: "nearest" });
-  }, [open, active]);
-
-  const openMenu = () => {
-    setActive(Math.max(0, options.findIndex((o) => o.value === value)));
-    setOpen(true);
-  };
-
   return (
-    <div className={`select ${block ? "block" : ""}`} ref={rootRef}>
-      {/* type="button" — <form> 안에서 쓰이면 기본값(submit)이라 열 때마다 폼이 제출된다(DB 연결 모달에서 실측) */}
-      <button
-        ref={triggerRef}
-        type="button"
-        className={`select-trigger ${cur ? "" : "select-empty"}`}
-        role="combobox"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={open ? listId : undefined}
-        onClick={() => (open ? setOpen(false) : openMenu())}
-        onKeyDown={(e) => {
-          if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-            e.preventDefault();
-            openMenu();
-          }
+    <div className={`select ${block ? "block" : ""}`}>
+      <SelectRoot
+        value={cur ? enc(cur.value) : ""}
+        onValueChange={(v) => onChange((v === EMPTY_VALUE ? "" : v) as T)}
+        onOpenChange={(o) => {
+          if (o) setBoundary(triggerRef.current?.closest(".modal-body") ?? null);
         }}
       >
-        <span>{cur?.label ?? placeholder}</span>
-        <svg className="select-caret" width="10" height="6" viewBox="0 0 10 6">
-          <path
-            d="M1 1l4 4 4-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
-      {open &&
-        createPortal(
-          // pos 계산(useLayoutEffect) 전 한 프레임은 숨긴다 — 측정용으로 마운트만 해둔 상태
-          <div
-            ref={menuRef}
-            id={listId}
-            role="listbox"
-            className="select-menu"
-            style={{
-              top: pos?.top,
-              bottom: pos?.bottom,
-              left: pos?.left,
-              right: pos?.right,
-              minWidth: pos?.minWidth,
-              maxHeight: pos?.maxHeight,
-              visibility: pos ? undefined : "hidden",
-            }}
-          >
-            {options.map((o, i) => (
-              <button
-                key={o.value}
-                type="button"
-                role="option"
-                aria-selected={o.value === value}
-                className={`select-item ${o.value === value ? "active" : ""} ${
-                  i === active ? "kbd-active" : ""
-                }`}
-                onMouseEnter={() => setActive(i)}
-                onClick={() => {
-                  onChange(o.value);
-                  setOpen(false);
-                  triggerRef.current?.focus();
-                }}
-              >
-                <span className="select-check">
-                  {o.value === value && <Icon name="check" size={12} />}
-                </span>
-                {o.label}
-              </button>
-            ))}
-          </div>,
-          document.body,
-        )}
+        <SelectTrigger ref={triggerRef} className={cur ? "" : "select-empty"}>
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent
+          align={align === "right" ? "end" : "start"}
+          sideOffset={MENU_GAP}
+          collisionPadding={MENU_EDGE}
+          collisionBoundary={boundary}
+        >
+          {options.map((o) => (
+            <SelectItem key={o.value} value={enc(o.value)}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </SelectRoot>
     </div>
   );
 }

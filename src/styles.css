@@ -1314,6 +1314,19 @@ body.resizing-col .pane-resizer::after {
     transform: translateX(-50%) scale(0.97);
   }
 }
+/* Radix Tooltip(components/ui/tooltip) — 위치는 popper 래퍼가 잡으므로 자기 위치/가운데 정렬을 뺀다 */
+.tip[data-slot="tooltip-content"] {
+  position: static;
+  transform: none;
+  transform-origin: var(--radix-tooltip-content-transform-origin);
+  animation-name: tip-in-popper;
+}
+@keyframes tip-in-popper {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
 .modal-head {
   display: flex;
   align-items: center;
@@ -2775,13 +2788,31 @@ html.widget-root #root {
 /* 판 안의 행이라 유리를 또 씌우지 않는다(유리 위의 유리는 탁해진다). 대신 불투명한 면도
    쓰지 않는다 — 반투명한 판에 불투명한 블록이 뚫리면 판이 유리가 아니게 된다. 틴트만. */
 .select-item:hover,
-.select-item.kbd-active {
+.select-item[data-highlighted] {
   background: var(--glass-fill-hover);
   color: var(--text);
+  outline: none;
 }
-.select-item.active {
+.select-item[data-state="checked"] {
   color: var(--text);
   font-weight: 600;
+}
+/* Radix Select(components/ui/select) — 위치는 Radix 의 popper 래퍼가 잡는다. 판은 그 안에서
+   흐름대로 놓이고, 너비는 트리거보다 좁아지지 않으며, 높이는 남은 공간(모달 안이면 본문 안)에
+   맞춰 줄되 항목 세 개(96px) 아래로는 줄지 않는다 — 그 아래는 스크롤 */
+.select-menu[data-slot="select-content"] {
+  position: relative;
+  min-width: var(--radix-select-trigger-width);
+  max-height: max(96px, min(260px, var(--radix-select-content-available-height)));
+  overflow: hidden;
+  transform-origin: var(--radix-select-content-transform-origin);
+  animation: select-in 0.14s var(--ease-out);
+}
+@keyframes select-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
 }
 .select-check {
   width: 14px;
@@ -5083,7 +5114,7 @@ html.widget-root #root {
 }
 /* 고른 것 = 두꺼운 유리(§2 강조). 예전엔 --text 로 1px 테두리 + 링을 덧대 **두 겹 선**이
    생겼는데, 유리 두께가 곧 선이므로 그 자리에 농도만 올리면 된다. */
-.onb-card.selected {
+.onb-card[data-state="checked"] {
   background: var(--glass-fill-accent);
   border-color: var(--glass-edge-accent);
   box-shadow: var(--glass-sheen-hover), var(--glass-seat);
@@ -5105,7 +5136,7 @@ html.widget-root #root {
 .onb-card:hover .onb-dot {
   border-color: var(--text-2);
 }
-.onb-card.selected .onb-dot {
+.onb-card[data-state="checked"] .onb-dot {
   border-color: var(--text);
   background: var(--text);
 }
@@ -5117,7 +5148,7 @@ html.widget-root #root {
   transition: color 0.12s;
 }
 /* 고른 것만 또렷하다 — 유리 농도만으로는 둘이 거의 같아 보였다(§3: 상태는 명암으로도 말한다) */
-.onb-card.selected .onb-name {
+.onb-card[data-state="checked"] .onb-name {
   color: var(--text);
 }
 .onb-version {

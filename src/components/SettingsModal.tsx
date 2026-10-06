@@ -35,6 +35,7 @@ import {
   ConfirmDelete,
   Modal,
   OptionCard,
+  OptionGroup,
   Select,
   SetField,
   SetInline,
@@ -578,18 +579,25 @@ export function SettingsModal({
             ) : detected !== null && detected.length === 0 ? (
               <div className="error-note">{t("settings.ai.notFound")}</div>
             ) : (
-              <div className="onb-grid cols" role="radiogroup" aria-label={t("settings.ai.title")}>
+              <OptionGroup
+                className="onb-grid cols"
+                label={t("settings.ai.title")}
+                value={provider ?? ""}
+                onValueChange={(id) => {
+                  const d = detected?.find((x) => x.id === id);
+                  if (d) pickDetected(d);
+                }}
+              >
                 {(detected ?? []).map((d) => (
                   <OptionCard
                     key={d.id}
-                    selected={provider === d.id}
+                    value={d.id}
                     name={d.name}
                     meta={trimVersion(d.version, d.name)}
                     sub={d.path}
-                    onSelect={() => pickDetected(d)}
                   />
                 ))}
-              </div>
+              </OptionGroup>
             )}
 
             {provider && (
