@@ -5,7 +5,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { initTheme } from "./lib/theme";
 import { t } from "./lib/i18n";
 import { errText } from "./lib/errors";
-import "./styles.css";
+import "./index.css";
 
 // 렌더 전에 테마 적용(플래시 방지). 메인/위젯 모두 동일 적용
 initTheme();

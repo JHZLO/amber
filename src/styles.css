@@ -12,9 +12,6 @@
   --border: #ececee;
   --border-strong: #dcdce0;
 
-  /* 강조색 = near-black. soft = 옅은 회색 (선택/활성 배경) */
-  --accent: #18181b;
-  --accent-soft: #f4f4f5;
 
 
 
@@ -120,8 +117,6 @@
   --text-3: #8b8b95;
   --border: #26262a;
   --border-strong: #3a3a40;
-  --accent: #f4f4f5;
-  --accent-soft: #1f1f23;
 
 
   /* 다크는 달력 예외와 같은 방식 — 채도를 낮추고 밝기를 올린다 (9.9~10.0:1 on --bg,
@@ -6974,7 +6969,7 @@ textarea.todo-edit {
   justify-content: center;
 }
 .report-week-day.has {
-  background: var(--accent-soft);
+  background: var(--surface-2);
   color: var(--text);
 }
 .report-week-day.none {

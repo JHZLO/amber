@@ -1,12 +1,15 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import path from "node:path";
 
-// @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
+  // shadcn 컴포넌트(src/components/ui)가 쓰는 경로 별칭. tsconfig 의 paths 와 짝이다
+  resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

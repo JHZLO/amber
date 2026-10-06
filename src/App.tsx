@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import "./styles.css";
+import "./index.css";
 import type { AppConfig } from "./lib/config";
 import { loadConfig } from "./lib/config";
 import { setAuthRequiredHandler } from "./lib/ai";
