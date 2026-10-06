@@ -6,6 +6,7 @@ import { initTheme } from "./lib/theme";
 import { t } from "./lib/i18n";
 import { errText } from "./lib/errors";
 import "./index.css";
+import { Button } from "@/components/ui/button";
 
 // 렌더 전에 테마 적용(플래시 방지). 메인/위젯 모두 동일 적용
 initTheme();
@@ -53,9 +54,9 @@ class ErrorBoundary extends React.Component<
         <h1 className="crash-title">{t("common.crash.title")}</h1>
         <p className="crash-hint">{t("common.crash.hint")}</p>
         <pre className="crash-detail">{this.state.error.message}</pre>
-        <button className="btn btn-primary btn-sm" onClick={() => location.reload()}>
+        <Button variant="primary" size="sm" onClick={() => location.reload()}>
           {t("common.crash.reload")}
-        </button>
+        </Button>
       </div>
     );
   }

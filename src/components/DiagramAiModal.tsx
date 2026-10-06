@@ -11,6 +11,7 @@ import { AiThinking, ChoiceChip, DiscardAiModal, Modal } from "../ui";
 import { composeInstruction } from "../lib/aiInstruction";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
+import { Button } from "@/components/ui/button";
 
 type Step = "prompt" | "loading" | "preview";
 type ViewMode = "diff" | "preview" | "source";
@@ -159,40 +160,40 @@ export function DiagramAiModal({
   if (step === "prompt") {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={requestClose}>
+        <Button size="sm" onClick={requestClose}>
           {t("common.cancel")}
-        </button>
-        <button
-          className="btn btn-primary"
+        </Button>
+        <Button
+          variant="primary"
           onClick={run}
           disabled={tooShort || !config?.provider}
           title={!config ? t("diagrams.ai.configLoading") : undefined}
         >
           <Icon name="sparkles" size={15} />
           {t("diagrams.ai.convert")}
-        </button>
+        </Button>
       </>
     );
   } else if (step === "loading") {
     footer = (
-      <button className="btn btn-sm btn-danger-ghost" onClick={stop}>
+      <Button variant="danger" size="sm" onClick={stop}>
         <Icon name="x" size={14} />
         {t("diagrams.ai.stop")}
-      </button>
+      </Button>
     );
   } else if (step === "preview") {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={() => setStep("prompt")}>
+        <Button size="sm" onClick={() => setStep("prompt")}>
           <Icon name="chevron-left" size={14} />
           {t("diagrams.ai.back")}
-        </button>
+        </Button>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={requestClose}>
+        <Button size="sm" onClick={requestClose}>
           {t("common.cancel")}
-        </button>
-        <button
-          className="btn btn-primary"
+        </Button>
+        <Button
+          variant="primary"
           onClick={() => {
             onApplied(result);
             onClose();
@@ -200,7 +201,7 @@ export function DiagramAiModal({
         >
           <Icon name="check" size={15} />
           {t("diagrams.ai.apply")}
-        </button>
+        </Button>
       </>
     );
   }

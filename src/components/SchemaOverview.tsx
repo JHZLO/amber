@@ -10,6 +10,7 @@ import { rootDisplayName } from "../lib/workspace";
 import { envLabel, prefAudit, schemaFolder, type DbConnection, type DbSchemaPref } from "../lib/dbconn";
 import { SNAPSHOT_FILE, formatHeaderTime, type SchemaSnapshot } from "../lib/schemaSnapshot";
 import { inferReferences } from "../lib/erdGen";
+import { Button } from "@/components/ui/button";
 
 const isAudit = (name: string) => name.endsWith("_aud");
 
@@ -103,22 +104,22 @@ export function SchemaOverview({
             <span onClick={() => !syncing && onToggleAudit(!audit)}>{t("diagrams.db.audit.include")}</span>
           </span>
         </Tooltip>
-        <button className="btn btn-sm" onClick={onSync} disabled={syncing}>
+        <Button size="sm" onClick={onSync} disabled={syncing}>
           <Icon name="refresh" size={14} />
           {syncing
             ? t("diagrams.db.syncingShort")
             : snapshot
               ? t("diagrams.db.syncAgo", { ago: timeAgo(snapshot.synced_at) })
               : t("diagrams.db.sync")}
-        </button>
-        <button
-          className="btn btn-primary btn-sm"
+        </Button>
+        <Button
+          variant="primary" size="sm"
           onClick={hasFullErd ? onOpenFull : onGenerate}
           disabled={!snapshot || syncing}
         >
           <Icon name="workflow" size={14} />
           {hasFullErd ? t("diagrams.db.openFull") : t("diagrams.db.generateFull")}
-        </button>
+        </Button>
       </div>
 
       <div className="db-ov">

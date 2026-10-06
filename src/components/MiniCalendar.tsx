@@ -22,6 +22,7 @@ import { vacationLabel, type VacationKind } from "../lib/vacations";
 import { t } from "../lib/i18n";
 import { Icon } from "../icons";
 import { Tooltip } from "../ui";
+import { Button } from "@/components/ui/button";
 
 /** 제목 클릭으로 오르내리는 단계 */
 type Level = "day" | "month" | "year";
@@ -141,20 +142,20 @@ export function MiniCalendar({
           {title}
         </button>
         <span className="cal-head-nav">
-          <button
-            className="icon-btn ghost sm"
+          <Button
+            variant="ghost" size="icon-sm"
             onClick={() => step(-1)}
             aria-label={arrowLabels[0]}
           >
             <Icon name="chevron-left" size={15} />
-          </button>
-          <button
-            className="icon-btn ghost sm"
+          </Button>
+          <Button
+            variant="ghost" size="icon-sm"
             onClick={() => step(1)}
             aria-label={arrowLabels[1]}
           >
             <Icon name="chevron-right" size={15} />
-          </button>
+          </Button>
         </span>
       </div>
 

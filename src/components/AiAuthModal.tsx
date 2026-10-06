@@ -24,6 +24,7 @@ import { errText } from "../lib/errors";
 import { t } from "../lib/i18n";
 import { Modal, Spinner } from "../ui";
 import { Icon } from "../icons";
+import { Button } from "@/components/ui/button";
 
 /** 실패 시 보여 줄 CLI 출력 꼬리 — 전문을 쏟으면 읽히지 않는다 */
 const TAIL_CHARS = 400;
@@ -131,28 +132,28 @@ export function AiAuthModal({
       onClose={close}
       footer={
         <>
-          <button className="btn btn-sm" onClick={close}>
+          <Button size="sm" onClick={close}>
             {t(phase === "done" && loggedIn ? "common.done" : "common.close")}
-          </button>
+          </Button>
           <span className="spacer" />
           {!unsupported && !(phase === "done" && loggedIn) && (
             <>
               {wantsCode && phase === "running" ? (
-                <button
-                  className="btn btn-primary"
+                <Button
+                  variant="primary"
                   onClick={() => void submit()}
                   disabled={busy || !code.trim()}
                 >
                   {busy ? <Spinner /> : t("settings.auth.submit")}
-                </button>
+                </Button>
               ) : (
-                <button
-                  className="btn btn-primary"
+                <Button
+                  variant="primary"
                   onClick={() => void start()}
                   disabled={phase === "checking" || phase === "running"}
                 >
                   {t(phase === "idle" && !loggedIn ? "settings.auth.start" : "settings.auth.again")}
-                </button>
+                </Button>
               )}
             </>
           )}
@@ -181,9 +182,9 @@ export function AiAuthModal({
               <label>{t("settings.auth.urlLabel")}</label>
               <div className="set-inline">
                 <input className="input" readOnly value={url} />
-                <button className="btn" onClick={() => void openUrl(url)}>
+                <Button  onClick={() => void openUrl(url)}>
                   {t("settings.auth.openBrowser")}
-                </button>
+                </Button>
               </div>
               <div className="hint" style={{ marginTop: 6 }}>
                 {t("settings.auth.urlHint")}

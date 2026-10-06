@@ -15,6 +15,7 @@ import { detectAiClis, type DetectedCli } from "../lib/ai";
 import { t } from "../lib/i18n";
 import { Modal, Spinner } from "../ui";
 import { Icon } from "../icons";
+import { Button } from "@/components/ui/button";
 
 const INSTALL_LINKS: Record<AiProvider, string> = {
   claude: "https://claude.com/claude-code",
@@ -75,18 +76,18 @@ export function AiOnboarding({
       onClose={skip}
       footer={
         <>
-          <button className="btn btn-sm" onClick={skip} disabled={busy}>
+          <Button size="sm" onClick={skip} disabled={busy}>
             {t("settings.onb.skip")}
-          </button>
+          </Button>
           <span className="spacer" />
-          <button
-            className="btn btn-primary"
+          <Button
+            variant="primary"
             onClick={() => void connect()}
             disabled={busy || !selected || detecting}
           >
             <Icon name="sparkles" size={15} />
             {busy ? t("settings.onb.connecting") : t("settings.onb.connect")}
-          </button>
+          </Button>
         </>
       }
     >
@@ -128,13 +129,13 @@ export function AiOnboarding({
           </p>
           <div className="onb-links">
             {(Object.keys(INSTALL_LINKS) as AiProvider[]).map((p) => (
-              <button
+              <Button
                 key={p}
-                className="btn btn-sm"
+                size="sm"
                 onClick={() => void openUrl(INSTALL_LINKS[p])}
               >
                 {t("settings.onb.installGuide", { name: PROVIDER_LABELS[p] })}
-              </button>
+              </Button>
             ))}
           </div>
         </div>

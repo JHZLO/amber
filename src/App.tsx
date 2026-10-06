@@ -40,6 +40,7 @@ import { t } from "./lib/i18n";
 import { errText } from "./lib/errors";
 import { usePaneResize } from "./lib/usePaneResize";
 import { setRailFocus, useRailDone, type RailSection } from "./lib/railDone";
+import { Button } from "@/components/ui/button";
 
 type StatusTab = ConceptStatus | "all";
 type Section = "til" | "notes" | "diagrams" | "todo";
@@ -403,27 +404,27 @@ function App() {
         )}
         <span className="spacer" />
         {section === "til" && (
-          <button
-            className="btn btn-primary"
+          <Button
+            variant="primary"
             onClick={() => setAddOpen(true)}
           >
             <Icon name="plus" size={15} />
             {t("app.add")}
-          </button>
+          </Button>
         )}
         <Tooltip label={isDark ? t("app.theme.toLight") : t("app.theme.toDark")}>
-          <button
+          <Button
             aria-label={isDark ? t("app.theme.toLight") : t("app.theme.toDark")}
-            className="icon-btn"
+            size="icon"
             onClick={toggleTheme}
           >
             <Icon name={isDark ? "sun" : "moon"} size={17} />
-          </button>
+          </Button>
         </Tooltip>
-        <button className="btn" onClick={showWidget} title={t("app.widget.open")}>
+        <Button  onClick={showWidget} title={t("app.widget.open")}>
           <Icon name="panel" size={15} />
           {t("app.widget.label")}
-        </button>
+        </Button>
       </header>
 
       {/* TIL 섹션 — 노트로 전환해도 언마운트하지 않고 숨김 (스크롤/선택 보존) */}
@@ -478,10 +479,10 @@ function App() {
           {ready && concepts.length === 0 && !loadError && (
             <div className="empty" style={{ height: "auto", padding: 40 }}>
               {status === "learning" ? t("app.empty.learning") : t("app.empty.noResults")}
-              <button className="btn btn-primary btn-sm" onClick={() => setAddOpen(true)}>
+              <Button variant="primary" size="sm" onClick={() => setAddOpen(true)}>
                 <Icon name="plus" size={14} />
                 {t("app.empty.addFirst")}
-              </button>
+              </Button>
             </div>
           )}
           {concepts.map((c) => (

@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { Icon } from "../icons";
 import { Tooltip } from "../ui";
 import { t } from "../lib/i18n";
+import { Button } from "@/components/ui/button";
 
 const MIN = 0.2;
 const MAX = 1.2; // 최대 120% 까지만 확대
@@ -184,38 +185,38 @@ export function MermaidZoom({
           <span className="mmd-zoom-pct">{Math.round(scale * 100)}%</span>
           <span className="mmd-zoom-sp" />
           <Tooltip label={t("diagrams.zoom.out")}>
-            <button
+            <Button
               aria-label={t("diagrams.zoom.out")}
-              className="icon-btn"
+              size="icon"
               onClick={() => zoomBy(1 / 1.2)}
             >
               <Icon name="minus" size={16} />
-            </button>
+            </Button>
           </Tooltip>
-          <button
-            className="btn btn-sm"
+          <Button
+            size="sm"
             onClick={reset}
             title={t("diagrams.zoom.fitTitle")}
           >
             {t("diagrams.zoom.fit")}
-          </button>
+          </Button>
           <Tooltip label={t("diagrams.zoom.in")}>
-            <button
+            <Button
               aria-label={t("diagrams.zoom.in")}
-              className="icon-btn"
+              size="icon"
               onClick={() => zoomBy(1.2)}
             >
               <Icon name="plus" size={16} />
-            </button>
+            </Button>
           </Tooltip>
           <Tooltip label={`${t("common.close")} (Esc)`}>
-            <button
+            <Button
               aria-label={`${t("common.close")} (Esc)`}
-              className="icon-btn"
+              size="icon"
               onClick={onClose}
             >
               <Icon name="x" size={17} />
-            </button>
+            </Button>
           </Tooltip>
         </div>
         <div

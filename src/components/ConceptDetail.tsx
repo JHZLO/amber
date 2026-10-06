@@ -18,6 +18,7 @@ import { AugmentModal } from "./AugmentModal";
 import { openNoteInApp } from "../lib/nav";
 import { dateLocale, t } from "../lib/i18n";
 import { errText } from "../lib/errors";
+import { Button } from "@/components/ui/button";
 
 const errMsg = errText; // Rust 코드화 에러까지 번역 (lib/errors.ts)
 
@@ -253,16 +254,16 @@ export function ConceptDetail({
           </div>
         )}
         <div className="detail-actions">
-          <button className="btn btn-primary btn-sm" onClick={save} disabled={busy}>
+          <Button variant="primary" size="sm" onClick={save} disabled={busy}>
             {busy ? t("concepts.saving") : t("common.save")}
-          </button>
-          <button
-            className="btn btn-sm"
+          </Button>
+          <Button
+            size="sm"
             onClick={() => setEditing(false)}
             disabled={busy}
           >
             {t("common.cancel")}
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -291,8 +292,9 @@ export function ConceptDetail({
 
         <div className="detail-actions detail-actions-split">
           <div className="detail-actions-group">
-            <button
-              className={`btn btn-sm ${concept.status === "learning" ? "btn-primary" : ""}`}
+            <Button
+              size="sm"
+              variant={concept.status === "learning" ? "primary" : "default"}
               onClick={toggleStatus}
               disabled={busy}
             >
@@ -307,33 +309,33 @@ export function ConceptDetail({
                   {t("concepts.action.backToLearning")}
                 </>
               )}
-            </button>
-            <button
-              className="btn btn-sm"
+            </Button>
+            <Button
+              size="sm"
               onClick={() => changeConfidence(1)}
               disabled={busy || concept.confidence >= 3}
             >
               {t("concepts.field.confidence")}
               <Icon name="plus" size={13} />
-            </button>
-            <button
-              className="btn btn-sm"
+            </Button>
+            <Button
+              size="sm"
               onClick={() => changeConfidence(-1)}
               disabled={busy || concept.confidence <= 1}
             >
               {t("concepts.field.confidence")}
               <Icon name="minus" size={13} />
-            </button>
-            <button
-              className="btn btn-sm"
+            </Button>
+            <Button
+              size="sm"
               onClick={startEdit}
               disabled={busy || loadingBody || !!readError}
             >
               <Icon name="pencil" size={14} />
               {t("concepts.action.edit")}
-            </button>
-            <button
-              className="btn btn-sm"
+            </Button>
+            <Button
+              size="sm"
               onClick={() => setAugmenting(true)}
               disabled={
                 busy ||
@@ -346,17 +348,17 @@ export function ConceptDetail({
             >
               <Icon name="sparkles" size={14} />
               {t("concepts.action.augment")}
-            </button>
+            </Button>
           </div>
           <div className="detail-actions-group">
-            <button
-              className="btn btn-sm btn-danger-ghost"
+            <Button
+              variant="danger" size="sm"
               onClick={() => setConfirmingDelete(true)}
               disabled={busy}
             >
               <Icon name="trash" size={14} />
               {t("common.delete")}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -385,14 +387,14 @@ export function ConceptDetail({
                 otherRoot ? t("concepts.sourceNote.otherRoot") : sourceNote.anchor
               }
             >
-              <button
-                className="btn btn-sm"
+              <Button
+                size="sm"
                 onClick={() => openNoteInApp(sourceNote.noteRel)}
                 disabled={otherRoot}
               >
                 <Icon name="book" size={13} />
                 {t("concepts.sourceNote.open")}
-              </button>
+              </Button>
             </Tooltip>
             <span className="concept-source-name">
               {otherRoot
@@ -418,20 +420,20 @@ export function ConceptDetail({
         onClose={() => setConfirmingDelete(false)}
         footer={
           <>
-            <button
-              className="btn btn-sm"
+            <Button
+              size="sm"
               onClick={() => setConfirmingDelete(false)}
               disabled={busy}
             >
               {t("common.cancel")}
-            </button>
-            <button
-              className="btn btn-sm btn-danger-ghost"
+            </Button>
+            <Button
+              variant="danger" size="sm"
               onClick={doDelete}
               disabled={busy}
             >
               {busy ? t("concepts.delete.deleting") : t("common.delete")}
-            </button>
+            </Button>
           </>
         }
       >

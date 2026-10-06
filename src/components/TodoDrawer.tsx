@@ -18,6 +18,7 @@ import { Tooltip } from "../ui";
 import { t } from "../lib/i18n";
 import type { Todo, TodoAncestor } from "../types";
 import { ancestorPath } from "../lib/todoTree";
+import { Button } from "@/components/ui/button";
 
 const DAY_MS = 86_400_000;
 
@@ -121,20 +122,20 @@ export function TodoDrawer({
         <span className="spacer" />
         {tab === "suggest" && (
           <Tooltip label={t("todos.suggest.run")}>
-            <button
-              className="icon-btn sm"
+            <Button
+              size="icon-sm"
               aria-label={t("todos.suggest.run")}
               onClick={onRun}
               disabled={busy}
             >
               <Icon name="refresh" size={13} />
-            </button>
+            </Button>
           </Tooltip>
         )}
         <Tooltip label={t("todos.parked.close")}>
-          <button className="icon-btn sm" aria-label={t("todos.parked.close")} onClick={onClose}>
+          <Button size="icon-sm" aria-label={t("todos.parked.close")} onClick={onClose}>
             <Icon name="chevron-right" size={14} />
-          </button>
+          </Button>
         </Tooltip>
       </div>
 
@@ -290,13 +291,13 @@ function ParkedCard({
           어떤 화면에서 무엇을 기대해야 하는지 매번 다시 배우게 된다 */}
       <span className="parked-card-actions" onClick={(e) => e.stopPropagation()}>
         <Tooltip label={t("common.delete")}>
-          <button
-            className="icon-btn sm danger"
+          <Button
+            variant="danger" size="icon-sm"
             aria-label={t("common.delete")}
             onClick={() => setConfirming(true)}
           >
             <Icon name="trash" size={13} />
-          </button>
+          </Button>
         </Tooltip>
       </span>
       <ConfirmDelete

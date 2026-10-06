@@ -32,6 +32,7 @@ import { t } from "../lib/i18n";
 import { blockRangeFromSelection } from "../lib/mdBlocks";
 import { nthIndex, rangeAt } from "../lib/noteAnchor";
 import { SelectionSweep } from "./SelectionSweep";
+import { Button } from "@/components/ui/button";
 
 const HIGHLIGHT_KEY = "note-q";
 const CURRENT_KEY = "note-q-cur";
@@ -813,13 +814,13 @@ export function NoteCommentLayer({
               {t("notes.qlist.title", { n: comments.length })}
             </div>
             <Tooltip label={t("common.close")}>
-              <button
+              <Button
                 aria-label={t("common.close")}
-                className="icon-btn ghost sm"
+                variant="ghost" size="icon-sm"
                 onClick={() => setListOpen(false)}
               >
                 <Icon name="x" size={14} />
-              </button>
+              </Button>
             </Tooltip>
           </div>
           {comments.length === 0 ? (
@@ -866,13 +867,13 @@ export function NoteCommentLayer({
                       </span>
                     </button>
                     <Tooltip label={t("notes.cmt.deleteThread")}>
-                      <button
-                        className="icon-btn ghost sm danger"
+                      <Button
+                        variant="ghost-danger" size="icon-sm"
                         aria-label={t("notes.cmt.deleteThread")}
                         onClick={() => setConfirmDel(cm)}
                       >
                         <Icon name="trash" size={12} />
-                      </button>
+                      </Button>
                     </Tooltip>
                   </div>
                 );
@@ -916,14 +917,14 @@ export function NoteCommentLayer({
                   “{pop.anchor}”
                 </div>
                 <Tooltip label={t("common.close")}>
-                  <button
+                  <Button
                     aria-label={t("common.close")}
-                    className="icon-btn ghost sm"
+                    variant="ghost" size="icon-sm"
                     onClick={() => setPop(null)}
                     disabled={asking}
                   >
                     <Icon name="x" size={14} />
-                  </button>
+                  </Button>
                 </Tooltip>
               </div>
               <textarea
@@ -950,17 +951,17 @@ export function NoteCommentLayer({
                 <CmtWaiting label={t("notes.cmt.thinking")} />
               ) : (
                 <div className="cmt-actions">
-                  <button className="btn btn-sm" onClick={() => setPop(null)}>
+                  <Button size="sm" onClick={() => setPop(null)}>
                     {t("common.cancel")}
-                  </button>
-                  <button
-                    className="btn btn-primary btn-sm"
+                  </Button>
+                  <Button
+                    variant="primary" size="sm"
                     onClick={() => void submitAsk()}
                     disabled={question.trim().length < 2 || !config?.provider}
                   >
                     <Icon name="sparkles" size={13} />
                     {t("notes.cmt.askAi")}
-                  </button>
+                  </Button>
                 </div>
               )}
             </>
@@ -969,9 +970,9 @@ export function NoteCommentLayer({
               <div className="cmt-pop-head">
                 {pop.fromList && (
                   <Tooltip label={t("notes.qlist.back")}>
-                    <button
+                    <Button
                       aria-label={t("notes.qlist.back")}
-                      className="icon-btn ghost sm"
+                      variant="ghost" size="icon-sm"
                       onClick={() => {
                         setPop(null);
                         setListOpen(true);
@@ -979,20 +980,20 @@ export function NoteCommentLayer({
                       disabled={asking}
                     >
                       <Icon name="chevron-left" size={14} />
-                    </button>
+                    </Button>
                   </Tooltip>
                 )}
                 <div className="cmt-anchor" title={viewComment.anchor}>
                   “{viewComment.anchor}”
                 </div>
                 <Tooltip label={t("common.close")}>
-                  <button
+                  <Button
                     aria-label={t("common.close")}
-                    className="icon-btn ghost sm"
+                    variant="ghost" size="icon-sm"
                     onClick={() => setPop(null)}
                   >
                     <Icon name="x" size={14} />
-                  </button>
+                  </Button>
                 </Tooltip>
               </div>
               <div className="cmt-thread" ref={threadRef}>
@@ -1027,14 +1028,14 @@ export function NoteCommentLayer({
                             }
                           }}
                         />
-                        <button
-                          className="btn btn-primary cmt-followup-send"
+                        <Button
+                          variant="primary" className="cmt-followup-send"
                           title={t("notes.cmt.reviseSend")}
                           onClick={() => void submitRevise(i)}
                           disabled={asking || reviseText.trim().length < 2}
                         >
                           <Icon name="sparkles" size={15} />
-                        </button>
+                        </Button>
                       </div>
                     ) : (
                       <div className="cmt-turn-actions">
@@ -1090,27 +1091,27 @@ export function NoteCommentLayer({
                   }}
                 />
                 {/* btn-sm(28px) 이 아니라 표준 높이(34px) — 옆 입력창과 같은 높이여야 한다 */}
-                <button
-                  className="btn btn-primary cmt-followup-send"
+                <Button
+                  variant="primary" className="cmt-followup-send"
                   title={t("notes.cmt.followUpSend")}
                   onClick={() => void submitFollowUp()}
                   disabled={asking || question.trim().length < 2 || !config?.provider}
                 >
                   <Icon name="sparkles" size={15} />
-                </button>
+                </Button>
               </div>
               <div className="cmt-meta">
                 {timeAgo(turns[turns.length - 1]?.createdAt ?? viewComment.createdAt)}
                 <span className="spacer" />
                 <Tooltip label={t("notes.cmt.deleteThread")}>
-                  <button
+                  <Button
                     aria-label={t("notes.cmt.deleteThread")}
-                    className="icon-btn ghost sm danger"
+                    variant="ghost-danger" size="icon-sm"
                     onClick={() => setConfirmDel(viewComment)}
                     disabled={asking}
                   >
                     <Icon name="trash" size={13} />
-                  </button>
+                  </Button>
                 </Tooltip>
               </div>
             </>

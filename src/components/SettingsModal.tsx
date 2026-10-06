@@ -54,6 +54,7 @@ import {
   notifyConnectionsChanged,
   type DbConnection,
 } from "../lib/dbconn";
+import { Button } from "@/components/ui/button";
 
 const THEMES: { id: ThemePref; label: string }[] = [
   { id: "system", label: t("settings.theme.system") },
@@ -439,37 +440,37 @@ export function SettingsModal({
 
   const footer = editing ? (
     <>
-      <button className="btn btn-sm" onClick={cancelEdit}>
+      <Button size="sm" onClick={cancelEdit}>
         {t("common.cancel")}
-      </button>
+      </Button>
       <span className="spacer" />
-      <button
-        className="btn btn-primary"
+      <Button
+        variant="primary"
         onClick={saveEdit}
         disabled={!editText.trim()}
       >
         {t("common.save")}
-      </button>
+      </Button>
     </>
   ) : (
     <>
-      <button className="btn btn-sm" onClick={openFolder}>
+      <Button size="sm" onClick={openFolder}>
         {t("settings.openDataFolder")}
-      </button>
-      <button
-        className="btn btn-sm"
+      </Button>
+      <Button
+        size="sm"
         onClick={() => void backup()}
         disabled={backingUp}
       >
         {backingUp ? t("settings.backup.busy") : t("settings.backup")}
-      </button>
+      </Button>
       <span className="spacer" />
-      <button className="btn btn-sm" onClick={onClose}>
+      <Button size="sm" onClick={onClose}>
         {t("common.close")}
-      </button>
-      <button className="btn btn-primary" onClick={save} disabled={testing}>
+      </Button>
+      <Button variant="primary" onClick={save} disabled={testing}>
         {t("common.save")}
-      </button>
+      </Button>
     </>
   );
 
@@ -550,14 +551,14 @@ export function SettingsModal({
                 : t("settings.ai.none")
             }
             action={
-              <button
-                className="btn btn-sm"
+              <Button
+                size="sm"
                 onClick={() => void redetect()}
                 disabled={detecting}
               >
                 <Icon name="refresh" size={13} />
                 {detecting ? t("settings.ai.detecting") : t("settings.ai.redetect")}
-              </button>
+              </Button>
             }
           >
 
@@ -610,12 +611,12 @@ export function SettingsModal({
                       <Icon name="check" size={13} />
                       {t("settings.auth.rowOk")}
                     </span>
-                    <button
-                      className="btn btn-sm"
+                    <Button
+                      size="sm"
                       onClick={() => setAuthOpen(true)}
                     >
                       {t("settings.auth.again")}
-                    </button>
+                    </Button>
                   </>
                 ) : auth.loggedIn === false ? (
                   <>
@@ -623,12 +624,12 @@ export function SettingsModal({
                       <Icon name="alert-triangle" size={13} />
                       {t("settings.auth.rowExpired")}
                     </span>
-                    <button
-                      className="btn btn-sm btn-primary"
+                    <Button
+                      variant="primary" size="sm"
                       onClick={() => setAuthOpen(true)}
                     >
                       {t("settings.auth.rowAction")}
-                    </button>
+                    </Button>
                   </>
                 ) : (
                   <span className="set-auth-state">
@@ -665,9 +666,9 @@ export function SettingsModal({
                     />
                     {/* 구획 안의 모든 버튼은 btn-sm 이다 — 예전엔 이 하나만 표준 높이라
                         옆 입력칸보다 커서 줄이 어긋나 보였다 */}
-                    <button className="btn btn-sm" onClick={test} disabled={testing}>
+                    <Button size="sm" onClick={test} disabled={testing}>
                       {testing ? <Spinner /> : t("settings.ai.test")}
-                    </button>
+                    </Button>
                   </SetInline>
                   {testResult && (
                     <div
@@ -781,10 +782,10 @@ export function SettingsModal({
           <SetSection
             title={t("settings.prompts.title")}
             action={
-              <button className="btn btn-sm" onClick={startNew}>
+              <Button size="sm" onClick={startNew}>
                 <Icon name="plus" size={13} />
                 {t("settings.prompt.new")}
-              </button>
+              </Button>
             }
             desc={
               <>
@@ -809,9 +810,9 @@ export function SettingsModal({
                       {p.label.trim() || p.text.slice(0, 24)}
                     </button>
                     <Tooltip label={t("common.delete")}>
-                      <button
+                      <Button
                         aria-label={t("common.delete")}
-                        className="icon-btn ghost sm danger prompt-del"
+                        variant="ghost-danger" size="icon-sm" className="prompt-del"
                         onClick={() =>
                           setPromptDel({
                             id: p.id,
@@ -820,7 +821,7 @@ export function SettingsModal({
                         }
                       >
                         <Icon name="trash" size={14} />
-                      </button>
+                      </Button>
                     </Tooltip>
                   </div>
                 ))}
@@ -852,12 +853,12 @@ export function SettingsModal({
       narrow
       footer={
         <>
-          <button className="btn btn-sm" onClick={() => setLangPending(null)}>
+          <Button size="sm" onClick={() => setLangPending(null)}>
             {t("common.cancel")}
-          </button>
-          <button className="btn btn-primary btn-sm" onClick={() => void applyLang()}>
+          </Button>
+          <Button variant="primary" size="sm" onClick={() => void applyLang()}>
             {t("settings.lang.apply")}
-          </button>
+          </Button>
         </>
       }
     >
@@ -902,12 +903,12 @@ export function SettingsModal({
       narrow
       footer={
         <>
-          <button className="btn btn-sm" onClick={() => setDbDelete(null)}>
+          <Button size="sm" onClick={() => setDbDelete(null)}>
             {t("common.cancel")}
-          </button>
-          <button className="btn btn-sm btn-danger-ghost" onClick={() => void removeDbConnection()}>
+          </Button>
+          <Button variant="danger" size="sm" onClick={() => void removeDbConnection()}>
             {t("common.delete")}
-          </button>
+          </Button>
         </>
       }
     >
@@ -924,16 +925,16 @@ export function SettingsModal({
       narrow
       footer={
         <>
-          <button className="btn btn-sm" onClick={() => setDbPw(null)} disabled={dbPwBusy}>
+          <Button size="sm" onClick={() => setDbPw(null)} disabled={dbPwBusy}>
             {t("common.cancel")}
-          </button>
-          <button
-            className="btn btn-primary btn-sm"
+          </Button>
+          <Button
+            variant="primary" size="sm"
             onClick={() => void saveDbPassword()}
             disabled={!dbPwValue || dbPwBusy}
           >
             {t("common.save")}
-          </button>
+          </Button>
         </>
       }
     >

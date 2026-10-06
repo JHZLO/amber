@@ -6,6 +6,7 @@ import type { SavedPrompt } from "../lib/prompts";
 import { Modal } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
+import { Button } from "@/components/ui/button";
 
 export function PromptPeekModal({
   prompt,
@@ -27,11 +28,11 @@ export function PromptPeekModal({
       onClose={onClose}
       footer={
         <>
-          <button className="btn btn-sm" onClick={onClose}>
+          <Button size="sm" onClick={onClose}>
             {t("common.close")}
-          </button>
-          <button
-            className={`btn ${included ? "" : "btn-primary"}`}
+          </Button>
+          <Button
+            variant={included ? "default" : "primary"}
             onClick={() => {
               onToggle();
               onClose();
@@ -39,7 +40,7 @@ export function PromptPeekModal({
           >
             <Icon name={included ? "minus" : "check"} size={15} />
             {included ? t("notes.ai.promptPeek.exclude") : t("notes.ai.promptPeek.include")}
-          </button>
+          </Button>
         </>
       }
     >

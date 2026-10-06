@@ -30,6 +30,7 @@ import {
   type DbTestResult,
   type DbTls,
 } from "../lib/dbconn";
+import { Button } from "@/components/ui/button";
 
 type Step = "form" | "schemas";
 
@@ -61,15 +62,15 @@ export function PasswordField({
       />
       <div className="db-pw-toggle">
         <Tooltip label={show ? t("diagrams.db.password.hide") : t("diagrams.db.password.show")}>
-          <button
+          <Button
             type="button"
-            className="icon-btn ghost sm"
+            variant="ghost" size="icon-sm"
             aria-label={show ? t("diagrams.db.password.hide") : t("diagrams.db.password.show")}
             aria-pressed={show}
             onClick={onToggle}
           >
             <Icon name={show ? "eye-off" : "eye"} size={14} />
-          </button>
+          </Button>
         </Tooltip>
       </div>
     </div>
@@ -307,40 +308,40 @@ export function DbConnectionModal({
     footer = (
       <>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={onClose} disabled={busy}>
+        <Button size="sm" onClick={onClose} disabled={busy}>
           {t("common.cancel")}
-        </button>
+        </Button>
         {editing ? (
           <>
-            <button className="btn btn-sm" onClick={goSchemas} disabled={!test || busy}>
+            <Button size="sm" onClick={goSchemas} disabled={!test || busy}>
               {t("diagrams.db.next")}
               <Icon name="chevron-right" size={13} />
-            </button>
-            <button className="btn btn-primary btn-sm" onClick={() => void save()} disabled={!fieldsValid || busy}>
+            </Button>
+            <Button variant="primary" size="sm" onClick={() => void save()} disabled={!fieldsValid || busy}>
               {busy ? t("diagrams.working") : t("diagrams.db.saveChanges")}
-            </button>
+            </Button>
           </>
         ) : (
-          <button className="btn btn-primary btn-sm" onClick={goSchemas} disabled={!test || busy}>
+          <Button variant="primary" size="sm" onClick={goSchemas} disabled={!test || busy}>
             {t("diagrams.db.next")}
             <Icon name="chevron-right" size={13} />
-          </button>
+          </Button>
         )}
       </>
     );
   } else {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={() => setStep("form")} disabled={busy}>
+        <Button size="sm" onClick={() => setStep("form")} disabled={busy}>
           <Icon name="chevron-left" size={13} />
           {t("diagrams.db.back")}
-        </button>
+        </Button>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={onClose} disabled={busy}>
+        <Button size="sm" onClick={onClose} disabled={busy}>
           {t("common.cancel")}
-        </button>
-        <button
-          className="btn btn-primary btn-sm"
+        </Button>
+        <Button
+          variant="primary" size="sm"
           onClick={() => void save()}
           disabled={busy || (!editing && enabledCount === 0)}
         >
@@ -349,7 +350,7 @@ export function DbConnectionModal({
             : editing
               ? t("diagrams.db.saveChanges")
               : t("diagrams.db.connectAndSync", { n: enabledCount })}
-        </button>
+        </Button>
       </>
     );
   }
@@ -448,9 +449,9 @@ export function DbConnectionModal({
                     <Icon name="key" size={14} />
                     <span>{t("diagrams.db.password.stored")}</span>
                     <span className="spacer" />
-                    <button type="button" className="btn btn-sm" onClick={() => setChangePw(true)}>
+                    <Button type="button" size="sm" onClick={() => setChangePw(true)}>
                       {t("diagrams.db.password.change")}
-                    </button>
+                    </Button>
                   </div>
                 ) : (
                   <PasswordField
@@ -494,9 +495,9 @@ export function DbConnectionModal({
                   </>
                 )}
               </div>
-              <button
+              <Button
                 type="button"
-                className="btn btn-sm"
+                size="sm"
                 onClick={() => void runTest()}
                 disabled={!fieldsValid || testing || busy}
               >
@@ -505,7 +506,7 @@ export function DbConnectionModal({
                   : test || testError
                     ? t("diagrams.db.test.again")
                     : t("diagrams.db.test")}
-              </button>
+              </Button>
             </div>
             {/* Enter 로 테스트가 돌게 하는 보이지 않는 submit */}
             <button type="submit" hidden />
@@ -598,18 +599,18 @@ export function DbConnectionModal({
         narrow
         footer={
           <>
-            <button className="btn btn-sm" onClick={() => setProdConfirm(false)}>
+            <Button size="sm" onClick={() => setProdConfirm(false)}>
               {t("common.cancel")}
-            </button>
-            <button
-              className="btn btn-primary btn-sm"
+            </Button>
+            <Button
+              variant="primary" size="sm"
               onClick={() => {
                 setProdConfirm(false);
                 setStep("schemas");
               }}
             >
               {t("diagrams.db.prod.confirmOk")}
-            </button>
+            </Button>
           </>
         }
       >

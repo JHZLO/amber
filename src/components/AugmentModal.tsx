@@ -10,6 +10,7 @@ import { composeInstruction } from "../lib/aiInstruction";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
+import { Button } from "@/components/ui/button";
 
 type Step = "prompt" | "loading" | "preview";
 
@@ -159,34 +160,34 @@ export function AugmentModal({
   if (step === "prompt") {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={requestClose}>
+        <Button size="sm" onClick={requestClose}>
           {t("common.cancel")}
-        </button>
-        <button
-          className="btn btn-primary"
+        </Button>
+        <Button
+          variant="primary"
           onClick={run}
           disabled={tooShort || !config?.provider}
           title={!config ? t("concepts.augment.loadingConfig") : undefined}
         >
           <Icon name="sparkles" size={15} />
           {t("concepts.augment.run")}
-        </button>
+        </Button>
       </>
     );
   } else if (step === "preview") {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={() => setStep("prompt")}>
+        <Button size="sm" onClick={() => setStep("prompt")}>
           <Icon name="chevron-left" size={14} />
           {t("concepts.augment.again")}
-        </button>
+        </Button>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={requestClose} disabled={saving}>
+        <Button size="sm" onClick={requestClose} disabled={saving}>
           {t("common.cancel")}
-        </button>
-        <button className="btn btn-primary" onClick={apply} disabled={saving}>
+        </Button>
+        <Button variant="primary" onClick={apply} disabled={saving}>
           {saving ? t("concepts.augment.applying") : t("concepts.augment.apply")}
-        </button>
+        </Button>
       </>
     );
   }
@@ -267,12 +268,12 @@ export function AugmentModal({
             <label style={{ display: "flex", alignItems: "center" }}>
               {t("concepts.field.augmentedNote")}
               <span className="spacer" />
-              <button
-                className="btn btn-sm"
+              <Button
+                size="sm"
                 onClick={() => setShowSource((v) => !v)}
               >
                 {showSource ? t("concepts.preview.show") : t("concepts.preview.source")}
-              </button>
+              </Button>
             </label>
             {showSource ? (
               <textarea

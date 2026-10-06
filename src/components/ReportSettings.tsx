@@ -26,6 +26,7 @@ import {
 import { Checkbox, Select, SetField, SetSection, Spinner, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { t, type MsgKey } from "../lib/i18n";
+import { Button } from "@/components/ui/button";
 
 // 앱이 직접 긁는 소스 둘. MCP 서버는 등록된 것을 그대로 아래에 목록으로 낸다
 const ALL_SOURCES: ReportSourceId[] = ["github", "ai_sessions"];
@@ -105,10 +106,10 @@ function GhGuide({
       </ol>
       <div className="rep-gh-guide-foot">
         <span className="hint">{t("report.gh.fix.after")}</span>
-        <button className="btn btn-sm" onClick={onRecheck} disabled={checking}>
+        <Button size="sm" onClick={onRecheck} disabled={checking}>
           <Icon name="refresh" size={13} />
           {checking ? t("report.status.checking") : t("report.gh.fix.recheck")}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -120,8 +121,8 @@ function CopyCmd({ cmd }: { cmd: string }) {
     <span className="rep-cmd-row">
       <code className="rep-mcp-cmd">{cmd}</code>
       <Tooltip label={copied ? t("report.gh.copied") : t("report.copy")}>
-        <button
-          className="icon-btn sm"
+        <Button
+          size="icon-sm"
           aria-label={t("report.copy")}
           onClick={() => {
             void navigator.clipboard.writeText(cmd).then(() => {
@@ -131,7 +132,7 @@ function CopyCmd({ cmd }: { cmd: string }) {
           }}
         >
           <Icon name={copied ? "check" : "copy"} size={13} />
-        </button>
+        </Button>
       </Tooltip>
     </span>
   );
@@ -315,10 +316,10 @@ export function ReportSettings() {
       title={t("report.title")}
       desc={t("report.set.desc")}
       action={
-        <button className="btn btn-sm" onClick={() => void redetect()} disabled={detecting}>
+        <Button size="sm" onClick={() => void redetect()} disabled={detecting}>
           <Icon name="refresh" size={13} />
           {detecting ? t("report.set.detecting") : t("report.set.redetect")}
-        </button>
+        </Button>
       }
     >
       <div className="rep-src-list">
@@ -358,13 +359,13 @@ export function ReportSettings() {
                 </div>
                 <span className={`rep-status ${st.ok ? "ok" : ""}`}>{st.label}</span>
                 <Tooltip label={isOpen ? t("report.set.collapse") : t("report.set.expand")}>
-                  <button
+                  <Button
                     aria-label={isOpen ? t("report.set.collapse") : t("report.set.expand")}
-                    className="icon-btn ghost sm"
+                    variant="ghost" size="icon-sm"
                     onClick={() => setExpanded(isOpen ? null : s.id)}
                   >
                     <Icon name={isOpen ? "chevron-down" : "chevron-right"} size={15} />
-                  </button>
+                  </Button>
                 </Tooltip>
               </div>
 
@@ -488,14 +489,14 @@ export function ReportSettings() {
           title={t("report.mcp.sectionTitle")}
           desc={t("report.mcp.sectionDesc")}
           action={
-            <button
-              className="btn btn-sm"
+            <Button
+              size="sm"
               onClick={() => void redetectMcp()}
               disabled={mcpLoading || !isClaude}
             >
               <Icon name="refresh" size={13} />
               {mcpLoading ? t("report.set.detecting") : t("report.mcp.redetect")}
-            </button>
+            </Button>
           }
         >
         {!isClaude ? (

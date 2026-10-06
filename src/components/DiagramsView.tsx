@@ -76,6 +76,7 @@ import {
   type SchemaSnapshot,
 } from "../lib/schemaSnapshot";
 import { ERD_GEN_VERSION, generateErd } from "../lib/erdGen";
+import { Button } from "@/components/ui/button";
 
 // 이동/생성 위치 Select 값 인코딩 (루트 '' ↔ '/')
 const encodeDir = (d: string) => (d ? `/${d}` : "/");
@@ -941,36 +942,36 @@ export function DiagramsView({
                   {connHit ? (
                     <>
                       <Tooltip label={t("diagrams.db.tree.syncAll")}>
-                        <button
+                        <Button
                           aria-label={t("diagrams.db.tree.syncAll")}
-                          className="icon-btn sm"
+                          size="icon-sm"
                           disabled={!!connProgress}
                           onClick={() => void syncConnection(connHit)}
                         >
                           <Icon name="refresh" size={13} />
-                        </button>
+                        </Button>
                       </Tooltip>
                       <Tooltip label={t("diagrams.db.tree.edit")}>
-                        <button
+                        <Button
                           aria-label={t("diagrams.db.tree.edit")}
-                          className="icon-btn sm"
+                          size="icon-sm"
                           onClick={() => setDbModal({ open: true, connection: connHit })}
                         >
                           <Icon name="settings" size={13} />
-                        </button>
+                        </Button>
                       </Tooltip>
                       {/* 끊기는 삭제가 아니다 — 기본은 파일을 남기므로 휴지통이 아니라 '잇기를 끊는' 표식 */}
                       <Tooltip label={t("diagrams.db.tree.disconnect")}>
-                        <button
+                        <Button
                           aria-label={t("diagrams.db.tree.disconnect")}
-                          className="icon-btn sm danger"
+                          variant="danger" size="icon-sm"
                           onClick={() => {
                             setDisconnectFiles(false);
                             setConfirmDisconnect(connHit);
                           }}
                         >
                           <Icon name="x" size={13} />
-                        </button>
+                        </Button>
                       </Tooltip>
                     </>
                   ) : schemaHit ? (
@@ -978,10 +979,10 @@ export function DiagramsView({
                       <Tooltip
                         label={t(schemaHit.pref.starred ? "diagrams.db.tree.unstar" : "diagrams.db.tree.star")}
                       >
-                        <button
+                        <Button
                           aria-label={t(schemaHit.pref.starred ? "diagrams.db.tree.unstar" : "diagrams.db.tree.star")}
                           aria-pressed={!!schemaHit.pref.starred}
-                          className="icon-btn sm"
+                          size="icon-sm"
                           onClick={() => void toggleStar(schemaHit.conn, schemaHit.pref)}
                         >
                           <Icon
@@ -989,27 +990,27 @@ export function DiagramsView({
                             size={13}
                             className={schemaHit.pref.starred ? "icon-fill" : undefined}
                           />
-                        </button>
+                        </Button>
                       </Tooltip>
                       <Tooltip label={t("diagrams.db.tree.syncHere")}>
-                        <button
+                        <Button
                           aria-label={t("diagrams.db.tree.syncHere")}
-                          className="icon-btn sm"
+                          size="icon-sm"
                           disabled={isSyncing}
                           onClick={() => void syncFolder(schemaHit.conn, schemaHit.pref)}
                         >
                           <Icon name="refresh" size={13} />
-                        </button>
+                        </Button>
                       </Tooltip>
                       <Tooltip label={t("diagrams.db.tree.openErd")}>
-                        <button
+                        <Button
                           aria-label={t("diagrams.db.tree.openErd")}
-                          className="icon-btn sm"
+                          size="icon-sm"
                           disabled={isSyncing || !schemaSnap}
                           onClick={() => openOrGenerateErd(schemaHit.conn, schemaHit.pref)}
                         >
                           <Icon name="workflow" size={13} />
-                        </button>
+                        </Button>
                       </Tooltip>
                     </>
                   ) : (
@@ -1017,41 +1018,41 @@ export function DiagramsView({
                       {n.isDir && (
                         <>
                           <Tooltip label={t("diagrams.tree.newFileHere")}>
-                            <button
+                            <Button
                               aria-label={t("diagrams.tree.newFileHere")}
-                              className="icon-btn sm"
+                              size="icon-sm"
                               onClick={() => openNameModal("new-file", n.path)}
                             >
                               <Icon name="file-plus" size={13} />
-                            </button>
+                            </Button>
                           </Tooltip>
                           <Tooltip label={t("diagrams.tree.newFolderHere")}>
-                            <button
+                            <Button
                               aria-label={t("diagrams.tree.newFolderHere")}
-                              className="icon-btn sm"
+                              size="icon-sm"
                               onClick={() => openNameModal("new-folder", n.path)}
                             >
                               <Icon name="folder-plus" size={13} />
-                            </button>
+                            </Button>
                           </Tooltip>
                         </>
                       )}
                       {/* 생성물의 이름은 스키마가 정한다 — 손으로 바꾸면 [ERD 열기]가 그 파일을 못 찾는다 */}
                       {!isGenerated && (
                         <Tooltip label={t("diagrams.rename")}>
-                          <button
+                          <Button
                             aria-label={t("diagrams.rename")}
-                            className="icon-btn sm"
+                            size="icon-sm"
                             onClick={() => openRenameModal(n)}
                           >
                             <Icon name="pencil" size={13} />
-                          </button>
+                          </Button>
                         </Tooltip>
                       )}
                       <Tooltip label={t("common.delete")}>
-                        <button
+                        <Button
                           aria-label={t("common.delete")}
-                          className="icon-btn sm danger"
+                          variant="danger" size="icon-sm"
                           onClick={() =>
                             setConfirmDelete({
                               name: n.name,
@@ -1061,7 +1062,7 @@ export function DiagramsView({
                           }
                         >
                           <Icon name="trash" size={13} />
-                        </button>
+                        </Button>
                       </Tooltip>
                     </>
                   )}
@@ -1186,18 +1187,18 @@ export function DiagramsView({
           <span className="spacer" />
           {/* 헤더에는 트리 전체에 걸리는 것만 남긴다 — 만드는 동작은 각자 구역 머리로 내려갔다(§7) */}
           <Tooltip label={t("common.find.treeTip")}>
-            <button className="icon-btn sm" aria-label={t("common.find.treeTip")} onClick={find.start}>
+            <Button size="icon-sm" aria-label={t("common.find.treeTip")} onClick={find.start}>
               <Icon name="search" size={14} />
-            </button>
+            </Button>
           </Tooltip>
           <Tooltip label={t("diagrams.tooltip.refresh")}>
-            <button
-              className="icon-btn sm"
+            <Button
+              size="icon-sm"
               aria-label={t("diagrams.refresh")}
               onClick={() => void refreshAll()}
             >
               <Icon name="refresh" size={14} />
-            </button>
+            </Button>
           </Tooltip>
         </div>
         <TreeFindBar find={find} />
@@ -1215,13 +1216,13 @@ export function DiagramsView({
               <br />
               {t("diagrams.empty.tree2")}
             </p>
-            <button
-              className="btn btn-primary btn-sm"
+            <Button
+              variant="primary" size="sm"
               onClick={() => openNameModal("new-file")}
             >
               <Icon name="file-plus" size={14} />
               {t("diagrams.empty.create")}
-            </button>
+            </Button>
           </div>
         )}
         {tree && (tree.length > 0 || connections.length > 0) && (
@@ -1238,22 +1239,22 @@ export function DiagramsView({
               <span>{t("diagrams.tree.group.mine")}</span>
               <span className="spacer" />
               <Tooltip label={t("diagrams.tooltip.newFileAt", { dir: encodeDir(activeDir) })}>
-                <button
-                  className="icon-btn sm"
+                <Button
+                  size="icon-sm"
                   aria-label={t("diagrams.newFile")}
                   onClick={() => openNameModal("new-file")}
                 >
                   <Icon name="file-plus" size={14} />
-                </button>
+                </Button>
               </Tooltip>
               <Tooltip label={t("diagrams.tooltip.newFolderAt", { dir: encodeDir(activeDir) })}>
-                <button
-                  className="icon-btn sm"
+                <Button
+                  size="icon-sm"
                   aria-label={t("diagrams.newFolder")}
                   onClick={() => openNameModal("new-folder")}
                 >
                   <Icon name="folder-plus" size={14} />
-                </button>
+                </Button>
               </Tooltip>
             </div>
             {find.open && find.nodes.length === 0 ? (
@@ -1266,13 +1267,13 @@ export function DiagramsView({
               <span className="spacer" />
               {/* 구역 이름이 이미 '데이터베이스'라 아이콘은 종류가 아니라 '더한다'를 말한다 */}
               <Tooltip label={t("diagrams.db.tooltip.add")}>
-                <button
-                  className="icon-btn sm"
+                <Button
+                  size="icon-sm"
                   aria-label={t("diagrams.db.addConnection")}
                   onClick={() => setDbModal({ open: true, connection: null })}
                 >
                   <Icon name="plus" size={14} />
-                </button>
+                </Button>
               </Tooltip>
             </div>
             {dbRoots.length > 0 ? (
@@ -1324,14 +1325,14 @@ export function DiagramsView({
               </div>
               <span className="spacer" />
               {dbFile && (
-                <button
-                  className="btn btn-sm"
+                <Button
+                  size="sm"
                   onClick={() => void syncFolder(dbFile.conn, dbFile.pref)}
                   disabled={busy || dbFile.syncing}
                 >
                   <Icon name="refresh" size={14} />
                   {dbFile.syncing ? t("diagrams.db.syncingShort") : t("diagrams.db.sync")}
-                </button>
+                </Button>
               )}
               <Tooltip
                 label={
@@ -1340,8 +1341,8 @@ export function DiagramsView({
                     : t("diagrams.ai.tooltipNoProvider")
                 }
               >
-                <button
-                  className="btn btn-sm"
+                <Button
+                  size="sm"
                   onClick={() => setAiOpen(true)}
                   disabled={
                     busy || loadingBody || !!readError || !config?.provider
@@ -1349,37 +1350,37 @@ export function DiagramsView({
                 >
                   <Icon name="sparkles" size={14} />
                   DDL → ERD
-                </button>
+                </Button>
               </Tooltip>
               {editing ? (
                 <>
-                  <button
-                    className="btn btn-primary btn-sm"
+                  <Button
+                    variant="primary" size="sm"
                     onClick={() => void save()}
                     disabled={busy}
                   >
                     {busy ? t("diagrams.saving") : `${t("common.save")} (⌘S)`}
-                  </button>
-                  <button
-                    className="btn btn-sm"
+                  </Button>
+                  <Button
+                    size="sm"
                     onClick={() => setEditing(false)}
                     disabled={busy}
                   >
                     {t("common.cancel")}
-                  </button>
+                  </Button>
                 </>
               ) : (
-                <button
-                  className="btn btn-sm"
+                <Button
+                  size="sm"
                   onClick={startEdit}
                   disabled={busy || loadingBody || !!readError}
                 >
                   <Icon name="pencil" size={14} />
                   {t("diagrams.edit")}
-                </button>
+                </Button>
               )}
-              <button
-                className="btn btn-sm btn-danger-ghost"
+              <Button
+                variant="danger" size="sm"
                 onClick={() =>
                   setConfirmDelete({
                     name: fileName,
@@ -1391,7 +1392,7 @@ export function DiagramsView({
               >
                 <Icon name="trash" size={14} />
                 {t("common.delete")}
-              </button>
+              </Button>
             </div>
 
             {opError && <div className="error-note">{opError}</div>}
@@ -1422,12 +1423,12 @@ export function DiagramsView({
                       })}
                 </span>
                 <span className="spacer" />
-                <button className="btn btn-sm" onClick={() => setDbDiffOpen(true)}>
+                <Button size="sm" onClick={() => setDbDiffOpen(true)}>
                   {t("diagrams.db.banner.viewDiff")}
-                </button>
-                <button className="btn btn-sm btn-danger-ghost" onClick={regenerateFromSnapshot}>
+                </Button>
+                <Button variant="danger" size="sm" onClick={regenerateFromSnapshot}>
                   {t("diagrams.db.regenerate")}
-                </button>
+                </Button>
               </div>
             )}
             {readError && (
@@ -1474,20 +1475,20 @@ export function DiagramsView({
               {t("diagrams.empty.sub2")}
             </p>
             <div className="notes-empty-actions">
-              <button
-                className="btn btn-primary btn-sm"
+              <Button
+                variant="primary" size="sm"
                 onClick={() => openNameModal("new-file")}
               >
                 <Icon name="file-plus" size={14} />
                 {t("diagrams.newFile")}
-              </button>
-              <button
-                className="btn btn-sm"
+              </Button>
+              <Button
+                size="sm"
                 onClick={() => openNameModal("new-folder")}
               >
                 <Icon name="folder-plus" size={14} />
                 {t("diagrams.newFolder")}
-              </button>
+              </Button>
             </div>
             <div className="notes-empty-tips">
               <span className="notes-empty-tip">
@@ -1514,15 +1515,15 @@ export function DiagramsView({
         onClose={() => setNameModal(null)}
         footer={
           <>
-            <button
-              className="btn btn-sm"
+            <Button
+              size="sm"
               onClick={() => setNameModal(null)}
               disabled={busy}
             >
               {t("common.cancel")}
-            </button>
-            <button
-              className="btn btn-primary btn-sm"
+            </Button>
+            <Button
+              variant="primary" size="sm"
               onClick={() => void submitNameModal()}
               disabled={busy}
             >
@@ -1531,7 +1532,7 @@ export function DiagramsView({
                 : nameModal?.kind === "rename"
                   ? t("diagrams.modal.renameConfirm")
                   : t("diagrams.modal.create")}
-            </button>
+            </Button>
           </>
         }
       >
@@ -1599,20 +1600,20 @@ export function DiagramsView({
         onClose={() => setConfirmDelete(null)}
         footer={
           <>
-            <button
-              className="btn btn-sm"
+            <Button
+              size="sm"
               onClick={() => setConfirmDelete(null)}
               disabled={busy}
             >
               {t("common.cancel")}
-            </button>
-            <button
-              className="btn btn-sm btn-danger-ghost"
+            </Button>
+            <Button
+              variant="danger" size="sm"
               onClick={() => void doDelete()}
               disabled={busy}
             >
               {busy ? t("diagrams.deleting") : t("common.delete")}
-            </button>
+            </Button>
           </>
         }
       >
@@ -1668,11 +1669,11 @@ export function DiagramsView({
         onClose={() => setConflict(null)}
         footer={
           <>
-            <button className="btn btn-sm" onClick={() => setConflict(null)}>
+            <Button size="sm" onClick={() => setConflict(null)}>
               {t("common.unsaved.keep")}
-            </button>
-            <button
-              className="btn btn-sm btn-danger-ghost"
+            </Button>
+            <Button
+              variant="danger" size="sm"
               onClick={() => {
                 const p = conflict?.path;
                 setConflict(null);
@@ -1681,9 +1682,9 @@ export function DiagramsView({
               disabled={busy}
             >
               {t("diagrams.conflict.reread")}
-            </button>
-            <button
-              className="btn btn-sm btn-danger-ghost"
+            </Button>
+            <Button
+              variant="danger" size="sm"
               onClick={() => {
                 setConflict(null);
                 void save({ force: true });
@@ -1691,7 +1692,7 @@ export function DiagramsView({
               disabled={busy}
             >
               {t("diagrams.conflict.overwrite")}
-            </button>
+            </Button>
           </>
         }
       >
@@ -1731,16 +1732,16 @@ export function DiagramsView({
         onClose={() => setConfirmDisconnect(null)}
         footer={
           <>
-            <button className="btn btn-sm" onClick={() => setConfirmDisconnect(null)} disabled={busy}>
+            <Button size="sm" onClick={() => setConfirmDisconnect(null)} disabled={busy}>
               {t("common.cancel")}
-            </button>
-            <button
-              className="btn btn-sm btn-danger-ghost"
+            </Button>
+            <Button
+              variant="danger" size="sm"
               onClick={() => void doDisconnect()}
               disabled={busy}
             >
               {busy ? t("diagrams.db.disconnect.working") : t("diagrams.db.disconnect.confirm")}
-            </button>
+            </Button>
           </>
         }
       >
@@ -1788,18 +1789,18 @@ export function DiagramsView({
         wide
         footer={
           <>
-            <button className="btn btn-sm" onClick={() => setDbDiffOpen(false)}>
+            <Button size="sm" onClick={() => setDbDiffOpen(false)}>
               {t("common.close")}
-            </button>
-            <button
-              className="btn btn-sm btn-danger-ghost"
+            </Button>
+            <Button
+              variant="danger" size="sm"
               onClick={() => {
                 setDbDiffOpen(false);
                 regenerateFromSnapshot();
               }}
             >
               {t("diagrams.db.regenerate")}
-            </button>
+            </Button>
           </>
         }
       >

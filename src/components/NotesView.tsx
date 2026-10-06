@@ -68,6 +68,7 @@ import {
   mimeForName,
   saveNoteImage,
 } from "../lib/noteAssets";
+import { Button } from "@/components/ui/button";
 
 // 이동/생성 위치 Select 값 인코딩 (루트 '' ↔ '/')
 const encodeDir = (d: string) => (d ? `/${d}` : "/");
@@ -894,38 +895,38 @@ export function NotesView({
                   {n.isDir && (
                     <>
                       <Tooltip label={t("notes.row.newNoteHere")}>
-                        <button
+                        <Button
                           aria-label={t("notes.row.newNoteHere")}
-                          className="icon-btn sm"
+                          size="icon-sm"
                           onClick={() => openNameModal("new-note", n.path)}
                         >
                           <Icon name="file-plus" size={13} />
-                        </button>
+                        </Button>
                       </Tooltip>
                       <Tooltip label={t("notes.row.newFolderHere")}>
-                        <button
+                        <Button
                           aria-label={t("notes.row.newFolderHere")}
-                          className="icon-btn sm"
+                          size="icon-sm"
                           onClick={() => openNameModal("new-folder", n.path)}
                         >
                           <Icon name="folder-plus" size={13} />
-                        </button>
+                        </Button>
                       </Tooltip>
                     </>
                   )}
                   <Tooltip label={t("notes.rename")}>
-                    <button
+                    <Button
                       aria-label={t("notes.rename")}
-                      className="icon-btn sm"
+                      size="icon-sm"
                       onClick={() => openRenameModal(n)}
                     >
                       <Icon name="pencil" size={13} />
-                    </button>
+                    </Button>
                   </Tooltip>
                   <Tooltip label={t("common.delete")}>
-                    <button
+                    <Button
                       aria-label={t("common.delete")}
-                      className="icon-btn sm danger"
+                      variant="danger" size="icon-sm"
                       onClick={() =>
                         setConfirmDelete({
                           name: n.name,
@@ -935,7 +936,7 @@ export function NotesView({
                       }
                     >
                       <Icon name="trash" size={13} />
-                    </button>
+                    </Button>
                   </Tooltip>
                 </span>
               </div>
@@ -984,36 +985,36 @@ export function NotesView({
           <RootPicker section="notes" />
           <span className="spacer" />
           <Tooltip label={t("notes.tooltip.newNote", { dir: encodeDir(activeDir) })}>
-            <button
-              className="icon-btn sm"
+            <Button
+              size="icon-sm"
               aria-label={t("notes.newNote")}
               onClick={() => openNameModal("new-note")}
             >
               <Icon name="file-plus" size={15} />
-            </button>
+            </Button>
           </Tooltip>
           <Tooltip label={t("notes.tooltip.newFolder", { dir: encodeDir(activeDir) })}>
-            <button
-              className="icon-btn sm"
+            <Button
+              size="icon-sm"
               aria-label={t("notes.newFolder")}
               onClick={() => openNameModal("new-folder")}
             >
               <Icon name="folder-plus" size={15} />
-            </button>
+            </Button>
           </Tooltip>
           <Tooltip label={t("common.find.treeTip")}>
-            <button className="icon-btn sm" aria-label={t("common.find.treeTip")} onClick={find.start}>
+            <Button size="icon-sm" aria-label={t("common.find.treeTip")} onClick={find.start}>
               <Icon name="search" size={14} />
-            </button>
+            </Button>
           </Tooltip>
           <Tooltip label={t("notes.tooltip.refresh")}>
-            <button
-              className="icon-btn sm"
+            <Button
+              size="icon-sm"
               aria-label={t("notes.refresh")}
               onClick={() => void refreshAll()}
             >
               <Icon name="refresh" size={14} />
-            </button>
+            </Button>
           </Tooltip>
         </div>
         <TreeFindBar find={find} />
@@ -1031,13 +1032,13 @@ export function NotesView({
               <br />
               {t("notes.tree.empty.sub")}
             </p>
-            <button
-              className="btn btn-primary btn-sm"
+            <Button
+              variant="primary" size="sm"
               onClick={() => openNameModal("new-note")}
             >
               <Icon name="file-plus" size={14} />
               {t("notes.tree.firstNote")}
-            </button>
+            </Button>
           </div>
         )}
         {tree && tree.length > 0 && (
@@ -1118,29 +1119,29 @@ export function NotesView({
               <div className="detail-actions-group">
                 {editing ? (
                   <>
-                    <button
-                      className="btn btn-primary btn-sm"
+                    <Button
+                      variant="primary" size="sm"
                       onClick={() => void save()}
                       disabled={busy}
                     >
                       {busy ? t("notes.saving") : t("notes.saveCmd")}
-                    </button>
-                    <button
-                      className="btn btn-sm"
+                    </Button>
+                    <Button
+                      size="sm"
                       onClick={() => setEditing(false)}
                       disabled={busy}
                     >
                       {t("common.cancel")}
-                    </button>
-                    <button
-                      className="btn btn-sm"
+                    </Button>
+                    <Button
+                      size="sm"
                       onClick={() => setAiOpen(true)}
                       disabled={busy || !config?.provider}
                       title={t("notes.ai.fromDraftTip")}
                     >
                       <Icon name="sparkles" size={14} />
                       {t("notes.aiWrite")}
-                    </button>
+                    </Button>
                     {/* 전문을 다시 받지 않고 **선택한 부분만** 고쳐 쓴다 — 출력이 짧아 초 단위로 끝난다 */}
                     <Tooltip
                       label={
@@ -1149,20 +1150,20 @@ export function NotesView({
                           : t("notes.spanAi.selBtnEmpty")
                       }
                     >
-                      <button
-                        className="btn btn-sm"
+                      <Button
+                        size="sm"
                         onClick={() => setSpanAi("selection")}
                         disabled={busy || !config?.provider || !srcSel}
                       >
                         <Icon name="scissors" size={14} />
                         {t("notes.spanAi.selBtn")}
-                      </button>
+                      </Button>
                     </Tooltip>
                   </>
                 ) : (
                   <>
-                    <button
-                      className="btn btn-sm"
+                    <Button
+                      size="sm"
                       onClick={() => {
                         setDraft(body);
                         setPreviewMd(body);
@@ -1172,9 +1173,9 @@ export function NotesView({
                     >
                       <Icon name="pencil" size={14} />
                       {t("notes.edit")}
-                    </button>
-                    <button
-                      className="btn btn-sm"
+                    </Button>
+                    <Button
+                      size="sm"
                       onClick={() => setAiOpen(true)}
                       disabled={
                         busy || loadingBody || !!readError || !config?.provider
@@ -1183,24 +1184,24 @@ export function NotesView({
                     >
                       <Icon name="sparkles" size={14} />
                       {t("notes.aiWrite")}
-                    </button>
+                    </Button>
                     {/* 전문 복사 — 다른 곳(슬랙·이슈)에 붙일 때 쓰는 동작이라
                         편집·AI 와 같은 좌측 그룹에 둔다(삭제 그룹과 섞지 않는다) */}
                     <Tooltip label={t("notes.copyAll")}>
-                      <button
-                        className="btn btn-sm"
+                      <Button
+                        size="sm"
                         aria-label={t("notes.copyAll")}
                         onClick={() => void copyAll()}
                         disabled={busy || loadingBody || !!readError || !body}
                       >
                         <Icon name={copied ? "check" : "copy"} size={14} />
                         {copied ? t("notes.copied") : t("notes.copy")}
-                      </button>
+                      </Button>
                     </Tooltip>
                     {/* 절 하나만 고쳐 쓰기 — 읽다가 눈에 걸린 절을 그 자리에서 손본다 */}
                     <Tooltip label={t("notes.spanAi.secBtnTip")}>
-                      <button
-                        className="btn btn-sm"
+                      <Button
+                        size="sm"
                         onClick={() => setSpanAi("section")}
                         disabled={
                           busy || loadingBody || !!readError || !body || !config?.provider
@@ -1208,14 +1209,14 @@ export function NotesView({
                       >
                         <Icon name="scissors" size={14} />
                         {t("notes.spanAi.secBtn")}
-                      </button>
+                      </Button>
                     </Tooltip>
                   </>
                 )}
               </div>
               <div className="detail-actions-group">
-                <button
-                  className="btn btn-sm btn-danger-ghost"
+                <Button
+                  variant="danger" size="sm"
                   onClick={() =>
                     setConfirmDelete({
                       name: fileName,
@@ -1227,7 +1228,7 @@ export function NotesView({
                 >
                   <Icon name="trash" size={14} />
                   {t("common.delete")}
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -1253,13 +1254,13 @@ export function NotesView({
                   </span>
                 </span>
                 <span className="ai-bg-actions">
-                  <button className="btn btn-sm" onClick={keepMine}>
+                  <Button size="sm" onClick={keepMine}>
                     {t("notes.disk.keep")}
-                  </button>
-                  <button className="btn btn-sm btn-danger-ghost" onClick={adoptDisk}>
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={adoptDisk}>
                     <Icon name="refresh" size={13} />
                     {t("notes.disk.load")}
-                  </button>
+                  </Button>
                 </span>
               </div>
             )}
@@ -1390,20 +1391,20 @@ export function NotesView({
               {t("notes.empty.sub")}
             </p>
             <div className="notes-empty-actions">
-              <button
-                className="btn btn-primary btn-sm"
+              <Button
+                variant="primary" size="sm"
                 onClick={() => openNameModal("new-note")}
               >
                 <Icon name="file-plus" size={14} />
                 {t("notes.newNote")}
-              </button>
-              <button
-                className="btn btn-sm"
+              </Button>
+              <Button
+                size="sm"
                 onClick={() => openNameModal("new-folder")}
               >
                 <Icon name="folder-plus" size={14} />
                 {t("notes.newFolder")}
-              </button>
+              </Button>
             </div>
             <div className="notes-empty-tips">
               <span className="notes-empty-tip">
@@ -1430,15 +1431,15 @@ export function NotesView({
         onClose={() => setNameModal(null)}
         footer={
           <>
-            <button
-              className="btn btn-sm"
+            <Button
+              size="sm"
               onClick={() => setNameModal(null)}
               disabled={busy}
             >
               {t("common.cancel")}
-            </button>
-            <button
-              className="btn btn-primary btn-sm"
+            </Button>
+            <Button
+              variant="primary" size="sm"
               onClick={() => void submitNameModal()}
               disabled={busy}
             >
@@ -1447,7 +1448,7 @@ export function NotesView({
                 : nameModal?.kind === "rename"
                   ? t("notes.renameConfirm")
                   : t("notes.create")}
-            </button>
+            </Button>
           </>
         }
       >
@@ -1517,20 +1518,20 @@ export function NotesView({
         onClose={() => setConfirmDelete(null)}
         footer={
           <>
-            <button
-              className="btn btn-sm"
+            <Button
+              size="sm"
               onClick={() => setConfirmDelete(null)}
               disabled={busy}
             >
               {t("common.cancel")}
-            </button>
-            <button
-              className="btn btn-sm btn-danger-ghost"
+            </Button>
+            <Button
+              variant="danger" size="sm"
               onClick={() => void doDelete()}
               disabled={busy}
             >
               {busy ? t("notes.deleting") : t("common.delete")}
-            </button>
+            </Button>
           </>
         }
       >
@@ -1622,11 +1623,11 @@ export function NotesView({
         onClose={() => setConflict(null)}
         footer={
           <>
-            <button className="btn btn-sm" onClick={() => setConflict(null)}>
+            <Button size="sm" onClick={() => setConflict(null)}>
               {t("notes.keepEditing")}
-            </button>
-            <button
-              className="btn btn-sm btn-danger-ghost"
+            </Button>
+            <Button
+              variant="danger" size="sm"
               onClick={() => {
                 const p = conflict?.path;
                 setConflict(null);
@@ -1635,9 +1636,9 @@ export function NotesView({
               disabled={busy}
             >
               {t("notes.conflict.reload")}
-            </button>
-            <button
-              className="btn btn-sm btn-danger-ghost"
+            </Button>
+            <Button
+              variant="danger" size="sm"
               onClick={() => {
                 setConflict(null);
                 void save({ force: true });
@@ -1645,7 +1646,7 @@ export function NotesView({
               disabled={busy}
             >
               {t("notes.conflict.overwrite")}
-            </button>
+            </Button>
           </>
         }
       >

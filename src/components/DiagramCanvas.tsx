@@ -20,6 +20,7 @@ import {
   parseEdgeEndpoints,
   splitOptionalType,
 } from "../lib/diagramGraph";
+import { Button } from "@/components/ui/button";
 
 let seq = 0;
 
@@ -752,14 +753,15 @@ export function DiagramCanvas({
                 </span>
               </button>
               {sel.columns.length > 0 && (
-                <button
-                  className={`btn btn-sm dgm-cols-toggle${showCols ? " active" : ""}`}
+                <Button
+                  size="sm"
+                  className={`dgm-cols-toggle${showCols ? " active" : ""}`}
                   aria-expanded={showCols}
                   onClick={() => setShowCols((v) => !v)}
                 >
                   <Icon name="layers" size={13} />
                   {t("diagrams.node.columns", { n: sel.columns.length })}
-                </button>
+                </Button>
               )}
             </div>
             <div className="dgm-node-info-meta">
@@ -767,23 +769,23 @@ export function DiagramCanvas({
                 <span className="dgm-node-info-id">{sel.id}</span>
               )}
               {sel.line > 0 && onJumpToLine && (
-                <button
-                  className="btn btn-sm"
+                <Button
+                  size="sm"
                   onClick={() => onJumpToLine(sel.line)}
                 >
                   {t("diagrams.node.line", { n: sel.line })}
-                </button>
+                </Button>
               )}
             </div>
           </div>
           <Tooltip label={t("diagrams.node.deselect")}>
-            <button
+            <Button
               aria-label={t("diagrams.node.deselect")}
-              className="icon-btn ghost sm"
+              variant="ghost" size="icon-sm"
               onClick={deselectNode}
             >
               <Icon name="x" size={14} />
-            </button>
+            </Button>
           </Tooltip>
         </div>
       )}
@@ -799,13 +801,13 @@ export function DiagramCanvas({
                 {t("diagrams.node.columns", { n: sel.columns.length })}
               </span>
             </div>
-            <button
-              className="icon-btn ghost sm"
+            <Button
+              variant="ghost" size="icon-sm"
               aria-label={t("common.close")}
               onClick={() => setShowCols(false)}
             >
               <Icon name="x" size={14} />
-            </button>
+            </Button>
           </div>
           {/* 긁어서 복사하라고 만든 목록이라 선택을 살려 둔다.
               칸 사이의 {" "} 는 장식이 아니다 — CSS 마진은 복사한 텍스트에 남지 않아
@@ -834,12 +836,12 @@ export function DiagramCanvas({
       {error && (
         <div className="dgm-error">
           <span className="dgm-error-msg">{error}</span>
-          <button
-            className="btn btn-sm"
+          <Button
+            size="sm"
             onClick={() => void navigator.clipboard.writeText(error)}
           >
             {t("diagrams.copy")}
-          </button>
+          </Button>
         </div>
       )}
     </div>

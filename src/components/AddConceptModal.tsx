@@ -10,6 +10,7 @@ import { AiThinking, DiscardAiModal, Modal } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
+import { Button } from "@/components/ui/button";
 
 type Step = "paste" | "loading" | "preview";
 
@@ -151,33 +152,33 @@ export function AddConceptModal({
   if (step === "paste") {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={manual}>
+        <Button size="sm" onClick={manual}>
           {t("concepts.add.manual")}
-        </button>
-        <button
-          className="btn btn-primary"
+        </Button>
+        <Button
+          variant="primary"
           onClick={generate}
           disabled={tooShort}
         >
           <Icon name="sparkles" size={15} />
           {t("concepts.add.generate")}
-        </button>
+        </Button>
       </>
     );
   } else if (step === "preview") {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={() => setStep("paste")}>
+        <Button size="sm" onClick={() => setStep("paste")}>
           <Icon name="chevron-left" size={14} />
           {t("concepts.add.backToSource")}
-        </button>
+        </Button>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={requestClose}>
+        <Button size="sm" onClick={requestClose}>
           {t("common.cancel")}
-        </button>
-        <button className="btn btn-primary" onClick={save} disabled={saving}>
+        </Button>
+        <Button variant="primary" onClick={save} disabled={saving}>
           {saving ? t("concepts.saving") : t("concepts.add.save")}
-        </button>
+        </Button>
       </>
     );
   }
@@ -258,13 +259,14 @@ export function AddConceptModal({
             <label>{t("concepts.field.confidence")}</label>
             <div style={{ display: "flex", gap: 6 }}>
               {[1, 2, 3].map((n) => (
-                <button
+                <Button
                   key={n}
-                  className={`btn btn-sm ${confidence === n ? "btn-primary" : ""}`}
+                  size="sm"
+                  variant={confidence === n ? "primary" : "default"}
                   onClick={() => setConfidence(n as Confidence)}
                 >
                   {n}
-                </button>
+                </Button>
               ))}
               <span className="hint" style={{ alignSelf: "center", marginLeft: 6 }}>
                 {t("concepts.add.confidenceHint")}
@@ -275,12 +277,12 @@ export function AddConceptModal({
             <label style={{ display: "flex", alignItems: "center" }}>
               {t("concepts.field.detailNote")}
               <span className="spacer" />
-              <button
-                className="btn btn-sm"
+              <Button
+                size="sm"
                 onClick={() => setShowPreview((v) => !v)}
               >
                 {showPreview ? t("concepts.preview.source") : t("concepts.preview.show")}
-              </button>
+              </Button>
             </label>
             {showPreview ? (
               <div className="markdown md-preview">

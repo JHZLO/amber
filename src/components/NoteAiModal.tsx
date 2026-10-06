@@ -25,6 +25,7 @@ import {
 } from "../lib/noteAiRun";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
+import { Button } from "@/components/ui/button";
 
 type Step = "prompt" | "loading" | "preview";
 type ViewMode = "diff" | "preview" | "source";
@@ -207,58 +208,58 @@ export function NoteAiModal({
     footer = (
       <>
         {revise && run?.result && (
-          <button className="btn btn-sm" onClick={() => setRevise(false)}>
+          <Button size="sm" onClick={() => setRevise(false)}>
             <Icon name="chevron-left" size={14} />
             {t("notes.ai.backToResult")}
-          </button>
+          </Button>
         )}
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={onClose}>
+        <Button size="sm" onClick={onClose}>
           {t("common.cancel")}
-        </button>
-        <button
-          className="btn btn-primary"
+        </Button>
+        <Button
+          variant="primary"
           onClick={runAi}
           disabled={tooShort || !config?.provider || spanBusy}
           title={!config ? t("notes.ai.configLoading") : undefined}
         >
           <Icon name="sparkles" size={15} />
           {t("notes.ai.run")}
-        </button>
+        </Button>
       </>
     );
   } else if (step === "loading") {
     footer = (
       <>
         {/* 5분짜리 실행에 탈출구가 없으면 앱을 끄는 것 말고 방법이 없다 */}
-        <button className="btn btn-sm btn-danger-ghost" onClick={() => stopNoteAi(path)}>
+        <Button variant="danger" size="sm" onClick={() => stopNoteAi(path)}>
           <Icon name="x" size={14} />
           {t("notes.ai.stop")}
-        </button>
+        </Button>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={onClose}>
+        <Button size="sm" onClick={onClose}>
           {t("notes.ai.bg.keep")}
-        </button>
+        </Button>
       </>
     );
   } else if (step === "preview") {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={() => setRevise(true)}>
+        <Button size="sm" onClick={() => setRevise(true)}>
           <Icon name="chevron-left" size={14} />
           {t("notes.ai.back")}
-        </button>
-        <button className="btn btn-sm btn-danger-ghost" onClick={() => setConfirmDiscard(true)}>
+        </Button>
+        <Button variant="danger" size="sm" onClick={() => setConfirmDiscard(true)}>
           {t("notes.ai.discard")}
-        </button>
+        </Button>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={onClose}>
+        <Button size="sm" onClick={onClose}>
           {t("common.close")}
-        </button>
-        <button className="btn btn-primary" onClick={apply} disabled={!run?.result}>
+        </Button>
+        <Button variant="primary" onClick={apply} disabled={!run?.result}>
           <Icon name="check" size={15} />
           {hasExisting ? t("notes.ai.applyDiff") : t("notes.ai.applyNew")}
-        </button>
+        </Button>
       </>
     );
   }
@@ -323,10 +324,10 @@ export function NoteAiModal({
           <div className="field">
             <label>{t("notes.ai.refDirs.label")}</label>
             <div className="chip-row">
-              <button type="button" className="btn btn-sm" onClick={() => void pickRefDir()}>
+              <Button type="button" size="sm" onClick={() => void pickRefDir()}>
                 <Icon name="folder-plus" size={13} />
                 {t("notes.ai.refDirs.add")}
-              </button>
+              </Button>
               {refDirs.map((d) => (
                 <Tooltip key={d} label={d}>
                   <ChoiceChip
@@ -364,8 +365,8 @@ export function NoteAiModal({
       {step === "preview" && run?.truncated && (
         <div className="warn-note ai-truncated" style={{ marginBottom: 12 }}>
           <span>{t("notes.ai.truncated")}</span>
-          <button
-            className="btn btn-sm"
+          <Button
+            size="sm"
             onClick={() => {
               if (config) void continueNoteAi(path, config);
             }}
@@ -373,7 +374,7 @@ export function NoteAiModal({
           >
             <Icon name="sparkles" size={13} />
             {t("notes.ai.continue")}
-          </button>
+          </Button>
         </div>
       )}
       {step === "preview" && run?.continued && !run.truncated && (

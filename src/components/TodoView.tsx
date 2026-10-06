@@ -80,6 +80,7 @@ import { dropSuggestion, runSuggest, useSuggest } from "../lib/todoSuggest";
 import { loadReportConfig, mcpSourcesFrom, rankedSources, reportCollect } from "../lib/report";
 import { openConceptInApp } from "../lib/nav";
 import type { AppConfig } from "../lib/config";
+import { Button } from "@/components/ui/button";
 
 const errMsg = errText; // Rust 코드화 에러까지 번역 (lib/errors.ts)
 
@@ -940,20 +941,20 @@ export function TodoView({
           // 밀린 스트립: 원래 날짜 + 가져오기/버리기 — 발견성 위해 항상 표시(hover 오버레이 아님)
           <span className="todo-overdue-actions">
             <span className="todo-row-date">{formatDayShort(todo.due_date)}</span>
-            <button
-              className="btn btn-sm"
+            <Button
+              size="sm"
               onClick={() => void moveToday([todo.id])}
             >
               {t("todos.overdue.moveOne")}
-            </button>
+            </Button>
             <Tooltip label={t("common.delete")}>
-              <button
+              <Button
                 aria-label={t("common.delete")}
-                className="icon-btn sm danger"
+                variant="danger" size="icon-sm"
                 onClick={() => askRemove(todo, true)}
               >
                 <Icon name="trash" size={13} />
-              </button>
+              </Button>
             </Tooltip>
           </span>
         ) : isGone ? (
@@ -962,13 +963,13 @@ export function TodoView({
           // 이 날짜에서 따로 치울 수 있다(라이브 행과 달리 지울 게 이 한 줄뿐이라 즉시 삭제).
           <span className="row-actions" onClick={(e) => e.stopPropagation()}>
             <Tooltip label={t("todos.row.removeRecord")}>
-              <button
+              <Button
                 aria-label={t("todos.row.removeRecord")}
-                className="icon-btn sm danger"
+                variant="danger" size="icon-sm"
                 onClick={() => setConfirmRecord(todo)}
               >
                 <Icon name="trash" size={13} />
-              </button>
+              </Button>
             </Tooltip>
           </span>
         ) : isCarried ? (
@@ -978,9 +979,9 @@ export function TodoView({
           <>
             <span className="row-actions" onClick={(e) => e.stopPropagation()}>
               <Tooltip label={t("todos.row.addChild")}>
-                <button
+                <Button
                   aria-label={t("todos.row.addChild")}
-                  className="icon-btn sm"
+                  size="icon-sm"
                   onClick={() => {
                     childDone.current = false;
                     setAddingChildFor(todo.id);
@@ -988,7 +989,7 @@ export function TodoView({
                   }}
                 >
                   <Icon name="plus" size={13} />
-                </button>
+                </Button>
               </Tooltip>
             </span>
             <span
@@ -1005,9 +1006,9 @@ export function TodoView({
           // 메인 목록: 하위추가/편집/삭제는 hover 오버레이(레이아웃을 밀지 않음)
           <span className="row-actions" onClick={(e) => e.stopPropagation()}>
             <Tooltip label={t("todos.row.addChild")}>
-              <button
+              <Button
                 aria-label={t("todos.row.addChild")}
-                className="icon-btn sm"
+                size="icon-sm"
                 onClick={() => {
                   childDone.current = false;
                   setAddingChildFor(todo.id);
@@ -1015,28 +1016,28 @@ export function TodoView({
                 }}
               >
                 <Icon name="plus" size={13} />
-              </button>
+              </Button>
             </Tooltip>
             <Tooltip label={t("todos.row.park")}>
-              <button
+              <Button
                 aria-label={t("todos.row.park")}
-                className="icon-btn sm"
+                size="icon-sm"
                 onClick={() => void park(todo)}
               >
                 <Icon name="arrow-right" size={13} />
-              </button>
+              </Button>
             </Tooltip>
             {/* 이름 변경 버튼은 두지 않는다 — 글자를 클릭하면 바로 인라인 편집이고(.todo-text 의
                 cursor: text 가 그걸 말한다), 같은 일을 하는 아이콘을 하나 더 두면 hover 줄만
                 길어진다. 아이콘은 **글자를 눌러서는 할 수 없는 일**에만 쓴다. */}
             <Tooltip label={t("common.delete")}>
-              <button
+              <Button
                 aria-label={t("common.delete")}
-                className="icon-btn sm danger"
+                variant="danger" size="icon-sm"
                 onClick={() => askRemove(todo, false)}
               >
                 <Icon name="trash" size={13} />
-              </button>
+              </Button>
             </Tooltip>
           </span>
         )}
@@ -1188,38 +1189,39 @@ export function TodoView({
           <span className="spacer" />
           {/* 캘린더 앱 표준: [오늘] ‹ › — 오늘이면 '오늘' 버튼 비활성(이미 오늘임을 표시) */}
           <div className="todo-nav">
-            <button
-              className="btn btn-sm"
+            <Button
+              size="sm"
               onClick={() => goDate(today)}
               disabled={isToday}
             >
               {t("todos.today")}
-            </button>
+            </Button>
             <Tooltip label={t("todos.nav.prevDay")}>
-              <button
+              <Button
                 aria-label={t("todos.nav.prevDay")}
-                className="icon-btn ghost"
+                variant="ghost" size="icon"
                 onClick={() => goDate(shiftDay(selected, unit === "week" ? -7 : -1))}
               >
                 <Icon name="chevron-left" size={16} />
-              </button>
+              </Button>
             </Tooltip>
             <Tooltip label={t("todos.nav.nextDay")}>
-              <button
+              <Button
                 aria-label={t("todos.nav.nextDay")}
-                className="icon-btn ghost"
+                variant="ghost" size="icon"
                 onClick={() => goDate(shiftDay(selected, unit === "week" ? 7 : 1))}
               >
                 <Icon name="chevron-right" size={16} />
-              </button>
+              </Button>
             </Tooltip>
           </div>
           {/* '언젠가' 토글 — 사이드 패널 토글은 오른쪽 위 구석이 자리다. 가장자리에 세로 탭을
               세우면 스크롤바와 붙어 창에 붙은 군더더기로 읽히고, 닫혀 있는데도 폭을 먹는다.
               날짜 이동과 같은 줄이되 구분선으로 가른다 — 이건 날짜를 바꾸는 버튼이 아니다. */}
           {unit === "day" && (
-            <button
-              className={`btn btn-sm todo-parked-toggle ${parkedOpen ? "on" : ""}`}
+            <Button
+              size="sm"
+              className={`todo-parked-toggle ${parkedOpen ? "on" : ""}`}
               aria-pressed={parkedOpen}
               onClick={() => setParkedOpen((v) => !v)}
             >
@@ -1228,7 +1230,7 @@ export function TodoView({
               {parked.length + suggest.items.length > 0 && (
                 <span className="todo-parked-n">{parked.length + suggest.items.length}</span>
               )}
-            </button>
+            </Button>
           )}
         </div>
 
@@ -1246,15 +1248,15 @@ export function TodoView({
               <b>{t("todos.overdue.title")}</b>
               <span className="todo-overdue-cnt">{overdue.length}</span>
               <span className="spacer" />
-              <button
-                className="btn btn-sm"
+              <Button
+                size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
                   void moveToday(overdue.map((o) => o.id));
                 }}
               >
                 {t("todos.overdue.moveAll")}
-              </button>
+              </Button>
             </div>
             <div className="todo-overdue-body">
               <div className="todo-overdue-inner">

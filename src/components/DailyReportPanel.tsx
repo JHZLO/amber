@@ -32,6 +32,7 @@ import { Icon } from "../icons";
 import { t, dateLocale } from "../lib/i18n";
 import { errText } from "../lib/errors";
 import { useScrollSync } from "../lib/useScrollSync";
+import { Button } from "@/components/ui/button";
 
 // GitHub·Slack·Notion 은 브랜드명이라 번역하지 않는다
 const SRC_LABEL: Record<string, string> = {
@@ -234,66 +235,66 @@ export function DailyReportPanel({
           // 편집 중 헤더 — 되돌릴 수 없는 액션(재생성·삭제)은 감춘다. 초안이 열린 채로
           // 눌리면 방금 고친 게 조용히 사라진다.
           <span className="report-actions">
-            <button className="btn btn-sm" onClick={closeEdit}>
+            <Button size="sm" onClick={closeEdit}>
               {t("common.cancel")}
-            </button>
-            <button
-              className="btn btn-sm btn-primary"
+            </Button>
+            <Button
+              variant="primary" size="sm"
               onClick={() => void saveEdit()}
               disabled={!dirty}
             >
               {t("common.save")}
-            </button>
+            </Button>
           </span>
         ) : phase === "done" ? (
           <span className="report-actions">
             <Tooltip label={t("report.edit")}>
-              <button
+              <Button
                 aria-label={t("report.edit")}
-                className="icon-btn sm"
+                size="icon-sm"
                 onClick={startEdit}
               >
                 <Icon name="pencil" size={13} />
-              </button>
+              </Button>
             </Tooltip>
             <Tooltip label={t("report.regen")}>
-              <button
+              <Button
                 aria-label={t("report.regen")}
-                className="icon-btn sm"
+                size="icon-sm"
                 onClick={() => setConfirmRegen(true)}
               >
                 <Icon name="refresh" size={13} />
-              </button>
+              </Button>
             </Tooltip>
             <Tooltip label={t("report.copy")}>
-              <button
+              <Button
                 aria-label={t("report.copy")}
-                className="icon-btn sm"
+                size="icon-sm"
                 onClick={() => void copy()}
               >
                 <Icon name={copied ? "check" : "copy"} size={13} />
-              </button>
+              </Button>
             </Tooltip>
             <Tooltip label={t("common.delete")}>
-              <button
+              <Button
                 aria-label={t("common.delete")}
-                className="icon-btn sm danger"
+                variant="danger" size="icon-sm"
                 onClick={() => setConfirmDelete(true)}
               >
                 <Icon name="trash" size={13} />
-              </button>
+              </Button>
             </Tooltip>
           </span>
         ) : phase === "idle" || phase === "empty" || phase === "error" ? (
-          <button
-            className="btn btn-sm btn-primary"
+          <Button
+            variant="primary" size="sm"
             onClick={() => void generate()}
             disabled={isFuture}
             title={isFuture ? t("report.futureNo") : undefined}
           >
             <Icon name="sparkles" size={13} />
             {config?.provider ? t("report.generate") : t("report.connectGenerate")}
-          </button>
+          </Button>
         ) : null}
       </div>
 
@@ -335,15 +336,15 @@ export function DailyReportPanel({
             })}
             {/* 중단은 소스 칩과 **같은 줄** 우측 — 진행 중인 그 작업에 딸린 조작이라
                 줄을 따로 내면 무엇을 멈추는 버튼인지 연결이 끊긴다. */}
-            <button
-              className="btn btn-sm btn-danger-ghost report-stop"
+            <Button
+              variant="danger" size="sm" className="report-stop"
               onClick={() => void cancelReport(date)}
               disabled={phase === "collecting"}
               title={t("report.stopHint")}
             >
               <Icon name="x" size={13} />
               {t("report.stop")}
-            </button>
+            </Button>
           </div>
           {phase === "collecting" ? (
             <AiThinking label={t("report.collecting")} indicator="ring" />
@@ -432,9 +433,9 @@ export function DailyReportPanel({
         footer={
           <>
             <span className="spacer" />
-            <button className="btn btn-sm" onClick={() => clearRun(date)}>
+            <Button size="sm" onClick={() => clearRun(date)}>
               {t("common.close")}
-            </button>
+            </Button>
           </>
         }
       >
@@ -460,12 +461,12 @@ export function DailyReportPanel({
         footer={
           <>
             <span className="spacer" />
-            <button className="btn btn-sm" onClick={() => setConfirmRegen(false)}>
+            <Button size="sm" onClick={() => setConfirmRegen(false)}>
               {t("common.cancel")}
-            </button>
-            <button className="btn btn-danger-ghost" onClick={regenerate}>
+            </Button>
+            <Button variant="danger" onClick={regenerate}>
               {t("report.regen")}
-            </button>
+            </Button>
           </>
         }
       >
@@ -480,12 +481,12 @@ export function DailyReportPanel({
         footer={
           <>
             <span className="spacer" />
-            <button className="btn btn-sm" onClick={() => setConfirmDelete(false)}>
+            <Button size="sm" onClick={() => setConfirmDelete(false)}>
               {t("common.cancel")}
-            </button>
-            <button className="btn btn-danger-ghost" onClick={() => void remove()}>
+            </Button>
+            <Button variant="danger" onClick={() => void remove()}>
               {t("common.delete")}
-            </button>
+            </Button>
           </>
         }
       >

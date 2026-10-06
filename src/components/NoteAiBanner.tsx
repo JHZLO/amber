@@ -13,6 +13,7 @@ import {
   stopNoteAi,
   type NoteAiRun,
 } from "../lib/noteAiRun";
+import { Button } from "@/components/ui/button";
 
 export function NoteAiBanner({ run, onOpen }: { run: NoteAiRun; onOpen: () => void }) {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -50,15 +51,15 @@ export function NoteAiBanner({ run, onOpen }: { run: NoteAiRun; onOpen: () => vo
           activity={waitLine ?? undefined}
         />
         <span className="ai-bg-actions">
-          <button className="btn btn-sm" onClick={onOpen}>
+          <Button size="sm" onClick={onOpen}>
             <Icon name="eye" size={13} />
             {t("notes.ai.bg.open")}
-          </button>
+          </Button>
           {/* 중단은 멈출 대상과 같은 줄 오른쪽 끝(§3) */}
-          <button className="btn btn-sm btn-danger-ghost" onClick={() => stopNoteAi(run.path)}>
+          <Button variant="danger" size="sm" onClick={() => stopNoteAi(run.path)}>
             <Icon name="x" size={13} />
             {t("notes.ai.stop")}
-          </button>
+          </Button>
         </span>
       </div>
     );
@@ -71,13 +72,13 @@ export function NoteAiBanner({ run, onOpen }: { run: NoteAiRun; onOpen: () => vo
           <b>{t("notes.ai.bg.failed")}</b> {run.error}
         </span>
         <span className="ai-bg-actions">
-          <button className="btn btn-sm" onClick={onOpen}>
+          <Button size="sm" onClick={onOpen}>
             <Icon name="refresh" size={13} />
             {t("notes.ai.bg.retry")}
-          </button>
-          <button className="btn btn-sm" onClick={() => dismissNoteAiError(run.path)}>
+          </Button>
+          <Button size="sm" onClick={() => dismissNoteAiError(run.path)}>
             {t("common.close")}
-          </button>
+          </Button>
         </span>
       </div>
     );
@@ -96,12 +97,12 @@ export function NoteAiBanner({ run, onOpen }: { run: NoteAiRun; onOpen: () => vo
           )}
         </span>
         <span className="ai-bg-actions">
-          <button className="btn btn-sm btn-primary" onClick={onOpen}>
+          <Button variant="primary" size="sm" onClick={onOpen}>
             {t("notes.ai.bg.review")}
-          </button>
-          <button className="btn btn-sm btn-danger-ghost" onClick={() => setConfirmDiscard(true)}>
+          </Button>
+          <Button variant="danger" size="sm" onClick={() => setConfirmDiscard(true)}>
             {t("notes.ai.discard")}
-          </button>
+          </Button>
         </span>
       </div>
       <DiscardAiModal

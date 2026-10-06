@@ -31,6 +31,7 @@ import { AiThinking, Modal, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { t, dateLocale } from "../lib/i18n";
 import { errText } from "../lib/errors";
+import { Button } from "@/components/ui/button";
 
 function hhmm(ms: number): string {
   return new Date(ms).toLocaleTimeString(dateLocale(), {
@@ -191,37 +192,37 @@ export function WeeklyReportPanel({
         {phase === "done" && (
           <span className="report-actions">
             <Tooltip label={t("report.regen")}>
-              <button
+              <Button
                 aria-label={t("report.regen")}
-                className="icon-btn sm"
+                size="icon-sm"
                 onClick={() => setConfirmRegen(true)}
               >
                 <Icon name="refresh" size={13} />
-              </button>
+              </Button>
             </Tooltip>
             <Tooltip label={t("report.weekly.copy")}>
-              <button
+              <Button
                 aria-label={t("report.weekly.copy")}
-                className="icon-btn sm"
+                size="icon-sm"
                 onClick={() => void copy()}
               >
                 <Icon name={copied ? "check" : "copy"} size={13} />
-              </button>
+              </Button>
             </Tooltip>
             <Tooltip label={t("common.delete")}>
-              <button
+              <Button
                 aria-label={t("common.delete")}
-                className="icon-btn sm danger"
+                variant="danger" size="icon-sm"
                 onClick={() => setConfirmDelete(true)}
               >
                 <Icon name="trash" size={13} />
-              </button>
+              </Button>
             </Tooltip>
           </span>
         )}
         {(phase === "idle" || phase === "empty" || phase === "error") && (
-          <button
-            className="btn btn-sm btn-primary"
+          <Button
+            variant="primary" size="sm"
             onClick={() => void generate()}
             disabled={isFutureWeek || have?.length === 0}
             title={isFutureWeek ? t("report.weekly.futureNo") : undefined}
@@ -230,7 +231,7 @@ export function WeeklyReportPanel({
             {config?.provider
               ? t("report.weekly.generate")
               : t("report.connectGenerate")}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -272,14 +273,14 @@ export function WeeklyReportPanel({
       {phase === "streaming" && (
         <>
           <div className="report-stop-row">
-            <button
-              className="btn btn-sm btn-danger-ghost"
+            <Button
+              variant="danger" size="sm"
               onClick={() => void cancelWeeklyReport(weekStart)}
               title={t("report.stopHint")}
             >
               <Icon name="x" size={13} />
               {t("report.stop")}
-            </button>
+            </Button>
           </div>
           {stream ? (
             <pre className="note-stream-body" ref={streamRef}>
@@ -333,12 +334,12 @@ export function WeeklyReportPanel({
         footer={
           <>
             <span className="spacer" />
-            <button className="btn btn-sm" onClick={() => setConfirmRegen(false)}>
+            <Button size="sm" onClick={() => setConfirmRegen(false)}>
               {t("common.cancel")}
-            </button>
-            <button className="btn btn-danger-ghost" onClick={regenerate}>
+            </Button>
+            <Button variant="danger" onClick={regenerate}>
               {t("report.regen")}
-            </button>
+            </Button>
           </>
         }
       >
@@ -354,9 +355,9 @@ export function WeeklyReportPanel({
         footer={
           <>
             <span className="spacer" />
-            <button className="btn btn-sm" onClick={() => clearRun(key)}>
+            <Button size="sm" onClick={() => clearRun(key)}>
               {t("common.close")}
-            </button>
+            </Button>
           </>
         }
       >
@@ -372,12 +373,12 @@ export function WeeklyReportPanel({
         footer={
           <>
             <span className="spacer" />
-            <button className="btn btn-sm" onClick={() => setConfirmDelete(false)}>
+            <Button size="sm" onClick={() => setConfirmDelete(false)}>
               {t("common.cancel")}
-            </button>
-            <button className="btn btn-danger-ghost" onClick={() => void remove()}>
+            </Button>
+            <Button variant="danger" onClick={() => void remove()}>
               {t("common.delete")}
-            </button>
+            </Button>
           </>
         }
       >

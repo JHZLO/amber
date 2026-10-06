@@ -33,6 +33,7 @@ import { loadRecentRefDirs, refDirName, rememberRefDir } from "../lib/refDirs";
 import { useAiWaitLine } from "../lib/aiWait";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
+import { Button } from "@/components/ui/button";
 
 type Step = "pick" | "prompt" | "loading" | "preview";
 type ViewMode = "diff" | "source";
@@ -243,11 +244,11 @@ export function NoteSpanAiModal({
     footer = (
       <>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={onClose}>
+        <Button size="sm" onClick={onClose}>
           {t("common.cancel")}
-        </button>
-        <button
-          className="btn btn-primary"
+        </Button>
+        <Button
+          variant="primary"
           disabled={picked.size === 0}
           onClick={() => {
             setRuns(runsFromPicked());
@@ -256,76 +257,76 @@ export function NoteSpanAiModal({
         >
           {t("notes.spanAi.next")}
           <Icon name="chevron-right" size={14} />
-        </button>
+        </Button>
       </>
     );
   } else if (step === "prompt") {
     footer = (
       <>
         {revise && spanRun?.result ? (
-          <button className="btn btn-sm" onClick={() => setRevise(false)}>
+          <Button size="sm" onClick={() => setRevise(false)}>
             <Icon name="chevron-left" size={14} />
             {t("notes.ai.backToResult")}
-          </button>
+          </Button>
         ) : (
           mode === "section" && (
-            <button className="btn btn-sm" onClick={() => setStage("pick")}>
+            <Button size="sm" onClick={() => setStage("pick")}>
               <Icon name="chevron-left" size={14} />
               {t("notes.spanAi.backToPick")}
-            </button>
+            </Button>
           )
         )}
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={onClose}>
+        <Button size="sm" onClick={onClose}>
           {t("common.cancel")}
-        </button>
-        <button
-          className="btn btn-primary"
+        </Button>
+        <Button
+          variant="primary"
           onClick={start}
           disabled={tooShort || !config?.provider || runs.length === 0 || composeBusy}
           title={!config ? t("notes.ai.configLoading") : undefined}
         >
           <Icon name="sparkles" size={15} />
           {t("notes.spanAi.run")}
-        </button>
+        </Button>
       </>
     );
   } else if (step === "loading") {
     footer = (
       <>
         {/* 탈출구는 남기되, 닫기는 중단이 아니다 — 스토어가 계속 돌린다 */}
-        <button className="btn btn-sm btn-danger-ghost" onClick={() => stopNoteAi(path)}>
+        <Button variant="danger" size="sm" onClick={() => stopNoteAi(path)}>
           <Icon name="x" size={14} />
           {t("notes.ai.stop")}
-        </button>
+        </Button>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={onClose}>
+        <Button size="sm" onClick={onClose}>
           {t("notes.ai.bg.keep")}
-        </button>
+        </Button>
       </>
     );
   } else {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={() => setRevise(true)}>
+        <Button size="sm" onClick={() => setRevise(true)}>
           <Icon name="chevron-left" size={14} />
           {t("notes.ai.back")}
-        </button>
-        <button className="btn btn-sm btn-danger-ghost" onClick={() => setConfirmDiscard(true)}>
+        </Button>
+        <Button variant="danger" size="sm" onClick={() => setConfirmDiscard(true)}>
           {t("notes.ai.discard")}
-        </button>
+        </Button>
         <span className="spacer" />
-        <button className="btn btn-sm" onClick={onClose}>
+        <Button size="sm" onClick={onClose}>
           {t("common.close")}
-        </button>
-        <button
-          className="btn btn-primary"
+        </Button>
+        <Button
+          variant="primary"
           onClick={apply}
           disabled={!results.some((r) => r.trim())}
         >
           <Icon name="check" size={15} />
           {t("notes.spanAi.apply")}
-        </button>
+        </Button>
       </>
     );
   }
@@ -487,10 +488,10 @@ export function NoteSpanAiModal({
         <div className="field">
           <label>{t("notes.ai.refDirs.label")}</label>
           <div className="chip-row">
-            <button type="button" className="btn btn-sm" onClick={() => void pickRefDir()}>
+            <Button type="button" size="sm" onClick={() => void pickRefDir()}>
               <Icon name="folder-plus" size={13} />
               {t("notes.ai.refDirs.add")}
-            </button>
+            </Button>
             {refDirs.map((d) => (
               <Tooltip key={d} label={d}>
                 <ChoiceChip

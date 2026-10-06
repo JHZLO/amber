@@ -14,6 +14,7 @@ import { createPortal } from "react-dom";
 import type { Confidence, ConceptStatus } from "./types";
 import { Icon, type IconName } from "./icons";
 import { dateLocale, t } from "./lib/i18n";
+import { Button } from "@/components/ui/button";
 
 /** 파일 트리 드래그 중 커서를 따라오는 오버레이(원본 행 복제본, dnd-kit DragOverlay 패턴).
  *  body 로 portal → 중첩 폴더의 overflow:hidden 을 벗어나므로 하위 뎁스에서도 안 잘린다.
@@ -296,12 +297,12 @@ export function ConfirmDelete({
       footer={
         <>
           <span className="spacer" />
-          <button className="btn btn-sm" onClick={onCancel}>
+          <Button size="sm" onClick={onCancel}>
             {t("common.cancel")}
-          </button>
-          <button className="btn btn-sm btn-danger-ghost" onClick={onConfirm}>
+          </Button>
+          <Button variant="danger" size="sm" onClick={onConfirm}>
             {t("common.delete")}
-          </button>
+          </Button>
         </>
       }
     >
@@ -611,9 +612,9 @@ export function Modal({
       >
         <div className="modal-head">
           <h2 id={titleId}>{title}</h2>
-          <button className="icon-btn" onClick={onClose} aria-label={t("common.close")}>
+          <Button size="icon" onClick={onClose} aria-label={t("common.close")}>
             <Icon name="x" />
-          </button>
+          </Button>
         </div>
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-foot">{footer}</div>}
@@ -650,12 +651,12 @@ export function DiscardModal({
       onClose={onKeep}
       footer={
         <>
-          <button className="btn btn-sm" onClick={onKeep}>
+          <Button size="sm" onClick={onKeep}>
             {t("common.unsaved.keep")}
-          </button>
-          <button className="btn btn-sm btn-danger-ghost" onClick={onDiscard}>
+          </Button>
+          <Button variant="danger" size="sm" onClick={onDiscard}>
             {t("common.closeDirty.discard")}
-          </button>
+          </Button>
         </>
       }
     >
@@ -683,12 +684,12 @@ export function UnsavedModal({
       onClose={onKeep}
       footer={
         <>
-          <button className="btn btn-sm" onClick={onKeep}>
+          <Button size="sm" onClick={onKeep}>
             {t("common.unsaved.keep")}
-          </button>
-          <button className="btn btn-sm btn-danger-ghost" onClick={onDiscard}>
+          </Button>
+          <Button variant="danger" size="sm" onClick={onDiscard}>
             {t("common.unsaved.discard")}
-          </button>
+          </Button>
         </>
       }
     >
@@ -724,12 +725,12 @@ export function DiscardAiModal({
       onClose={onKeep}
       footer={
         <>
-          <button className="btn btn-sm" onClick={onKeep}>
+          <Button size="sm" onClick={onKeep}>
             {t("common.aiDiscard.keep")}
-          </button>
-          <button className="btn btn-sm btn-danger-ghost" onClick={onDiscard}>
+          </Button>
+          <Button variant="danger" size="sm" onClick={onDiscard}>
             {mode === "discard" ? t("common.aiDiscard.discardOnly") : t("common.aiDiscard.discard")}
-          </button>
+          </Button>
         </>
       }
     >

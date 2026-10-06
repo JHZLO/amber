@@ -16,6 +16,7 @@ import { AiThinking, DiscardAiModal, Modal } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
+import { Button } from "@/components/ui/button";
 
 type Step = "loading" | "preview";
 
@@ -179,13 +180,13 @@ export function PromoteConceptModal({
   if (step === "preview") {
     footer = (
       <>
-        <button className="btn btn-sm" onClick={requestClose} disabled={saving}>
+        <Button size="sm" onClick={requestClose} disabled={saving}>
           {t("common.cancel")}
-        </button>
-        <button className="btn btn-primary" onClick={() => void save()} disabled={saving}>
+        </Button>
+        <Button variant="primary" onClick={() => void save()} disabled={saving}>
           <Icon name="layers" size={15} />
           {saving ? t("concepts.saving") : t("concepts.promote.save")}
-        </button>
+        </Button>
       </>
     );
   }
@@ -237,12 +238,12 @@ export function PromoteConceptModal({
             <label style={{ display: "flex", alignItems: "center" }}>
               {t("concepts.field.detailNote")}
               <span className="spacer" />
-              <button
-                className="btn btn-sm"
+              <Button
+                size="sm"
                 onClick={() => setShowSource((v) => !v)}
               >
                 {showSource ? t("concepts.preview.show") : t("concepts.preview.source")}
-              </button>
+              </Button>
             </label>
             {showSource ? (
               <textarea

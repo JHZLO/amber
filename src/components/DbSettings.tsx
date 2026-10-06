@@ -14,6 +14,7 @@ import {
   listConnections,
   type DbConnection,
 } from "../lib/dbconn";
+import { Button } from "@/components/ui/button";
 
 export function DbSettings({
   onAdd,
@@ -52,10 +53,10 @@ export function DbSettings({
     <SetSection
       title={t("settings.db.title")}
       action={
-        <button className="btn btn-sm" onClick={onAdd}>
+        <Button size="sm" onClick={onAdd}>
           <Icon name="plus" size={13} />
           {t("settings.db.add")}
-        </button>
+        </Button>
       }
     >
 
@@ -98,21 +99,21 @@ export function DbSettings({
                   </div>
                   <div className="db-conn-actions">
                     {st === "needsPassword" && (
-                      <button className="btn btn-sm" onClick={() => onEnterPassword(c)}>
+                      <Button size="sm" onClick={() => onEnterPassword(c)}>
                         {t("settings.db.enterPassword")}
-                      </button>
+                      </Button>
                     )}
-                    <button className="btn btn-sm" onClick={() => onEdit(c)}>
+                    <Button size="sm" onClick={() => onEdit(c)}>
                       {t("settings.db.edit")}
-                    </button>
+                    </Button>
                     <Tooltip label={t("settings.db.deleteTitle")}>
-                      <button
-                        className="btn btn-sm btn-danger-ghost"
+                      <Button
+                        variant="danger" size="sm"
                         aria-label={t("settings.db.deleteTitle")}
                         onClick={() => onDelete(c)}
                       >
                         <Icon name="trash" size={13} />
-                      </button>
+                      </Button>
                     </Tooltip>
                   </div>
                 </div>
