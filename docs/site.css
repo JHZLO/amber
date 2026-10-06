@@ -28,6 +28,8 @@ code { font-family: var(--mono); font-size: 0.9em; background: var(--surface-2);
 .display { font-family: var(--display); font-weight: 600; letter-spacing: -0.025em; line-height: 1.05; margin: 0; }
 h2.display { font-size: clamp(30px, 3.6vw, 48px); }
 .eyebrow { color: var(--amber); margin: 0 0 18px; }
+/* the platform, said before anything else in the hero */
+.os-badge { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 12px; margin-right: 14px; border-radius: 999px; border: 1px solid rgba(208, 138, 42, 0.5); background: var(--amber-soft); color: var(--text); vertical-align: middle; text-transform: none; letter-spacing: 0.02em; }
 p { margin: 0 0 16px; color: var(--text-2); }
 
 /* grain: a fixed film over everything, faint */
