@@ -3,11 +3,12 @@
 // 매끄럽고 깜빡임이 없다(저배율이라 transform 업스케일 흐림·텍스처 한계 문제도 없음).
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { Dialog as DialogPrimitive, VisuallyHidden } from "radix-ui";
 import { Icon } from "../icons";
 import { Tooltip } from "../ui";
 import { t } from "../lib/i18n";
 import { Button } from "@/components/ui/button";
+import { portalContainer, useReturnFocus } from "@/components/ui/dialog";
 
 const MIN = 0.2;
 const MAX = 1.2; // 최대 120% 까지만 확대
@@ -23,6 +24,9 @@ export function MermaidZoom({
   onClose: () => void;
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
+  // 휠 리스너를 붙일 캔버스. 판은 Radix(Presence)가 열린 **다음 렌더**에 붙이므로, [open] 만 보는
+  // effect 는 캔버스가 생기기 전에 돌고 끝난다 — 붙는 순간을 상태로 받아 그때 다시 돈다
+  const [canvasEl, setCanvasEl] = useState<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [tx, setTx] = useState(0);
@@ -93,22 +97,9 @@ export function MermaidZoom({
     return () => cancelAnimationFrame(id);
   }, [open, svg]);
 
-  // ESC 닫기
-  useEffect(() => {
-    if (!open) return;
-    const h = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", h, true);
-    return () => window.removeEventListener("keydown", h, true);
-  }, [open, onClose]);
-
   // 휠 줌: rAF 로 한 프레임의 이벤트를 합쳐 한 번만 반영(빠른 스크롤 깜빡임 방지)
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const canvas = canvasEl;
     if (!open || !canvas) return;
     let raf = 0;
     let pending: { mx: number; my: number; factor: number } | null = null;
@@ -141,7 +132,7 @@ export function MermaidZoom({
       canvas.removeEventListener("wheel", onWheel);
       if (raf) cancelAnimationFrame(raf);
     };
-  }, [open]);
+  }, [open, canvasEl]);
 
   // 드래그 팬 (window 리스너로 캔버스 밖까지 이어짐)
   useEffect(() => {
@@ -165,7 +156,7 @@ export function MermaidZoom({
     };
   }, [open]);
 
-  if (!open) return null;
+  const returnFocus = useReturnFocus(open);
 
   // 버튼 줌: 캔버스 중앙 기준
   const zoomBy = (k: number) => {
@@ -176,65 +167,85 @@ export function MermaidZoom({
     setTy((t) => t * ratio);
   };
 
-  return createPortal(
-    // 배경을 눌러도 닫지 않는다 — 닫기는 X 와 Esc 뿐(ui.tsx Modal 과 같은 규약).
-    // 확대한 그림을 끌어 옮기다 커서가 판 밖에서 떨어지면 뷰어가 닫혀 버렸다.
-    <div className="mmd-zoom-overlay">
-      <div className="mmd-zoom-modal">
-        <div className="mmd-zoom-toolbar">
-          <span className="mmd-zoom-pct">{Math.round(scale * 100)}%</span>
-          <span className="mmd-zoom-sp" />
-          <Tooltip label={t("diagrams.zoom.out")}>
-            <Button
-              aria-label={t("diagrams.zoom.out")}
-              size="icon"
-              onClick={() => zoomBy(1 / 1.2)}
-            >
-              <Icon name="minus" size={16} />
-            </Button>
-          </Tooltip>
-          <Button
-            size="sm"
-            onClick={reset}
-            title={t("diagrams.zoom.fitTitle")}
+  // 겹친 창 중 맨 위 것만 Esc 를 받는 건 Radix 레이어가 한다 — 모달 위에서 열어도 뷰어만 닫힌다.
+  // 배경을 눌러도 닫지 않는다 — 닫기는 X 와 Esc 뿐(ui.tsx Modal 과 같은 규약).
+  // 확대한 그림을 끌어 옮기다 커서가 판 밖에서 떨어지면 뷰어가 닫혀 버렸다.
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogPrimitive.Portal container={portalContainer()}>
+        <div className="mmd-zoom-overlay">
+          <DialogPrimitive.Content
+            className="mmd-zoom-modal"
+            aria-describedby={undefined}
+            onOpenAutoFocus={(e) => {
+              // 첫 버튼(축소)에 포커스 링이 서지 않게 판 자체에 둔다 — 키보드는 Tab 으로 들어간다
+              e.preventDefault();
+              (e.currentTarget as HTMLElement | null)?.focus();
+            }}
+            onCloseAutoFocus={returnFocus}
+            onInteractOutside={(e) => e.preventDefault()}
           >
-            {t("diagrams.zoom.fit")}
-          </Button>
-          <Tooltip label={t("diagrams.zoom.in")}>
-            <Button
-              aria-label={t("diagrams.zoom.in")}
-              size="icon"
-              onClick={() => zoomBy(1.2)}
+            <VisuallyHidden.Root asChild>
+              <DialogPrimitive.Title>{t("diagrams.zoom.title")}</DialogPrimitive.Title>
+            </VisuallyHidden.Root>
+            <div className="mmd-zoom-toolbar">
+              <span className="mmd-zoom-pct">{Math.round(scale * 100)}%</span>
+              <span className="mmd-zoom-sp" />
+              <Tooltip label={t("diagrams.zoom.out")}>
+                <Button
+                  aria-label={t("diagrams.zoom.out")}
+                  size="icon"
+                  onClick={() => zoomBy(1 / 1.2)}
+                >
+                  <Icon name="minus" size={16} />
+                </Button>
+              </Tooltip>
+              <Button
+                size="sm"
+                onClick={reset}
+                title={t("diagrams.zoom.fitTitle")}
+              >
+                {t("diagrams.zoom.fit")}
+              </Button>
+              <Tooltip label={t("diagrams.zoom.in")}>
+                <Button
+                  aria-label={t("diagrams.zoom.in")}
+                  size="icon"
+                  onClick={() => zoomBy(1.2)}
+                >
+                  <Icon name="plus" size={16} />
+                </Button>
+              </Tooltip>
+              <Tooltip label={`${t("common.close")} (Esc)`}>
+                <Button
+                  aria-label={`${t("common.close")} (Esc)`}
+                  size="icon"
+                  onClick={onClose}
+                >
+                  <Icon name="x" size={17} />
+                </Button>
+              </Tooltip>
+            </div>
+            <div
+              ref={(el) => {
+                canvasRef.current = el;
+                setCanvasEl(el);
+              }}
+              className="mmd-zoom-canvas"
+              onMouseDown={(e) => {
+                drag.current = { x: e.clientX, y: e.clientY };
+              }}
             >
-              <Icon name="plus" size={16} />
-            </Button>
-          </Tooltip>
-          <Tooltip label={`${t("common.close")} (Esc)`}>
-            <Button
-              aria-label={`${t("common.close")} (Esc)`}
-              size="icon"
-              onClick={onClose}
-            >
-              <Icon name="x" size={17} />
-            </Button>
-          </Tooltip>
+              <div
+                ref={contentRef}
+                className="mmd-zoom-content"
+                style={{ transform: `translate(${tx}px, ${ty}px) scale(${scale})` }}
+                dangerouslySetInnerHTML={{ __html: svg }}
+              />
+            </div>
+          </DialogPrimitive.Content>
         </div>
-        <div
-          ref={canvasRef}
-          className="mmd-zoom-canvas"
-          onMouseDown={(e) => {
-            drag.current = { x: e.clientX, y: e.clientY };
-          }}
-        >
-          <div
-            ref={contentRef}
-            className="mmd-zoom-content"
-            style={{ transform: `translate(${tx}px, ${ty}px) scale(${scale})` }}
-            dangerouslySetInnerHTML={{ __html: svg }}
-          />
-        </div>
-      </div>
-    </div>,
-    document.body,
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }

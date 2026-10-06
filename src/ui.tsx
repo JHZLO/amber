@@ -2,7 +2,6 @@
 
 import {
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type ReactElement,
@@ -14,7 +13,7 @@ import type { Confidence, ConceptStatus } from "./types";
 import { Icon, type IconName } from "./icons";
 import { dateLocale, t } from "./lib/i18n";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, useReturnFocus } from "@/components/ui/dialog";
 import { Checkbox as CheckboxUI } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -443,24 +442,6 @@ const MODAL_FOCUSABLE =
 const MODAL_TRAPPABLE =
   'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
-/** 창이 닫히면 열기 직전에 포커스가 있던 곳으로 돌려보낸다.
- *  Radix 는 Dialog.Trigger 로 연 창만 트리거에 포커스를 돌려준다. 우리 창은 전부 상태로 열고 닫아서
- *  (Trigger 가 없다) 그대로 두면 포커스가 <body> 로 떨어지고, Tab 이 문서 처음부터 다시 시작한다.
- *  확인 창을 닫으면 쓰던 입력칸으로 돌아가야 한다. */
-function useReturnFocus(open: boolean) {
-  const prev = useRef<HTMLElement | null>(null);
-  // 레이아웃 단계에서 잰다 — Radix 가 창 안으로 포커스를 옮기기(FocusScope 의 effect) 전이다
-  useLayoutEffect(() => {
-    if (open) prev.current = document.activeElement as HTMLElement | null;
-  }, [open]);
-  return (e: Event) => {
-    e.preventDefault();
-    const el = prev.current;
-    prev.current = null;
-    if (el?.isConnected) el.focus();
-  };
-}
-
 /** 모든 모달. 판과 레이어는 Radix Dialog(components/ui/dialog), 닫기 규칙은 여기서 건다.
  *  닫기는 X, 취소, Esc 뿐이다 — 바깥(배경판)을 눌러도 닫히지 않는다(DESIGN.md §8 창 닫기). */
 export function Modal({
@@ -535,16 +516,10 @@ export function Modal({
     target.focus();
   };
 
-  // Esc — 겹친 창 중 맨 위 것만 받는 건 Radix 레이어가 한다. 여기서는 그 위에 뜬 우리 쪽
-  // portal(아직 Radix 가 아닌 것)을 먼저 닫게 비켜 주고, 입력한 게 있으면 한 번 더 묻는다.
+  // Esc — 겹친 창 중 맨 위 것만 받는 건 Radix 레이어가 한다(위에 뜬 드롭다운, 확인 창, 확대 뷰어가
+  // 먼저 닫힌다). 여기서는 입력한 게 있으면 한 번 더 묻기만 한다.
   // X 와 취소는 누른 것 자체가 뜻이라 묻지 않는다(키 하나는 실수로 눌리지만 버튼은 겨냥해야 눌린다).
   const onEscape = (e: KeyboardEvent) => {
-    // mermaid 확대 뷰어(아직 Radix 가 아니다)가 위에 떠 있으면 그쪽만 닫히게 모달은 유지.
-    // 드롭다운(Select)은 Radix 레이어라 열려 있으면 이 창까지 Esc 가 오지 않는다
-    if (document.querySelector(".mmd-zoom-overlay")) {
-      e.preventDefault();
-      return;
-    }
     if (typedRef.current) {
       e.preventDefault();
       setAskDiscard(true);

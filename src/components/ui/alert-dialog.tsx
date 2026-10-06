@@ -3,7 +3,7 @@ import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
 import type { VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
-import { modalVariants } from "@/components/ui/dialog";
+import { modalVariants, portalContainer } from "@/components/ui/dialog";
 
 /* 확인 창 — Radix AlertDialog 에 Modal 과 같은 `.overlay > .modal` 판을 씌운다.
 
@@ -26,7 +26,7 @@ function AlertDialogContent({
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content> &
   Pick<VariantProps<typeof modalVariants>, "size">) {
   return (
-    <AlertDialogPrimitive.Portal>
+    <AlertDialogPrimitive.Portal container={portalContainer()}>
       <AlertDialogPrimitive.Overlay className="overlay" data-slot="alert-dialog-overlay">
         <AlertDialogPrimitive.Content
           data-slot="alert-dialog-content"

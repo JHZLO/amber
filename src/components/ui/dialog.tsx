@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useLayoutEffect, useRef } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { cva, type VariantProps } from "class-variance-authority";
 
@@ -22,10 +23,33 @@ const modalVariants = cva("modal", {
   defaultVariants: { size: "default", fixedHeight: false },
 });
 
+/** Portal 에 container 를 직접 준다. 안 주면 Radix Portal 이 한 박자 늦게(마운트 뒤 상태 갱신으로)
+ *  붙어서, 창을 여는 순간 도는 호출부의 useEffect 가 아직 비어 있는 ref 를 본다
+ *  — 확대 뷰어의 휠 줌이 그렇게 붙지 않았다. container 가 있으면 같은 렌더에 붙는다. */
+const portalContainer = () => (typeof document === "undefined" ? undefined : document.body);
+
 const Dialog = DialogPrimitive.Root;
 const DialogTitle = DialogPrimitive.Title;
 const DialogDescription = DialogPrimitive.Description;
 const DialogClose = DialogPrimitive.Close;
+
+/** 창이 닫히면 열기 직전에 포커스가 있던 곳으로 돌려보낸다.
+ *  Radix 는 Dialog.Trigger 로 연 창만 트리거에 포커스를 돌려준다. 우리 창은 전부 상태로 열고 닫아서
+ *  (Trigger 가 없다) 그대로 두면 포커스가 <body> 로 떨어지고, Tab 이 문서 처음부터 다시 시작한다.
+ *  확인 창을 닫으면 쓰던 입력칸으로 돌아가야 한다. */
+function useReturnFocus(open: boolean) {
+  const prev = useRef<HTMLElement | null>(null);
+  // 레이아웃 단계에서 잰다 — Radix 가 창 안으로 포커스를 옮기기(FocusScope 의 effect) 전이다
+  useLayoutEffect(() => {
+    if (open) prev.current = document.activeElement as HTMLElement | null;
+  }, [open]);
+  return (e: Event) => {
+    e.preventDefault();
+    const el = prev.current;
+    prev.current = null;
+    if (el?.isConnected) el.focus();
+  };
+}
 
 function DialogContent({
   className,
@@ -35,7 +59,7 @@ function DialogContent({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & VariantProps<typeof modalVariants>) {
   return (
-    <DialogPrimitive.Portal>
+    <DialogPrimitive.Portal container={portalContainer()}>
       <div className="overlay" data-slot="dialog-overlay">
         <DialogPrimitive.Content
           data-slot="dialog-content"
@@ -49,4 +73,13 @@ function DialogContent({
   );
 }
 
-export { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, modalVariants };
+export {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  modalVariants,
+  portalContainer,
+  useReturnFocus,
+};
