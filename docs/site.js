@@ -125,6 +125,19 @@ function horizontal(sy) {
   hidx.textContent = String(clamp(Math.round(p * (n - 1)) + 1, 1, n));
   // screenshots drift a little slower than their copy — depth without a library
   shots.forEach((s, i) => { const local = p * (n - 1) - i; s.style.transform = `translate3d(${clamp(local, -1, 1) * 40}px, 0, 0)`; });
+  const ch = panels[clamp(Math.round(p * (n - 1)), 0, n - 1)].dataset.ch;
+  chapters.forEach((b) => b.setAttribute("aria-current", String(b.dataset.ch === ch)));
+}
+// chapter buttons jump to their first panel: a scroll position on desktop (the track follows), the panel itself when stacked
+const panels = $$(".panel", track), chapters = $$(".chapters button");
+for (const b of chapters) {
+  b.addEventListener("click", () => {
+    const k = panels.findIndex((pn) => pn.dataset.ch === b.dataset.ch);
+    if (!desktop()) { panels[k].scrollIntoView({ behavior: reduce ? "auto" : "smooth" }); return; }
+    const y = hs.offsetTop + (k / (panels.length - 1)) * (hs.offsetHeight - innerHeight) + 1;
+    if (lenis) lenis.scrollTo(y, { duration: 1.2 });
+    else scrollTo({ top: y, behavior: reduce ? "auto" : "smooth" });
+  });
 }
 function strata(sy) {
   if (!layers) return;

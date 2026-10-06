@@ -41,7 +41,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="site.css?v=0.22.65-films">
+<link rel="stylesheet" href="site.css?v=0.22.65-chapters">
 </head>
 <body>
 <div class="grain" aria-hidden="true"></div>
@@ -111,53 +111,91 @@
   </section>
 
   <!-- 02: workspaces, horizontal on scroll -->
-  <section class="hscroll" id="features" style="--panels: 5">
+  <section class="hscroll" id="features" style="--panels: 9">
     <div class="hscroll-sticky">
       <div class="hbar">
         <span class="mono">01 — Workspaces</span>
+        <nav class="chapters" aria-label="Workspaces">
+          <button type="button" data-ch="todos">To-dos</button>
+          <button type="button" data-ch="concepts">Concepts</button>
+          <button type="button" data-ch="notes">Notes</button>
+          <button type="button" data-ch="diagrams">Diagrams</button>
+        </nav>
         <div class="rail" aria-hidden="true"><i id="hprog"></i></div>
-        <span class="mono"><b id="hidx">1</b> / 5</span>
+        <span class="mono"><b id="hidx">1</b> / 9</span>
       </div>
       <div class="track" id="track">
-        <article class="panel">
+        <article class="panel" data-ch="todos">
           <div class="panel-copy">
-            <p class="eyebrow mono">To-dos and timetable</p>
+            <p class="eyebrow mono">To-dos / Carry-over</p>
+            <h2 class="display">Yesterday's leftovers, brought to today.</h2>
+            <p>Unfinished work from earlier days waits in an Overdue strip at the top of today. Bring it all over in one click, or one item at a time. The original day keeps a faded record of what moved, and checking it there still completes it.</p>
+          </div>
+          <figure class="panel-shot"><video src="assets/films/carry.mp4" poster="assets/films/carry.jpg" muted loop playsinline preload="none" aria-label="The Overdue strip opens, Bring all to today moves three unfinished items into today, and the day before keeps faded records of where they went"></video></figure>
+        </article>
+        <article class="panel" data-ch="todos">
+          <div class="panel-copy">
+            <p class="eyebrow mono">To-dos / Timetable</p>
             <h2 class="display">Plan the day in blocks, not lists.</h2>
-            <p>Nested checklists grouped under headings, next to a calendar-style time-blocking grid. Park what isn't for today in the drawer, carry overdue work forward, and mark holidays and time off.</p>
+            <p>Nested checklists grouped under headings, next to a calendar-style time-blocking grid. Drag to create a block with a 15-minute snap, park what isn't for today in the drawer, and mark holidays and time off.</p>
           </div>
           <figure class="panel-shot"><video src="assets/films/todos.mp4" poster="assets/films/todos.jpg" muted loop playsinline preload="none" aria-label="A to-do is added and checked off, then a 14:00 time block is dragged onto the timetable and named"></video></figure>
         </article>
-        <article class="panel">
+        <article class="panel" data-ch="todos">
           <div class="panel-copy">
-            <p class="eyebrow mono">Notes and AI</p>
-            <h2 class="display">Real markdown files. AI you review as a diff.</h2>
-            <p>Live preview and a scroll-spy outline. Ask about any sentence and the answer stays beside it. AI edits scoped to a sentence, a section or the whole note arrive as a reviewable diff, and whole-note drafts write in the background.</p>
-          </div>
-          <figure class="panel-shot"><video src="assets/films/notes.mp4" poster="assets/films/notes.jpg" muted loop playsinline preload="none" aria-label="A sentence in a note is selected and rewritten by AI, shown as an inline red and green diff, then accepted"></video></figure>
-        </article>
-        <article class="panel">
-          <div class="panel-copy">
-            <p class="eyebrow mono">Diagrams</p>
-            <h2 class="display">Paste DDL, get an ERD you can actually read.</h2>
-            <p>Mermaid .mmd files on a pan/zoom canvas. Search tables and columns, click one to focus it and its neighbours, and switch between two layout engines.</p>
-          </div>
-          <figure class="panel-shot"><video src="assets/films/diagrams.mp4" poster="assets/films/diagrams.jpg" muted loop playsinline preload="none" aria-label="Pasted DDL becomes an order ERD; searching payments focuses it and its neighbour, then the layout switches to curved"></video></figure>
-        </article>
-        <article class="panel">
-          <div class="panel-copy">
-            <p class="eyebrow mono">Database sync</p>
-            <h2 class="display">Connect MySQL, get every schema drawn.</h2>
-            <p>Amber reads information_schema in a read-only session and writes one deterministic ERD per schema without AI. When the live schema drifts, a banner shows the diff before anything is regenerated.</p>
-          </div>
-          <figure class="panel-shot"><video src="assets/films/sync.mp4" poster="assets/films/sync.jpg" muted loop playsinline preload="none" aria-label="A MySQL connection is read in a read-only session and the shop schema is drawn; a drift banner shows the diff, then Regenerate adds the new table"></video></figure>
-        </article>
-        <article class="panel">
-          <div class="panel-copy">
-            <p class="eyebrow mono">Daily and weekly reports</p>
+            <p class="eyebrow mono">To-dos / Daily report</p>
             <h2 class="display">Your day, written as problem → fix.</h2>
             <p>At the end of the day the AI reads your to-dos, GitHub activity and local Claude Code or Codex sessions and writes the report. Weekly rolls the dailies up into Notion-ready text.</p>
           </div>
           <figure class="panel-shot"><video src="assets/films/reports.mp4" poster="assets/films/reports.jpg" muted loop playsinline preload="none" aria-label="Generate reads the day's to-dos, commits and AI sessions and writes the daily report, then the weekly view rolls the days up for Notion"></video></figure>
+        </article>
+        <article class="panel" data-ch="concepts">
+          <div class="panel-copy">
+            <p class="eyebrow mono">Concepts</p>
+            <h2 class="display">Turn a chat that taught you something into a card.</h2>
+            <p>Paste the Q&amp;A and Claude organizes it into a title, a summary and a detail note you can edit before saving. Three confidence dots and a learned state keep the deck down to what you haven't internalized, and the desktop widget cycles the weakest cards between tasks.</p>
+          </div>
+          <figure class="panel-shot"><video src="assets/films/concepts.mp4" poster="assets/films/concepts.jpg" muted loop playsinline preload="none" aria-label="A pasted AI chat becomes a concept card with a summary and detail note, then the desktop widget shows it and its confidence is raised"></video></figure>
+        </article>
+        <article class="panel" data-ch="notes">
+          <div class="panel-copy">
+            <p class="eyebrow mono">Notes / Ask</p>
+            <h2 class="display">Drag a sentence, ask about it.</h2>
+            <p>Select any passage and ask. The answer arrives in a thread beside the text, where you can follow up, and the passage keeps a highlight so the question is one click away later.</p>
+          </div>
+          <figure class="panel-shot"><video src="assets/films/ask.mp4" poster="assets/films/ask.jpg" muted loop playsinline preload="none" aria-label="A sentence is dragged, Ask opens a panel, and the AI's answer appears in a thread beside the highlighted passage"></video></figure>
+        </article>
+        <article class="panel" data-ch="notes">
+          <div class="panel-copy">
+            <p class="eyebrow mono">Notes / Write with AI</p>
+            <h2 class="display">Write the note together.</h2>
+            <p>Tell Claude what to cover, add a preset or a reference folder, and let it draft in the background while you keep working. When the draft is ready you review the changes and apply them to the editor; nothing is saved until you press ⌘S.</p>
+          </div>
+          <figure class="panel-shot"><video src="assets/films/write.mp4" poster="assets/films/write.jpg" muted loop playsinline preload="none" aria-label="Write with AI drafts a note in the background, the draft's changes are reviewed as a diff, applied to the editor and saved"></video></figure>
+        </article>
+        <article class="panel" data-ch="notes">
+          <div class="panel-copy">
+            <p class="eyebrow mono">Notes / Edit a part</p>
+            <h2 class="display">Real markdown files. Edits you review first.</h2>
+            <p>Select a sentence or a section and say how it should change. Only that part is rewritten, shown against the original before it goes back into the draft.</p>
+          </div>
+          <figure class="panel-shot"><video src="assets/films/edit.mp4" poster="assets/films/edit.jpg" muted loop playsinline preload="none" aria-label="A selected sentence is rewritten by AI, shown against the original, applied in place and saved"></video></figure>
+        </article>
+        <article class="panel" data-ch="diagrams">
+          <div class="panel-copy">
+            <p class="eyebrow mono">Diagrams / ERD</p>
+            <h2 class="display">Paste DDL, get an ERD you can actually read.</h2>
+            <p>Mermaid .mmd files on a pan/zoom canvas. Click a table to light up its neighbours, open its columns in a side panel with keys and nullability, and switch between two layout engines.</p>
+          </div>
+          <figure class="panel-shot"><video src="assets/films/diagrams.mp4" poster="assets/films/diagrams.jpg" muted loop playsinline preload="none" aria-label="Pasted DDL becomes an ERD; clicking payments and then orders opens their columns in a side panel, then the layout switches to curved"></video></figure>
+        </article>
+        <article class="panel" data-ch="diagrams">
+          <div class="panel-copy">
+            <p class="eyebrow mono">Diagrams / Database sync</p>
+            <h2 class="display">Connect MySQL, get every schema drawn.</h2>
+            <p>Test the connection, pick the schemas, and Amber reads information_schema to write one deterministic ERD per schema without AI. The password stays in the macOS Keychain. When the live schema drifts, a banner shows the diff before anything is regenerated.</p>
+          </div>
+          <figure class="panel-shot"><video src="assets/films/sync.mp4" poster="assets/films/sync.jpg" muted loop playsinline preload="none" aria-label="A MySQL connection is tested and three schemas are synced; the shop schema's overview and ERD open, and a drift banner leads to Regenerate"></video></figure>
         </article>
       </div>
     </div>
@@ -278,6 +316,6 @@
 
 <!-- inertial scrolling: native scroll position eased each frame (the module below skips it when the script is missing or motion is reduced) -->
 <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.18/dist/lenis.min.js"></script>
-<script type="module" src="site.js?v=0.22.65-films"></script>
+<script type="module" src="site.js?v=0.22.65-chapters"></script>
 </body>
 </html>

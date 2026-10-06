@@ -111,6 +111,10 @@ p { margin: 0 0 16px; color: var(--text-2); }
 .hscroll-sticky { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; display: flex; flex-direction: column; background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .hbar { display: flex; align-items: center; gap: 24px; padding: 84px var(--pad) 0; }
 .hbar b { color: var(--text); font-weight: 500; }
+.chapters { display: flex; flex-wrap: wrap; gap: 4px; }
+.chapters button { font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); background: none; border: 1px solid transparent; border-radius: 999px; padding: 6px 12px; cursor: pointer; transition: color 0.2s, background 0.2s, border-color 0.2s; }
+.chapters button:hover { color: var(--text); }
+.chapters button[aria-current="true"] { color: var(--text); background: var(--surface-2); border-color: var(--border-strong); }
 .rail { flex: 1; height: 1px; background: var(--border-strong); position: relative; }
 .rail i { position: absolute; left: 0; top: -1px; height: 3px; width: 0; background: var(--amber); box-shadow: 0 0 14px rgba(208, 138, 42, 0.55); border-radius: 2px; }
 .track { display: flex; flex: 1; align-items: center; will-change: transform; transform: translate3d(0, 0, 0); }
@@ -182,7 +186,7 @@ p { margin: 0 0 16px; color: var(--text-2); }
   .card3d { width: 100%; }
   .hscroll { height: auto; }
   .hscroll-sticky { position: static; height: auto; overflow: visible; }
-  .hbar { padding-top: 64px; }
+  .hbar { padding-top: 64px; flex-wrap: wrap; gap: 12px; }
   .hbar .rail, .hbar span:last-child { display: none; }
   .track { display: block; transform: none !important; }
   .panel { flex: none; height: auto; grid-template-columns: 1fr; gap: 24px; padding: 48px var(--pad); }
