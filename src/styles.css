@@ -301,7 +301,7 @@ select {
   margin-bottom: 16px;
   user-select: none;
 }
-/* 앱 표식 — **표면이 아니라 모양이 유리다**(icons.tsx 의 amber-glass 그라디언트).
+/* 앱 표식 — 책상 스탠드(icons.tsx 의 AmberMark). 스탠드는 이 색 하나를 따르고 빛만 호박색이다.
    타일도 테두리도 없다: 판을 깔면 그건 컨트롤의 문법이라 표식이 활성 탭처럼 보이고,
    흰 1px 테는 유리가 아니라 그어 놓은 선으로 읽힌다. */
 .rail-brand svg {

@@ -368,14 +368,14 @@ export function Icon({
   );
 }
 
-/** Amber 브랜드 마크 — **유리 속 호박 한 알**(앱 아이콘과 같은 그림에서 타일만 뺀 것).
+/** Amber 브랜드 마크 — **책상 스탠드와 호박빛**(앱 아이콘과 같은 그림에서 밤 타일만 뺀 것).
  *  타일도 테두리도 없다: 판을 깔고 테를 두르는 건 컨트롤의 문법이라 로고가 활성 탭처럼 읽힌다.
  *
  *  두 재질이 한 몸이다.
- *   유리 — 방울. 채움, 윤곽, 안쪽 두께 그늘, 왼쪽 위 반사, 바닥에 모인 빛. 전부 currentColor 라
- *          테마 토큰 하나(.rail-brand svg 의 color)만 따라간다(반사만 흰색 — 빛은 테마를 안 탄다)
- *   호박 — 가운데 구슬. 레일에서 **색이 있는 유일한 것**이라 로고가 로고로 읽힌다.
- *          구슬 빛이 유리 안에 번지되 밖으로는 새지 않는다(clip). */
+ *   스탠드 — 받침, 팔, 갓. 전부 currentColor 라 테마 토큰 하나(.rail-brand svg 의 color)만
+ *          따라간다(갓의 반사만 흰색 — 빛은 테마를 안 탄다)
+ *   빛 — 갓에서 떨어지는 빛줄기와 책상 위 웅덩이. 레일에서 **색이 있는 유일한 것**이라 로고가 로고로 읽힌다.
+ *  좌표는 앱 아이콘과 같은 1024 판이다(빛줄기 끝은 갓 입구에서 계산한 값). */
 export function AmberMark({
   size = 28,
   className,
@@ -383,9 +383,9 @@ export function AmberMark({
   size?: number;
   className?: string;
 }) {
-  const drop =
-    "M 16 8.8 C 13.9 11.6 11.8 14.96 11.8 18.74 C 11.8 21.06 13.68 22.94 16 22.94 " +
-    "C 18.32 22.94 20.2 21.06 20.2 18.74 C 20.2 14.96 18.1 11.6 16 8.8 Z";
+  const shade =
+    "M10 -45C61.2 -57.5 106.08 -92.88 136 -108L136 108C106.08 92.88 61.2 57.5 10 45Z";
+  const arm = { strokeWidth: 38, strokeLinecap: "round", strokeLinejoin: "round" } as const;
   return (
     <svg
       className={className}
@@ -397,52 +397,32 @@ export function AmberMark({
       aria-label="Amber"
     >
       <defs>
-        <linearGradient id="amber-glass" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="currentColor" stopOpacity="0.3" />
-          <stop offset="0.55" stopColor="currentColor" stopOpacity="0.07" />
-          <stop offset="1" stopColor="currentColor" stopOpacity="0.18" />
+        <linearGradient id="amber-beam" gradientUnits="userSpaceOnUse" x1="470" y1="496" x2="412" y2="710">
+          <stop offset="0" stopColor="#FFD47E" stopOpacity="0.9" />
+          <stop offset="1" stopColor="#FFAE3D" stopOpacity="0.1" />
         </linearGradient>
-        <linearGradient id="amber-rim" x1="0.15" y1="0" x2="0.85" y2="1">
-          <stop offset="0" stopColor="currentColor" stopOpacity="1" />
-          <stop offset="0.55" stopColor="currentColor" stopOpacity="0.3" />
-          <stop offset="1" stopColor="currentColor" stopOpacity="0.6" />
-        </linearGradient>
-        <radialGradient id="amber-orb" cx="0.38" cy="0.34" r="0.72">
-          <stop offset="0" stopColor="#FFE3A8" />
-          <stop offset="0.38" stopColor="#E8B45A" />
-          <stop offset="0.78" stopColor="#D08A2A" />
-          <stop offset="1" stopColor="#8F5314" />
-        </radialGradient>
-        <clipPath id="amber-clip">
-          <path d={drop} />
-        </clipPath>
         <filter id="amber-soft" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="0.35" />
-        </filter>
-        <filter id="amber-glow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="1.3" />
+          <feGaussianBlur stdDeviation="8" />
         </filter>
       </defs>
 
-      <g transform="translate(16 16) scale(1.22) translate(-16 -16)">
-        <path d={drop} fill="url(#amber-glass)" />
-        <g clipPath="url(#amber-clip)">
-          <circle cx="16" cy="18.5" r="3.6" fill="#D08A2A" fillOpacity="0.55" filter="url(#amber-glow)" />
-          <ellipse cx="16.3" cy="22.1" rx="3.2" ry="1" fill="currentColor" fillOpacity="0.35" filter="url(#amber-soft)" />
-          <ellipse
-            cx="14.05"
-            cy="13.5"
-            rx="0.95"
-            ry="2.8"
-            transform="rotate(28 14.05 13.5)"
-            fill="#fff"
-            fillOpacity="0.75"
-            filter="url(#amber-soft)"
-          />
+      <g transform="translate(16 16) scale(0.064) translate(-496 -515)">
+        <path d="M575 522L365 469L268 710L555 710Z" fill="url(#amber-beam)" filter="url(#amber-soft)" />
+        <ellipse cx="412" cy="710" rx="132" ry="18" fill="#FFAE3D" filter="url(#amber-soft)" />
+        <ellipse cx="412" cy="708" rx="80" ry="10" fill="#FFF6E0" />
+
+        <g stroke="currentColor" fill="currentColor">
+          <path d="M650 684L694 480" {...arm} />
+          <path d="M694 480L506 352" {...arm} />
+          <circle cx="694" cy="480" r="30" stroke="none" />
+          <rect x="574" y="676" width="150" height="36" rx="18" stroke="none" />
+          <g transform="translate(506 352) rotate(104)">
+            <circle r="50" stroke="none" />
+            <path d={shade} strokeWidth="24" strokeLinejoin="round" />
+          </g>
         </g>
-        <circle cx="16" cy="18.5" r="2.25" fill="url(#amber-orb)" />
-        <ellipse cx="15.35" cy="17.8" rx="0.55" ry="0.42" fill="#fff" fillOpacity="0.85" />
-        <path d={drop} stroke="url(#amber-rim)" strokeWidth="0.85" strokeLinejoin="round" />
+        <ellipse cx="452" cy="420" rx="30" ry="18" transform="rotate(-40 452 420)" fill="#fff" fillOpacity="0.45" />
+        <ellipse cx="470" cy="496" rx="95" ry="14" transform="rotate(194 470 496)" fill="#FFF4D8" />
       </g>
     </svg>
   );
