@@ -3034,48 +3034,6 @@ html.widget-root #root {
   box-shadow: none;
   color: var(--danger);
 }
-/* 트리 구역 라벨 — '내 다이어그램'(내가 만든 것)과 '데이터베이스'(연결이 채우는 것)를 가른다.
-   폴더가 아니라 성격이 다르다는 신호라 행이 아닌 eyebrow(§4)로 쓴다. 연결이 없으면 렌더되지 않는다. */
-.tree-group {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 16px 6px 6px 12px;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-3);
-  user-select: none;
-}
-.tree-group:first-child {
-  padding-top: 6px;
-}
-/* 구역에서 만드는 버튼 — 트리 행 액션과 같은 고스트 톤이지만 **항상 보인다**(숨기면 만들 길이 사라진다) */
-.tree-group .icon-btn {
-  border: none;
-  background: transparent;
-  color: var(--text-3);
-}
-.tree-group .icon-btn:hover {
-  background: var(--surface-3);
-  color: var(--text);
-}
-.tree-group-empty {
-  padding: 2px 12px 10px;
-  font-size: 12px;
-  color: var(--text-3);
-}
-/* 연결 끊기 확인의 선택지 — 체크와 글자가 한 덩어리로 눌린다 */
-.db-disc-opt {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-top: 16px;
-  font-size: 13px;
-  color: var(--text-2);
-  cursor: pointer;
-}
 
 .tree-empty {
   padding: 44px 20px;
@@ -7678,28 +7636,8 @@ textarea.todo-edit {
   white-space: nowrap;
   text-align: right;
 }
-.db-folder {
-  height: 34px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--text-2);
-  font-size: 13px;
-}
-.db-folder b {
-  color: var(--text);
-  font-weight: 600;
-}
 
 /* --- 스키마 개요 pane --- */
-.db-ov-wrap {
-  display: flex;
-  flex-direction: column;
-}
 .db-title {
   display: flex;
   align-items: center;
@@ -7816,14 +7754,7 @@ textarea.todo-edit {
   font-variant-numeric: tabular-nums;
   line-height: 1.3;
 }
-.db-ov-meta {
-  margin-top: 0;
-  padding: 8px 14px;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-}
-
-/* 감사 테이블 포함 토글 — Checkbox primitive + 라벨, 헤더 버튼들과 한 줄 */
+/* 감사 테이블 포함 토글 — Checkbox primitive + 라벨 (연결 모달의 스키마 단계) */
 .db-audit-toggle {
   display: inline-flex;
   align-items: center;
@@ -7835,10 +7766,6 @@ textarea.todo-edit {
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
-}
-.db-audit-toggle.disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 /* --- 변경 감지 배너 (연동 ERD 위) — 정보이지 경고가 아니라 surface-2, 색 없음 --- */
@@ -7963,4 +7890,307 @@ textarea.todo-edit {
   .tree-row.db-syncing .tree-ico {
     animation: none;
   }
+}
+
+/* ---- ERD 탭 (ErdView, ErdCanvas) ----
+   그림과 조작은 resin 플레이그라운드의 것(resin/viewer, viewer.css)을 그대로 쓴다. 여기는 둘레만:
+   캔버스 판, 떠 있는 조작(뜬 유리, §2 유리), 표 패널과 컬럼 정보창의 틀.
+   패널 안의 글(표, 키 라벨, NULL)은 resin 의 것이라 resin 의 색을 받는다 — 사용자가 "렌더링은 resin 과
+   똑같이"를 골랐다. 회색 계단과 글꼴만 amber 토큰으로 잇는다. */
+:root {
+  --rz-ink: var(--text);
+  --rz-muted: var(--text-2);
+  --rz-faint: var(--text-3);
+  --rz-rule: var(--border-strong);
+  --rz-panel: var(--surface);
+  --rz-code: var(--surface-2);
+  --rz-active-line: color-mix(in srgb, var(--text) 4%, transparent);
+  --rz-font-body: var(--font);
+  --rz-font-mono: var(--mono);
+  --rz-accent: #9a5a0c;
+  --rz-accent-soft: rgba(205, 138, 30, 0.14);
+  --rz-warn: #9a6700;
+  --rz-k-pk: #b26a00;
+  --rz-k-uk: #6d4fd8;
+  --rz-k-fk: #0b7a90;
+  --rz-stage: #e9ebf1;
+}
+:root[data-theme="dark"] {
+  --rz-accent: #e2a64d;
+  --rz-accent-soft: rgba(226, 166, 77, 0.14);
+  --rz-warn: #e3b341;
+  --rz-k-pk: #f6c76b;
+  --rz-k-uk: #c8bbff;
+  --rz-k-fk: #86e1ec;
+  --rz-stage: #05060c;
+}
+.erd-tree-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.erd-legacy {
+  display: grid;
+  gap: 8px;
+  margin: 10px 10px 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.erd-legacy p {
+  margin: 0;
+}
+.erd-legacy-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.erd-detail {
+  display: flex;
+  flex-direction: column;
+}
+.erd-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.erd-body.hidden {
+  display: none;
+}
+.erd-overview {
+  overflow: hidden;
+}
+.erd-empty {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.erd-mode {
+  margin-right: 4px;
+}
+/* 테이블 행 — 이름이 먼저다. 코멘트는 남은 자리만 쓰고 넘치면 접힌다 */
+.tree-row.erd-leaf .label {
+  flex: 0 1 auto;
+}
+.tree-row.erd-leaf .tree-sub {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.db-row.db-row-pick {
+  cursor: pointer;
+}
+.db-row.db-row-pick:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+/* 캔버스 판 — 크기는 여기서, 그 안의 그림과 조작은 resin 이 */
+.erd-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+/* .rz-viewer(viewer.css)는 position: relative 를 준다 — 판을 채우도록 한 단계 더 구체적으로 덮는다 */
+.erd-stage .erd-viewport {
+  position: absolute;
+  inset: 0;
+}
+/* 떠 있는 조작 — 뒤에 움직이는 배경이 실제로 흐르므로 뜬 유리(blur 있음)다 */
+.erd-float {
+  position: absolute;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--glass-edge);
+  border-radius: 9px;
+  background: var(--glass-fill), var(--glass-panel);
+  backdrop-filter: var(--glass-blur-panel);
+  -webkit-backdrop-filter: var(--glass-blur-panel);
+  box-shadow: var(--glass-sheen), var(--shadow-sm);
+}
+.erd-float-tl {
+  top: 10px;
+  left: 10px;
+}
+.erd-float-br {
+  right: 10px;
+  bottom: 10px;
+}
+.erd-float-bl {
+  bottom: 10px;
+  left: 10px;
+}
+.erd-float-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    transform 0.16s var(--ease-out);
+}
+.erd-float-btn:hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--text);
+}
+.erd-float-btn:active {
+  transform: scale(0.94);
+}
+.erd-float-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+/* 고른 쪽만 잉크로 채운다(§3) */
+.erd-float-btn.on,
+.erd-float-btn.on:hover {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+}
+/* 패널 옆이 좁을 때 — 배경 고르기는 견본만, 더 좁으면 비켜선다 */
+.erd-stage[data-room] .erd-float-bl .erd-float-label {
+  display: none;
+}
+.erd-stage[data-room="tight"] .erd-float-bl {
+  display: none;
+}
+.erd-float-pct {
+  min-width: 48px;
+  font-variant-numeric: tabular-nums;
+}
+.erd-float-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: var(--border-strong);
+}
+/* 배경 견본 — resin 플레이그라운드의 것과 같은 색 */
+.erd-swatch {
+  width: 14px;
+  height: 10px;
+  flex: none;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(128, 128, 128, 0.4);
+}
+.erd-swatch-aurora {
+  background: linear-gradient(180deg, #05060c 0%, #5a5ff0 45%, #22c7a9 75%, #05060c 100%);
+}
+.erd-swatch-silk {
+  background: linear-gradient(135deg, #0a0708 0%, #5b2c7a 40%, #d9893a 75%, #f1b6c4 100%);
+}
+.erd-swatch-caustic {
+  background: radial-gradient(circle at 35% 30%, #9fe7f2 0, transparent 35%), linear-gradient(160deg, #0e5e70, #031018);
+}
+.erd-status {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius);
+  background: var(--glass-fill), var(--glass-panel);
+  backdrop-filter: var(--glass-blur-panel);
+  -webkit-backdrop-filter: var(--glass-blur-panel);
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+/* 표 패널 — 캔버스 오른쪽에 붙는다. 폭은 손잡이로, 캔버스가 120px 은 남는다 */
+.erd-panel {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(var(--erd-panel-w, 560px), calc(100% - 120px));
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border-strong);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.erd-panel-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.erd-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  flex: none;
+  padding: 0 6px 0 14px;
+  border-bottom: 1px solid var(--border);
+}
+.erd-panel-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.erd-panel-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.erd-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 16px 28px;
+  user-select: text;
+}
+/* 컬럼 정보창 — 그 행 아래에 붙는 작은 카드. 글자를 골라 복사할 수 있다 */
+.erd-pop {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  top: 0;
+  width: max-content;
+  max-width: min(320px, calc(100% - 16px));
+  max-height: calc(100% - 16px);
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 12.5px;
+  line-height: 1.45;
+  user-select: text;
+}
+.erd-pop[hidden] {
+  display: none;
 }

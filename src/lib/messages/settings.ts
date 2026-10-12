@@ -139,15 +139,15 @@ const ko = {
   "settings.db.title": "데이터베이스 연결",
   "settings.db.add": "연결 추가",
   "settings.db.none":
-    "연결된 데이터베이스가 없어요. 연결하면 스키마별 ERD 가 다이어그램 탭에 자동으로 생겨요.",
+    "연결된 데이터베이스가 없어요. 연결하면 스키마별 ERD 가 ERD 탭에 그려져요.",
   "settings.db.schemas": "스키마 {n}",
   "settings.db.folder": "폴더 {path}",
   "settings.db.edit": "편집",
   "settings.db.enterPassword": "비밀번호 입력",
   "settings.db.deleteTitle": "연결 삭제",
-  "settings.db.deleteBody": "연결과 저장된 비밀번호를 지울까요? 다이어그램 파일은 그대로 남아요.",
+  "settings.db.deleteBody": "연결과 저장된 비밀번호, 이 연결의 스냅샷을 지울까요? DB 에는 아무 일도 일어나지 않아요.",
   "settings.db.hint":
-    "비밀번호는 macOS 키체인에만 저장돼요. 연결을 삭제하면 키체인 항목도 함께 지워지고, 생성된 다이어그램 파일은 남아요 — 폴더는 일반 폴더로 돌아가요.",
+    "비밀번호는 macOS 키체인에만 저장돼요. 연결을 삭제하면 키체인 항목과 그 연결의 스냅샷도 함께 지워져요.",
   "settings.db.passwordTitle": "비밀번호 입력 — {name}",
   "settings.db.passwordSaved": "저장했어요. 다음 동기화부터 이 비밀번호를 써요.",
 } as const;
@@ -280,15 +280,15 @@ const en: Record<keyof typeof ko, string> = {
   "settings.db.title": "Database connections",
   "settings.db.add": "Add connection",
   "settings.db.none":
-    "No databases connected. Connect one and an ERD per schema appears in the Diagrams tab automatically.",
+    "No databases connected. Connect one and the ERD tab draws an ERD per schema.",
   "settings.db.schemas": "{n} schemas",
   "settings.db.folder": "folder {path}",
   "settings.db.edit": "Edit",
   "settings.db.enterPassword": "Enter password",
   "settings.db.deleteTitle": "Delete connection",
-  "settings.db.deleteBody": "Delete the connection and its saved password? Diagram files stay where they are.",
+  "settings.db.deleteBody": "Delete the connection, its saved password and its snapshots? Nothing happens to the database.",
   "settings.db.hint":
-    "Passwords live only in the macOS Keychain. Deleting a connection removes its Keychain item too; generated diagram files stay and the folder becomes a plain folder.",
+    "Passwords live only in the macOS Keychain. Deleting a connection also removes its Keychain item and its snapshots.",
   "settings.db.passwordTitle": "Enter password — {name}",
   "settings.db.passwordSaved": "Saved. The next sync uses this password.",
 } as const;

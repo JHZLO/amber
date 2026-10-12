@@ -51,9 +51,24 @@ export type IconName =
   | "key"
   | "eye"
   | "eye-off"
-  | "star";
+  | "star"
+  | "grid";
 
 const PATHS: Record<IconName, ReactNode> = {
+  // ERD 캔버스의 점 격자 켜기/끄기 — 격자가 점이라 아이콘도 점 아홉 개
+  grid: (
+    <>
+      <circle cx="6" cy="6" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="6" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="18" cy="6" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="6" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="18" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="6" cy="18" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="18" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="18" cy="18" r="1.6" fill="currentColor" stroke="none" />
+    </>
+  ),
   // 즐겨찾기 — 켜짐은 같은 획에 채움만 더한다(.icon-fill, DESIGN §3 채움/아웃라인)
   star: (
     <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />

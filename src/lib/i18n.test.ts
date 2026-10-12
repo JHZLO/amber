@@ -7,6 +7,7 @@ import { appMessages } from "./messages/app";
 import { conceptsMessages } from "./messages/concepts";
 import { notesMessages } from "./messages/notes";
 import { diagramsMessages } from "./messages/diagrams";
+import { erdMessages } from "./messages/erd";
 import { todosMessages } from "./messages/todos";
 import { reportMessages } from "./messages/report";
 import { settingsMessages } from "./messages/settings";
@@ -17,6 +18,7 @@ const DOMAINS = {
   concepts: conceptsMessages,
   notes: notesMessages,
   diagrams: diagramsMessages,
+  erd: erdMessages,
   todos: todosMessages,
   report: reportMessages,
   settings: settingsMessages,

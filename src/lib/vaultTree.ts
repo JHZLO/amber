@@ -198,52 +198,6 @@ export function ancestorPaths(dir: string): string[] {
 /** 폴더 이름이 바뀌었을 때 경로 하나를 새 접두사로 옮긴다.
  *  정확히 그 폴더거나 그 하위인 경로만 바뀌고, 이름이 접두사로만 겹치는 형제
  *  ('CS' 를 옮길 때의 'CS수업.md')는 건드리지 않는다 — 구분자까지 봐야 하는 이유. */
-/** 트리를 "내 것"과 "DB 연결" 둘로 가른다 — 연결 폴더는 어느 깊이에 있든 뽑아 올린다.
- *  연결은 사용자가 만든 폴더가 아니라 **위치**라 뿌리에 서야 하고, 같은 폴더가 두 구역에 겹쳐
- *  보이면 어느 쪽이 진짜인지 알 수 없다. 뽑을 게 없으면 원본 배열을 그대로 돌려준다(참조 보존). */
-export function splitDbRoots<T extends { path: string; isDir: boolean; children?: T[] }>(
-  nodes: T[],
-  isConnFolder: (path: string) => boolean,
-): { mine: T[]; dbRoots: T[] } {
-  const dbRoots: T[] = [];
-  const walk = (list: T[]): T[] => {
-    let changed = false;
-    const kept: T[] = [];
-    for (const n of list) {
-      if (n.isDir && isConnFolder(n.path)) {
-        dbRoots.push(n);
-        changed = true;
-        continue;
-      }
-      if (n.isDir && n.children?.length) {
-        const children = walk(n.children);
-        if (children !== n.children) {
-          kept.push({ ...n, children });
-          changed = true;
-          continue;
-        }
-      }
-      kept.push(n);
-    }
-    return changed ? kept : list;
-  };
-  return { mine: walk(nodes), dbRoots };
-}
-
-/** 연결 하나의 바로 아래 줄을 즐겨찾기가 먼저 오게 다시 세운다 — 그 안에서는 원래 순서(이름순)를 지킨다.
- *  더 깊이는 건드리지 않는다: 즐겨찾기는 스키마(연결의 자식)에만 붙는다. 바꿀 게 없으면 원본을 돌려준다. */
-export function starredFirst<T extends { path: string; children?: T[] }>(
-  root: T,
-  isStarred: (path: string) => boolean,
-): T {
-  const kids = root.children;
-  if (!kids?.length) return root;
-  const top = kids.filter((n) => isStarred(n.path));
-  if (!top.length || top.length === kids.length) return root;
-  const sorted = [...top, ...kids.filter((n) => !isStarred(n.path))];
-  return sorted.every((n, i) => n === kids[i]) ? root : { ...root, children: sorted };
-}
-
 export function remapPath(path: string, oldPrefix: string, newPrefix: string): string {
   if (path === oldPrefix) return newPrefix;
   if (path.startsWith(`${oldPrefix}/`)) return newPrefix + path.slice(oldPrefix.length);

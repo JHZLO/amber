@@ -31,6 +31,7 @@ import { NotesView } from "./components/NotesView";
 import { AiOnboarding } from "./components/AiOnboarding";
 import { AiAuthModal } from "./components/AiAuthModal";
 import { DiagramsView } from "./components/DiagramsView";
+import { ErdView } from "./components/ErdView";
 import { TodoView } from "./components/TodoView";
 import { SearchModal, type SearchHit } from "./components/SearchModal";
 import { THEME_EVENT, resolvedTheme, toggleTheme } from "./lib/theme";
@@ -43,9 +44,9 @@ import { setRailFocus, useRailDone, type RailSection } from "./lib/railDone";
 import { Button } from "@/components/ui/button";
 
 type StatusTab = ConceptStatus | "all";
-type Section = "til" | "notes" | "diagrams" | "todo";
+type Section = "til" | "notes" | "erd" | "diagrams" | "todo";
 
-/** 모달이 떠 있는가 — 전역 단축키(⌘K·⌘,·⌘1~4)는 그때 양보한다.
+/** 모달이 떠 있는가 — 전역 단축키(⌘K / ⌘, / ⌘1~5)는 그때 양보한다.
  *  열린 모달 state 를 열거하면 새 모달이 생길 때마다 빠뜨리므로 DOM 을 본다
  *  (PageFind 가 ⌘F 에 쓰는 것과 같은 선택자). Modal 은 body 로 portal 된다. */
 const shielded = (): boolean =>
@@ -71,15 +72,17 @@ const DEFAULT_SORT: Record<StatusTab, ConceptSort> = {
   all: "recent_updated",
 };
 
-// 레일 = 최상위 작업공간. 순서가 곧 ⌘1~4 의 번호라 모듈 상수로 고정한다
+// 레일 = 최상위 작업공간. 순서가 곧 ⌘1~5 의 번호라 모듈 상수로 고정한다.
+// ERD 가 ⌘4 다 — 다이어그램 탭이 ERD 를 품던 시절 ⌘4 를 누르던 손이 그대로 ERD 에 닿는다
 const RAIL: {
   id: Section;
   label: string;
-  icon: "layers" | "book" | "workflow" | "calendar-check";
+  icon: "layers" | "book" | "workflow" | "calendar-check" | "database";
 }[] = [
   { id: "todo", label: t("app.rail.todo"), icon: "calendar-check" },
   { id: "til", label: t("app.rail.til"), icon: "layers" },
   { id: "notes", label: t("app.rail.notes"), icon: "book" },
+  { id: "erd", label: t("app.rail.erd"), icon: "database" },
   { id: "diagrams", label: t("app.rail.diagrams"), icon: "workflow" },
 ];
 
@@ -98,7 +101,7 @@ function App() {
   const [section, setSection] = useState<Section>(() =>
     ((): Section => {
       const s = localStorage.getItem("til.section");
-      return s === "notes" || s === "diagrams" || s === "todo" ? s : "til";
+      return s === "notes" || s === "erd" || s === "diagrams" || s === "todo" ? s : "til";
     })(),
   );
   useEffect(() => {
@@ -258,7 +261,7 @@ function App() {
     }
   };
 
-  // ⌘K 빠른 검색 · ⌘1~4 레일 전환. 섹션 단축키(⌘S)와 달리 앱 전역이라 activeRef 대신
+  // ⌘K 빠른 검색, ⌘1~5 레일 전환. 섹션 단축키(⌘S)와 달리 앱 전역이라 activeRef 대신
   // "모달이 떠 있으면 양보" 로 가린다 — 안 보이는 화면이 뒤에서 바뀌지 않게.
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -387,9 +390,11 @@ function App() {
             ? t("app.rail.til")
             : section === "notes"
               ? t("app.rail.notes")
-              : section === "diagrams"
-                ? t("app.rail.diagrams")
-                : t("app.rail.todo")}
+              : section === "erd"
+                ? t("app.rail.erd")
+                : section === "diagrams"
+                  ? t("app.rail.diagrams")
+                  : t("app.rail.todo")}
         </span>
         {section === "til" && (
           <div className="search-wrap">
@@ -535,6 +540,11 @@ function App() {
       {/* 필기노트 섹션 — 편집 초안 보존을 위해 항상 마운트 */}
       <div className={`section-wrap ${section === "notes" ? "" : "hidden"}`}>
         <NotesView active={section === "notes"} config={config} />
+      </div>
+
+      {/* ERD 섹션 — 연결된 DB 의 스키마를 그린다. 선택과 캔버스 시점 보존을 위해 항상 마운트 */}
+      <div className={`section-wrap ${section === "erd" ? "" : "hidden"}`}>
+        <ErdView active={section === "erd"} />
       </div>
 
       {/* 다이어그램 섹션 — 편집 초안 보존을 위해 항상 마운트 */}

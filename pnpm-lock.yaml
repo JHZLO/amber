@@ -38,6 +38,9 @@ importers:
       diff:
         specifier: ^9.0.0
         version: 9.0.0
+      elkjs:
+        specifier: 0.12.0
+        version: 0.12.0
       mermaid:
         specifier: ^11.16.0
         version: 11.16.0
@@ -59,6 +62,9 @@ importers:
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1
+      resin:
+        specifier: github:JHZLO/resin#0d9855f2323464880071a029fda700ee1cda0d6a
+        version: https://codeload.github.com/JHZLO/resin/tar.gz/0d9855f2323464880071a029fda700ee1cda0d6a(elkjs@0.12.0)
       svg-pan-zoom:
         specifier: ^3.6.2
         version: 3.6.2
@@ -1952,6 +1958,9 @@ packages:
   electron-to-chromium@1.5.383:
     resolution: {integrity: sha512-I2484/KkAvl8lm9VyjH2JnbOIV0d/UCqT7gbzs6l+o6Vmn9wgB66uVcKX+Vk6HrXtY6fbWTOEXuv8waDTuFNCw==}
 
+  elkjs@0.12.0:
+    resolution: {integrity: sha512-YZcKynxVxYoKIOEpywEPwCFdg+BTbxQRNf3pbwdDCvc8O3kQD8bmIwSxKU1eOTVc4Xo+VG9Te+575mlfvOrhEQ==}
+
   elkjs@0.9.3:
     resolution: {integrity: sha512-f/ZeWvW/BCXbhGEf1Ujp29EASo/lk1FDnETgNKwJrsVvGZhUWCZyg3xLJjAsxfOmt8KjswHmI5EwCQcPMpOYhQ==}
 
@@ -2492,6 +2501,16 @@ packages:
   require-from-string@2.0.2:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
+
+  resin@https://codeload.github.com/JHZLO/resin/tar.gz/0d9855f2323464880071a029fda700ee1cda0d6a:
+    resolution: {tarball: https://codeload.github.com/JHZLO/resin/tar.gz/0d9855f2323464880071a029fda700ee1cda0d6a}
+    version: 0.2.0
+    engines: {node: '>=22.18'}
+    peerDependencies:
+      elkjs: '>=0.9'
+    peerDependenciesMeta:
+      elkjs:
+        optional: true
 
   robust-predicates@3.0.3:
     resolution: {integrity: sha512-NS3levdsRIUOmiJ8FZWCP7LG3QpJyrs/TE0Zpf1yvZu8cAJJ6QMW92H1c7kWpdIHo8RvmLxN/o2JXTKHp74lUA==}
@@ -4602,6 +4621,8 @@ snapshots:
 
   electron-to-chromium@1.5.383: {}
 
+  elkjs@0.12.0: {}
+
   elkjs@0.9.3: {}
 
   enhanced-resolve@5.26.0:
@@ -5441,6 +5462,10 @@ snapshots:
       unified: 11.0.5
 
   require-from-string@2.0.2: {}
+
+  resin@https://codeload.github.com/JHZLO/resin/tar.gz/0d9855f2323464880071a029fda700ee1cda0d6a(elkjs@0.12.0):
+    optionalDependencies:
+      elkjs: 0.12.0
 
   robust-predicates@3.0.3: {}
 

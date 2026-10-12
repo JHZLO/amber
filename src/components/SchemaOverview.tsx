@@ -1,16 +1,12 @@
-// 스키마 개요 — 다이어그램 트리에서 연결의 스키마 폴더를 클릭했을 때 우측 pane.
+// 스키마 개요 — ERD 탭에서 스키마의 [개요] 보기. 머리줄(이름, 동기화)은 ERD 보기와 함께 쓰므로 ErdView 가 갖는다.
 // 스냅샷(schema.json)으로 그린다 — 연결이 끊긴 채로도 마지막 구조가 보인다.
-// 주 행동은 하나: [전체 ERD 생성](없을 때) 또는 [ERD 열기](있을 때). 재생성은 ERD 화면의 변경 배너에서 한다.
 
 import { useMemo, useState } from "react";
-import { Checkbox, Spinner, Tooltip, timeAgo } from "../ui";
+import { Spinner } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
-import { rootDisplayName } from "../lib/workspace";
-import { envLabel, prefAudit, schemaFolder, type DbConnection, type DbSchemaPref } from "../lib/dbconn";
-import { SNAPSHOT_FILE, formatHeaderTime, type SchemaSnapshot } from "../lib/schemaSnapshot";
+import { formatHeaderTime, type SchemaSnapshot } from "../lib/schemaSnapshot";
 import { inferReferences } from "../lib/erdGen";
-import { Button } from "@/components/ui/button";
 
 const isAudit = (name: string) => name.endsWith("_aud");
 
@@ -22,30 +18,15 @@ function compact(n: number): string {
 }
 
 export function SchemaOverview({
-  conn,
-  pref,
   snapshot,
   syncing,
-  error,
-  hasFullErd,
-  onSync,
-  onGenerate,
-  onOpenFull,
-  onToggleAudit,
+  onPickTable,
 }: {
-  conn: DbConnection;
-  pref: DbSchemaPref;
   snapshot: SchemaSnapshot | null;
   syncing: boolean;
-  error: string | null;
-  hasFullErd: boolean;
-  onSync: () => void;
-  onGenerate: () => void;
-  onOpenFull: () => void;
-  /** 감사 테이블 포함 토글 — 값은 스키마 설정에 저장되고 생성·재생성이 따른다 */
-  onToggleAudit: (audit: boolean) => void;
+  /** 테이블 행을 고르면 ERD 보기에서 그 표를 연다 */
+  onPickTable: (table: string) => void;
 }) {
-  const audit = prefAudit(pref);
   const [query, setQuery] = useState("");
 
   const refs = useMemo(() => (snapshot ? inferReferences(snapshot) : null), [snapshot]);
@@ -80,157 +61,106 @@ export function SchemaOverview({
   }, [snapshot, query]);
 
   return (
-    <div className="notes-detail editing db-ov-wrap">
-      <div className="dgm-head">
-        <div className="dgm-head-info">
-          <div className="note-crumb">
-            <Icon name="database" size={12} />
-            {[t("diagrams.title"), conn.name].join(" › ")}
-          </div>
-          <h1 className="dgm-title db-title">
-            {pref.name}
-            {pref.label && <span className="chip chip-sm">{pref.label}</span>}
-            <span className={`chip chip-sm ${conn.env === "prod" ? "chip-fill" : ""}`}>{envLabel(conn.env)}</span>
-          </h1>
+    <div className="db-ov">
+      {!snapshot ? (
+        <div className="db-ov-empty">
+          {syncing ? <Spinner /> : <Icon name="table" size={22} />}
+          <p>{syncing ? t("erd.db.syncingShort") : t("erd.db.overview.noSnapshot")}</p>
         </div>
-        <span className="spacer" />
-        <Tooltip label={t("diagrams.db.audit.hint")}>
-          <span className={`db-audit-toggle ${syncing ? "disabled" : ""}`}>
-            <Checkbox
-              checked={audit}
-              onChange={() => !syncing && onToggleAudit(!audit)}
-              label={t("diagrams.db.audit.include")}
-            />
-            <span onClick={() => !syncing && onToggleAudit(!audit)}>{t("diagrams.db.audit.include")}</span>
-          </span>
-        </Tooltip>
-        <Button size="sm" onClick={onSync} disabled={syncing}>
-          <Icon name="refresh" size={14} />
-          {syncing
-            ? t("diagrams.db.syncingShort")
-            : snapshot
-              ? t("diagrams.db.syncAgo", { ago: timeAgo(snapshot.synced_at) })
-              : t("diagrams.db.sync")}
-        </Button>
-        <Button
-          variant="primary" size="sm"
-          onClick={hasFullErd ? onOpenFull : onGenerate}
-          disabled={!snapshot || syncing}
-        >
-          <Icon name="workflow" size={14} />
-          {hasFullErd ? t("diagrams.db.openFull") : t("diagrams.db.generateFull")}
-        </Button>
-      </div>
-
-      <div className="db-ov">
-        {error && <div className="error-note">{error}</div>}
-
-        {!snapshot ? (
-          <div className="db-ov-empty">
-            {syncing ? <Spinner /> : <Icon name="table" size={22} />}
-            <p>{syncing ? t("diagrams.db.syncingShort") : t("diagrams.db.overview.noSnapshot")}</p>
+      ) : (
+        <>
+          <div className="db-kv">
+            <span>{t("erd.db.overview.stats", { tables: stats!.tables, columns: stats!.columns })}</span>
+            <span>·</span>
+            <span>{t("erd.db.overview.audit", { n: stats!.audit })}</span>
+            <span>·</span>
+            <span>
+              {t("erd.db.overview.snapshot", {
+                time: formatHeaderTime(new Date(snapshot.synced_at)),
+                server: snapshot.server,
+              })}
+            </span>
           </div>
-        ) : (
-          <>
-            <div className="db-kv">
-              <span>{t("diagrams.db.overview.stats", { tables: stats!.tables, columns: stats!.columns })}</span>
-              <span>·</span>
-              <span>{t("diagrams.db.overview.audit", { n: stats!.audit })}</span>
-              <span>·</span>
-              <span>
-                {t("diagrams.db.overview.snapshot", {
-                  time: formatHeaderTime(new Date(snapshot.synced_at)),
-                  server: snapshot.server,
-                })}
-              </span>
-            </div>
 
-            <div className="db-ov-grid">
-              <div className="db-panel">
-                <div className="db-panel-head">
-                  <span className="set-eyebrow">{t("diagrams.db.overview.tableList")}</span>
-                  <span className="spacer" />
-                  <div className="db-search">
-                    <Icon name="search" size={12} />
-                    <input
-                      className="db-search-input"
-                      value={query}
-                      placeholder={t("diagrams.db.overview.searchPh")}
-                      onChange={(e) => setQuery(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="db-list scroll">
-                  {rows.length === 0 && <div className="db-row-empty">{t("diagrams.db.overview.empty")}</div>}
-                  {rows.map((tb) => (
-                    <div key={tb.name} className={`db-row ${isAudit(tb.name) ? "audit" : ""}`}>
-                      <div className="db-row-main">
-                        <div className="db-row-name">{tb.name}</div>
-                        <div className="db-row-sub">
-                          {tb.comment || t("diagrams.db.overview.noComment")}
-                        </div>
-                      </div>
-                      <span className="db-num">{t("diagrams.db.overview.cols", { n: tb.columns.length })}</span>
-                      <span className="db-num">
-                        {tb.rows_estimate !== null
-                          ? t("diagrams.db.overview.rows", { n: compact(tb.rows_estimate) })
-                          : ""}
-                      </span>
-                    </div>
-                  ))}
+          <div className="db-ov-grid">
+            <div className="db-panel">
+              <div className="db-panel-head">
+                <span className="set-eyebrow">{t("erd.db.overview.tableList")}</span>
+                <span className="spacer" />
+                <div className="db-search">
+                  <Icon name="search" size={12} />
+                  <input
+                    className="db-search-input"
+                    value={query}
+                    placeholder={t("erd.db.overview.searchPh")}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
                 </div>
               </div>
-
-              <div className="db-ov-side">
-                <div className="db-stats">
-                  <div className="db-stat">
-                    <div className="db-stat-l">{t("diagrams.db.stat.physical")}</div>
-                    <div className="db-stat-v">{stats!.physical}</div>
-                  </div>
-                  <div className="db-stat">
-                    <div className="db-stat-l">{t("diagrams.db.stat.logical")}</div>
-                    <div className="db-stat-v">{stats!.logical}</div>
-                  </div>
-                  <div className="db-stat">
-                    <div className="db-stat-l">{t("diagrams.db.stat.unresolved")}</div>
-                    <div className="db-stat-v">{stats!.unresolved}</div>
-                  </div>
-                </div>
-                {refs && refs.unresolved.length > 0 && (
-                  <div className="db-panel">
-                    <div className="db-panel-head">
-                      <span className="set-eyebrow">{t("diagrams.db.stat.unresolvedList")}</span>
+              <div className="db-list scroll">
+                {rows.length === 0 && <div className="db-row-empty">{t("erd.db.overview.empty")}</div>}
+                {rows.map((tb) => (
+                  <div
+                    key={tb.name}
+                    className={`db-row db-row-pick ${isAudit(tb.name) ? "audit" : ""}`}
+                    onClick={() => onPickTable(tb.name)}
+                  >
+                    <div className="db-row-main">
+                      <div className="db-row-name">{tb.name}</div>
+                      <div className="db-row-sub">
+                        {tb.comment || t("erd.db.overview.noComment")}
+                      </div>
                     </div>
-                    <div className="db-list scroll">
-                      {refs.unresolved.map((u) => (
-                        <div key={`${u.table}.${u.column}`} className="db-row db-row-tight">
-                          <div className="db-row-main">
-                            <div className="db-row-name">
-                              {u.table}
-                              <span className="db-row-col">.{u.column}</span>
-                            </div>
+                    <span className="db-num">{t("erd.db.overview.cols", { n: tb.columns.length })}</span>
+                    <span className="db-num">
+                      {tb.rows_estimate !== null
+                        ? t("erd.db.overview.rows", { n: compact(tb.rows_estimate) })
+                        : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="db-ov-side">
+              <div className="db-stats">
+                <div className="db-stat">
+                  <div className="db-stat-l">{t("erd.db.stat.physical")}</div>
+                  <div className="db-stat-v">{stats!.physical}</div>
+                </div>
+                <div className="db-stat">
+                  <div className="db-stat-l">{t("erd.db.stat.logical")}</div>
+                  <div className="db-stat-v">{stats!.logical}</div>
+                </div>
+                <div className="db-stat">
+                  <div className="db-stat-l">{t("erd.db.stat.unresolved")}</div>
+                  <div className="db-stat-v">{stats!.unresolved}</div>
+                </div>
+              </div>
+              {refs && refs.unresolved.length > 0 && (
+                <div className="db-panel">
+                  <div className="db-panel-head">
+                    <span className="set-eyebrow">{t("erd.db.stat.unresolvedList")}</span>
+                  </div>
+                  <div className="db-list scroll">
+                    {refs.unresolved.map((u) => (
+                      <div key={`${u.table}.${u.column}`} className="db-row db-row-tight">
+                        <div className="db-row-main">
+                          <div className="db-row-name">
+                            {u.table}
+                            <span className="db-row-col">.{u.column}</span>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                    <div className="hint db-panel-foot">{t("diagrams.db.stat.unresolvedHint")}</div>
+                      </div>
+                    ))}
                   </div>
-                )}
-              </div>
+                  <div className="hint db-panel-foot">{t("erd.db.stat.unresolvedHint")}</div>
+                </div>
+              )}
             </div>
-          </>
-        )}
-      </div>
-
-      <div className="detail-meta db-ov-meta">
-        {rootDisplayName("diagrams")}/{schemaFolder(conn, pref.name)}
-        {snapshot && (
-          <>
-            {" · "}
-            {SNAPSHOT_FILE} {formatHeaderTime(new Date(snapshot.synced_at))}
-          </>
-        )}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

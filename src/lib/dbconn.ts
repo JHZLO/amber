@@ -1,13 +1,13 @@
 // DB 연동 — 연결 프로필(SQLite `db_connections`) · Rust 커맨드 래퍼 · 스냅샷 파일 · 동기화.
 //
-// 분담(DESIGN §11): 프로필은 SQLite, 스키마 구조는 스키마 폴더의 `schema.json`, 비밀번호는 키체인(Rust).
-// 프론트는 비밀번호를 저장 순간 한 번 Rust 로 넘기고 그 뒤로는 모른다 — 여기 어떤 함수도 비밀번호를
-// 돌려주지 않는다. 순수 계산(지문·비교·헤더)은 lib/schemaSnapshot.ts, mermaid 생성은 lib/erdGen.ts.
+// 분담(DESIGN §11): 프로필은 SQLite, 스키마 구조는 ERD 저장소(lib/erdStore.ts)의 `schema.json`, 비밀번호는
+// 키체인(Rust). 프론트는 비밀번호를 저장 순간 한 번 Rust 로 넘기고 그 뒤로는 모른다 — 여기 어떤 함수도
+// 비밀번호를 돌려주지 않는다. 순수 계산(지문, 비교)은 lib/schemaSnapshot.ts, resin 생성은 lib/erdGen.ts.
 
 import { invoke } from "@tauri-apps/api/core";
 import { ulid as newUlid } from "ulid";
 import { getDb } from "./db";
-import { ensureDiagramDir, readDiagramFileIfExists, writeDiagramFile } from "./diagrams";
+import { deleteErdEntry, ensureErdDir, readErdFileIfExists, writeErdFile } from "./erdStore";
 import { isCodedError } from "./errors";
 import { t } from "./i18n";
 import {
@@ -48,7 +48,7 @@ export interface DbConnection {
   port: number;
   username: string;
   tls: DbTls;
-  /** 다이어그램 루트 기준 상대경로 — 연결 폴더. 스키마 폴더는 `${folder_path}/${schema}` */
+  /** ERD 저장소 기준 상대경로 — 연결 폴더. 스키마 폴더는 `${folder_path}/${schema}` */
   folder_path: string;
   schemas: DbSchemaPref[];
   last_sync_at: number | null; // UTC ms
@@ -194,11 +194,13 @@ export async function updateConnection(id: number, patch: Partial<ConnectionInpu
   await db.execute(`UPDATE db_connections SET ${sets.join(", ")} WHERE id = $${args.length}`, args);
 }
 
-/** 연결 삭제 = 프로필 + 키체인 항목. 파일(폴더·ERD·스냅샷)은 남긴다 — 폴더는 일반 폴더로 돌아간다 */
+/** 연결 삭제 = 프로필 + 키체인 항목 + 스냅샷 폴더(휴지통). 스냅샷은 그 연결로만 그려지는 사본이라 연결이
+ *  없으면 볼 길이 없다 — 남겨 두면 보이지 않는 짐이 된다. 다시 연결하면 처음부터 다시 읽는다. */
 export async function deleteConnection(c: DbConnection): Promise<void> {
   await dbSecretDelete(c.ulid);
   const db = await getDb();
   await db.execute("DELETE FROM db_connections WHERE id = $1", [c.id]);
+  await deleteErdEntry(c.folder_path).catch(() => {}); // 한 번도 동기화하지 않은 연결은 폴더가 없다
 }
 
 /** 동기화 결과 기록. 성공이면 시각 갱신 + 에러 지움, 실패면 코드만 남긴다(문장은 프론트가 만든다) */
@@ -216,27 +218,6 @@ export async function markSync(id: number, errorCode: string | null): Promise<vo
       [Date.now(), id],
     );
   }
-}
-
-/** 트리에서 폴더 이름이 바뀌거나 옮겨졌을 때 — 그 폴더거나 그 하위였던 연결 폴더 경로를 따라 옮긴다.
- *  vaultTree.remapPath 와 같은 규칙(구분자까지 봐야 'dev' 와 'dev2' 가 섞이지 않는다). */
-export async function remapConnectionFolders(oldPrefix: string, newPrefix: string): Promise<boolean> {
-  const list = await listConnections();
-  const db = await getDb();
-  let touched = false;
-  for (const c of list) {
-    let next: string | null = null;
-    if (c.folder_path === oldPrefix) next = newPrefix;
-    else if (c.folder_path.startsWith(`${oldPrefix}/`)) next = newPrefix + c.folder_path.slice(oldPrefix.length);
-    if (next === null) continue;
-    await db.execute("UPDATE db_connections SET folder_path = $1, updated_at = $2 WHERE id = $3", [
-      next,
-      Date.now(),
-      c.id,
-    ]);
-    touched = true;
-  }
-  return touched;
 }
 
 // ---- Rust 커맨드 ----
@@ -265,13 +246,13 @@ export const snapshotPath = (c: DbConnection, schema: string) =>
   `${schemaFolder(c, schema)}/${SNAPSHOT_FILE}`;
 
 export async function readSnapshot(c: DbConnection, schema: string): Promise<SchemaSnapshot | null> {
-  const body = await readDiagramFileIfExists(snapshotPath(c, schema));
+  const body = await readErdFileIfExists(snapshotPath(c, schema));
   return body === null ? null : parseSnapshot(body);
 }
 
 export async function writeSnapshot(c: DbConnection, schema: string, snap: SchemaSnapshot): Promise<void> {
-  await ensureDiagramDir(schemaFolder(c, schema));
-  await writeDiagramFile(snapshotPath(c, schema), JSON.stringify(snap, null, 2) + "\n");
+  await ensureErdDir(schemaFolder(c, schema));
+  await writeErdFile(snapshotPath(c, schema), JSON.stringify(snap, null, 2) + "\n");
 }
 
 /** 열 때 자동 동기화하는 최소 간격 — 터널이 자주 끊기는 환경에서 폴링 대신 '열 때 한 번'으로 족하다 */
@@ -288,8 +269,7 @@ export interface SyncResult {
   diff: SchemaDiff | null;
 }
 
-/** 스키마 하나를 DB 에서 다시 읽어 `schema.json` 을 갱신한다. 파일(ERD)은 건드리지 않는다 —
- *  ERD 는 사용자가 [다시 생성] 으로 초안을 받아 ⌘S 할 때만 바뀐다. */
+/** 스키마 하나를 DB 에서 다시 읽어 `schema.json` 을 갱신한다. ERD 탭은 이 스냅샷을 바로 그린다 */
 export async function syncSchema(c: DbConnection, schema: string): Promise<SyncResult> {
   const previous = await readSnapshot(c, schema);
   try {
@@ -308,16 +288,6 @@ export function enabledSchemas(c: DbConnection): DbSchemaPref[] {
   return c.schemas.filter((s) => s.enabled);
 }
 
-/** 스키마 하나의 감사 테이블 포함 여부를 바꿔 저장한다 (true 는 기본값이라 키를 지운다) */
-export async function setSchemaAudit(c: DbConnection, schema: string, audit: boolean): Promise<void> {
-  const schemas = c.schemas.map((p) => {
-    if (p.name !== schema) return p;
-    const { audit: _drop, ...rest } = p;
-    return audit ? rest : { ...rest, audit: false };
-  });
-  await updateConnection(c.id, { schemas });
-}
-
 export async function setSchemaStarred(c: DbConnection, schema: string, starred: boolean): Promise<void> {
   const schemas = c.schemas.map((p) => {
     if (p.name !== schema) return p;
@@ -327,35 +297,19 @@ export async function setSchemaStarred(c: DbConnection, schema: string, starred:
   await updateConnection(c.id, { schemas });
 }
 
-/** 트리가 폴더 경로로 연결·스키마를 알아보기 위한 색인 */
-export interface ConnectionIndex {
-  byFolder: Map<string, DbConnection>;
-  schemaByFolder: Map<string, { conn: DbConnection; pref: DbSchemaPref }>;
-}
-
-export function indexConnections(list: DbConnection[]): ConnectionIndex {
-  const byFolder = new Map<string, DbConnection>();
-  const schemaByFolder = new Map<string, { conn: DbConnection; pref: DbSchemaPref }>();
-  for (const c of list) {
-    byFolder.set(c.folder_path, c);
-    for (const pref of enabledSchemas(c)) schemaByFolder.set(schemaFolder(c, pref.name), { conn: c, pref });
-  }
-  return { byFolder, schemaByFolder };
-}
-
 export const ENVS: DbEnv[] = ["dev", "staging", "prod"];
 
 export function envLabel(env: DbEnv): string {
   return env === "prod"
-    ? t("diagrams.db.env.prod")
+    ? t("erd.db.env.prod")
     : env === "staging"
-      ? t("diagrams.db.env.staging")
-      : t("diagrams.db.env.dev");
+      ? t("erd.db.env.staging")
+      : t("erd.db.env.dev");
 }
 
 // ---- 연결 상태 ----
 //
-// 설정 목록과 다이어그램 트리가 같은 판정·같은 색을 쓰도록 여기 한 곳에 둔다(둘이 갈리면 같은 연결이
+// 설정 목록과 ERD 탭 트리가 같은 판정과 같은 색을 쓰도록 여기 한 곳에 둔다(둘이 갈리면 같은 연결이
 // 화면마다 다른 상태로 보인다). 키체인을 읽어 비밀번호 존재를 확인하지 않는다 — 읽기 자체가 macOS
 // 확인창을 띄운다. 동기화가 KEYCHAIN_MISSING 으로 실패한 흔적(last_error)으로 "비밀번호 필요"를 안다.
 
@@ -369,10 +323,10 @@ export function connStatus(c: DbConnection): DbConnStatus {
 }
 
 const STATUS_KEY = {
-  connected: "diagrams.db.status.connected",
-  failed: "diagrams.db.status.failed",
-  needsPassword: "diagrams.db.status.needsPassword",
-  never: "diagrams.db.status.never",
+  connected: "erd.db.status.connected",
+  failed: "erd.db.status.failed",
+  needsPassword: "erd.db.status.needsPassword",
+  never: "erd.db.status.never",
 } as const;
 
 export function connStatusLabel(st: DbConnStatus): string {

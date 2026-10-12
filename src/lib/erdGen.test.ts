@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { compile, format } from "resin";
 import { commonTablePrefix, generateErd, inferReferences } from "./erdGen";
 import type {
   SchemaSnapshot,
@@ -169,185 +170,96 @@ const FIXTURE: SnapshotTable[] = [
   ]),
 ];
 
-const HEADER = "    %% amber:db dev/svc_booking · 2026-09-02 09:41";
+/** 생성하고, resin 이 오류 없이 읽는지까지 본다 */
+const gen = (tables: SnapshotTable[], opts?: { audit?: boolean }): string => {
+  const { source } = generateErd(snap(tables), opts);
+  expect(compile(source).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+  return source;
+};
+/** 컬럼 한 줄 — 정렬 공백은 두 칸으로 접는다 */
+const line = (source: string, column: string): string =>
+  source
+    .split("\n")
+    .find((l) => l.trim().split(/\s+/)[0] === column)!
+    .trim()
+    .replace(/\s{2,}/g, "  ");
 
-// 규칙에서 손으로 유도한 기대 출력. 공통 접두사는 'ts_booking' 의 마지막 '_' 까지 물린 'ts_' 라서
-// 참조 대상은 booking.id / booking_payment.id, 코멘트 없는 memo 의 라벨은 booking_memo 다.
-const GOLDEN_KO = `erDiagram
-    %% amber:db dev/svc_booking · 2026-09-02 09:41
-    %% 실선(--)=물리 FK(DB 제약) / 점선(..)=논리 참조(앱 레벨, 물리 FK 없음)
-    ts_booking ||..o{ ts_booking_coupon_use : "쿠폰 사용 · 논리 FK(uk_booking_coupon)"
-    ts_booking ||..o{ ts_booking_memo : "booking_memo · 논리 FK, DB 제약 없음"
-    ts_booking ||..o{ ts_booking_passenger : "예약 승객 · 논리 FK(ix_booking_id)"
-    ts_booking ||..o| ts_booking_payment : "결제 · uq, 논리"
-    ts_booking_payment ||--o{ ts_booking_refund : "환불 · 물리 FK"
+// 규칙에서 유도한 기대 출력. 선언된 FK 는 `->`, 이름이나 코멘트로 추론한 참조는 `~>`, 감사 테이블은 원본의
+// `audit envers` 한 줄이 된다. user_id 는 가리킬 테이블이 없어 인덱스만 남는다.
+const GOLDEN = `table ts_booking "예약" {
+  id             bigint         pk
+  user_id        bigint         index as idx_user_id  "회원 ID"
+  booking_no     varchar(32)    uk  "예약번호"
+  status         enum           enum(PENDING, CONFIRMED, CANCELED)  index as idx_status
+  cancel_reason  varchar(255)?  "취소 사유"
+  created_at     datetime
+  updated_at     datetime
+} audit envers(status, created_at)
 
-    revinfo ||..o{ ts_booking_aud : "Envers rev"
+table ts_booking_coupon_use "쿠폰 사용" {
+  id           bigint       pk
+  booking_id   bigint       ~> ts_booking
+  coupon_code  varchar(64)
+  created_at   datetime
+  unique(booking_id, coupon_code) as uk_booking_coupon
+}
 
-    ts_booking {
-        bigint id PK
-        bigint user_id "회원 ID (idx_user_id)"
-        varchar booking_no UK "예약번호"
-        varchar status "PENDING/CONFIRMED/CANCELED (idx_status)"
-        varchar? cancel_reason "취소 사유"
-        datetime created_at
-        datetime updated_at
-    }
+table ts_booking_memo {
+  id          bigint    pk
+  booking_id  bigint    ~> ts_booking
+  body        text?     "a \\"quoted\\" memo"
+  created_at  datetime
+}
 
-    ts_booking_coupon_use {
-        bigint id PK
-        bigint booking_id FK "uk(booking_id,coupon_code); 논리 FK -> booking.id"
-        varchar coupon_code
-        datetime created_at
-    }
+table ts_booking_passenger "예약 승객" {
+  id           bigint         pk
+  booking_id   bigint         ~> ts_booking  index as ix_booking_id  "예약 ID"
+  name         varchar(255)?  enc  "이름 (암호화)"
+  passport_no  varchar(255)?  enc  "여권번호"
+  created_at   datetime
+}
 
-    ts_booking_memo {
-        bigint id PK
-        bigint booking_id FK "논리 FK -> booking.id; DB 제약/인덱스 없음"
-        text? body "a #quot;quoted#quot; memo"
-        datetime created_at
-    }
+table ts_booking_payment "결제" {
+  id          bigint         pk
+  booking_id  bigint         uk as uq_booking_id  ~> ts_booking
+  method      varchar(20)    enum(CARD, BANK_TRANSFER)
+  amount      decimal(12,2)
+  created_at  datetime
+  updated_at  datetime?
+}
 
-    ts_booking_passenger {
-        bigint id PK
-        bigint booking_id FK "예약 ID (ix_booking_id); 논리 FK -> booking.id"
-        varchar? name "이름 (암호화) (enc)"
-        varchar? passport_no "여권번호 (enc)"
-        datetime created_at
-    }
-
-    ts_booking_payment {
-        bigint id PK
-        bigint booking_id FK,UK "논리 FK -> booking.id"
-        varchar method "CARD/BANK_TRANSFER"
-        decimal amount
-        datetime created_at
-        datetime? updated_at
-    }
-
-    ts_booking_refund {
-        bigint id PK
-        bigint payment_id FK "결제 ID (ix_payment_id); 물리 FK -> booking_payment.id"
-        datetime created_at
-    }
-
-    revinfo {
-        int rev PK
-        bigint revtstmp
-    }
-
-    ts_booking_aud {
-        bigint id PK
-        int rev PK,FK
-        tinyint revtype
-        varchar status
-    }
+table ts_booking_refund "환불" {
+  id          bigint    pk
+  payment_id  bigint    -> ts_booking_payment  index as ix_payment_id  "결제 ID"
+  created_at  datetime
+}
 `;
 
 describe("generateErd — 골든", () => {
-  it("픽스처 전체를 하우스 스타일 그대로 낸다 (ko)", () => {
-    const r = generateErd(snap(FIXTURE), { lang: "ko", header: HEADER });
-    expect(r.mermaid).toBe(GOLDEN_KO);
-    expect(r.stats).toEqual({
-      tables: 8,
-      auditTables: 1,
-      physicalFk: 1,
-      logicalRefs: 4,
-      unresolvedRefs: 1,
-    });
-    expect(r.unresolved).toEqual([{ table: "ts_booking", column: "user_id" }]);
+  it("픽스처 전체를 resin 으로 낸다", () => {
+    const r = generateErd(snap(FIXTURE));
+    expect(r.source).toBe(GOLDEN);
+    expect(r.notes).toEqual([]);
   });
 
-  it("헤더가 없으면 erDiagram 바로 다음이 범례다", () => {
-    const r = generateErd(snap(FIXTURE), { lang: "ko" });
-    expect(r.mermaid.split("\n").slice(0, 2)).toEqual([
-      "erDiagram",
-      "    %% 실선(--)=물리 FK(DB 제약) / 점선(..)=논리 참조(앱 레벨, 물리 FK 없음)",
-    ]);
-    expect(r.mermaid).toBe(GOLDEN_KO.replace(`${HEADER}\n`, ""));
+  it("resin 이 경고 없이 읽고, resin 의 정렬과 같은 모양이다", () => {
+    const { source } = generateErd(snap(FIXTURE));
+    expect(compile(source).diagnostics).toEqual([]);
+    expect(format(source).text).toBe(source);
   });
 
   it("테이블 순서를 섞어도 바이트 단위로 같은 출력이다", () => {
-    const expected = generateErd(snap(FIXTURE), { lang: "ko", header: HEADER }).mermaid;
-    const reversed = [...FIXTURE].reverse();
-    const rotated = [...FIXTURE.slice(3), ...FIXTURE.slice(0, 3)];
-    const interleaved = FIXTURE.filter((_, i) => i % 2).concat(FIXTURE.filter((_, i) => !(i % 2)));
-    for (const tables of [reversed, rotated, interleaved]) {
-      expect(generateErd(snap(tables), { lang: "ko", header: HEADER }).mermaid).toBe(expected);
+    const expected = generateErd(snap(FIXTURE)).source;
+    for (let i = 1; i < FIXTURE.length; i++) {
+      const tables = [...FIXTURE.slice(i), ...FIXTURE.slice(0, i)];
+      expect(generateErd(snap(tables)).source).toBe(expected);
     }
   });
-});
 
-describe("generateErd — 언어", () => {
-  it("en 은 범례·근거 단어·참조 문구만 바뀌고 코멘트는 그대로다", () => {
-    const { mermaid } = generateErd(snap(FIXTURE), { lang: "en" });
-    const lines = mermaid.split("\n");
-    expect(lines[1]).toBe(
-      "    %% solid(--)=physical FK (DB constraint) / dotted(..)=logical reference (app level, no FK constraint)",
-    );
-    expect(lines).toContain('    ts_booking_payment ||--o{ ts_booking_refund : "환불 · physical FK"');
-    expect(lines).toContain('    ts_booking ||..o{ ts_booking_passenger : "예약 승객 · logical FK(ix_booking_id)"');
-    expect(lines).toContain('    ts_booking ||..o| ts_booking_payment : "결제 · uq, logical"');
-    expect(lines).toContain('    ts_booking ||..o{ ts_booking_memo : "booking_memo · logical FK, no DB constraint"');
-    expect(lines).toContain('        bigint booking_id FK "logical FK -> booking.id; no DB constraint or index"');
-    expect(lines).toContain('        bigint payment_id FK "결제 ID (ix_payment_id); physical FK -> booking_payment.id"');
-    expect(mermaid).not.toMatch(/물리|논리|제약/);
-  });
-});
-
-describe("generateErd — 부분집합", () => {
-  it("ts_booking 만 고르면 짝 감사 테이블과 revinfo 가 딸려오고 도메인 선은 없다", () => {
-    const r = generateErd(snap(FIXTURE), { lang: "ko", tables: ["ts_booking"] });
-    expect(r.mermaid).toBe(`erDiagram
-    %% 실선(--)=물리 FK(DB 제약) / 점선(..)=논리 참조(앱 레벨, 물리 FK 없음)
-
-    revinfo ||..o{ ts_booking_aud : "Envers rev"
-
-    ts_booking {
-        bigint id PK
-        bigint user_id "회원 ID (idx_user_id)"
-        varchar booking_no UK "예약번호"
-        varchar status "PENDING/CONFIRMED/CANCELED (idx_status)"
-        varchar? cancel_reason "취소 사유"
-        datetime created_at
-        datetime updated_at
-    }
-
-    revinfo {
-        int rev PK
-        bigint revtstmp
-    }
-
-    ts_booking_aud {
-        bigint id PK
-        int rev PK,FK
-        tinyint revtype
-        varchar status
-    }
-`);
-    // unresolved 는 부분집합이 아니라 스냅샷 전체 기준
-    expect(r.stats).toEqual({ tables: 3, auditTables: 1, physicalFk: 0, logicalRefs: 0, unresolvedRefs: 1 });
-  });
-
-  it("상대가 그려지지 않은 관계는 선·FK 마커 없이 설명에만 남는다", () => {
-    const { mermaid, stats } = generateErd(snap(FIXTURE), {
-      lang: "ko",
-      tables: ["ts_booking_refund", "ts_booking_passenger"],
-    });
-    expect(mermaid).not.toMatch(/\|\|[-.]{2}o[{|]/);
-    expect(mermaid).toContain('        bigint payment_id "결제 ID (ix_payment_id); 물리 FK -> booking_payment.id"');
-    expect(mermaid).toContain('        bigint booking_id "예약 ID (ix_booking_id); 논리 FK -> booking.id"');
-    // 감사 테이블이 없으니 revinfo 도 안 딸려온다
-    expect(mermaid).not.toContain("revinfo");
-    expect(stats).toEqual({ tables: 2, auditTables: 0, physicalFk: 0, logicalRefs: 0, unresolvedRefs: 1 });
-    // 관계 없는 도메인 테이블은 이름순
-    expect(mermaid.indexOf("ts_booking_passenger {")).toBeLessThan(mermaid.indexOf("ts_booking_refund {"));
-  });
-
-  it("없는 테이블 이름은 무시한다", () => {
-    const r = generateErd(snap(FIXTURE), { lang: "ko", tables: ["nope", "revinfo"] });
-    expect(r.stats.tables).toBe(1);
-    expect(r.mermaid).toContain("    revinfo {");
+  it("audit: false 면 감사 테이블을 싣지 않는다", () => {
+    const source = gen(FIXTURE, { audit: false });
+    expect(source).not.toContain("audit envers");
+    expect(source).toBe(GOLDEN.replace("} audit envers(status, created_at)", "}"));
   });
 });
 
@@ -357,16 +269,13 @@ describe("참조 추론 보강 — 실제 accounts 스키마에서 나온 구멍
     comment: "디바이스",
   });
 
-  it("코멘트의 `table.column` 이 이름 규칙으로 못 잇는 user_id → ts_customers 를 잇고, 설명은 참조를 되풀이하지 않는다", () => {
+  it("코멘트의 `table.column` 이 이름 규칙으로 못 잇는 user_id → ts_customers 를 잇는다", () => {
     const consents = tbl(
       "ts_customer_consents",
       [pk(), col("user_id", "bigint", { nullable: true, comment: "ts_customers.id - 유저 ID" })],
       { comment: "수신동의" },
     );
-    const r = generateErd(snap([customers, consents]), { lang: "ko" });
-    expect(r.mermaid).toContain('ts_customers ||..o{ ts_customer_consents : "수신동의 · 논리 FK(코멘트)"');
-    expect(r.mermaid).toContain('bigint? user_id FK "ts_customers.id - 유저 ID; DB 제약/인덱스 없음"');
-    expect(r.stats.unresolvedRefs).toBe(0);
+    expect(line(gen([customers, consents]), "user_id")).toBe('user_id  bigint?  ~> ts_customers  "ts_customers.id - 유저 ID"');
   });
 
   it("공통 접두사가 없어도 대다수 토큰(ts_)을 접두사로 삼아 device_id → ts_devices 를 찾는다", () => {
@@ -411,9 +320,11 @@ describe("참조 추론 보강 — 실제 accounts 스키마에서 나온 구멍
     expect(edges.map((e) => `${e.from}.${e.fromColumn} -> ${e.to}.${e.toColumn}`)).toEqual([
       "ts_travel_change_queue.travel_id -> ts_travels.travel_id",
     ]);
+    // 테이블은 이름순이라 ts_travel_change_queue 가 먼저 나온다. 대상 컬럼이 기본 키가 아니라 이름까지 적는다
+    expect(line(gen([travels, dibs, queue]), "travel_id")).toBe("travel_id  varchar(36)  ~> ts_travels.travel_id");
   });
 
-  it("같은 두 테이블 사이의 FK 가 셋이면 관계선은 하나에 ×3, 관계가 많은 부모가 먼저 온다", () => {
+  it("같은 두 테이블 사이의 FK 가 여럿이면 컬럼마다 하나씩 잇는다", () => {
     const contacts = tbl("ts_personal_contacts", [pk()], { comment: "연락처" });
     const orgs = tbl("ts_organizations", [pk()], { comment: "조직" });
     const fkTo = (name: string, column: string, ref_table: string) => ({
@@ -443,21 +354,10 @@ describe("참조 추론 보강 — 실제 accounts 스키마에서 나온 구멍
         ],
       },
     );
-    const members = tbl("ts_org_members", [pk(), col("org_id", "bigint")], {
-      comment: "구성원",
-      fks: [fkTo("fk_members_org", "org_id", "ts_organizations")],
-    });
-    const r = generateErd(snap([contacts, orgs, details, members]), { lang: "ko" });
-    const lines = r.mermaid.split("\n").filter((l) => l.includes("||--"));
-    expect(lines).toEqual([
-      '    ts_organizations ||--o{ ts_org_details : "조직 상세 · 물리 FK"',
-      '    ts_organizations ||--o{ ts_org_members : "구성원 · 물리 FK"',
-      '    ts_personal_contacts ||--o{ ts_org_details : "조직 상세 · 물리 FK ×3"',
-    ]);
-    // FK 자동 인덱스(제약과 같은 이름)는 적지 않고, 코멘트가 대상을 말하면 참조 문구도 되풀이하지 않는다
-    expect(r.mermaid).toContain('bigint org_id FK "조직 ID. FK to ts_organizations.id"');
-    expect(r.mermaid).toContain('bigint contract_manager_contact_id FK "물리 FK -> personal_contacts.id"');
-    expect(r.stats.physicalFk).toBe(5);
+    const source = gen([contacts, orgs, details]);
+    expect(line(source, "org_id")).toBe('org_id  bigint  -> ts_organizations  index as org_id  "조직 ID. FK to ts_organizations.id"');
+    expect(line(source, "secondary_settlement_contact_id")).toBe("secondary_settlement_contact_id  bigint?  -> ts_personal_contacts");
+    expect(compile(source).model!.relations.filter((r) => r.parent === "ts_personal_contacts")).toHaveLength(3);
   });
 
   it("id PK 의 코멘트가 'ID' 같은 되풀이면 비우고, 깨진 인코딩 코멘트는 되살린다", () => {
@@ -466,29 +366,9 @@ describe("참조 추론 보강 — 실제 accounts 스키마에서 나온 구멍
     expect(broken).not.toBe("마지막 변경 감지 시각");
     const t = tbl("ts_queue", [pk("id", "bigint"), col("changed_at", "datetime", { comment: broken })]);
     t.columns[0].comment = "ID";
-    const r = generateErd(snap([t]), { lang: "ko" });
-    expect(r.mermaid).toContain("        bigint id PK\n");
-    expect(r.mermaid).toContain('datetime changed_at "마지막 변경 감지 시각"');
-  });
-});
-
-describe("generateErd — 감사 테이블 제외", () => {
-  it("audit: false 면 *_aud·revinfo 블록과 Envers 관계선이 사라지고 도메인만 남는다", () => {
-    const r = generateErd(snap(FIXTURE), { lang: "ko", audit: false });
-    expect(r.mermaid).not.toContain("_aud");
-    expect(r.mermaid).not.toContain("revinfo");
-    expect(r.mermaid).not.toContain("Envers");
-    expect(r.stats.auditTables).toBe(0);
-    expect(r.stats.tables).toBe(FIXTURE.filter((t) => !t.name.endsWith("_aud") && t.name !== "revinfo").length);
-    // 도메인 관계선과 블록은 그대로
-    expect(r.mermaid).toContain('ts_booking_payment ||--o{ ts_booking_refund : "환불 · 물리 FK"');
-    expect(r.mermaid).toContain("    ts_booking {");
-  });
-
-  it("부분집합과 함께 써도 감사 테이블은 딸려오지 않는다", () => {
-    const r = generateErd(snap(FIXTURE), { lang: "ko", tables: ["ts_booking"], audit: false });
-    expect(r.mermaid).not.toContain("ts_booking_aud");
-    expect(r.stats).toEqual({ tables: 1, auditTables: 0, physicalFk: 0, logicalRefs: 0, unresolvedRefs: 1 });
+    const source = gen([t]);
+    expect(line(source, "id")).toBe("id  bigint  pk");
+    expect(line(source, "changed_at")).toBe('changed_at  datetime  "마지막 변경 감지 시각"');
   });
 });
 
@@ -508,29 +388,22 @@ describe("inferReferences", () => {
     ]);
   });
 
-  it("엣지 세부 — 1:1·인덱스 이름·제약 이름", () => {
+  it("엣지 세부 — 물리 FK 는 선언된 대상 컬럼, 논리 참조는 id", () => {
     const { edges } = inferReferences(snap(FIXTURE));
     const byFrom = new Map(edges.map((e) => [e.from, e]));
-    expect(byFrom.get("ts_booking_payment")).toMatchObject({
-      physical: false,
-      oneToOne: true,
-      indexName: "uq_booking_id",
+    expect(byFrom.get("ts_booking_payment")).toEqual({
+      from: "ts_booking_payment",
+      fromColumn: "booking_id",
+      to: "ts_booking",
       toColumn: "id",
-      constraintName: null,
+      physical: false,
     });
-    // 복합 UNIQUE 의 첫 컬럼: 인덱스 이름은 잡히지만 1:1 은 아니다
-    expect(byFrom.get("ts_booking_coupon_use")).toMatchObject({
-      oneToOne: false,
-      indexName: "uk_booking_coupon",
-    });
-    expect(byFrom.get("ts_booking_memo")).toMatchObject({ oneToOne: false, indexName: null });
-    expect(byFrom.get("ts_booking_refund")).toMatchObject({
-      physical: true,
-      oneToOne: false,
-      indexName: "ix_payment_id",
-      constraintName: "fk_refund_payment",
+    expect(byFrom.get("ts_booking_refund")).toEqual({
+      from: "ts_booking_refund",
+      fromColumn: "payment_id",
       to: "ts_booking_payment",
       toColumn: "id",
+      physical: true,
     });
   });
 
@@ -599,21 +472,19 @@ describe("commonTablePrefix", () => {
     expect(commonTablePrefix(["ts_x", "user"])).toBe("");
   });
 
-  it("라벨 의미의 기본값과 참조 대상이 같은 접두사를 쓴다", () => {
+  it("접두사가 긴 스키마에서도 참조 대상을 찾는다", () => {
     const tables = [
       tbl("ts_identity_esigns", [pk()]),
       tbl("ts_identity_esign_signers", [pk(), col("esign_id", "bigint", { key: "MUL" })], {
         indexes: [ix("ix_esign_id", ["esign_id"])],
       }),
     ];
-    const { mermaid } = generateErd(snap(tables), { lang: "ko" });
-    expect(mermaid).toContain('    ts_identity_esigns ||..o{ ts_identity_esign_signers : "esign_signers · 논리 FK(ix_esign_id)"');
-    expect(mermaid).toContain('        bigint esign_id FK "(ix_esign_id); 논리 FK -> esigns.id"');
+    expect(line(gen(tables), "esign_id")).toBe("esign_id  bigint  ~> ts_identity_esigns  index as ix_esign_id");
   });
 });
 
-describe("속성 줄 세부 규칙", () => {
-  it("created_at → updated_at 은 항상 맨 뒤로 가고 설명을 달지 않는다", () => {
+describe("컬럼 세부 규칙", () => {
+  it("created_at → updated_at 은 항상 맨 뒤로 간다", () => {
     const tables = [
       tbl("t_thing", [
         col("updated_at", "datetime", { nullable: true, comment: "수정 시각" }),
@@ -622,40 +493,33 @@ describe("속성 줄 세부 규칙", () => {
         col("label", "varchar", { column_type: "varchar(50)", comment: "라벨" }),
       ], { indexes: [ix("idx_created_at", ["created_at"])] }),
     ];
-    const { mermaid } = generateErd(snap(tables), { lang: "ko" });
-    expect(mermaid).toContain(`    t_thing {
-        bigint id PK
-        varchar label "라벨"
-        datetime created_at
-        datetime? updated_at
-    }
-`);
+    const names = gen(tables).split("\n").slice(1, -2).map((l) => l.trim().split(/\s+/)[0]);
+    expect(names).toEqual(["id", "label", "created_at", "updated_at"]);
   });
 
-  it("따옴표는 라벨·설명 모두 #quot; 로 바꾼다", () => {
+  it("따옴표는 설명 안에서 이스케이프된다", () => {
     const tables = [
       tbl("ts_a", [pk()], { comment: "A" }),
       tbl("ts_b", [pk(), col("a_id", "bigint", { comment: 'say "hi"' })], { comment: 'the "b" table' }),
     ];
-    const { mermaid } = generateErd(snap(tables), { lang: "ko" });
-    expect(mermaid).toContain('    ts_a ||..o{ ts_b : "the #quot;b#quot; table · 논리 FK, DB 제약 없음"');
-    expect(mermaid).toContain('        bigint a_id FK "say #quot;hi#quot;; 논리 FK -> a.id; DB 제약/인덱스 없음"');
-    expect(mermaid.split("\n").filter((l) => l.includes('"')).every((l) => l.split('"').length === 3)).toBe(true);
+    const source = gen(tables);
+    expect(source).toContain('table ts_b "the \\"b\\" table" {');
+    expect(line(source, "a_id")).toBe('a_id  bigint  ~> ts_a  "say \\"hi\\""');
   });
 
-  it("PK 는 스냅샷이 nullable 이라 해도 ? 를 달지 않는다", () => {
+  it("PK 는 스냅샷이 nullable 이라 해도 널 허용으로 쓰지 않는다", () => {
     const tables = [tbl("t", [col("id", "bigint", { key: "PRI", nullable: true }), col("x", "int", { nullable: true })])];
-    const { mermaid } = generateErd(snap(tables), { lang: "ko" });
-    expect(mermaid).toContain("        bigint id PK\n        int? x\n");
+    const source = gen(tables);
+    expect(line(source, "id")).toBe("id  bigint  pk");
+    expect(line(source, "x")).toBe("x  int?");
   });
 
   it("코멘트가 없으면 이름에서 의미를 지어내지 않는다", () => {
     const tables = [tbl("t", [pk(), col("customer_name", "varchar", { column_type: "varchar(100)" })])];
-    const { mermaid } = generateErd(snap(tables), { lang: "ko" });
-    expect(mermaid).toContain("        varchar customer_name\n");
+    expect(line(gen(tables), "customer_name")).toBe("customer_name  varchar(100)");
   });
 
-  it("(enc) — 코멘트 근거가 있을 때만 형제 규칙이 켜지고, 좁은 컬럼은 제외", () => {
+  it("enc — 코멘트 근거가 있을 때만 형제 규칙이 켜지고, 좁은 컬럼은 제외", () => {
     const withEnc = tbl("t", [
       pk(),
       col("email", "varchar", { column_type: "varchar(512)", comment: "encrypted email" }),
@@ -664,19 +528,18 @@ describe("속성 줄 세부 규칙", () => {
       col("address", "varchar", { column_type: "varchar(254)" }),
       col("memo", "text"),
     ]);
-    const enc = generateErd(snap([withEnc]), { lang: "ko" }).mermaid;
-    expect(enc).toContain('        varchar email "encrypted email (enc)"');
-    expect(enc).toContain('        text phone "(enc)"');
-    expect(enc).toContain("        varchar nickname\n");
-    expect(enc).toContain("        varchar address\n");
-    expect(enc).toContain("        text memo\n");
+    const enc = gen([withEnc]);
+    expect(line(enc, "email")).toBe('email  varchar(512)  enc  "encrypted email"');
+    expect(line(enc, "phone")).toBe("phone  text  enc");
+    expect(line(enc, "nickname")).toBe("nickname  varchar(50)");
+    expect(line(enc, "address")).toBe("address  varchar(254)");
+    expect(line(enc, "memo")).toBe("memo  text");
 
     const noEnc = tbl("t", [pk(), col("phone", "text"), col("passport_no", "varchar", { column_type: "varchar(255)" })]);
-    const plain = generateErd(snap([noEnc]), { lang: "ko" }).mermaid;
-    expect(plain).not.toContain("(enc)");
+    expect(gen([noEnc])).not.toContain("enc");
   });
 
-  it("enum — column_type 이 CHECK 보다 우선하고, 둘 다 없으면 쓰지 않는다", () => {
+  it("enum — 타입의 값이 CHECK 보다 우선하고, 둘 다 없으면 쓰지 않는다", () => {
     const tables = [
       tbl(
         "t",
@@ -696,14 +559,14 @@ describe("속성 줄 세부 규칙", () => {
         },
       ),
     ];
-    const { mermaid } = generateErd(snap(tables), { lang: "ko" });
-    expect(mermaid).toContain('        enum kind "종류; A/B"');
-    expect(mermaid).toContain('        varchar state "ON/OFF"');
-    expect(mermaid).toContain('        varchar substate "S1/S2"');
-    expect(mermaid).toContain("        varchar mode\n");
+    const source = gen(tables);
+    expect(line(source, "kind")).toBe('kind  enum  enum(A, B)  "종류"');
+    expect(line(source, "state")).toBe("state  varchar(10)  enum(ON, OFF)");
+    expect(line(source, "substate")).toBe("substate  varchar(10)  enum(S1, S2)");
+    expect(line(source, "mode")).toBe("mode  varchar(10)");
   });
 
-  it("다른 스키마를 가리키는 물리 FK — 사실은 적되 마커·선은 없고 논리 추론에서도 빠진다", () => {
+  it("다른 스키마를 가리키는 물리 FK 는 그 테이블을 external table 로 적고, 논리 추론에서도 빠진다", () => {
     const tables = [
       tbl("ts_user", [pk()]),
       tbl(
@@ -723,14 +586,24 @@ describe("속성 줄 세부 규칙", () => {
         },
       ),
     ];
-    const r = generateErd(snap(tables), { lang: "ko" });
-    expect(r.mermaid).not.toMatch(/\|\|[-.]{2}o[{|]/);
-    expect(r.mermaid).toContain('        bigint user_id "(ix_user_id); 물리 FK -> svc_identity.ts_identity_users.id"');
-    expect(r.unresolved).toEqual([]);
-    expect(r.stats.physicalFk).toBe(0);
+    const source = gen(tables);
+    expect(source).toContain("external table `svc_identity.ts_identity_users` {");
+    expect(line(source, "user_id")).toBe("user_id  bigint  -> `svc_identity.ts_identity_users`  index as ix_user_id");
+    expect(generateErd(snap(tables)).notes).toEqual([]);
   });
 
-  it("물리 FK 1:1 은 실선 o| 와 'uq, 물리 FK'", () => {
+  it("같은 스키마인데 스냅샷에 없는 테이블을 가리키면 스키마 이름 없이 external table 로 적는다", () => {
+    const tables = [
+      tbl("ts_child", [pk(), col("gone_id", "bigint", { key: "MUL" })], {
+        fks: [{ name: "fk_gone", columns: ["gone_id"], ref_schema: "svc_booking", ref_table: "ts_gone", ref_columns: ["id"] }],
+      }),
+    ];
+    const source = gen(tables);
+    expect(source).toContain("external table ts_gone {");
+    expect(line(source, "gone_id")).toBe("gone_id  bigint  -> ts_gone");
+  });
+
+  it("물리 FK 1:1 은 uk 와 -> 가 함께 간다", () => {
     const tables = [
       tbl("ts_a", [pk()], { comment: "A" }),
       tbl("ts_b", [pk(), col("a_id", "bigint", { key: "UNI" })], {
@@ -739,61 +612,41 @@ describe("속성 줄 세부 규칙", () => {
         fks: [{ name: "fk_b_a", columns: ["a_id"], ref_schema: "svc_booking", ref_table: "ts_a", ref_columns: ["id"] }],
       }),
     ];
-    const { mermaid } = generateErd(snap(tables), { lang: "ko" });
-    expect(mermaid).toContain('    ts_a ||--o| ts_b : "B · uq, 물리 FK"');
-    expect(mermaid).toContain('        bigint a_id FK,UK "물리 FK -> a.id"');
+    const source = gen(tables);
+    expect(line(source, "a_id")).toBe("a_id  bigint  uk as uq_a_id  -> ts_a");
+    expect(compile(source).model!.relations[0].one).toBe(true);
   });
 
-  it("이름의 이상한 문자는 _ 로, 타입은 소문자 한 토큰으로", () => {
-    const tables = [tbl("odd table", [pk(), col("my col", "Double Precision", { nullable: true })])];
-    const { mermaid } = generateErd(snap(tables), { lang: "ko" });
-    expect(mermaid).toContain("    odd_table {\n        bigint id PK\n        double_precision? my_col\n    }\n");
+  it("식별자가 아닌 이름은 백틱으로, 여러 단어 타입은 한 단어로", () => {
+    const tables = [tbl("odd table", [pk(), col("my col", "double", { column_type: "double precision", nullable: true })])];
+    const source = gen(tables);
+    expect(source).toContain("table `odd table` {");
+    expect(line(source, "`my")).toBe("`my col`  double?");
   });
 });
 
 describe("감사 테이블", () => {
-  it("id/rev/revtype 을 머리로 올리고 나머지는 스냅샷 순서, 타임스탬프·?·설명 없음", () => {
+  it("revinfo 와 *_aud 는 원본 테이블의 audit envers 가 되고 따로 쓰지 않는다", () => {
     const tables = [
-      tbl("ts_x", [pk()]),
+      tbl("ts_x", [pk(), col("status", "varchar", { column_type: "varchar(20)" }), col("amount", "decimal")]),
       tbl("revinfo", [pk("rev", "int"), col("revtstmp", "bigint", { nullable: true })]),
       tbl("ts_x_aud", [
         col("status", "varchar", { column_type: "varchar(20)", nullable: true, comment: "상태" }),
         col("rev", "int", { key: "PRI" }),
-        col("updated_at", "datetime", { nullable: true }),
         col("revtype", "tinyint", { nullable: true }),
-        col("amount", "decimal", { nullable: true }),
         col("id", "bigint", { key: "PRI" }),
-        col("created_at", "datetime", { nullable: true }),
       ]),
     ];
-    const { mermaid, stats } = generateErd(snap(tables), { lang: "ko" });
-    expect(mermaid).toContain(`    ts_x_aud {
-        bigint id PK
-        int rev PK,FK
-        tinyint revtype
-        varchar status
-        decimal amount
-    }
-`);
-    // revinfo 는 일반 스타일 — 널 허용이면 ? 가 붙는다
-    expect(mermaid).toContain("    revinfo {\n        int rev PK\n        bigint? revtstmp\n    }");
-    expect(stats).toEqual({ tables: 3, auditTables: 1, physicalFk: 0, logicalRefs: 0, unresolvedRefs: 0 });
+    const source = gen(tables);
+    expect(source).toContain("} audit envers(status)");
+    expect(source).not.toContain("table revinfo");
+    expect(source).not.toContain("table ts_x_aud");
   });
 
-  it("revinfo 가 없으면 감사 관계선도 없다", () => {
+  it("revinfo 가 없으면 *_aud 는 평범한 테이블로 남는다", () => {
     const tables = [tbl("ts_x", [pk()]), tbl("ts_x_aud", [col("id", "bigint", { key: "PRI" }), col("rev", "int", { key: "PRI" })])];
-    const { mermaid } = generateErd(snap(tables), { lang: "ko" });
-    expect(mermaid).toBe(`erDiagram
-    %% 실선(--)=물리 FK(DB 제약) / 점선(..)=논리 참조(앱 레벨, 물리 FK 없음)
-
-    ts_x {
-        bigint id PK
-    }
-
-    ts_x_aud {
-        bigint id PK
-        int rev PK,FK
-    }
-`);
+    const source = gen(tables);
+    expect(source).toContain("table ts_x_aud {");
+    expect(source).not.toContain("audit envers");
   });
 });

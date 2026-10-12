@@ -95,7 +95,7 @@ export function DbSettings({
                     {/* 마지막 시도 시각은 성공이든 실패든 '언제 기준의 상태인가'를 말해 준다 */}
                     {(st === "connected" || st === "failed") &&
                       c.last_sync_at &&
-                      ` · ${t("diagrams.db.syncAgo", { ago: timeAgo(c.last_sync_at) })}`}
+                      ` · ${t("erd.db.syncAgo", { ago: timeAgo(c.last_sync_at) })}`}
                   </div>
                   <div className="db-conn-actions">
                     {st === "needsPassword" && (
@@ -126,7 +126,7 @@ export function DbSettings({
       <p className="hint" style={{ marginTop: 14, lineHeight: 1.6 }}>
         {t("settings.db.hint")}
         <br />
-        {t("diagrams.db.hint.readonly")}
+        {t("erd.db.hint.readonly")}
       </p>
     </SetSection>
   );

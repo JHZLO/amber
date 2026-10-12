@@ -882,7 +882,7 @@ export function SettingsModal({
       onLoggedIn={() => void refreshAuth()}
     />
 
-    {/* DB 연결 추가/편집 — 다이어그램 탭이 DB_CONNECTIONS_EVENT 로 알아채 동기화를 시작한다 */}
+    {/* DB 연결 추가/편집 — ERD 탭이 DB_CONNECTIONS_EVENT 로 알아채 동기화를 시작한다 */}
     <DbConnectionModal
       open={dbModal.open}
       connection={dbModal.connection}
@@ -903,7 +903,7 @@ export function SettingsModal({
       }}
     />
 
-    {/* 연결 삭제 — 프로필 + 키체인만. 파일은 남는다 */}
+    {/* 연결 삭제 — 프로필, 키체인, 그 연결의 스냅샷(휴지통). DB 에는 아무 일도 없다 */}
     <Modal
       open={dbDelete !== null}
       title={t("settings.db.deleteTitle")}
@@ -953,7 +953,7 @@ export function SettingsModal({
         }}
       >
         <div className="field">
-          <label>{t("diagrams.db.field.password")}</label>
+          <label>{t("erd.db.field.password")}</label>
           <PasswordField
             value={dbPwValue}
             show={dbPwShow}
@@ -961,7 +961,7 @@ export function SettingsModal({
             onChange={setDbPwValue}
             autoFocus
           />
-          <div className="hint">{t("diagrams.db.hint.password")}</div>
+          <div className="hint">{t("erd.db.hint.password")}</div>
         </div>
         {dbPwError && <div className="error-note">{dbPwError}</div>}
       </form>

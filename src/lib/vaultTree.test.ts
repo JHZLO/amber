@@ -12,8 +12,6 @@ import {
   remapPath,
   remapPaths,
   searchFiles,
-  splitDbRoots,
-  starredFirst,
   type VaultNode,
 } from "./vaultTree";
 
@@ -200,36 +198,6 @@ describe("ancestorPaths", () => {
   });
 });
 
-describe("splitDbRoots", () => {
-  type N = { path: string; isDir: boolean; children?: N[] };
-  const tree: N[] = [
-    { path: "ERD", isDir: true, children: [{ path: "ERD/a.mmd", isDir: false }] },
-    { path: "MySQL", isDir: true, children: [{ path: "MySQL/svc", isDir: true }] },
-    { path: "temp.mmd", isDir: false },
-  ];
-
-  it("lifts connection folders out of the tree and leaves the rest untouched", () => {
-    const { mine, dbRoots } = splitDbRoots(tree, (p) => p === "MySQL");
-    expect(mine.map((n) => n.path)).toEqual(["ERD", "temp.mmd"]);
-    expect(dbRoots.map((n) => n.path)).toEqual(["MySQL"]);
-    // 뽑힌 연결은 하위를 그대로 들고 간다
-    expect(dbRoots[0].children?.[0].path).toBe("MySQL/svc");
-  });
-
-  it("lifts a nested connection folder to the top of its own section", () => {
-    const nested: N[] = [{ path: "db", isDir: true, children: [{ path: "db/prod", isDir: true }] }];
-    const { mine, dbRoots } = splitDbRoots(nested, (p) => p === "db/prod");
-    expect(dbRoots.map((n) => n.path)).toEqual(["db/prod"]);
-    expect(mine[0].children).toEqual([]);
-  });
-
-  it("returns the same array when there is nothing to lift", () => {
-    const { mine, dbRoots } = splitDbRoots(tree, () => false);
-    expect(mine).toBe(tree); // 참조 보존 — 연결이 없으면 리렌더가 트리를 흔들지 않는다
-    expect(dbRoots).toEqual([]);
-  });
-});
-
 describe("remapPath", () => {
   it("그 폴더 자신을 옮긴다", () => {
     expect(remapPath("CS", "CS", "컴퓨터과학")).toBe("컴퓨터과학");
@@ -255,21 +223,3 @@ describe("remapPath", () => {
   });
 });
 
-describe("starredFirst", () => {
-  type N = { path: string; children?: N[] };
-  const conn: N = {
-    path: "MySQL",
-    children: [{ path: "MySQL/a" }, { path: "MySQL/b" }, { path: "MySQL/c" }, { path: "MySQL/d" }],
-  };
-
-  it("moves starred children to the top and keeps both groups in their original order", () => {
-    const out = starredFirst(conn, (p) => p === "MySQL/d" || p === "MySQL/b");
-    expect(out.children?.map((n) => n.path)).toEqual(["MySQL/b", "MySQL/d", "MySQL/a", "MySQL/c"]);
-  });
-
-  it("returns the same object when nothing would move", () => {
-    expect(starredFirst(conn, () => false)).toBe(conn);
-    expect(starredFirst(conn, () => true)).toBe(conn);
-    expect(starredFirst(conn, (p) => p === "MySQL/a")).toBe(conn);
-  });
-});
