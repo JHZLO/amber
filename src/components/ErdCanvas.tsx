@@ -30,6 +30,8 @@ interface ViewPrefs {
   columns: Columns;
   audit: "collapse" | "expand";
   edges: "angular" | "curved";
+  /** 세로(위에서 아래, 선이 카드 위아래에 붙는다) 또는 가로(resin 기본, 선이 컬럼 행에 붙는다) */
+  direction: "down" | "right";
   grid: boolean;
   stage: CanvasStage;
 }
@@ -37,7 +39,7 @@ interface ViewPrefs {
 const VIEW_KEY = "amber.erd.view";
 const PANEL_KEY = "amber.erd.panel";
 const PANEL_MIN = 360;
-const DEFAULT_VIEW: ViewPrefs = { columns: "all", audit: "collapse", edges: "angular", grid: true, stage: "aurora" };
+const DEFAULT_VIEW: ViewPrefs = { columns: "all", audit: "collapse", edges: "angular", direction: "down", grid: true, stage: "aurora" };
 /** 다시 그리지 않고 되살릴 그림 — 스키마를 오갈 때. 개수와 DOM 노드 수 둘 다로 묶는다(플레이그라운드와 같은 값) */
 const KEEP_DRAWINGS = 4;
 const KEEP_NODES = 100_000;
@@ -49,6 +51,7 @@ function loadView(): ViewPrefs {
       columns: v.columns === "keys" || v.columns === "none" ? v.columns : "all",
       audit: v.audit === "expand" ? "expand" : "collapse",
       edges: v.edges === "curved" ? "curved" : "angular",
+      direction: v.direction === "right" ? "right" : "down",
       grid: v.grid !== false,
       stage: v.stage && CANVAS_STAGES.includes(v.stage) ? v.stage : DEFAULT_VIEW.stage,
     };
@@ -115,6 +118,7 @@ export function ErdCanvas({
   const shownKey = useRef("");
   const shownDrawing = useRef<MountedDrawing | null>(null);
   const shownId = useRef("");
+  const shownDirection = useRef("");
   const renderSeq = useRef(0);
   /** 그림이 바뀐 뒤 할 일 — 숨은 컬럼을 고르면 컬럼을 펼쳐 다시 그린 다음 정보창을 연다 */
   const afterDraw = useRef<(() => void) | null>(null);
@@ -336,8 +340,9 @@ export function ErdCanvas({
       return;
     }
     const ink = c.drawOptions();
-    const key = JSON.stringify([drawingId, view.columns, view.audit, view.edges, ink.look, ink.stage]);
-    const fit = shownId.current !== drawingId;
+    const key = JSON.stringify([drawingId, view.columns, view.audit, view.edges, view.direction, ink.look, ink.stage]);
+    // 다른 스키마이거나 방향이 바뀌면 그림이 통째로 달라진다 — 보던 자리가 뜻을 잃으니 화면에 맞춘다
+    const fit = shownId.current !== drawingId || shownDirection.current !== view.direction;
     if (key === shownKey.current) {
       // 앞선 그리기를 이 그림으로 되돌렸다 — 그 그리기는 seq 가 어긋나 스스로 끄지 않으니 여기서 끈다
       setBusy(false);
@@ -358,6 +363,7 @@ export function ErdCanvas({
             columns: view.columns,
             audit: view.audit,
             edges: view.edges,
+            direction: view.direction,
             idPrefix: "erd-",
           }));
         if (seq !== renderSeq.current) return;
@@ -377,6 +383,7 @@ export function ErdCanvas({
         shownDrawing.current = c.show(drawing, fit);
         shownKey.current = key;
         shownId.current = drawingId;
+        shownDirection.current = view.direction;
         // 열려 있던 것을 새 그림에서 다시 잡는다
         const { inspected: open, popped: pop } = live.current;
         if (pop && c.row(pop.table, pop.column)) c.focus?.row(pop.table, pop.column);
@@ -560,6 +567,18 @@ export function ErdCanvas({
             {t("erd.canvas.audit")}
           </button>
         </Tooltip>
+        <span className="erd-float-sep" aria-hidden="true" />
+        {(["down", "right"] as const).map((d) => (
+          <Tooltip key={d} label={t(d === "down" ? "erd.canvas.direction.downHint" : "erd.canvas.direction.rightHint")}>
+            <button
+              className={`erd-float-btn ${view.direction === d ? "on" : ""}`}
+              aria-pressed={view.direction === d}
+              onClick={() => set({ direction: d })}
+            >
+              {t(d === "down" ? "erd.canvas.direction.down" : "erd.canvas.direction.right")}
+            </button>
+          </Tooltip>
+        ))}
         <span className="erd-float-sep" aria-hidden="true" />
         {(["angular", "curved"] as const).map((e) => (
           <button
