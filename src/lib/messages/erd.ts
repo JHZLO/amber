@@ -46,6 +46,7 @@ const ko = {
   "erd.canvas.grid": "격자",
   "erd.canvas.laying": "배치하는 중…",
   "erd.canvas.table": "테이블",
+  "erd.canvas.findPh": "테이블이나 컬럼 이름",
 
   "erd.db.addConnection": "DB 연결 추가",
   "erd.db.tooltip.add": "데이터베이스 연결",
@@ -183,6 +184,7 @@ const en: Record<keyof typeof ko, string> = {
   "erd.canvas.grid": "Grid",
   "erd.canvas.laying": "Laying out…",
   "erd.canvas.table": "Table",
+  "erd.canvas.findPh": "Table or column name",
 
   "erd.db.addConnection": "Add database connection",
   "erd.db.tooltip.add": "Connect a database",

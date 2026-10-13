@@ -8071,6 +8071,46 @@ textarea.todo-edit {
 .erd-stage[data-room="tight"] .erd-float-bl {
   display: none;
 }
+/* ⌘F 찾기 — 본문 검색 바(.page-find)와 같은 구성. 캔버스 위라 다른 떠 있는 조작처럼 뜬 유리를 입는다 */
+.page-find.erd-find {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
+  max-width: calc(100% - 20px);
+  margin: 0;
+  border-color: var(--glass-edge);
+  background: var(--glass-fill), var(--glass-panel);
+  backdrop-filter: var(--glass-blur-panel);
+  -webkit-backdrop-filter: var(--glass-blur-panel);
+  box-shadow: var(--glass-sheen), var(--shadow-sm);
+}
+/* 좌상단 보기 조작과 부딪히면 그 아래 줄로(ErdCanvas 가 잰다) */
+.page-find.erd-find[data-low] {
+  top: 54px;
+}
+/* 남은 폭이 바보다 좁으면(패널이 넓게 열렸을 때) 입력란이 줄어든다 — 바가 캔버스 밖으로 잘리지 않게.
+   바의 폭 상한은 ErdCanvas 가 패널 폭에 맞춰 준다 */
+.erd-find .page-find-input {
+  min-width: 0;
+}
+/* 맞은 것 회색, 지금 것 노랑 — 본문 검색(::highlight(page-find))과 같은 색. resin 이 표 머리글과 행마다
+   깔아 둔 판(.rz-hit)을 칠한다. viewer.css 의 호버, 끌기, 고른 컬럼보다 한 단계 구체적이라 찾는 동안은 이 색이 남는다 */
+.erd-stage .erd-viewport .rz-content svg .erd-find-hit > .rz-hit {
+  fill: rgb(120, 120, 130);
+  fill-opacity: 0.3;
+}
+.erd-stage .erd-viewport .rz-content svg .erd-find-cur > .rz-hit {
+  fill: rgb(250, 204, 21);
+  fill-opacity: 0.55;
+}
+:root[data-theme="dark"] .erd-stage .erd-viewport .rz-content svg .erd-find-hit > .rz-hit {
+  fill: rgb(160, 160, 175);
+}
+:root[data-theme="dark"] .erd-stage .erd-viewport .rz-content svg .erd-find-cur > .rz-hit {
+  fill: rgb(202, 138, 4);
+  fill-opacity: 0.62;
+}
 .erd-float-pct {
   min-width: 48px;
   font-variant-numeric: tabular-nums;

@@ -4,6 +4,7 @@
 //
 // 조작 규약(resin 과 같다): 휠 = 포인터 중심 확대, 드래그 = 이동, 더블클릭 = 맞춤. 표 이름 = 패널, 컬럼 = 정보창,
 // 표 몸통 = 초점만, 빈 곳 = 정보창 닫고 초점은 패널의 표로. 패널은 X 와 Esc 로만 닫힌다.
+// ⌘F 는 그려진 표와 컬럼의 이름에서 찾는다(트리에 포커스가 있으면 트리 찾기가 먼저 받는다).
 
 import { useEffect, useRef, useState } from "react";
 import type { Model } from "@jhzlo/resin";
@@ -97,6 +98,18 @@ export function ErdCanvas({
   const [panelWidth, setPanelWidth] = useState(loadPanelWidth);
   // 패널 옆에 남은 캔버스 폭 — 좁으면 배경 고르기가 글자를 접고, 더 좁으면 비켜선다(플레이그라운드와 같은 문턱)
   const [room, setRoom] = useState<"" | "snug" | "tight">("");
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findIdx, setFindIdx] = useState(0);
+  const [findCount, setFindCount] = useState(0);
+  // 찾기 바가 좌상단 보기 조작과 부딪히면 그 아래 줄로 내려간다(패널이 열려 폭이 줄 때)
+  const [findLow, setFindLow] = useState(false);
+  const findInputRef = useRef<HTMLInputElement>(null);
+  const findBarRef = useRef<HTMLDivElement>(null);
+  const viewFloatRef = useRef<HTMLDivElement>(null);
+  const findHits = useRef<Element[]>([]);
+  /** 찾느라 초점 흐림을 걷었는가 — 찾기를 비우거나 닫을 때 한 번만 되돌린다 */
+  const findCleared = useRef(false);
 
   const mounted = useRef(new Map<string, MountedDrawing>());
   const shownKey = useRef("");
@@ -108,8 +121,8 @@ export function ErdCanvas({
   const popFrame = useRef(0);
 
   // 콜백이 늘 지금 상태를 보게 한다 — Canvas 는 한 번 만들어 계속 쓰므로 생성 때의 클로저에 갇히면 안 된다
-  const live = useRef({ model, inspected, popped, view });
-  live.current = { model, inspected, popped, view };
+  const live = useRef({ model, inspected, popped, view, find: findOpen ? findQuery : "" });
+  live.current = { model, inspected, popped, view, find: findOpen ? findQuery : "" };
 
   const covered = () => panelRef.current?.offsetWidth ?? 0;
 
@@ -177,6 +190,75 @@ export function ErdCanvas({
     c.refresh();
     setPopped({ table, column });
     requestAnimationFrame(() => c.revealElement(c.row(table, column), covered()));
+  }
+
+  /** 찾기 — 그려진 표 이름(머리글)과 컬럼 이름에서. 칠하는 건 resin 이 행마다 깔아 둔 판(.rz-hit)이라
+   *  그림은 그대로다. `move` 가 거짓이면 다시 칠하기만 한다(그림을 새로 올렸을 때) */
+  function runFind(q: string, move = true) {
+    const root = viewportRef.current;
+    if (!root) return;
+    for (const el of Array.from(root.querySelectorAll(".erd-find-hit"))) el.classList.remove("erd-find-hit", "erd-find-cur");
+    const term = q.trim().toLowerCase();
+    const hits: Element[] = [];
+    if (term) {
+      for (const card of Array.from(root.querySelectorAll<SVGGElement>(".rz-t[data-t]"))) {
+        const head = card.querySelector(".rz-head");
+        if (head && card.dataset.t!.toLowerCase().includes(term)) hits.push(head);
+        for (const row of Array.from(card.querySelectorAll<SVGGElement>(".rz-c[data-c]")))
+          if (row.dataset.c!.toLowerCase().includes(term)) hits.push(row);
+      }
+    }
+    for (const el of hits) el.classList.add("erd-find-hit");
+    findHits.current = hits;
+    setFindCount(hits.length);
+    setFindIdx(0);
+    if (hits.length) markFind(0, move);
+    if (term) liftFocus();
+    else if (findCleared.current) {
+      findCleared.current = false;
+      restoreFocus();
+    }
+  }
+
+  /** 찾는 동안은 초점 흐림을 걷는다 — 흐려진 표에 걸린 결과도 보여야 한다. 비우거나 닫으면 되돌린다 */
+  function liftFocus() {
+    const c = canvasRef.current;
+    c?.focus?.clear();
+    c?.refresh(true);
+    findCleared.current = true;
+  }
+
+  /** 패널과 정보창이 가리키는 것으로 초점을 되돌린다 */
+  function restoreFocus() {
+    const c = canvasRef.current;
+    const pop = live.current.popped;
+    if (pop && c?.row(pop.table, pop.column)) c.focus?.row(pop.table, pop.column);
+    else settleFocus();
+    c?.refresh(true);
+  }
+
+  /** 키보드(입력, Enter)로 옮길 때는 움직이지 않고 바로 간다(DESIGN: 키보드 동작에 애니메이션 없음) */
+  function markFind(i: number, move = true, animate = false) {
+    const hits = findHits.current;
+    for (const el of hits) el.classList.remove("erd-find-cur");
+    hits[i]?.classList.add("erd-find-cur");
+    if (move) canvasRef.current?.revealElement(hits[i] ?? null, covered(), animate);
+  }
+
+  function stepFind(delta: number, animate = false) {
+    const n = findHits.current.length;
+    if (!n) return;
+    const next = (((findIdx + delta) % n) + n) % n;
+    setFindIdx(next);
+    // 찾는 사이 표를 눌러 다시 흐려졌을 수 있다
+    liftFocus();
+    markFind(next, true, animate);
+  }
+
+  function closeFind() {
+    setFindOpen(false);
+    setFindQuery("");
+    runFind("", false);
   }
 
   const tap = useRef<(hit: CanvasHit) => void>(() => {});
@@ -302,6 +384,8 @@ export function ErdCanvas({
           if (pop) setPopped(null);
           if (open) c.focusTable(open);
         }
+        // 찾기를 새 그림에 다시 칠한다(찾는 중이면 위의 초점을 다시 걷는다). 되살린 그림에 남은 지난 칠도 여기서 걷힌다
+        runFind(live.current.find, false);
         c.refresh(true);
         const next = afterDraw.current;
         afterDraw.current = null;
@@ -365,12 +449,15 @@ export function ErdCanvas({
     const measure = () => {
       const free = wrap.clientWidth - covered();
       setRoom(free < 350 ? "tight" : free < 560 ? "snug" : "");
+      const tl = viewFloatRef.current;
+      const bar = findBarRef.current;
+      setFindLow(!!tl && !!bar && tl.offsetLeft + tl.offsetWidth + 8 > free - 10 - bar.offsetWidth);
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(wrap);
     return () => ro.disconnect();
-  }, [panelWidth, inspected]);
+  }, [panelWidth, inspected, findOpen]);
 
   // Esc — 안쪽부터: 정보창, 그다음 패널
   useEffect(() => {
@@ -387,6 +474,23 @@ export function ErdCanvas({
       } else return;
       canvasRef.current?.refresh(true);
       e.preventDefault();
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [active]);
+
+  // ⌘F — 탭이 보일 때만. 트리에 포커스가 있으면 트리 찾기가 먼저 받고 막는다(TreeFind). 탭을 떠나면 닫는다
+  useEffect(() => {
+    if (!active) {
+      closeFind();
+      return;
+    }
+    const h = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== "f") return;
+      if (document.querySelector(".overlay, .mmd-zoom-overlay")) return;
+      e.preventDefault();
+      setFindOpen(true);
+      requestAnimationFrame(() => findInputRef.current?.select());
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
@@ -434,7 +538,7 @@ export function ErdCanvas({
       <div className="erd-viewport" ref={viewportRef} />
 
       {/* 좌상단 — 무엇을 그리나. 고른 쪽만 채운다(§3) */}
-      <div className="erd-float erd-float-tl" role="group" aria-label={t("erd.canvas.view")}>
+      <div className="erd-float erd-float-tl" ref={viewFloatRef} role="group" aria-label={t("erd.canvas.view")}>
         {COLUMN_LEVELS.map((c) => (
           <Tooltip key={c.id} label={c.hint}>
             <button
@@ -522,6 +626,54 @@ export function ErdCanvas({
           </button>
         ))}
       </div>
+
+      {/* 우상단 — 찾기(⌘F). 본문 검색 바와 같은 구성이고, 패널이 열리면 패널 왼쪽으로 비켜선다 */}
+      {findOpen && (
+        <div
+          className="page-find erd-find"
+          ref={findBarRef}
+          data-low={findLow || undefined}
+          style={
+            inspected
+              ? {
+                  right: `calc(min(${panelWidth}px, 100% - 120px) + 10px)`,
+                  maxWidth: `calc(100% - min(${panelWidth}px, 100% - 120px) - 20px)`,
+                }
+              : undefined
+          }
+        >
+          <Icon name="search" size={14} />
+          <input
+            ref={findInputRef}
+            className="page-find-input"
+            autoFocus
+            placeholder={t("erd.canvas.findPh")}
+            value={findQuery}
+            onChange={(e) => {
+              setFindQuery(e.target.value);
+              runFind(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
+              if (e.key === "Enter") stepFind(e.shiftKey ? -1 : 1);
+              if (e.key === "Escape") {
+                e.stopPropagation(); // 정보창과 패널을 닫는 Esc 까지 가지 않게
+                closeFind();
+              }
+            }}
+          />
+          <span className="page-find-count">{findCount ? `${findIdx + 1}/${findCount}` : findQuery.trim() ? "0" : ""}</span>
+          <button className="page-find-nav" aria-label={t("common.find.prev")} onClick={() => stepFind(-1, true)} disabled={!findCount}>
+            <Icon name="chevron-left" size={14} />
+          </button>
+          <button className="page-find-nav" aria-label={t("common.find.next")} onClick={() => stepFind(1, true)} disabled={!findCount}>
+            <Icon name="chevron-right" size={14} />
+          </button>
+          <button className="page-find-nav" aria-label={t("common.close")} onClick={closeFind}>
+            <Icon name="x" size={14} />
+          </button>
+        </div>
+      )}
 
       {busy && (
         <div className="erd-status">
