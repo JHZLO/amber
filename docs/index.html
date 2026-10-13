@@ -93,6 +93,7 @@
           <button type="button" data-ch="todos">To-dos</button>
           <button type="button" data-ch="concepts">Concepts</button>
           <button type="button" data-ch="notes">Notes</button>
+          <button type="button" data-ch="erd">ERD</button>
           <button type="button" data-ch="diagrams">Diagrams</button>
         </nav>
         <div class="rail" aria-hidden="true"><i id="hprog"></i></div>
@@ -155,21 +156,21 @@
           </div>
           <figure class="panel-shot"><video src="assets/films/edit.mp4" poster="assets/films/edit.jpg" muted loop playsinline preload="none" aria-label="A selected sentence is rewritten by AI, shown against the original, applied in place and saved"></video></figure>
         </article>
+        <article class="panel" data-ch="erd">
+          <div class="panel-copy">
+            <p class="eyebrow mono">ERD / Database</p>
+            <h2 class="display">Connect MySQL, read every schema.</h2>
+            <p>Test the connection and pick the schemas. Amber reads information_schema into a snapshot and draws it top to bottom without AI, with no ERD file to keep in step. One View button picks what each card shows. The password stays in the macOS Keychain, and the next sync tells you what changed.</p>
+          </div>
+          <figure class="panel-shot"><video src="assets/films/erd.mp4" poster="assets/films/erd.jpg" muted loop playsinline preload="none" aria-label="A MySQL connection is tested and three schemas sync into the ERD tab; shop is drawn top to bottom, the View panel leaves descriptions and types out of the cards, and the next sync shows what changed, with a new shipments table"></video></figure>
+        </article>
         <article class="panel" data-ch="diagrams">
           <div class="panel-copy">
-            <p class="eyebrow mono">Diagrams / ERD</p>
+            <p class="eyebrow mono">Diagrams / Mermaid</p>
             <h2 class="display">Paste DDL, get an ERD you can actually read.</h2>
             <p>Mermaid .mmd files on a pan/zoom canvas. Click a table to light up its neighbours, open its columns in a side panel with keys and nullability, and switch between two layout engines.</p>
           </div>
           <figure class="panel-shot"><video src="assets/films/diagrams.mp4" poster="assets/films/diagrams.jpg" muted loop playsinline preload="none" aria-label="Pasted DDL becomes an ERD; clicking payments and then orders opens their columns in a side panel, then the layout switches to curved"></video></figure>
-        </article>
-        <article class="panel" data-ch="diagrams">
-          <div class="panel-copy">
-            <p class="eyebrow mono">Diagrams / Database sync</p>
-            <h2 class="display">Connect MySQL, get every schema drawn.</h2>
-            <p>Test the connection, pick the schemas, and Amber reads information_schema to write one deterministic ERD per schema without AI. The password stays in the macOS Keychain. When the live schema drifts, a banner shows the diff before anything is regenerated.</p>
-          </div>
-          <figure class="panel-shot"><video src="assets/films/sync.mp4" poster="assets/films/sync.jpg" muted loop playsinline preload="none" aria-label="A MySQL connection is tested and three schemas are synced; the shop schema's overview and ERD open, and a drift banner leads to Regenerate"></video></figure>
         </article>
       </div>
     </div>

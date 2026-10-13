@@ -39,8 +39,8 @@
 |---|---|
 | ✅ **To-dos & timetable** | Nested checklists per day or per week, a Google-Calendar-style time-blocking grid, Korean public holidays and time-off marks. |
 | 📝 **Notes** | Real markdown files in real folders. Live preview, scroll-spy TOC, inline AI Q&A, and AI edits scoped to a sentence, a section or the whole note — always as a reviewable diff. |
+| 🗄️ **ERD** | Connect MySQL and every schema you pick is drawn from a read-only snapshot, without AI. Choose what each card shows, find any table or column, and see what changed on the next sync. |
 | 📊 **Diagrams** | Mermaid `.mmd` files on a pan/zoom canvas with table search, focus mode and two layout engines. Paste DDL and get a house-style ERD. |
-| 🗄️ **Database sync** | Connect MySQL. Amber reads `information_schema`, writes one deterministic ERD per schema without AI, and shows a diff when the live schema drifts. |
 | 📋 **Daily & weekly reports** | The AI writes your day as “problem → fix” from your to-dos, GitHub activity and local Claude Code / Codex sessions. Weekly rolls the dailies up into Notion-ready text. |
 | 🧠 **Concepts** | On the side: turn an AI chat that taught you something into a flashcard. Confidence dots and a “learned” model keep the deck focused on what you haven’t internalized. |
 | 📌 **Desktop widget** | An always-on-top sticker cycles through the cards you’re still learning, weakest first. |
@@ -121,6 +121,35 @@ draft you review and save with `⌘S`, never straight into the file.
 <tr>
 <td width="50%" valign="middle">
 
+### 🗄️ ERD from your database
+
+Connect a MySQL database the DataGrip way (host, port, user), with the password stored **only in
+the macOS Keychain** (never in Amber’s DB, files or logs). The ERD tab lists each connection with
+the schemas you picked and their tables. Amber reads `information_schema` in a read-only session,
+keeps a `schema.json` snapshot per schema and draws it with [resin](https://github.com/JHZLO/resin)
+**deterministically, without AI**. There is no ERD file to keep in step: the snapshot is the
+source. Logical references (`order_id` → `orders`) are inferred from names, comments and
+suffixes, and Envers `*_aud` audit tables fold away unless you turn them on.
+
+The drawing reads top to bottom. One **View** button holds the rest: every column, keys only or
+names only; which parts of a row to show (key, tags, description, type, null); vertical or
+horizontal; angular or curved lines. Click a table for its columns in a side panel, click a
+column for its details, find any table or column with `⌘F`, or switch to **Overview** for the
+counts, a searchable table list and the references Amber could not resolve.
+
+Sync again and a banner says what changed since the last snapshot: tables and columns added,
+removed or changed. Production connections carry a “Production” badge everywhere and ask for
+confirmation on first connect. Connection status shows as a live green dot in the tree and in
+*Settings › Databases*.
+
+</td>
+<td width="50%">
+  <img src="docs/assets/erd.png" alt="The ERD tab drawing a demo shop schema top to bottom, with the View panel open" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
 ### 📊 Mermaid diagram studio
 
 Keep ERDs, flowcharts and sequence diagrams as plain `.mmd` files organized in folders. Pan/zoom
@@ -137,30 +166,6 @@ the column notes.
 </td>
 <td width="50%">
   <img src="docs/assets/diagrams.png" alt="ERD on the canvas with one table focused and its column card open" width="100%" />
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
-### 🗄️ Database → ERD sync
-
-Connect a MySQL database the DataGrip way — host · port · user, with the password stored **only
-in the macOS Keychain** (never in Amber’s DB, files or logs). The connection becomes an ordinary
-folder in the diagrams tree with one sub-folder per schema you pick. Amber reads
-`information_schema` in a read-only session, keeps a `schema.json` snapshot per schema, and
-generates the same house-style ERD **deterministically, without AI** — the same schema always
-produces byte-identical output. Logical references (`order_id` → `orders`) are inferred from
-names, comments and suffixes; Envers `*_aud` audit tables can be toggled off per schema.
-
-Open a synced ERD later and a banner tells you when the live schema has drifted — tables and
-columns added, removed or changed — with a full diff. Regeneration always lands as an editor
-draft you save with `⌘S`; nothing is overwritten silently. Production connections carry a
-“Production” badge everywhere and ask for confirmation on first connect. Connection status
-shows as a live green dot in the tree and in *Settings › Databases*.
-
-</td>
-<td width="50%">
-  <img src="docs/assets/db-sync.png" alt="A MySQL connection synced into the diagram tree, with the schema-drift banner over a generated ERD" width="100%" />
 </td>
 </tr>
 <tr>
@@ -239,7 +244,7 @@ bump confidence, or mark one learned right from the widget, entirely from the ke
 
 ## Also in the box
 
-- **Quick search** — `⌘K` (or `⌘P`) searches note and diagram names and bodies plus concepts in one box; `⌘F` finds within the current screen, including tables and columns on a diagram canvas
+- **Quick search** — `⌘K` (or `⌘P`) searches note and diagram names and bodies plus concepts in one box; `⌘F` finds within the current screen, including tables and columns on a diagram or ERD canvas
 - **Sign in without leaving the app** — when a CLI token expires, Amber opens the login flow for Claude Code and Codex in a modal (the code goes straight to the CLI’s stdin; Amber stores nothing)
 - **Pick the model** per provider, and **stop** any AI run mid-way
 - **Korean & English UI** — from your system language, switchable in *Settings › Appearance*; the AI response language can follow the UI or be fixed separately
@@ -253,9 +258,9 @@ bump confidence, or mark one learned right from the widget, entirely from the ke
 
 | Main window | |
 |---|---|
-| `⌘1` – `⌘4` | Switch workspace (To-dos · Concepts · Notes · Diagrams) |
+| `⌘1` – `⌘5` | Switch workspace (To-dos, Concepts, Notes, ERD, Diagrams) |
 | `⌘K` / `⌘P` | Quick search across the vault |
-| `⌘F` | Find in the current screen / diagram canvas |
+| `⌘F` | Find in the current screen / diagram or ERD canvas |
 | `⌘S` | Save the note, diagram or report you’re editing |
 | `⌘,` | Settings |
 | `Esc` | Close modal · leave full screen · deselect |
@@ -290,7 +295,8 @@ settings) lives in SQLite.
 └── vault/
     ├── concepts/<ulid>/index.md    # concept detail notes
     ├── notes/**/*.md               # notes (+ *.comments.json Q&A · *.concepts.json promoted-concept links)
-    ├── diagrams/**/*.mmd           # mermaid sources (+ <connection>/<schema>/schema.json DB snapshots)
+    ├── diagrams/**/*.mmd           # mermaid sources
+    ├── erd/**/schema.json          # database snapshots the ERD tab draws from
     └── reports/<date>.md           # daily reports (+ <week-start>-week.md weekly)
 ```
 
