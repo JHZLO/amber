@@ -9,7 +9,7 @@
 // localeCompare 대신 코드 유닛 비교를 쓰고, 컬럼 순서는 스냅샷(DDL) 순서를 따른다(타임스탬프만 맨 뒤).
 // 코멘트는 번역하지 않고 그대로 옮긴다 — 의미를 지어내는 일은 하지 않는다(코멘트가 없으면 설명도 없다).
 
-import { fromSchema, type SchemaForeignKey, type SchemaInput } from "resin";
+import { fromSchema, type SchemaForeignKey, type SchemaInput } from "@jhzlo/resin";
 import type {
   SchemaSnapshot,
   SnapshotColumn,

@@ -12,6 +12,7 @@
     "test:ts": "vitest run"
   },
   "dependencies": {
+    "@jhzlo/resin": "0.2.0",
     "@mermaid-js/layout-elk": "^0.2.2",
     "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/api": "^2",
@@ -30,7 +31,6 @@
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
-    "resin": "github:JHZLO/resin#0d9855f2323464880071a029fda700ee1cda0d6a",
     "svg-pan-zoom": "^3.6.2",
     "tailwind-merge": "^3.7.0",
     "tailwindcss": "^4.3.3",

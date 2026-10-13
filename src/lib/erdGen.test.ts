@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compile, format } from "resin";
+import { compile, format } from "@jhzlo/resin";
 import { commonTablePrefix, generateErd, inferReferences } from "./erdGen";
 import type {
   SchemaSnapshot,

@@ -5,7 +5,7 @@
 // 그리기와 조작은 resin 플레이그라운드의 것을 그대로 쓴다(ErdCanvas).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { compile } from "resin";
+import { compile } from "@jhzlo/resin";
 import {
   DB_CONNECTIONS_EVENT,
   connStatus,

@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@jhzlo/resin':
+        specifier: 0.2.0
+        version: 0.2.0(elkjs@0.12.0)
       '@mermaid-js/layout-elk':
         specifier: ^0.2.2
         version: 0.2.2(mermaid@11.16.0)
@@ -62,9 +65,6 @@ importers:
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1
-      resin:
-        specifier: github:JHZLO/resin#0d9855f2323464880071a029fda700ee1cda0d6a
-        version: https://codeload.github.com/JHZLO/resin/tar.gz/0d9855f2323464880071a029fda700ee1cda0d6a(elkjs@0.12.0)
       svg-pan-zoom:
         specifier: ^3.6.2
         version: 3.6.2
@@ -436,6 +436,15 @@ packages:
 
   '@iconify/utils@3.1.4':
     resolution: {integrity: sha512-b1S7B1k9ohZ+iNTi2ATxbRYG9fTrJmUT0rc46bvVnNxqNRGW7dyo/vRREwyniI5IRN2RSJHDcm+s3BjWrSAjHw==}
+
+  '@jhzlo/resin@0.2.0':
+    resolution: {integrity: sha512-M8EG51rtJghijRQDyzHtsLx5T2wm3eSAKCCHTiiWu+lgbN6JjxLMl6VB2vbTJXcqyM7p+qgSDmRYOYBNLtaj/w==}
+    engines: {node: '>=22.18'}
+    peerDependencies:
+      elkjs: '>=0.9'
+    peerDependenciesMeta:
+      elkjs:
+        optional: true
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -2502,16 +2511,6 @@ packages:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
 
-  resin@https://codeload.github.com/JHZLO/resin/tar.gz/0d9855f2323464880071a029fda700ee1cda0d6a:
-    resolution: {tarball: https://codeload.github.com/JHZLO/resin/tar.gz/0d9855f2323464880071a029fda700ee1cda0d6a}
-    version: 0.2.0
-    engines: {node: '>=22.18'}
-    peerDependencies:
-      elkjs: '>=0.9'
-    peerDependenciesMeta:
-      elkjs:
-        optional: true
-
   robust-predicates@3.0.3:
     resolution: {integrity: sha512-NS3levdsRIUOmiJ8FZWCP7LG3QpJyrs/TE0Zpf1yvZu8cAJJ6QMW92H1c7kWpdIHo8RvmLxN/o2JXTKHp74lUA==}
 
@@ -3092,6 +3091,10 @@ snapshots:
       '@antfu/install-pkg': 1.1.0
       '@iconify/types': 2.0.0
       import-meta-resolve: 4.2.0
+
+  '@jhzlo/resin@0.2.0(elkjs@0.12.0)':
+    optionalDependencies:
+      elkjs: 0.12.0
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
@@ -5462,10 +5465,6 @@ snapshots:
       unified: 11.0.5
 
   require-from-string@2.0.2: {}
-
-  resin@https://codeload.github.com/JHZLO/resin/tar.gz/0d9855f2323464880071a029fda700ee1cda0d6a(elkjs@0.12.0):
-    optionalDependencies:
-      elkjs: 0.12.0
 
   robust-predicates@3.0.3: {}
 

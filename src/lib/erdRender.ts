@@ -3,8 +3,8 @@
 
 import ELK from "elkjs/lib/elk-api.js";
 import elkWorkerUrl from "elkjs/lib/elk-worker.min.js?url";
-import { toSvg, type ElkLike, type Model, type SvgOptions, type SvgResult } from "resin";
-import { LayoutCache } from "resin/viewer";
+import { toSvg, type ElkLike, type Model, type SvgOptions, type SvgResult } from "@jhzlo/resin";
+import { LayoutCache } from "@jhzlo/resin/viewer";
 
 let elk: ElkLike | null = null;
 const cache = new LayoutCache<SvgResult>(8, 48 * 1024 * 1024);

@@ -6,7 +6,7 @@
 // 표 몸통 = 초점만, 빈 곳 = 정보창 닫고 초점은 패널의 표로. 패널은 X 와 Esc 로만 닫힌다.
 
 import { useEffect, useRef, useState } from "react";
-import type { Model } from "resin";
+import type { Model } from "@jhzlo/resin";
 import {
   CANVAS_STAGES,
   Canvas,
@@ -15,8 +15,8 @@ import {
   type CanvasHit,
   type CanvasStage,
   type MountedDrawing,
-} from "resin/viewer";
-import "resin/viewer.css";
+} from "@jhzlo/resin/viewer";
+import "@jhzlo/resin/viewer.css";
 import { drawErd } from "../lib/erdRender";
 import { THEME_EVENT, resolvedTheme } from "../lib/theme";
 import { t } from "../lib/i18n";
