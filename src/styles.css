@@ -8071,6 +8071,53 @@ textarea.todo-edit {
 .erd-stage[data-room="tight"] .erd-float-bl {
   display: none;
 }
+/* [보기] 판 — 좌상단 버튼 하나가 여는 드롭다운. 판은 .select-menu(뜬 유리)이고 줄은 떠 있는 조작과 같은 알약이다.
+   항목 칸에는 resin 의 견본 행(.rz-parts, viewer.css)이 들어간다 — 색은 위 --rz-* 토큰으로 잇는다 */
+.erd-view-summary {
+  color: var(--text-3);
+  font-weight: 500;
+}
+.erd-float-btn.on .erd-view-summary {
+  color: inherit;
+  opacity: 0.6;
+}
+.select-menu.erd-view-panel {
+  position: absolute;
+  top: 48px;
+  left: 10px;
+  z-index: 6; /* 정보창(.erd-pop, 5) 위 */
+  width: max-content;
+  max-width: calc(100% - 20px);
+  max-height: none;
+  overflow: visible;
+  padding: 4px 12px 12px;
+  white-space: normal;
+}
+.erd-view-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 12px 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
+.erd-view-note {
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.erd-view-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+.erd-view-parts.is-locked {
+  opacity: var(--disabled-opacity);
+  pointer-events: none;
+}
 /* ⌘F 찾기 — 본문 검색 바(.page-find)와 같은 구성. 캔버스 위라 다른 떠 있는 조작처럼 뜬 유리를 입는다 */
 .page-find.erd-find {
   position: absolute;

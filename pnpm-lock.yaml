@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@jhzlo/resin':
-        specifier: 0.2.2
-        version: 0.2.2(elkjs@0.12.0)
+        specifier: 0.2.4
+        version: 0.2.4(elkjs@0.12.0)
       '@mermaid-js/layout-elk':
         specifier: ^0.2.2
         version: 0.2.2(mermaid@11.16.0)
@@ -437,9 +437,10 @@ packages:
   '@iconify/utils@3.1.4':
     resolution: {integrity: sha512-b1S7B1k9ohZ+iNTi2ATxbRYG9fTrJmUT0rc46bvVnNxqNRGW7dyo/vRREwyniI5IRN2RSJHDcm+s3BjWrSAjHw==}
 
-  '@jhzlo/resin@0.2.2':
-    resolution: {integrity: sha512-8Lv0nMI00osOqzuTEnBOZAqkxPSUhmi2X4lKadck6UQLJKQXBywXZeDQVfCHV3miPdPT803mpEjso6XIKWSIbw==}
+  '@jhzlo/resin@0.2.4':
+    resolution: {integrity: sha512-RYMXc7JZoD04L1R5RnMYTqGw7Y2CGwi59qOzPRxrLkBCfvNvDkjq3BFAU4OT46uFxLf4Q6fC6iCiJViQ3T/Wug==}
     engines: {node: '>=22.18'}
+    hasBin: true
     peerDependencies:
       elkjs: '>=0.9'
     peerDependenciesMeta:
@@ -3092,7 +3093,7 @@ snapshots:
       '@iconify/types': 2.0.0
       import-meta-resolve: 4.2.0
 
-  '@jhzlo/resin@0.2.2(elkjs@0.12.0)':
+  '@jhzlo/resin@0.2.4(elkjs@0.12.0)':
     optionalDependencies:
       elkjs: 0.12.0
 
