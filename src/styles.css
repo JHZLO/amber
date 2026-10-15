@@ -3286,6 +3286,44 @@ html.widget-root #root {
   color: var(--text-3);
   margin-bottom: 4px;
 }
+/* 경로 줄이 곧 경로 복사 버튼이다(NoteCrumb). 탐색기 머리의 .root-path 와 같은 문법 —
+   평소엔 글자만, 손이 닿으면 면과 끝의 복사 표식이 나오고, 누르면 그 표식이 체크로 바뀐다.
+   왼쪽 -6px: hover 면이 생겨도 글자가 제목 줄 왼쪽 끝에 그대로 맞는다. */
+.note-crumb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: -6px;
+  padding: 3px 6px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-3);
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, transform 0.16s var(--ease-out);
+}
+.note-crumb-btn:hover {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.note-crumb-btn:active {
+  transform: scale(0.96);
+}
+.note-crumb-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.note-crumb-copy {
+  display: inline-flex;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.note-crumb-btn:hover .note-crumb-copy,
+.note-crumb-btn:focus-visible .note-crumb-copy,
+.note-crumb-btn.copied .note-crumb-copy {
+  opacity: 1;
+}
 .note-textarea {
   flex: 1;
   min-height: 420px;

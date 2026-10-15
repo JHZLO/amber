@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
 import { PageFind } from "./PageFind";
+import { NoteCrumb } from "./NoteCrumb";
 import { TREE_ROW_ATTR, TreeFindBar, TreeLabel, useTreeFind } from "./TreeFind";
 import { headingSection } from "../lib/mdSecRefs";
 import { NoteCommentLayer } from "./NoteComments";
@@ -972,7 +973,6 @@ export function NotesView({
   const fileName = selected
     ? selected.slice(selected.lastIndexOf("/") + 1).replace(/\.md$/i, "")
     : "";
-  const crumbDirs = selected ? parentOf(selected).split("/").filter(Boolean) : [];
   // 본문의 `![](_assets/…)` 를 풀 기준 폴더
   const assetBase = selected ? noteDirPath(selected) : undefined;
 
@@ -1081,10 +1081,8 @@ export function NotesView({
         />
         {selected ? (
           <div className={`notes-detail ${editing ? "editing" : ""}`}>
-            <div className="note-crumb">
-              <Icon name="folder" size={12} />
-              {[t("notes.title"), ...crumbDirs].join(" › ")}
-            </div>
+            {/* 경로 줄 = 경로 복사(⌥⌘C) — NoteCrumb 주석 참고 */}
+            <NoteCrumb path={selected} active={active} />
             <div className="detail-head">
               {/* 제목 = 파일명이다. 트리까지 가지 않고 여기서 바꾸는 게 자연스럽다 —
                   누르면 트리의 이름 변경과 **같은 모달**을 연다(이름 검증·중복 처리·에러

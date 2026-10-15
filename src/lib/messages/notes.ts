@@ -27,6 +27,8 @@ const ko = {
   "notes.saving": "저장 중…",
   "notes.copy": "복사",
   "notes.copied": "복사됨",
+  // 제목 위 경로 줄(NoteCrumb) — 툴팁이 복사될 경로를 먼저 보인다
+  "notes.crumb.copyTip": "{path} 복사 (⌥⌘C)",
   "notes.copyAll": "노트 전문을 마크다운 원문으로 클립보드에 복사해요",
   "notes.edit": "편집",
   "notes.aiWrite": "AI 작성",
@@ -240,6 +242,7 @@ const en: Record<keyof typeof ko, string> = {
   "notes.saving": "Saving…",
   "notes.copy": "Copy",
   "notes.copied": "Copied",
+  "notes.crumb.copyTip": "Copy {path} (⌥⌘C)",
   "notes.copyAll": "Copy the whole note to the clipboard as markdown",
   "notes.edit": "Edit",
   "notes.aiWrite": "Write with AI",
