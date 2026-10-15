@@ -17,6 +17,7 @@ import { createPortal } from "react-dom";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { FIND_LIMIT, clearPaint, findInText, findRanges, paint } from "../lib/pageFind";
+import { openEnclosingToggles } from "../lib/mdDetails";
 
 const KEY_ALL = "page-find";
 const KEY_CUR = "page-find-cur";
@@ -113,6 +114,8 @@ export function PageFind({
       r.startContainer.nodeType === Node.TEXT_NODE
         ? r.startContainer.parentElement
         : (r.startContainer as HTMLElement);
+    // 접힌 마크다운 토글 안의 결과면 펴야 보인다(펴는 동안에도 글자 자리는 그대로라 바로 스크롤해도 된다)
+    openEnclosingToggles(el);
     el?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, []);
 

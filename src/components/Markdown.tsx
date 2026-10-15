@@ -1,7 +1,7 @@
 // 앱 공용 마크다운 렌더러: GFM + ```mermaid``` 코드펜스를 다이어그램으로, ```svg 펜스를 인라인 그래픽으로 렌더.
 // 호출부는 기존처럼 .markdown 컨테이너로 감싸서 쓴다 (여긴 래퍼를 추가하지 않음).
 
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -9,6 +9,7 @@ import { Mermaid } from "./Mermaid";
 import { Icon, type IconName } from "../icons";
 import { t, type MsgKey } from "../lib/i18n";
 import { remarkAlerts, type AlertKind } from "../lib/mdAlerts";
+import { onToggleReveal, parseBlocks, remarkDetails, type BlockKind } from "../lib/mdDetails";
 import { remarkSecRefs } from "../lib/mdSecRefs";
 import { looksLikeMermaid } from "../lib/mdMermaid";
 import { remarkSvgHtml, sanitizeSvg } from "../lib/mdSvg";
@@ -97,6 +98,60 @@ function MdImage({ base, src, alt }: { base?: string; src?: string; alt?: string
   return <img src={cur?.url ?? undefined} alt={alt ?? ""} className="md-img" />;
 }
 
+const BLOCK_LABELS: Record<BlockKind, MsgKey> = {
+  paragraph: "common.toggle.paragraph",
+  list: "common.toggle.list",
+  code: "common.toggle.code",
+  figure: "common.toggle.figure",
+  table: "common.toggle.table",
+  toggle: "common.toggle.toggle",
+};
+
+/** 마크다운 토글(`<details>`, lib/mdDetails.ts) — 앉은 유리 카드 한 장이 머리이자 그릇이다.
+ *
+ *  **모듈 수준 컴포넌트여야 한다.** components 맵의 인라인 함수는 렌더마다 새 타입이라 React 가
+ *  매번 다시 마운트하고, 그러면 편 토글이 편집 미리보기의 글자 하나, AI 스트리밍 조각 하나마다 도로 접힌다.
+ *  펼침은 grid 트랙(0fr, 1fr)으로 열고 닫혀도 언마운트하지 않는다(DESIGN 9.2). `inert` 는 쓰지 않는다
+ *  (WKWebView 커서 문제, TodoDrawer 참고) — 접힌 몸통은 CSS visibility 가 탭 순서와 클릭에서 뺀다. */
+function MdToggle(props: { open?: boolean; children?: React.ReactNode }) {
+  const p = props as typeof props & {
+    "data-summary"?: string;
+    "data-blocks"?: string;
+    "data-md-start"?: number;
+    "data-md-end"?: number;
+  };
+  const [open, setOpen] = useState(props.open === true);
+  const ref = useRef<HTMLDivElement>(null);
+  // 목차, 찾기, 코멘트가 접힌 토글 안으로 이동할 때 펴 달라고 부탁한다(openEnclosingToggles)
+  useEffect(() => onToggleReveal(ref.current, () => setOpen(true)), []);
+  const meta = parseBlocks(p["data-blocks"])
+    .map(([kind, n]) => t(BLOCK_LABELS[kind], { n }))
+    .join(", ");
+  return (
+    <div
+      ref={ref}
+      className="md-toggle"
+      data-open={open}
+      data-md-start={p["data-md-start"]}
+      data-md-end={p["data-md-end"]}
+    >
+      <button
+        type="button"
+        className="md-toggle-sum"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <Icon name="chevron-right" size={14} className="md-toggle-caret" />
+        <span className="md-toggle-title">{p["data-summary"] || t("common.toggle.untitled")}</span>
+        {meta && <span className="md-toggle-meta">{meta}</span>}
+      </button>
+      <div className="md-toggle-body" aria-hidden={!open}>
+        <div className="md-toggle-inner">{props.children}</div>
+      </div>
+    </div>
+  );
+}
+
 // memo: 부모(예: NotesView 스크롤 스파이)가 재렌더돼도 본문 문자열이 그대로면
 // 마크다운 재파싱/mermaid 재렌더를 건너뛴다 → 스크롤 시 깜빡임 제거.
 export const Markdown = memo(function Markdown({
@@ -109,7 +164,7 @@ export const Markdown = memo(function Markdown({
 }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkAlerts, remarkSecRefs, remarkSvgHtml]}
+      remarkPlugins={[remarkGfm, remarkAlerts, remarkSecRefs, remarkSvgHtml, remarkDetails]}
       // 문법 하이라이트 — 클래스(hljs-*)만 붙이고 색은 styles.css 의 토큰이 정한다.
       // detect: false 로 **언어를 적은 블록만** 칠한다(추측이 틀리면 색이 엉뚱해진다).
       // svg·mermaid 는 칠하지 않는다 — highlight.js 가 svg 를 xml 별칭으로 알아 토큰으로 쪼개면
@@ -136,6 +191,8 @@ export const Markdown = memo(function Markdown({
             </div>
           );
         },
+        // `<details>` 토글 — 모듈 수준 컴포넌트를 그대로 넘긴다(MdToggle 주석 참고)
+        details: MdToggle,
         // 아래 블록들은 렌더를 바꾸지 않는다 — 소스 좌표만 얹는다(읽기 모드 드래그 → 부분 수정)
         p(props) {
           return <p {...srcAttrs(props.node, children)}>{props.children}</p>;

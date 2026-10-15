@@ -30,6 +30,7 @@ import { ConfirmDelete, DiscardModal, timeAgo, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { blockRangeFromSelection } from "../lib/mdBlocks";
+import { openEnclosingToggles } from "../lib/mdDetails";
 import { nthIndex, rangeAt } from "../lib/noteAnchor";
 import { SelectionSweep } from "./SelectionSweep";
 import { Button } from "@/components/ui/button";
@@ -200,7 +201,9 @@ export function NoteCommentLayer({
       if (!fromList) return;
       setListOpen(false);
       const hit = rangesRef.current.find((r) => r.id === id);
-      // Range 는 스크롤 대상이 못 되므로 앵커가 걸린 요소를 올린다 — 문장 단위면 충분하다
+      // Range 는 스크롤 대상이 못 되므로 앵커가 걸린 요소를 올린다 — 문장 단위면 충분하다.
+      // 접힌 마크다운 토글 안이면 먼저 편다
+      openEnclosingToggles(hit?.range.startContainer.parentElement);
       hit?.range.startContainer.parentElement?.scrollIntoView({
         block: "center",
         behavior: "smooth",

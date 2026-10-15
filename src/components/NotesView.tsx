@@ -59,6 +59,7 @@ import {
 import { loadNoteConcepts, type NoteConceptLink } from "../lib/noteConcepts";
 import { decideDiskSync, keepCaret, watchNotesRoot } from "../lib/noteWatch";
 import { openConceptInApp, OPEN_NOTE } from "../lib/nav";
+import { inClosedToggle, openEnclosingToggles } from "../lib/mdDetails";
 import { emit } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
@@ -330,7 +331,8 @@ export function NotesView({
       let cur = toc[0].id;
       for (const t of toc) {
         const el = document.getElementById(t.id);
-        if (!el) continue;
+        // 접힌 토글 안의 제목은 화면에 없다 — 토글 머리 바로 밑 자리로 읽혀 현재 절을 엉뚱하게 잡는다
+        if (!el || inClosedToggle(el)) continue;
         if (el.getBoundingClientRect().top - cTop <= 96) cur = t.id;
         else break;
       }
@@ -379,9 +381,10 @@ export function NotesView({
 
   function scrollToHeading(id: string) {
     setActiveHeading(id);
-    document
-      .getElementById(id)
-      ?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
+    const el = document.getElementById(id);
+    // 접힌 토글 안의 제목이면 펴야 보인다 — 목차는 토글 안의 제목도 싣는다
+    openEnclosingToggles(el);
+    el?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
   }
 
   const reload = useCallback(async () => {

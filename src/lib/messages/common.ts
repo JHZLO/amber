@@ -114,6 +114,15 @@ const ko = {
   "common.alert.warning": "주의",
   "common.alert.caution": "경고",
 
+  // 마크다운 토글(`<details>`) — 제목이 없을 때의 이름과 머리에 흐리게 적는 '안에 든 것'
+  "common.toggle.untitled": "자세히",
+  "common.toggle.paragraph": "문단 {n}",
+  "common.toggle.list": "목록 {n}",
+  "common.toggle.code": "코드 {n}",
+  "common.toggle.figure": "그림 {n}",
+  "common.toggle.table": "표 {n}",
+  "common.toggle.toggle": "토글 {n}",
+
   // 페이지 내 검색(⌘F) — 필기노트·개념·투두 공용 (components/PageFind.tsx)
   "common.find.ph": "이 화면에서 찾기",
   "common.find.treePh": "트리에서 찾기 — 접힌 폴더 안까지",
@@ -257,6 +266,14 @@ const en: Record<keyof typeof ko, string> = {
   "common.alert.important": "Important",
   "common.alert.warning": "Warning",
   "common.alert.caution": "Caution",
+
+  "common.toggle.untitled": "Details",
+  "common.toggle.paragraph": "Text {n}",
+  "common.toggle.list": "List {n}",
+  "common.toggle.code": "Code {n}",
+  "common.toggle.figure": "Figure {n}",
+  "common.toggle.table": "Table {n}",
+  "common.toggle.toggle": "Toggle {n}",
 
   "common.find.ph": "Find on this screen",
   "common.find.treePh": "Find in tree, including collapsed folders",

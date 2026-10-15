@@ -2552,6 +2552,117 @@ body.resizing-col .pane-resizer::after {
 .md-alert-caution {
   --md-alert: var(--alert-caution);
 }
+/* 토글(`<details>` — lib/mdDetails.ts + components/Markdown.tsx 의 MdToggle). 앉은 유리 카드다(§2 유리):
+   테두리가 있는 면이라 유리를 쓰고, 뒤에 흐를 것이 없으니 blur 는 없다. 손이 닿으면 한 단 들린다.
+   펼침은 §9.2 의 grid 트랙(0fr, 1fr) — .tree-children 과 같은 수법이라 안의 글이 다시 흐르지 않는다. */
+.md-toggle {
+  margin: 12px 0;
+  border: 1px solid var(--glass-edge);
+  border-radius: 12px;
+  background: var(--glass-fill);
+  box-shadow: var(--glass-sheen), var(--glass-seat);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.md-toggle:has(> .md-toggle-sum:hover) {
+  border-color: var(--glass-edge-hover);
+  box-shadow: var(--glass-sheen-hover), var(--glass-seat-hover);
+}
+/* 안쪽 토글은 테만 남긴다 — 유리 위에 유리를 또 깔면 채움과 그림자가 겹겹이 짙어진다 */
+.md-toggle .md-toggle {
+  background: none;
+  box-shadow: none;
+}
+.md-toggle-sum {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 14px 9px 12px;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.md-toggle-sum:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.md-toggle-caret {
+  flex-shrink: 0;
+  /* 꺾쇠를 제목 첫 줄 가운데에 — 제목이 여러 줄이어도 첫 줄에 붙어 있게 */
+  margin-top: calc((1.7em - 14px) / 2);
+  color: var(--text-3);
+  transition: transform 0.24s var(--ease-out), color 0.12s;
+}
+.md-toggle-sum:hover .md-toggle-caret {
+  color: var(--text);
+}
+.md-toggle[data-open="true"] > .md-toggle-sum .md-toggle-caret {
+  transform: rotate(90deg);
+}
+.md-toggle-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+/* 안에 든 것(문단 2, 코드 1) — 펴기 전에 무엇이 접혀 있는지 흐리게 말한다 */
+.md-toggle-meta {
+  flex-shrink: 0;
+  margin-top: calc((1.7em - 1.5em) / 2);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+/* 접히는 게 **끝난 뒤** 숨긴다(.parked 와 같은 지연) — 바로 숨기면 닫히는 동안 속이 먼저 사라진다.
+   visibility:hidden 이 접힌 몸통을 탭 순서와 클릭에서 뺀다(inert 는 WKWebView 커서 문제로 안 쓴다). */
+.md-toggle-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.28s var(--ease-out), visibility 0s linear 0.28s;
+}
+.md-toggle[data-open="false"] > .md-toggle-body {
+  visibility: hidden;
+}
+.md-toggle[data-open="true"] > .md-toggle-body {
+  grid-template-rows: 1fr;
+  transition-delay: 0s;
+}
+/* 세로 padding 을 두지 않는다 — 닫힌 칸(0fr)에서도 padding 은 남아 글이 한 줄 비친다.
+   위의 테 한 줄과 아래 여백은 안쪽 블록(::before, ::after)으로 준다. */
+.md-toggle-inner {
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 16px 0 34px;
+}
+.md-toggle-inner::before {
+  content: "";
+  display: block;
+  height: 1px;
+  margin: 0 0 10px -22px;
+  background: var(--glass-edge);
+}
+.md-toggle-inner::after {
+  content: "";
+  display: block;
+  height: 12px;
+}
+.md-toggle-inner > :first-child {
+  margin-top: 0;
+}
+.md-toggle-inner > :last-child {
+  margin-bottom: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .md-toggle-caret,
+  .md-toggle-body {
+    transition: none;
+  }
+}
 
 /* ---- 위젯 (투명 창) ---- */
 html.widget-root,
