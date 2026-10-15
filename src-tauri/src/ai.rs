@@ -2160,6 +2160,15 @@ mod tests {
         }
     }
 
+    // 토글은 렌더러(src/lib/mdDetails.ts)가 `<details>` 와 `<summary>` 를 읽어 접는다. 두 프롬프트가 같은 문법을
+    // 가르쳐야 노트 AI 가 쓴 토글이 접혀 보인다 — 다른 모양(예: 노션식 `>` 토글)을 쓰면 인용구로 렌더된다.
+    #[test]
+    fn note_prompts_teach_the_toggle_syntax_the_renderer_reads() {
+        for base in [NOTE_SYSTEM_PROMPT, NOTE_EDIT_SYSTEM_PROMPT] {
+            assert!(base.contains("<details>") && base.contains("<summary>"), "토글 문법이 빠졌다");
+        }
+    }
+
     // 스타일 가이드와 아키텍처 스킬은 빌드 시점에 굽는 선택 사항이라(build.rs) 있을 때와 없을 때가 둘 다 정상이다.
     // 없을 때 빈 줄만 덧붙이면 프롬프트 끝이 지저분해지고, 있을 때 언어 지시가 가운데 끼면 무시된다.
     #[test]
