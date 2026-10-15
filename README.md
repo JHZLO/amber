@@ -80,9 +80,10 @@ Real folders and files are the source of truth — point the notes tree at **any
 (a git repo, an Obsidian vault) and switch between recent ones like *Open Folder* in an IDE.
 Edit with a live side-by-side preview whose two panes scroll together (`⌘S` to save), read with a
 floating scroll-spy table of contents, find in the page with `⌘F`, and rename a note straight from
-its title. Rendering understands GFM, GitHub-style `> [!NOTE]` alert blocks, syntax-highlighted
-code blocks framed as macOS windows, `[[1-2]]` jumps to a numbered section, and mermaid fences
-(even ones that forgot the `mermaid` tag).
+its title. Rendering understands GFM, GitHub-style `> [!NOTE]` alert blocks, `<details>` /
+`<summary>` toggles that fold into glass cards, syntax-highlighted code blocks framed as macOS
+windows, `[[1-2]]` jumps to a numbered section, and mermaid fences (even ones that forgot the
+`mermaid` tag).
 
 **AI where you point.** Select any sentence to ask about it — answers live in a sidecar file and
 show as Notion-style highlights, never bloating the note; every question on a note is also
