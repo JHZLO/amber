@@ -39,6 +39,15 @@ describe("lint-svg — 잡아야 할 것", () => {
     expect(errors(body)).toContainEqual(expect.stringContaining("텍스트끼리 겹침"));
   });
 
+  it("상자 가운데 정렬한 글자가 왼쪽 아이콘을 덮으면", () => {
+    const node = '<rect x="264" y="48" width="152" height="56" rx="4" stroke="currentColor" stroke-opacity="0.28"/>';
+    const icon = '<g transform="translate(280,64) scale(0.8333)"><use href="#f-server"/></g>';
+    const centred = '<text x="340" y="72" font-size="12" text-anchor="middle" opacity="0.85">Group Coordinator</text>';
+    expect(errors(node + icon + centred)).toEqual(['텍스트/아이콘 겹침 "Group Coordinator"']);
+    // 아이콘 오른쪽(x + 40)에서 시작하면 조용하다
+    expect(errors(node + icon + centred.replace('x="340" y="72"', 'x="304" y="72"').replace(' text-anchor="middle"', ""))).toEqual([]);
+  });
+
   it("상자를 관통하는 선", () => {
     const through = '<path d="M8 100 H400" stroke="currentColor" stroke-opacity="0.62" stroke-width="1" fill="none"/>';
     expect(errors(NODE + NODE_R + through)).toContainEqual(expect.stringContaining("선이 상자를 관통"));
@@ -98,6 +107,12 @@ describe("lint-svg — 잡으면 안 되는 것", () => {
   it("폭이 1 이 아닌 화살촉은 연결선이 아니라 마크다 (축을 넘어간 구간 표시)", () => {
     const cap = '<path d="m600 94 7 6 -7 6" stroke="#ea580c" stroke-width="1.5" fill="none"/>';
     expect(errors(cap)).toEqual([]);
+  });
+
+  it("아이콘 안쪽 도형과 defs 원본은 그림 좌표로 읽지 않는다", () => {
+    const defs = '<defs><g id="f-server"><rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/></g></defs>';
+    const inline = '<g transform="translate(24,82) scale(0.8333)"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 22V12"/></g>';
+    expect(lintSvg(figure(defs + inline + '<text x="8" y="16" font-size="11" opacity="0.62">모서리 라벨</text>'))).toMatchObject({ issues: [], notes: [] });
   });
 
   it("상자를 감싸는 group 은 관통 판정에서 빠진다", () => {

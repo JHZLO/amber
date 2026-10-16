@@ -6,7 +6,7 @@
 //   node scripts/lint-svg.mjs a.svg b.svg        따로 뽑아 둔 svg 파일만
 //   node scripts/lint-svg.mjs "~/…/노트.md"      특정 노트만
 //
-// 오류로 잡는 것: 캔버스 이탈, 텍스트/상자 겹침, 텍스트끼리 겹침, 선이 글자를 지나감,
+// 오류로 잡는 것: 캔버스 이탈, 텍스트/상자 겹침, 텍스트/아이콘 겹침, 텍스트끼리 겹침, 선이 글자를 지나감,
 // 선이 상자를 관통, 화살표 끝점이 닿은 상자 중앙과 어긋남, 이어 붙는 사각형의 y/height 와
 // 이음매 모서리, 화살촉에 칠해진 강조색, 강조 상자 개수, 팔레트 밖의 색, 글자 크기와 톤 토큰.
 //
@@ -85,10 +85,22 @@ export function pathSegments(d) {
 
 const INHERITED = ["font-size", "text-anchor", "font-weight", "stroke", "stroke-opacity", "opacity", "fill"];
 
+// 아이콘은 24 격자 그림을 translate(x,y) scale(s) 로 놓은 g 다. 안의 도형은 아이콘 자기 좌표라
+// 그림 좌표로 읽으면 엉뚱한 상자와 선이 생긴다 — 자리(24·s 정사각형)만 남기고 들어가지 않는다.
+const PICTOGRAM = /translate\(\s*(-?[\d.]+)[\s,]+(-?[\d.]+)\s*\)\s*scale\(\s*([\d.]+)\s*\)/;
+
 function collect(el, inherited, out) {
   const attr = { ...inherited };
   for (const k of INHERITED) if (el.getAttribute(k)) attr[k] = el.getAttribute(k);
   const tag = el.tagName.toLowerCase();
+
+  if (tag === "defs") return;
+  const icon = tag === "g" && PICTOGRAM.exec(el.getAttribute("transform") || "");
+  if (icon) {
+    const [x, y, s] = icon.slice(1).map(Number);
+    out.icons.push([x, y, x + 24 * s, y + 24 * s]);
+    return;
+  }
 
   if (tag === "text") {
     const label = (el.textContent || "").trim();
@@ -179,7 +191,7 @@ export function lintSvg(source) {
   if (viewBox.length !== 4 || viewBox.some(Number.isNaN)) return { issues: ["viewBox 가 없거나 형식이 아니다"], notes: [], width: 0, height: 0 };
   const [, , W, H] = viewBox;
 
-  const out = { texts: [], rects: [], segs: [], nodes: [], stubs: [], seams: [], accented: [] };
+  const out = { texts: [], rects: [], segs: [], nodes: [], stubs: [], seams: [], accented: [], icons: [] };
   collect(root, {}, out);
   const issues = [];
   const notes = [];
@@ -218,6 +230,8 @@ export function lintSvg(source) {
     }
     if (out.rects.some((r) => overlaps(b, r) && !inside(b, r))) issues.push(`텍스트/상자 겹침 "${t.label.slice(0, 18)}"`);
     if (out.segs.some((s) => segmentHitsBox(b, s))) issues.push(`선이 텍스트를 지나감 "${t.label.slice(0, 18)}"`);
+    // 상자 가운데 정렬한 글자가 왼쪽에 앉힌 아이콘 위로 번지는 사고가 여기 걸린다
+    if (out.icons.some((i) => overlaps(b, i))) issues.push(`텍스트/아이콘 겹침 "${t.label.slice(0, 18)}"`);
   }
   for (let a = 0; a < out.texts.length; a++) {
     for (let b = a + 1; b < out.texts.length; b++) {
