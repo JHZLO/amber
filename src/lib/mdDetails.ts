@@ -180,6 +180,36 @@ function paragraph(text: string): MdNode {
   return { type: "paragraph", children: [{ type: "text", value: text }] };
 }
 
+// ---- 편집기 입력 — `<details>` 를 손으로 다 치지 않게 한다(파일에는 GitHub 문법이 그대로 남는다) ----
+
+const SUMMARY_OPEN = "<details>\n<summary>";
+/** 제목 뒤 뼈대. 본문 앞뒤 빈 줄이 있어야 본문을 마크다운으로 읽는다(위 머리 주석) */
+const SUMMARY_CLOSE = "</summary>\n\n\n\n</details>";
+
+/** 줄 맨 앞의 `>>` 뒤에서 스페이스를 치면 토글 뼈대로 바꾼다 — 그 줄에 이어 쓴 글은 제목이 된다.
+ *  `> ` 는 인용구라 그대로 둔다. 바꿀 게 없으면 null, 있으면 [start, end) 를 text 로 갈아 끼우고
+ *  커서를 caret(제목 앞)에 둔다. */
+export function toggleShortcut(
+  value: string,
+  caret: number,
+): { start: number; end: number; text: string; caret: number } | null {
+  const start = value.lastIndexOf("\n", caret - 1) + 1;
+  if (value.slice(start, caret) !== ">>") return null;
+  const lineEnd = value.indexOf("\n", caret);
+  const end = lineEnd === -1 ? value.length : lineEnd;
+  const text = SUMMARY_OPEN + value.slice(caret, end) + SUMMARY_CLOSE;
+  return { start, end, text, caret: start + SUMMARY_OPEN.length };
+}
+
+/** 토글 제목 줄에서 Enter — 제목에 줄바꿈을 넣는 대신 본문 자리로 커서를 옮긴다.
+ *  뼈대 모양(제목 줄 뒤에 빈 줄 둘)일 때만, 그 둘째 빈 줄 머리를 돌려준다. 아니면 null(평소 Enter) */
+export function toggleTitleEnter(value: string, caret: number): number | null {
+  const start = value.lastIndexOf("\n", caret - 1) + 1;
+  const lineEnd = value.indexOf("\n", caret);
+  if (lineEnd === -1 || !/^<summary>.*<\/summary>$/.test(value.slice(start, lineEnd))) return null;
+  return value.startsWith("\n\n\n", lineEnd) ? lineEnd + 2 : null;
+}
+
 // ---- 화면 쪽 — 펼침 상태는 카드(MdToggle)의 React state 라 밖에서는 이벤트로 부탁한다 ----
 
 const REVEAL = "md-toggle-reveal";

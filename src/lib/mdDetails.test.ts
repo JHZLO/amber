@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { describe, expect, it } from "vitest";
-import { detailsTokens, parseBlocks, remarkDetails } from "./mdDetails";
+import { detailsTokens, parseBlocks, remarkDetails, toggleShortcut, toggleTitleEnter } from "./mdDetails";
 
 const render = (md: string) =>
   renderToStaticMarkup(
@@ -153,5 +153,56 @@ describe("parseBlocks", () => {
     ]);
     expect(parseBlocks("nope:3,code:x,table:1")).toEqual([["table", 1]]);
     expect(parseBlocks(undefined)).toEqual([]);
+  });
+});
+
+/** 편집 한 번을 적용한 결과 — 글과 커서 자리 */
+function apply(value: string, caret: number) {
+  const tg = toggleShortcut(value, caret);
+  if (!tg) return null;
+  const next = value.slice(0, tg.start) + tg.text + value.slice(tg.end);
+  return { next, caret: tg.caret };
+}
+
+describe("toggleShortcut", () => {
+  it("줄 맨 앞의 >> 뒤 스페이스 → 토글 뼈대, 커서는 제목 자리", () => {
+    const r = apply("앞 문단\n>>", 7)!;
+    expect(r.next).toBe("앞 문단\n<details>\n<summary></summary>\n\n\n\n</details>");
+    expect(r.next.slice(r.caret)).toMatch(/^<\/summary>/);
+  });
+
+  it("그 줄에 이미 쓴 글은 제목이 되고, 아래 줄은 그대로", () => {
+    const r = apply(">>계좌 간 송금\n다음 줄", 2)!;
+    expect(r.next).toBe("<details>\n<summary>계좌 간 송금</summary>\n\n\n\n</details>\n다음 줄");
+  });
+
+  it(">> 스페이스, 제목, Enter, 본문 순으로 치면 토글로 읽힌다", () => {
+    const r = apply(">>", 2)!;
+    const titled = r.next.slice(0, r.caret) + "제목" + r.next.slice(r.caret);
+    const at = toggleTitleEnter(titled, r.caret + "제목".length)!;
+    const html = render(titled.slice(0, at) + "본문" + titled.slice(at));
+    expect(attr(html, "data-summary")).toBe("제목");
+    expect(html).toMatch(/<details[^>]*><p>본문<\/p><\/details>/);
+  });
+
+  it("> 한 개(인용구), 줄 중간의 >>, 앞에 글이 있는 >> 는 건드리지 않는다", () => {
+    expect(toggleShortcut(">", 1)).toBeNull();
+    expect(toggleShortcut("a >>", 4)).toBeNull();
+    expect(toggleShortcut("x>>", 3)).toBeNull();
+    expect(toggleShortcut(">>>", 3)).toBeNull();
+  });
+});
+
+describe("toggleTitleEnter", () => {
+  it("뼈대의 제목 줄이면 본문 자리(빈 줄 하나 건너)로", () => {
+    const v = "<details>\n<summary>제목</summary>\n\n\n\n</details>";
+    const at = toggleTitleEnter(v, v.indexOf("</summary>"))!;
+    expect(v.slice(0, at)).toBe("<details>\n<summary>제목</summary>\n\n");
+  });
+
+  it("제목 줄이 아니거나 본문을 이미 채웠으면 평소 Enter", () => {
+    expect(toggleTitleEnter("그냥 글\n\n\n", 2)).toBeNull();
+    const filled = "<details>\n<summary>제목</summary>\n\n본문\n\n</details>";
+    expect(toggleTitleEnter(filled, filled.indexOf("</summary>"))).toBeNull();
   });
 });

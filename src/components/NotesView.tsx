@@ -61,7 +61,12 @@ import {
 import { loadNoteConcepts, type NoteConceptLink } from "../lib/noteConcepts";
 import { decideDiskSync, keepCaret, watchNotesRoot } from "../lib/noteWatch";
 import { openConceptInApp, OPEN_NOTE } from "../lib/nav";
-import { inClosedToggle, openEnclosingToggles } from "../lib/mdDetails";
+import {
+  inClosedToggle,
+  openEnclosingToggles,
+  toggleShortcut,
+  toggleTitleEnter,
+} from "../lib/mdDetails";
 import { emit } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
@@ -245,6 +250,30 @@ export function NotesView({
           saveNoteImage(dir, new Uint8Array(await f.arrayBuffer()), f.type),
       ),
     );
+  };
+
+  // `>>` + 스페이스 = 토글 뼈대, 토글 제목 줄의 Enter = 본문 자리로(lib/mdDetails.ts).
+  // 뼈대도 execCommand 로 넣는다 — ⌘Z 로 되돌릴 수 있게(insertAtCaret 과 같은 이유)
+  const onSrcKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.nativeEvent.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
+    const el = e.currentTarget;
+    if (el.selectionStart !== el.selectionEnd) return;
+    if (e.key === " ") {
+      const tg = toggleShortcut(el.value, el.selectionStart);
+      if (!tg) return;
+      e.preventDefault();
+      el.setSelectionRange(tg.start, tg.end);
+      if (!document.execCommand("insertText", false, tg.text)) {
+        el.setRangeText(tg.text, tg.start, tg.end, "end");
+        setDraft(el.value);
+      }
+      el.setSelectionRange(tg.caret, tg.caret);
+    } else if (e.key === "Enter" && !e.shiftKey) {
+      const at = toggleTitleEnter(el.value, el.selectionStart);
+      if (at === null) return;
+      e.preventDefault();
+      el.setSelectionRange(at, at);
+    }
   };
 
   // Finder 에서 끌어다 놓기 — 파일 드롭은 Tauri 가 창 단위로 가로채서 HTML drop 이벤트로는
@@ -1279,6 +1308,7 @@ export function NotesView({
                     className={`textarea note-textarea${dropHot ? " is-drop" : ""}`}
                     value={draft}
                     onPaste={onSrcPaste}
+                    onKeyDown={onSrcKeyDown}
                     onChange={(e) => {
                       setDraft(e.target.value);
                       // 글자를 고치면 앞서 잡아 둔 구간의 오프셋이 밀린다 — 그 자리에 그대로
