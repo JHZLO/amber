@@ -1863,7 +1863,7 @@ body.resizing-col .pane-resizer::after {
   outline: none;
   box-shadow: var(--focus-ring);
 }
-/* 검색 결과 — 노트 질문 하이라이트(note-q)와 같은 층이지만 색을 달리해 겹쳐도 구분된다.
+/* 검색 결과 — 노트 질문 형광펜(.glyph-paint .q)과 색을 달리해 겹쳐도 구분된다.
    현재 결과만 진하게: 여러 건이 걸렸을 때 지금 어디에 서 있는지가 보여야 한다. */
 ::highlight(page-find) {
   background-color: rgba(120, 120, 130, 0.3);
@@ -3340,34 +3340,49 @@ html.widget-root #root {
   display: flex;
   align-items: flex-start;
   gap: 28px;
-  position: relative; /* 선택 칠(.sel-paint)이 이 상자를 기준으로 깔린다 */
+  position: relative; /* 글자 칠(.glyph-paint)이 이 상자를 기준으로 깔린다 */
 }
 .note-read-wrap .markdown {
   flex: 1;
   min-width: 0;
   max-width: 780px; /* 읽기 좋은 본문 폭 + 우측 목차 자리 */
 }
-/* 본문 드래그 선택 — 네이티브 칠은 지우고 SelectionPaint 가 글자 상자만큼 칠한다.
-   WebKit 은 둘째 줄부터 칠을 윗줄 바닥까지 늘려 글자 위가 떠 보였다. 색은 macOS 기본 선택색,
-   혼합 모드로 깔아 글자 색이 그대로 남는다(어두운 판 = screen, 밝은 판 = multiply). */
+/* 본문의 드래그 선택과 질문 형광펜 — GlyphPaint 가 글자 상자만큼 칠한다(네이티브 선택 칠은 지운다).
+   WebKit 은 둘째 줄부터 칠을 윗줄 바닥까지 늘려 글자 위가 떠 보였다. 혼합 모드로 깔아 글자 색이
+   그대로 남는다(어두운 판 = screen, 밝은 판 = multiply). 색은 예전 반투명 칠이 판 위에 섞인 값이다:
+   선택 = macOS 기본 선택색, 질문 = 노랑 0.32 / 0.55(밝게), 호박 0.42 / 0.62(어둡게). 지금 것만 진하게(q-cur). */
 .note-read-wrap > .markdown ::selection {
   background: transparent;
 }
-.sel-paint {
+.glyph-paint {
   position: absolute;
   inset: 0;
   pointer-events: none;
   mix-blend-mode: multiply;
 }
-.sel-paint > span {
+.glyph-paint > span {
   position: absolute;
+}
+.glyph-paint > .sel {
   background: #b3d7ff;
 }
-:root[data-theme="dark"] .sel-paint {
+.glyph-paint > .q {
+  background: rgb(253, 239, 180);
+}
+.glyph-paint > .q-cur {
+  background: rgb(252, 227, 126);
+}
+:root[data-theme="dark"] .glyph-paint {
   mix-blend-mode: screen;
 }
-:root[data-theme="dark"] .sel-paint > span {
+:root[data-theme="dark"] .glyph-paint > .sel {
   background: rgb(37, 78, 123);
+}
+:root[data-theme="dark"] .glyph-paint > .q {
+  background: rgb(82, 51, 0);
+}
+:root[data-theme="dark"] .glyph-paint > .q-cur {
+  background: rgb(120, 76, 0);
 }
 /* 제목 스케일은 위 마크다운 블록이 정본 — 여기서 크기를 다시 정의하지 않는다 */
 .markdown h1,
@@ -4648,21 +4663,7 @@ html.widget-root #root {
 }
 
 /* ---- 필기노트 인라인 질문(노션 댓글식) ---- */
-/* 질문이 달린 텍스트 하이라이트 (CSS Custom Highlight — DOM 무변경) */
-::highlight(note-q) {
-  background-color: rgba(250, 204, 21, 0.32);
-}
-/* 지금 열려 있는 스레드의 문장만 진하게 — 목록에서 들어왔을 때 본문의 어디였는지 보여야 한다.
-   page-find 와 같은 규약(기본 + 현재 한 건만 진하게)이라 값도 맞춘다. */
-::highlight(note-q-cur) {
-  background-color: rgba(250, 204, 21, 0.55);
-}
-:root[data-theme="dark"] ::highlight(note-q) {
-  background-color: rgba(202, 138, 4, 0.42);
-}
-:root[data-theme="dark"] ::highlight(note-q-cur) {
-  background-color: rgba(202, 138, 4, 0.62);
-}
+/* 질문이 달린 텍스트의 형광펜은 .glyph-paint 의 q / q-cur 다(본문 칠은 거기 한 곳) */
 
 /* 드래그 선택 시 뜨는 플로팅 "질문" 버튼 */
 /* 선택 툴바(질문 / 개념으로) — 컨테이너가 위치를 잡고 버튼은 나란히 */

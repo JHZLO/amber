@@ -51,7 +51,7 @@ import {
   useNoteAiRun,
 } from "../lib/noteAiRun";
 import { NoteSpanAiModal } from "./NoteSpanAiModal";
-import { SelectionPaint } from "./SelectionPaint";
+import { SelectionPaint } from "./GlyphPaint";
 import { RootPicker } from "./RootPicker";
 import { rootDisplayName, WORKSPACE_EVENT } from "../lib/workspace";
 import {

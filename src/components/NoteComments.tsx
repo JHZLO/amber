@@ -1,6 +1,6 @@
 // 필기노트 인라인 질문(노션 댓글식) 레이어 — 읽기 모드 전용.
 // 드래그 선택 → "질문" 플로팅 버튼 → 우측 고정 패널에서 질문 → AI 짧은 답변 → 사이드카에 저장.
-// 저장된 질문은 본문 텍스트에 하이라이트(CSS Custom Highlight API, DOM 무변경)로 표시되고
+// 저장된 질문은 본문 텍스트에 형광펜(GlyphPaint — 글자 높이로 덮는 층, DOM 무변경)으로 표시되고
 // 클릭하면 우측 패널(항상 1개)로 스레드를 본다. 패널에서 후속 질문을 이어갈 수 있고
 // 이전 문답이 AI 에 문맥으로 전달된다. 앵커 = "렌더된 텍스트 문자열 + n번째 출현".
 //
@@ -11,6 +11,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type RefObject,
@@ -30,13 +31,11 @@ import { ConfirmDelete, DiscardModal, timeAgo, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { blockRangeFromSelection } from "../lib/mdBlocks";
-import { inCollapsedBody, onToggleChange, openEnclosingToggles } from "../lib/mdDetails";
+import { openEnclosingToggles } from "../lib/mdDetails";
 import { nthIndex, rangeAt } from "../lib/noteAnchor";
 import { SelectionSweep } from "./SelectionSweep";
+import { GlyphPaint, type GlyphMark } from "./GlyphPaint";
 import { Button } from "@/components/ui/button";
-
-const HIGHLIGHT_KEY = "note-q";
-const CURRENT_KEY = "note-q-cur";
 
 // 패널은 우측 여백에 고정(CSS)이라 좌표를 들고 다니지 않는다 — 상태 하나 = 패널 최대 1개
 type Pop =
@@ -54,16 +53,6 @@ function offsetIn(container: Node, node: Node, offset: number): number {
     return 0;
   }
   return r.toString().length;
-}
-
-type HighlightRegistry = {
-  set: (key: string, highlight: unknown) => void;
-  delete: (key: string) => void;
-};
-function highlightRegistry(): HighlightRegistry | null {
-  const css = CSS as unknown as { highlights?: HighlightRegistry };
-  const HL = (window as unknown as { Highlight?: unknown }).Highlight;
-  return css.highlights && HL ? css.highlights : null;
 }
 
 /** 말풍선 안의 대기 한 줄 — **바가 없다.** 기다림의 모션은 본문 위를 지나가는 형광펜
@@ -184,10 +173,12 @@ export function NoteCommentLayer({
     pos: Map<string, number>;
     missing: Set<string>;
   }>({ pos: new Map(), missing: new Set() });
-  // 토글을 접고 펼 때마다 다시 칠한다 — 접힌 몸통 안의 구간은 칠하지 않으므로(inCollapsedBody)
-  const [foldTick, setFoldTick] = useState(0);
+  // 형광펜으로 칠할 앵커들(rangesRef 와 같은 값) — 칠은 다시 그려야 하니 state 로도 든다
+  const [painted, setPainted] = useState<{ id: string; range: Range }[]>([]);
+  // 형광펜 층을 깔 자리 — 본문과 같이 스크롤되는 상자(GlyphPaint 주석)
+  const [wrapEl, setWrapEl] = useState<HTMLElement | null>(null);
   useEffect(
-    () => onToggleChange(containerRef.current, () => setFoldTick((n) => n + 1)),
+    () => setWrapEl(containerRef.current?.closest<HTMLElement>(".note-read-wrap") ?? null),
     [containerRef],
   );
 
@@ -233,8 +224,7 @@ export function NoteCommentLayer({
     };
   }, [noteRel, notifyCount]);
 
-  // 앵커 복원: 위치(목록 정렬용) → Range → CSS Custom Highlight.
-  // 하이라이트를 못 쓰는 환경에서도 위치 계산과 스크롤은 그대로 살려 둔다(목록은 계속 동작).
+  // 앵커 복원: 위치(목록 정렬용) → Range → 형광펜(GlyphPaint).
   useEffect(() => {
     const c = containerRef.current;
     rangesRef.current = [];
@@ -257,47 +247,20 @@ export function NoteCommentLayer({
       else missing.add(cm.id);
     }
     rangesRef.current = found;
+    setPainted(found);
     setAnchors({ pos, missing });
-    const registry = highlightRegistry();
-    if (!registry) return;
-    const HL = (
-      window as unknown as { Highlight: new (...r: Range[]) => unknown }
-    ).Highlight;
-    const shown = found.filter((f) => !inCollapsedBody(f.range));
-    if (shown.length) registry.set(HIGHLIGHT_KEY, new HL(...shown.map((f) => f.range)));
-    else registry.delete(HIGHLIGHT_KEY);
-    return () => {
-      try {
-        registry.delete(HIGHLIGHT_KEY);
-      } catch {
-        /* noop */
-      }
-    };
-  }, [comments, body, containerRef, foldTick]);
+  }, [comments, body, containerRef]);
 
   // 지금 열려 있는 스레드의 문장만 진하게. 목록에서 들어왔을 때 "본문의 어디였는지"가
-  // 보여야 하기 때문이다 — 그 한 건만 덮어 칠하므로 note-q 위에 얹는다.
-  useEffect(() => {
-    const registry = highlightRegistry();
-    if (!registry) return;
-    const id = pop?.kind === "view" ? pop.id : null;
-    const hit = id ? rangesRef.current.find((r) => r.id === id) : null;
-    if (!hit || inCollapsedBody(hit.range)) {
-      registry.delete(CURRENT_KEY);
-      return;
-    }
-    const HL = (
-      window as unknown as { Highlight: new (...r: Range[]) => unknown }
-    ).Highlight;
-    registry.set(CURRENT_KEY, new HL(hit.range));
-    return () => {
-      try {
-        registry.delete(CURRENT_KEY);
-      } catch {
-        /* noop */
-      }
-    };
-  }, [pop, comments, foldTick]);
+  // 보여야 하기 때문이다 — 뒤에 온 것이 위에 칠해지므로 그 한 건을 맨 뒤로 보낸다.
+  const curId = pop?.kind === "view" ? pop.id : null;
+  const marks = useMemo<GlyphMark[]>(() => {
+    const rest = painted
+      .filter((p) => p.id !== curId)
+      .map((p) => ({ range: p.range, tone: "q" as const }));
+    const cur = painted.find((p) => p.id === curId);
+    return cur ? [...rest, { range: cur.range, tone: "q-cur" }] : rest;
+  }, [painted, curId]);
 
   // 드래그 선택 감시 → 앵커/출현 인덱스/버튼 위치를 그 자리에서 계산 (rAF 스로틀)
   useEffect(() => {
@@ -748,6 +711,8 @@ export function NoteCommentLayer({
 
   return createPortal(
     <>
+      {/* 형광펜은 body 가 아니라 본문 상자 안에 깐다 — 같이 스크롤돼야 한다(GlyphPaint) */}
+      {wrapEl && createPortal(<GlyphPaint containerRef={containerRef} marks={marks} />, wrapEl)}
       {sweepAt && (
         <SelectionSweep
           containerRef={containerRef}

@@ -17,10 +17,15 @@ import { createPortal } from "react-dom";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { FIND_LIMIT, clearPaint, findInText, findRanges, paint } from "../lib/pageFind";
-import { openEnclosingToggles } from "../lib/mdDetails";
+import { inCollapsedBody, onToggleChange, openEnclosingToggles } from "../lib/mdDetails";
 
 const KEY_ALL = "page-find";
 const KEY_CUR = "page-find-cur";
+/** 보이는 결과만 칠한다. WebKit 은 접힌 토글 몸통 안의 하이라이트를 숨기지 않고 다음에 보이는 글자
+ *  (아래 토글 제목)에 칠한다(mdDetails.inCollapsedBody). 개수와 이동은 숨은 결과까지 그대로 센다. */
+function paintShown(key: string, ranges: Range[]): void {
+  paint(key, ranges.filter((r) => !inCollapsedBody(r)));
+}
 /** 검색 디바운스 — 매 글자마다 전체 DOM 을 훑으면 긴 노트에서 타이핑이 밀린다 */
 const FIND_DEBOUNCE_MS = 120;
 /** 거울판이 원문 칸에서 그대로 베껴 와야 하는 것 — 줄이 같은 자리에서 접히게 하는 값들 */
@@ -67,6 +72,8 @@ export function PageFind({
   const [idx, setIdx] = useState(0);
   const [count, setCount] = useState(0);
   const hitsRef = useRef<Range[]>([]);
+  /** 지금 결과 — 토글을 접고 펼 때 다시 칠하려고 들고 있다 */
+  const curRef = useRef<Range | null>(null);
   /** 편집 갈래의 결과 — 원문 문자열 안의 [시작, 끝). 거울판을 다시 그려야 해서 state 다 */
   const [srcHits, setSrcHits] = useState<[number, number][]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -89,6 +96,7 @@ export function PageFind({
     setCount(0);
     setIdx(0);
     hitsRef.current = [];
+    curRef.current = null;
     setSrcHits([]);
     clearPaint(KEY_ALL, KEY_CUR);
     // 편집 중이었다면 찾던 자리에 커서를 두고 나간다 — 찾은 이유가 거기를 고치려는 것이다.
@@ -109,7 +117,9 @@ export function PageFind({
   const focusHit = useCallback((hits: Range[], i: number) => {
     const r = hits[i];
     if (!r) return;
-    paint(KEY_CUR, [r]);
+    curRef.current = r;
+    // 아직 접힌 토글 안이면 지금은 빠지고, 아래에서 펴지는 순간 칠해진다(onToggleChange)
+    paintShown(KEY_CUR, [r]);
     const el =
       r.startContainer.nodeType === Node.TEXT_NODE
         ? r.startContainer.parentElement
@@ -143,6 +153,7 @@ export function PageFind({
         const hits = findInText(src.value, q);
         setSrcHits(hits);
         hitsRef.current = [];
+        curRef.current = null;
         setCount(hits.length);
         setIdx(0);
         lastHitRef.current = hits[0] ?? null;
@@ -156,12 +167,24 @@ export function PageFind({
       setSrcHits([]);
       setCount(hits.length);
       setIdx(0);
-      paint(KEY_ALL, hits);
+      paintShown(KEY_ALL, hits);
       if (hits.length) focusHit(hits, 0);
-      else clearPaint(KEY_CUR);
+      else {
+        curRef.current = null;
+        clearPaint(KEY_CUR);
+      }
     },
     [containerRef, sourceRef, focusHit],
   );
+
+  // 토글을 접고 펴면 보이는 결과가 달라진다 — 그 자리에서 다시 칠한다
+  useEffect(() => {
+    if (!open) return;
+    return onToggleChange(containerRef.current, () => {
+      paintShown(KEY_ALL, hitsRef.current);
+      paintShown(KEY_CUR, curRef.current ? [curRef.current] : []);
+    });
+  }, [open, containerRef]);
 
   /** 타이핑 중에는 미룬다 — 마지막 입력 뒤 한 번만 훑는다 */
   const runSoon = useCallback(
