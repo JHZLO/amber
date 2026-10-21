@@ -203,3 +203,23 @@ export function onToggleReveal(el: Element | null, open: () => void): (() => voi
 export function inClosedToggle(el: Element): boolean {
   return !!el.closest('.md-toggle[data-open="false"]');
 }
+
+/** Range 의 한쪽 끝이 접힌 토글의 몸통 안인가 — 그런 구간은 칠하지 않는다.
+ *  WebKit 은 visibility:hidden 안의 Custom Highlight 를 숨기지 않고 **그다음 보이는 글자**에 칠한다
+ *  (접힌 토글 안의 질문 형광펜이 아래 토글 제목에 붙었다). 제목 줄은 접혀도 보이므로 몸통만 본다. */
+export function inCollapsedBody(r: Range): boolean {
+  return [r.startContainer, r.endContainer].some(
+    (n) =>
+      !!(n instanceof Element ? n : n.parentElement)?.closest(
+        '.md-toggle[data-open="false"] > .md-toggle-body',
+      ),
+  );
+}
+
+/** container 안의 토글이 접히거나 펴질 때마다 부른다. 정리 함수를 돌려준다(useEffect 용) */
+export function onToggleChange(container: Element | null, cb: () => void): (() => void) | undefined {
+  if (!container) return;
+  const mo = new MutationObserver(cb);
+  mo.observe(container, { subtree: true, attributes: true, attributeFilter: ["data-open"] });
+  return () => mo.disconnect();
+}

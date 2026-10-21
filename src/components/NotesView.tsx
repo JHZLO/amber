@@ -51,6 +51,7 @@ import {
   useNoteAiRun,
 } from "../lib/noteAiRun";
 import { NoteSpanAiModal } from "./NoteSpanAiModal";
+import { SelectionPaint } from "./SelectionPaint";
 import { RootPicker } from "./RootPicker";
 import { rootDisplayName, WORKSPACE_EVENT } from "../lib/workspace";
 import {
@@ -1325,6 +1326,7 @@ export function NotesView({
                     setSpanAi("selection");
                   }}
                 />
+                <SelectionPaint containerRef={mdRef} />
                 {toc.length >= 2 && (
                   <nav className="note-toc" ref={tocRef}>
                     <div className="note-toc-label">{t("notes.toc")}</div>

@@ -3340,11 +3340,34 @@ html.widget-root #root {
   display: flex;
   align-items: flex-start;
   gap: 28px;
+  position: relative; /* 선택 칠(.sel-paint)이 이 상자를 기준으로 깔린다 */
 }
 .note-read-wrap .markdown {
   flex: 1;
   min-width: 0;
   max-width: 780px; /* 읽기 좋은 본문 폭 + 우측 목차 자리 */
+}
+/* 본문 드래그 선택 — 네이티브 칠은 지우고 SelectionPaint 가 글자 상자만큼 칠한다.
+   WebKit 은 둘째 줄부터 칠을 윗줄 바닥까지 늘려 글자 위가 떠 보였다. 색은 macOS 기본 선택색,
+   혼합 모드로 깔아 글자 색이 그대로 남는다(어두운 판 = screen, 밝은 판 = multiply). */
+.note-read-wrap > .markdown ::selection {
+  background: transparent;
+}
+.sel-paint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+.sel-paint > span {
+  position: absolute;
+  background: #b3d7ff;
+}
+:root[data-theme="dark"] .sel-paint {
+  mix-blend-mode: screen;
+}
+:root[data-theme="dark"] .sel-paint > span {
+  background: rgb(37, 78, 123);
 }
 /* 제목 스케일은 위 마크다운 블록이 정본 — 여기서 크기를 다시 정의하지 않는다 */
 .markdown h1,
@@ -4647,7 +4670,8 @@ html.widget-root #root {
    "AI로 작성" 모달 위로 '질문 N' 트리거가 떠 있었다(실측). 툴팁(300)·Select 메뉴(60)는 그대로 위. */
 .cmt-fab-bar {
   position: fixed;
-  z-index: 40;
+  /* 패널(.cmt-pop 45) 위 — 패널을 띄운 채 본문 오른쪽 끝을 드래그하면 버튼 바가 패널 밑으로 들어간다 */
+  z-index: 46;
   display: inline-flex;
   gap: 4px;
 }

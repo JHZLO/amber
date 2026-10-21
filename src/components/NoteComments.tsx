@@ -30,7 +30,7 @@ import { ConfirmDelete, DiscardModal, timeAgo, Tooltip } from "../ui";
 import { Icon } from "../icons";
 import { t } from "../lib/i18n";
 import { blockRangeFromSelection } from "../lib/mdBlocks";
-import { openEnclosingToggles } from "../lib/mdDetails";
+import { inCollapsedBody, onToggleChange, openEnclosingToggles } from "../lib/mdDetails";
 import { nthIndex, rangeAt } from "../lib/noteAnchor";
 import { SelectionSweep } from "./SelectionSweep";
 import { Button } from "@/components/ui/button";
@@ -184,6 +184,12 @@ export function NoteCommentLayer({
     pos: Map<string, number>;
     missing: Set<string>;
   }>({ pos: new Map(), missing: new Set() });
+  // 토글을 접고 펼 때마다 다시 칠한다 — 접힌 몸통 안의 구간은 칠하지 않으므로(inCollapsedBody)
+  const [foldTick, setFoldTick] = useState(0);
+  useEffect(
+    () => onToggleChange(containerRef.current, () => setFoldTick((n) => n + 1)),
+    [containerRef],
+  );
 
   const notifyCount = useCallback(
     (list: NoteComment[]) => onCountChange?.(list.length),
@@ -257,7 +263,8 @@ export function NoteCommentLayer({
     const HL = (
       window as unknown as { Highlight: new (...r: Range[]) => unknown }
     ).Highlight;
-    if (found.length) registry.set(HIGHLIGHT_KEY, new HL(...found.map((f) => f.range)));
+    const shown = found.filter((f) => !inCollapsedBody(f.range));
+    if (shown.length) registry.set(HIGHLIGHT_KEY, new HL(...shown.map((f) => f.range)));
     else registry.delete(HIGHLIGHT_KEY);
     return () => {
       try {
@@ -266,7 +273,7 @@ export function NoteCommentLayer({
         /* noop */
       }
     };
-  }, [comments, body, containerRef]);
+  }, [comments, body, containerRef, foldTick]);
 
   // 지금 열려 있는 스레드의 문장만 진하게. 목록에서 들어왔을 때 "본문의 어디였는지"가
   // 보여야 하기 때문이다 — 그 한 건만 덮어 칠하므로 note-q 위에 얹는다.
@@ -275,7 +282,7 @@ export function NoteCommentLayer({
     if (!registry) return;
     const id = pop?.kind === "view" ? pop.id : null;
     const hit = id ? rangesRef.current.find((r) => r.id === id) : null;
-    if (!hit) {
+    if (!hit || inCollapsedBody(hit.range)) {
       registry.delete(CURRENT_KEY);
       return;
     }
@@ -290,7 +297,7 @@ export function NoteCommentLayer({
         /* noop */
       }
     };
-  }, [pop, comments]);
+  }, [pop, comments, foldTick]);
 
   // 드래그 선택 감시 → 앵커/출현 인덱스/버튼 위치를 그 자리에서 계산 (rAF 스로틀)
   useEffect(() => {
@@ -752,18 +759,23 @@ export function NoteCommentLayer({
           onClick={askingAt && !pop ? () => setPop(askingAt.restore) : undefined}
         />
       )}
-      {selInfo && !pop && (
+      {/* 패널이 떠 있어도 뜬다 — 새로 드래그해 물으면 openAsk 가 패널을 바꿔 끼운다 */}
+      {selInfo && (
         <div className="cmt-fab-bar" style={fabStyle}>
-          <button
-            className="cmt-fab"
-            title={t("notes.cmt.askTip")}
-            // mousedown 은 선택 해제 방지만, 열기는 click 에서 (앵커는 이미 캡처됨)
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={openAsk}
-          >
-            <Icon name="message" size={13} />
-            {t("notes.cmt.ask")}
-          </button>
+          {/* 답을 기다리는 동안엔 새 질문을 열지 않는다 — 대기 자리(asking)가 하나뿐이라
+              새 패널이 남의 대기를 떠안고, 답이 오면 그 패널이 엉뚱한 스레드로 바뀐다 */}
+          {!asking && (
+            <button
+              className="cmt-fab"
+              title={t("notes.cmt.askTip")}
+              // mousedown 은 선택 해제 방지만, 열기는 click 에서 (앵커는 이미 캡처됨)
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={openAsk}
+            >
+              <Icon name="message" size={13} />
+              {t("notes.cmt.ask")}
+            </button>
+          )}
           {onPromote && (
             <button
               className="cmt-fab"

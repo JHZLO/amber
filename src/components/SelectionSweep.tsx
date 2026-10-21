@@ -9,6 +9,7 @@
 // 고정 레이어를 깐다. DOM 은 건드리지 않는다(마크다운 렌더 결과에 흔적이 남지 않게).
 
 import { useEffect, useState } from "react";
+import { inCollapsedBody, onToggleChange } from "../lib/mdDetails";
 import { mergeLineRects, nthIndex, rangeAt, type Rect } from "../lib/noteAnchor";
 
 /** 지나가는 빛의 폭(px). 줄 길이와 무관하게 일정해야 같은 붓으로 그은 것처럼 보인다 */
@@ -47,7 +48,8 @@ export function SelectionSweep({
       let idx = nthIndex(full, anchor, occurrence);
       if (idx === -1) idx = nthIndex(full, anchor, 0); // 본문이 바뀌었으면 첫 출현으로
       const r = idx === -1 ? null : rangeAt(c, idx, anchor.length);
-      if (!r) return setBoxes([]);
+      // 접힌 토글 안이면 그리지 않는다 — 잘려 안 보이는 글자의 사각형은 아래 블록 위에 놓인다
+      if (!r || inCollapsedBody(r)) return setBoxes([]);
       // 줄마다 하나로 합쳐서 넘긴다 — 굵은 글씨·코드가 낀 줄은 getClientRects 가 조각을 여럿 주는데,
       // 그대로 그리면 조각마다 빛이 따로 돌아 경계에서 띠가 끊긴다
       setBoxes(mergeLineRects([...r.getClientRects()]));
@@ -59,7 +61,9 @@ export function SelectionSweep({
     // 스크롤·리사이즈로 글자가 움직이면 형광펜도 따라간다 (fixed 레이어라 좌표가 어긋난다)
     window.addEventListener("scroll", soon, true);
     window.addEventListener("resize", soon);
+    const offToggle = onToggleChange(containerRef.current, soon);
     return () => {
+      offToggle?.();
       if (raf) cancelAnimationFrame(raf);
       window.removeEventListener("scroll", soon, true);
       window.removeEventListener("resize", soon);
