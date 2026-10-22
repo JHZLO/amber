@@ -539,7 +539,8 @@ export function TodoView({
       setTodos(rows);
       const [ttFrom, ttTo] = ttRange(ttView, selected);
       const bl = await listBlocks(ttFrom, ttTo);
-      const ov = selected === today ? await listOverdueOpen(today) : [];
+      // 지난 날에도 띄운다 — 그 날 적지 못한 일을 나중에 그 날로 옮겨 그 날의 기록으로 남긴다
+      const ov = selected <= today ? await listOverdueOpen(selected) : [];
       const [start, end] = dayRangeMs(selected);
       const lr = await conceptsLearnedOn(start, end);
       if (seq !== daySeq.current) return;
@@ -783,11 +784,12 @@ export function TodoView({
     }
   }
 
-  async function moveToday(ids: number[]) {
+  /** 밀린 할 일을 보고 있는 날(오늘 또는 지난 날)로 옮긴다 */
+  async function moveHere(ids: number[]) {
     if (!ids.length) return;
     try {
       // 완료 재계산을 하지 않는다 — 옮기는 건 끝내는 게 아니다(lib/todos.moveTodos 주석)
-      await moveTodos(ids, todayStr());
+      await moveTodos(ids, selected);
       refreshAll();
     } catch (e) {
       setError(errMsg(e));
@@ -943,9 +945,9 @@ export function TodoView({
             <span className="todo-row-date">{formatDayShort(todo.due_date)}</span>
             <Button
               size="sm"
-              onClick={() => void moveToday([todo.id])}
+              onClick={() => void moveHere([todo.id])}
             >
-              {t("todos.overdue.moveOne")}
+              {t(isToday ? "todos.overdue.moveOne" : "todos.overdue.moveOneDay")}
             </Button>
             <Tooltip label={t("common.delete")}>
               <Button
@@ -1235,8 +1237,10 @@ export function TodoView({
         </div>
 
         {/* 밀린 할 일은 '오늘 계획의 재료'라 날짜 바로 아래. 입력창과 그 입력이 들어갈 목록
-            사이에 끼우면 타이핑한 것이 무관한 블록 아래에 나타나 매핑이 깨진다(DESIGN §7) */}
-        {unit === "day" && isToday && overdue.length > 0 && (
+            사이에 끼우면 타이핑한 것이 무관한 블록 아래에 나타나 매핑이 깨진다(DESIGN §7).
+            지난 날에도 뜬다(그 날로 옮겨 기록한다). 비어 있는 날만으로 좁히지 않는다 — 하나를 옮기는
+            순간 그 날이 비지 않아 나머지가 사라진다. 앞날은 아직 밀린 게 아니라 띄우지 않는다. */}
+        {unit === "day" && selected <= today && overdue.length > 0 && (
           <div className={`todo-overdue ${overdueOpen ? "open" : ""}`}>
             <div
               className="todo-overdue-head"
@@ -1252,10 +1256,10 @@ export function TodoView({
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  void moveToday(overdue.map((o) => o.id));
+                  void moveHere(overdue.map((o) => o.id));
                 }}
               >
-                {t("todos.overdue.moveAll")}
+                {t(isToday ? "todos.overdue.moveAll" : "todos.overdue.moveAllDay")}
               </Button>
             </div>
             <div className="todo-overdue-body">

@@ -62,6 +62,9 @@ const ko = {
   "todos.parked.pulled": "{name} 을(를) 오늘로 올렸어요",
   "todos.overdue.moveOne": "오늘로",
   "todos.overdue.moveAll": "모두 오늘로 가져오기",
+  // 지난 날을 보고 있을 때 — 그 날로 옮긴다
+  "todos.overdue.moveOneDay": "이 날로",
+  "todos.overdue.moveAllDay": "모두 이 날로 가져오기",
   "todos.overdue.more": "외 {n}개",
 
   // 서브트리 삭제 확인 모달 — {name} 자리는 코드가 <b>제목</b> 으로 채운다(어순은 이 문자열이 결정)
@@ -195,6 +198,8 @@ const en: Record<keyof typeof ko, string> = {
   "todos.parked.pulled": "Brought {name} to today",
   "todos.overdue.moveOne": "To today",
   "todos.overdue.moveAll": "Bring all to today",
+  "todos.overdue.moveOneDay": "To this day",
+  "todos.overdue.moveAllDay": "Bring all to this day",
   "todos.overdue.more": "{n} more",
 
   "todos.delete.title": "Delete to-do",
