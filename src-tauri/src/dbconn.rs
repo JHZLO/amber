@@ -24,7 +24,8 @@ use crate::ai::AiError;
 
 /// 키체인 service. account 는 `db/<ulid>` — 연결마다 항목 하나.
 const KEYCHAIN_SERVICE: &str = "dev.jhzlo.amber";
-const CONNECT_TIMEOUT_SECS: u64 = 5;
+/// 운영 JIT 터널은 연결마다 bastion 세션을 새로 열어 접속에만 2초 넘게 걸린다. 짧으면 버린 시도가 세션을 붙든다
+const CONNECT_TIMEOUT_SECS: u64 = 10;
 const QUERY_TIMEOUT_SECS: u64 = 20;
 /// 연결당 풀 크기 — 프론트가 스키마 셋을 동시에 introspect 한다(DiagramsView.autoSyncMissing). 그보다 하나 여유.
 const POOL_MAX: u32 = 4;
@@ -372,8 +373,9 @@ pub async fn db_secret_delete(ulid: String) -> Result<(), AiError> {
 
 /// 비밀 저장소 호출과 터널 확인이 들어가는 명령이라 키체인보다 넉넉히
 const CREDENTIAL_TIMEOUT_SECS: u64 = 60;
-/// 연결 확인에서 계정 명령을 동시에 몇 개까지 — 스키마가 수십 개라 하나씩이면 1분을 넘긴다
-const CREDENTIAL_PARALLEL: usize = 6;
+/// 연결 확인에서 계정 명령을 동시에 몇 개까지 — 스키마가 수십 개라 하나씩이면 1분을 넘긴다.
+/// 동시 연결도 이만큼 생긴다. 운영 JIT 터널은 연결마다 bastion SSH 세션을 열어 크게 잡지 않는다(동기화 워커 수와 같게)
+const CREDENTIAL_PARALLEL: usize = 3;
 
 #[derive(Deserialize)]
 struct CommandCredential {
@@ -440,18 +442,6 @@ async fn command_credential(command: &str, schema: &str) -> Result<(String, Stri
         )));
     }
     Ok((c.username.trim().to_string(), c.password))
-}
-
-/// 이 스키마에 붙을 계정. 명령이 있으면 스키마마다 명령으로, 없으면 프로필 사용자 + 키체인
-async fn credential_for(profile: &DbProfile, schema: &str) -> Result<(String, String), AiError> {
-    if uses_command(profile) {
-        command_credential(&profile.credential_command, schema).await
-    } else {
-        Ok((
-            profile.username.trim().to_string(),
-            password_for(&profile.ulid).await?,
-        ))
-    }
 }
 
 // ---- 접속 ----
@@ -547,33 +537,16 @@ fn timed_out(secs: u64) -> AiError {
 }
 
 /// 풀 캐시 — 같은 프로필(호스트, 포트, 사용자, TLS, 계정 명령)이면 재사용, 달라졌으면 새로 만든다.
-/// 비밀번호 변경은 db_secret_set 이 drop_pool 로 비운다.
+/// 비밀번호 변경은 db_secret_set 이 drop_pool 로 비운다. 계정 명령 연결은 캐시하지 않는다(db_introspect).
 static POOLS: OnceLock<Mutex<HashMap<String, (String, MySqlPool)>>> = OnceLock::new();
 
 fn pools() -> &'static Mutex<HashMap<String, (String, MySqlPool)>> {
     POOLS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// 풀 캐시의 키. 비밀번호 연결은 연결 하나에 풀 하나, 계정 명령 연결은 스키마마다 계정이 달라 스키마마다 하나
-fn pool_key(profile: &DbProfile, schema: &str) -> String {
-    if uses_command(profile) {
-        format!("{}/{schema}", profile.ulid)
-    } else {
-        profile.ulid.clone()
-    }
-}
-
-/// 이 연결의 풀 전부(스키마별 풀 포함)
 fn drop_pool(ulid: &str) {
-    let prefix = format!("{ulid}/");
     if let Ok(mut m) = pools().lock() {
-        m.retain(|k, _| k != ulid && !k.starts_with(&prefix));
-    }
-}
-
-fn drop_pool_key(key: &str) {
-    if let Ok(mut m) = pools().lock() {
-        m.remove(key);
+        m.remove(ulid);
     }
 }
 
@@ -590,24 +563,27 @@ fn profile_sig(p: &DbProfile) -> String {
 }
 
 /// 같은 프로필로 이미 만든 풀
-fn cached_pool(profile: &DbProfile, key: &str) -> Option<MySqlPool> {
+fn cached_pool(profile: &DbProfile) -> Option<MySqlPool> {
     let sig = profile_sig(profile);
     let m = pools().lock().ok()?;
-    let (s, pool) = m.get(key)?;
+    let (s, pool) = m.get(&profile.ulid)?;
     (*s == sig).then(|| pool.clone())
 }
 
-fn pool_for(
-    profile: &DbProfile,
-    key: &str,
-    username: &str,
-    password: &str,
-) -> Result<MySqlPool, AiError> {
-    if let Some(pool) = cached_pool(profile, key) {
+fn pool_for(profile: &DbProfile, password: &str) -> Result<MySqlPool, AiError> {
+    if let Some(pool) = cached_pool(profile) {
         return Ok(pool);
     }
+    let pool = open_pool(profile, &profile.username, password)?;
+    if let Ok(mut m) = pools().lock() {
+        m.insert(profile.ulid.clone(), (profile_sig(profile), pool.clone()));
+    }
+    Ok(pool)
+}
+
+fn open_pool(profile: &DbProfile, username: &str, password: &str) -> Result<MySqlPool, AiError> {
     let opts = connect_options(profile, username, password)?;
-    let pool = MySqlPoolOptions::new()
+    Ok(MySqlPoolOptions::new()
         .max_connections(POOL_MAX)
         .acquire_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
         // 계정에 쓰기 권한이 있어도 이 세션으론 못 쓰게 — 읽기 전용 약속을 코드로 못 박는다
@@ -617,11 +593,7 @@ fn pool_for(
                 Ok(())
             })
         })
-        .connect_lazy_with(opts);
-    if let Ok(mut m) = pools().lock() {
-        m.insert(key.to_string(), (profile_sig(profile), pool.clone()));
-    }
-    Ok(pool)
+        .connect_lazy_with(opts))
 }
 
 // ---- 행 디코딩 ----
@@ -853,13 +825,16 @@ pub async fn db_introspect(profile: DbProfile, schema: String) -> Result<RawSnap
             "스키마 이름이 비어 있습니다.",
         ));
     }
-    // 같은 프로필의 풀이 살아 있으면 계정이 필요 없다 — 키체인은 첫 스키마에서만, 계정 명령은 스키마마다 한 번
-    let key = pool_key(&profile, &schema);
-    let pool = match cached_pool(&profile, &key) {
-        Some(p) => p,
-        None => {
-            let (username, password) = credential_for(&profile, &schema).await?;
-            pool_for(&profile, &key, &username, &password)?
+    let pool = if uses_command(&profile) {
+        // 계정 명령 연결은 풀을 캐시하지 않는다. 스키마마다 계정을 새로 받고, 풀은 이 함수가 끝나며 닫힌다.
+        // 운영 JIT 터널은 DB 연결 하나가 bastion SSH 세션 하나라 스키마마다 남긴 연결이 세션 상한을 채운다
+        let (username, password) = command_credential(&profile.credential_command, &schema).await?;
+        open_pool(&profile, &username, &password)?
+    } else {
+        // 같은 프로필의 풀이 살아 있으면 비밀번호가 필요 없다 — 키체인은 첫 스키마에서만 한 번
+        match cached_pool(&profile) {
+            Some(p) => p,
+            None => pool_for(&profile, &password_for(&profile.ulid).await?)?,
         }
     };
 
@@ -869,14 +844,7 @@ pub async fn db_introspect(profile: DbProfile, schema: String) -> Result<RawSnap
     )
     .await
     .map_err(|_| timed_out(QUERY_TIMEOUT_SECS))?
-    .map_err(map_sqlx)
-    // 계정 명령이 준 비밀번호는 비밀 저장소에서 바뀐다. 거절되면 풀을 버려 다음 동기화가 새로 받게 한다
-    .map_err(|e| {
-        if e.code == "DB_AUTH" {
-            drop_pool_key(&key);
-        }
-        e
-    })?;
+    .map_err(map_sqlx)?;
 
     // 테이블 골격 (이름순 — 프론트 생성기도 이 순서를 그대로 쓴다)
     let mut tables: Vec<SnapshotTable> = fetch_all(&pool, SQL_TABLES, &schema)
@@ -1059,25 +1027,6 @@ mod tests {
         );
         // 홈을 모르면 그대로 둔다(실행 시 NotFound 로 드러난다)
         assert_eq!(command_argv("~/cred", "x", ""), vec!["~/cred"]);
-    }
-
-    #[test]
-    fn command_connections_pool_per_schema() {
-        let p = DbProfile {
-            ulid: "01J".into(),
-            kind: "mysql".into(),
-            host: "127.0.0.1".into(),
-            port: 3307,
-            username: "ro".into(),
-            tls: "preferred".into(),
-            credential_command: String::new(),
-        };
-        assert_eq!(pool_key(&p, "orders"), "01J");
-        let q = DbProfile {
-            credential_command: "cred {schema}".into(),
-            ..p
-        };
-        assert_eq!(pool_key(&q, "orders"), "01J/orders");
     }
 
     #[test]
