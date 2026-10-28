@@ -372,6 +372,12 @@ pub fn run() {
             sql: include_str!("../migrations/0016_todo_parked.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 17,
+            description: "add_db_credential_command",
+            sql: include_str!("../migrations/0017_db_credential_command.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

@@ -81,7 +81,8 @@ export function DbSettings({
                     <span className={`chip chip-sm ${c.env === "prod" ? "chip-fill" : ""}`}>{envLabel(c.env)}</span>
                   </div>
                   <div className="db-conn-sub">
-                    {c.kind} · {c.host}:{c.port} · {c.username} ·{" "}
+                    {c.kind} · {c.host}:{c.port} ·{" "}
+                    {c.credential_command ? t("erd.db.auth.command") : c.username} ·{" "}
                     {t("settings.db.schemas", { n: c.schemas.filter((s) => s.enabled).length })} ·{" "}
                     {t("settings.db.folder", { path: c.folder_path })}
                   </div>

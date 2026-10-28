@@ -14,6 +14,7 @@ import { erdFileExists } from "../lib/erdStore";
 import {
   ENVS,
   createConnection,
+  dbSecretDelete,
   dbSecretSet,
   dbTest,
   deleteConnection,
@@ -32,6 +33,8 @@ import {
 import { Button } from "@/components/ui/button";
 
 type Step = "form" | "schemas";
+/** 계정을 어디서 받나 — 키체인의 비밀번호 하나, 또는 스키마마다 실행하는 명령 */
+type Auth = "password" | "command";
 
 /** 비밀번호 입력 + 보기/숨기기 토글. 키체인에만 저장되는 값이라 확인할 길이 이 칸밖에 없다 */
 export function PasswordField({
@@ -82,6 +85,24 @@ const TLS_OPTIONS: { value: DbTls; label: string }[] = [
   { value: "disabled", label: t("erd.db.tls.disabled") },
 ];
 
+const AUTH_OPTIONS: { value: Auth; label: string }[] = [
+  { value: "password", label: t("erd.db.auth.password") },
+  { value: "command", label: t("erd.db.auth.command") },
+];
+
+/** 확인에 실패한 스키마의 이유. 행이 이미 스키마 이름을 말하므로 detail 앞의 "스키마: " 는 뗀다 */
+function failReason(s: DbTestResult["schemas"][number]): string {
+  if (!s.error) return "";
+  const prefix = `${s.name}: `;
+  const detail = s.error.detail?.startsWith(prefix) ? s.error.detail.slice(prefix.length) : s.error.detail;
+  return errText({ ...s.error, detail });
+}
+
+/** 계정 명령 연결의 스키마 칸 → 이름 목록. 쉼표, 공백, 줄바꿈 어느 것으로 나눠도 된다 */
+function schemaListOf(text: string): string[] {
+  return [...new Set(text.split(/[\s,]+/).filter(Boolean))];
+}
+
 // P1 은 MySQL 만이라 종류 컨트롤을 두지 않는다 — 고를 수 없는 Select 는 자리만 차지하고 아무것도
 // 답해 주지 않는다. 대신 단계 라벨에 "MySQL" 을 적어 무엇에 붙는지는 말해 준다.
 // (Postgres 가 붙으면 그때 호스트 줄 앞에 Select 를 되살린다 — 포트 기본값도 함께 바뀌어야 한다.)
@@ -114,6 +135,9 @@ export function DbConnectionModal({
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [tls, setTls] = useState<DbTls>("preferred");
+  const [auth, setAuth] = useState<Auth>("password");
+  const [command, setCommand] = useState("");
+  const [schemaText, setSchemaText] = useState("");
   // 편집 모달에서 비밀번호 칸을 열었는가 — 기본은 닫힘("키체인에 저장됨")
   const [changePw, setChangePw] = useState(false);
   // 입력한 비밀번호를 평문으로 확인 — 열 때마다 숨김으로 돌아간다
@@ -141,6 +165,9 @@ export function DbConnectionModal({
     setUsername(connection?.username ?? "");
     setPassword("");
     setTls(connection?.tls ?? "preferred");
+    setAuth(connection?.credential_command ? "command" : "password");
+    setCommand(connection?.credential_command ?? "");
+    setSchemaText(connection?.credential_command ? connection.schemas.map((p) => p.name).join(", ") : "");
     setChangePw(false);
     setShowPw(false);
     setTesting(false);
@@ -164,13 +191,20 @@ export function DbConnectionModal({
   }
 
   const portNum = portOf(port);
+  const byCommand = auth === "command";
+  // 키체인에 이 연결의 비밀번호가 있는가 — 계정 명령 연결이었다면 없다
+  const pwStored = connection !== null && !connection.credential_command;
+  const schemaList = schemaListOf(schemaText);
   const fieldsValid =
     name.trim().length > 0 &&
     host.trim().length > 0 &&
     portNum !== null &&
-    username.trim().length > 0 &&
-    (editing && !changePw ? true : password.length > 0);
+    (byCommand
+      ? command.trim().length > 0 && schemaList.length > 0
+      : username.trim().length > 0 && (pwStored && !changePw ? true : password.length > 0));
   const enabledCount = prefs.filter((p) => p.enabled).length;
+  const failedCount = test?.schemas.filter((s) => s.error).length ?? 0;
+  const okCount = (test?.schemas.length ?? 0) - failedCount;
 
   async function runTest() {
     if (!fieldsValid || testing) return;
@@ -185,9 +219,11 @@ export function DbConnectionModal({
           port: portNum ?? 3306,
           username: username.trim(),
           tls,
+          credential_command: byCommand ? command.trim() : "",
         },
         // 편집 중 비밀번호를 안 바꿨으면 Rust 가 키체인에서 읽는다
-        editing && !changePw ? null : password,
+        byCommand || (pwStored && !changePw) ? null : password,
+        byCommand ? schemaList : undefined,
       );
       setTest(r);
       // 이미 있던 설정(표시명·체크)은 지키고, 새로 보인 스키마만 기본값으로 — 테이블이 있으면 켜 둔다
@@ -258,12 +294,18 @@ export function DbConnectionModal({
           env,
           host,
           port: portNum,
-          username,
+          username: byCommand ? "" : username,
           tls,
+          credential_command: byCommand ? command : "",
           // 테스트를 안 했으면 스키마 목록은 손대지 않는다(연결 없이 이름만 고치는 경로)
           ...(test || auditTouched ? { schemas: prefsToSave() } : {}),
         });
-        if (changePw && password) await dbSecretSet(connection.ulid, password);
+        // 계정 명령으로 바꿨으면 키체인의 비밀번호는 더 쓰지 않는다 — 남기지 않는다
+        if (byCommand) {
+          if (pwStored) await dbSecretDelete(connection.ulid);
+        } else if (password && (changePw || !pwStored)) {
+          await dbSecretSet(connection.ulid, password);
+        }
         const fresh = await getConnection(connection.id);
         if (!fresh) throw new Error("connection vanished");
         saved = fresh;
@@ -275,17 +317,20 @@ export function DbConnectionModal({
           env,
           host,
           port: portNum,
-          username,
+          username: byCommand ? "" : username,
           tls,
+          credential_command: byCommand ? command : "",
           folder_path: folder,
           schemas: prefsToSave(),
         });
-        try {
-          await dbSecretSet(saved.ulid, password);
-        } catch (e) {
-          // 비밀번호 없는 프로필은 쓸모가 없다 — 행을 되돌려 반쪽 상태를 남기지 않는다
-          await deleteConnection(saved).catch(() => {});
-          throw e;
+        if (!byCommand) {
+          try {
+            await dbSecretSet(saved.ulid, password);
+          } catch (e) {
+            // 비밀번호 없는 프로필은 쓸모가 없다 — 행을 되돌려 반쪽 상태를 남기지 않는다
+            await deleteConnection(saved).catch(() => {});
+            throw e;
+          }
         }
       }
       notifyConnectionsChanged();
@@ -426,39 +471,75 @@ export function DbConnectionModal({
               </div>
               <div className="hint sp6 db-form-hint">{t("erd.db.hint.host")}</div>
 
-              <div className="field sp3">
-                <label>{t("erd.db.field.user")}</label>
-                <input
-                  className="input"
-                  value={username}
-                  spellCheck={false}
-                  autoCapitalize="off"
-                  onChange={(e) => touch(setUsername)(e.target.value)}
-                />
+              <div className="field sp2">
+                <label>{t("erd.db.field.auth")}</label>
+                <Select value={auth} options={AUTH_OPTIONS} onChange={touch(setAuth)} block />
               </div>
-              <div className="field sp3">
-                <label>{t("erd.db.field.password")}</label>
-                {editing && !changePw ? (
-                  <div className="db-pw-stored">
-                    <Icon name="key" size={14} />
-                    <span>{t("erd.db.password.stored")}</span>
-                    <span className="spacer" />
-                    <Button type="button" size="sm" onClick={() => setChangePw(true)}>
-                      {t("erd.db.password.change")}
-                    </Button>
+              {byCommand ? (
+                <>
+                  <div className="field sp4">
+                    <label>{t("erd.db.field.command")}</label>
+                    <input
+                      className="input"
+                      value={command}
+                      placeholder="~/bin/db-credential {schema}"
+                      spellCheck={false}
+                      autoCapitalize="off"
+                      onChange={(e) => touch(setCommand)(e.target.value)}
+                    />
                   </div>
-                ) : (
-                  <PasswordField
-                    value={password}
-                    show={showPw}
-                    onToggle={() => setShowPw((v) => !v)}
-                    onChange={touch(setPassword)}
-                  />
-                )}
-              </div>
-              {/* 계정 한 줄에 걸리는 두 가지(키체인 저장·읽기 전용 권장)를 한 줄로 모은다 —
-                  칸마다 힌트를 달면 줄 높이가 제각각이 되고 끝에 뜬 힌트는 무엇의 설명인지 흐려진다 */}
-              <div className="hint sp6 db-form-hint">{t("erd.db.hint.account")}</div>
+                  {/* 계정마다 자기 스키마만 보여서 연결 확인으로 목록을 얻을 수 없다 — 읽을 스키마를 적는다 */}
+                  <div className="field sp6">
+                    <label>{t("erd.db.field.schemaList")}</label>
+                    <textarea
+                      className="textarea"
+                      rows={3}
+                      value={schemaText}
+                      placeholder={t("erd.db.field.schemaListPh")}
+                      spellCheck={false}
+                      autoCapitalize="off"
+                      onChange={(e) => touch(setSchemaText)(e.target.value)}
+                    />
+                  </div>
+                  <div className="hint sp6 db-form-hint">{t("erd.db.hint.command")}</div>
+                </>
+              ) : (
+                <>
+                  <div className="field sp2">
+                    <label>{t("erd.db.field.user")}</label>
+                    <input
+                      className="input"
+                      value={username}
+                      spellCheck={false}
+                      autoCapitalize="off"
+                      onChange={(e) => touch(setUsername)(e.target.value)}
+                    />
+                  </div>
+                  <div className="field sp2">
+                    <label>{t("erd.db.field.password")}</label>
+                    {pwStored && !changePw ? (
+                      <div className="db-pw-stored">
+                        <Icon name="key" size={14} />
+                        <span>{t("erd.db.password.stored")}</span>
+                        <span className="spacer" />
+                        <Button type="button" size="sm" onClick={() => setChangePw(true)}>
+                          {t("erd.db.password.change")}
+                        </Button>
+                      </div>
+                    ) : (
+                      <PasswordField
+                        value={password}
+                        show={showPw}
+                        onToggle={() => setShowPw((v) => !v)}
+                        onChange={touch(setPassword)}
+                      />
+                    )}
+                  </div>
+                  {/* 계정 한 줄에 걸리는 두 가지(키체인 저장·읽기 전용 권장)를 한 줄로 모은다 —
+                      칸마다 힌트를 달면 줄 높이가 제각각이 되고 끝에 뜬 힌트는 무엇의 설명인지 흐려진다 */}
+                  <div className="hint sp6 db-form-hint">{t("erd.db.hint.account")}</div>
+                </>
+              )}
             </div>
 
             {/* 연결 확인 — 예전에는 푸터 왼쪽의 외딴 버튼이었고, 성공해야 [다음]이 열린다는 걸
@@ -473,9 +554,15 @@ export function DbConnectionModal({
                     <b>{t("erd.db.test.ok")}</b>
                     {t("erd.db.testOk", {
                       server: test.server,
-                      n: test.schemas.length,
+                      n: okCount,
                       ms: test.latency_ms,
                     })}
+                    {failedCount > 0 && (
+                      <>
+                        <br />
+                        {t("erd.db.test.someFailed", { n: failedCount })}
+                      </>
+                    )}
                   </>
                 ) : testError ? (
                   <>
@@ -515,11 +602,11 @@ export function DbConnectionModal({
                   name: name.trim(),
                   host: host.trim(),
                   port,
-                  user: username.trim(),
+                  user: byCommand ? t("erd.db.auth.command") : username.trim(),
                 })}
               </span>
               <span>·</span>
-              <span>{t("erd.db.schemas.readable", { n: test.schemas.length })}</span>
+              <span>{t("erd.db.schemas.readable", { n: okCount })}</span>
             </div>
             <div className="db-panel">
               <div className="db-panel-head db-schema-cols">
@@ -538,14 +625,21 @@ export function DbConnectionModal({
                       <span className="db-row-name" onClick={() => togglePref(s.name)}>
                         {s.name}
                       </span>
-                      <input
-                        className="input db-label-input"
-                        value={p?.label ?? ""}
-                        placeholder={t("erd.db.schemas.labelPh")}
-                        disabled={!on}
-                        onChange={(e) => setLabel(s.name, e.target.value)}
-                      />
-                      <span className="db-num">{s.tables}</span>
+                      {/* 붙지 못한 스키마는 표시명과 테이블 수 대신 이유를 둔다(두 칸에 걸쳐). 전문은 hover */}
+                      {s.error ? (
+                        <span className="db-row-sub" style={{ gridColumn: "span 2" }} title={failReason(s)}>
+                          {failReason(s)}
+                        </span>
+                      ) : (
+                        <input
+                          className="input db-label-input"
+                          value={p?.label ?? ""}
+                          placeholder={t("erd.db.schemas.labelPh")}
+                          disabled={!on}
+                          onChange={(e) => setLabel(s.name, e.target.value)}
+                        />
+                      )}
+                      {!s.error && <span className="db-num">{s.tables}</span>}
                     </div>
                   );
                 })}

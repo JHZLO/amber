@@ -69,6 +69,7 @@ export const CODE_KEY: Record<string, MsgKey> = {
   DB_UNSUPPORTED: "common.err.db.unsupported",
   DB_EMPTY_FIELD: "common.err.db.emptyField",
   DB_EMPTY_PASSWORD: "common.err.db.emptyPassword",
+  DB_CREDENTIAL: "common.err.db.credential",
   KEYCHAIN_DENIED: "common.err.keychain.denied",
   KEYCHAIN_MISSING: "common.err.keychain.missing",
 };

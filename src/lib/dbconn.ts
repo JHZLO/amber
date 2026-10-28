@@ -8,7 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ulid as newUlid } from "ulid";
 import { getDb } from "./db";
 import { deleteErdEntry, ensureErdDir, readErdFileIfExists, writeErdFile } from "./erdStore";
-import { isCodedError } from "./errors";
+import { isCodedError, type CodedError } from "./errors";
 import { t } from "./i18n";
 import {
   SNAPSHOT_FILE,
@@ -48,6 +48,8 @@ export interface DbConnection {
   port: number;
   username: string;
   tls: DbTls;
+  /** 계정 명령. 비어 있으면 username + 키체인, 있으면 스키마마다 이 명령으로 계정을 받는다 */
+  credential_command: string;
   /** ERD 저장소 기준 상대경로 — 연결 폴더. 스키마 폴더는 `${folder_path}/${schema}` */
   folder_path: string;
   schemas: DbSchemaPref[];
@@ -66,12 +68,14 @@ export interface DbProfile {
   port: number;
   username: string;
   tls: DbTls;
+  credential_command: string;
 }
 
 export interface DbTestResult {
   server: string;
   latency_ms: number;
-  schemas: { name: string; tables: number }[];
+  /** error 는 계정 명령 연결에서 그 스키마만 붙지 못했을 때 */
+  schemas: { name: string; tables: number; error?: CodedError }[];
 }
 
 export const profileOf = (c: DbProfile): DbProfile => ({
@@ -81,6 +85,7 @@ export const profileOf = (c: DbProfile): DbProfile => ({
   port: c.port,
   username: c.username,
   tls: c.tls,
+  credential_command: c.credential_command,
 });
 
 /** 연결 목록이 바뀌었다(추가·편집·삭제·동기화) — 트리·설정이 서로 다시 읽게 하는 창 안 이벤트 */
@@ -118,7 +123,7 @@ function fromRow(r: Row): DbConnection {
 }
 
 const COLS =
-  "id, ulid, name, kind, env, host, port, username, tls, folder_path, schemas_json, " +
+  "id, ulid, name, kind, env, host, port, username, tls, credential_command, folder_path, schemas_json, " +
   "last_sync_at, last_error, created_at, updated_at";
 
 export async function listConnections(): Promise<DbConnection[]> {
@@ -141,6 +146,7 @@ export interface ConnectionInput {
   port: number;
   username: string;
   tls: DbTls;
+  credential_command: string;
   folder_path: string;
   schemas: DbSchemaPref[];
 }
@@ -150,8 +156,8 @@ export async function createConnection(input: ConnectionInput): Promise<DbConnec
   const db = await getDb();
   const ulid = newUlid();
   const res = await db.execute(
-    `INSERT INTO db_connections (ulid, name, kind, env, host, port, username, tls, folder_path, schemas_json)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    `INSERT INTO db_connections (ulid, name, kind, env, host, port, username, tls, credential_command, folder_path, schemas_json)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [
       ulid,
       input.name.trim(),
@@ -161,6 +167,7 @@ export async function createConnection(input: ConnectionInput): Promise<DbConnec
       input.port,
       input.username.trim(),
       input.tls,
+      input.credential_command.trim(),
       input.folder_path,
       JSON.stringify(input.schemas),
     ],
@@ -185,6 +192,7 @@ export async function updateConnection(id: number, patch: Partial<ConnectionInpu
   if (patch.port !== undefined) put("port", patch.port);
   if (patch.username !== undefined) put("username", patch.username.trim());
   if (patch.tls !== undefined) put("tls", patch.tls);
+  if (patch.credential_command !== undefined) put("credential_command", patch.credential_command.trim());
   if (patch.folder_path !== undefined) put("folder_path", patch.folder_path);
   if (patch.schemas !== undefined) put("schemas_json", JSON.stringify(patch.schemas));
   if (!sets.length) return;
@@ -222,9 +230,18 @@ export async function markSync(id: number, errorCode: string | null): Promise<vo
 
 // ---- Rust 커맨드 ----
 
-/** 접속 확인. password 를 안 주면 Rust 가 키체인에서 읽는다(편집·재검사) */
-export function dbTest(profile: DbProfile, password?: string | null): Promise<DbTestResult> {
-  return invoke<DbTestResult>("db_test", { profile: profileOf(profile), password: password ?? null });
+/** 접속 확인. password 를 안 주면 Rust 가 키체인에서 읽는다(편집·재검사).
+ *  계정 명령 연결은 계정마다 자기 스키마만 보이므로 확인할 스키마를 schemas 로 준다 */
+export function dbTest(
+  profile: DbProfile,
+  password?: string | null,
+  schemas?: string[],
+): Promise<DbTestResult> {
+  return invoke<DbTestResult>("db_test", {
+    profile: profileOf(profile),
+    password: password ?? null,
+    schemas: schemas ?? null,
+  });
 }
 
 export function dbIntrospect(profile: DbProfile, schema: string): Promise<RawSnapshot> {
