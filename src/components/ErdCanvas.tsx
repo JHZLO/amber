@@ -25,6 +25,7 @@ import { t } from "../lib/i18n";
 import { errText } from "../lib/errors";
 import { Icon } from "../icons";
 import { Spinner, Tooltip } from "../ui";
+import { SelectionPaint } from "./GlyphPaint";
 
 type Columns = "all" | "keys" | "none";
 interface ViewPrefs {
@@ -93,6 +94,7 @@ export function ErdCanvas({
   const panelRef = useRef<HTMLElement>(null);
   const panelBodyRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
+  const popBodyRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<Canvas | null>(null);
 
   const [view, setView] = useState<ViewPrefs>(loadView);
@@ -442,10 +444,10 @@ export function ErdCanvas({
 
   // 정보창 — resin 의 컬럼 설명
   useEffect(() => {
-    const pop = popRef.current;
-    if (!pop) return;
+    const body = popBodyRef.current;
+    if (!body) return;
     if (!model || !popped) {
-      pop.replaceChildren();
+      body.replaceChildren();
       return;
     }
     const el = columnDetails(model, popped.table, popped.column, (name) => openTable(name));
@@ -453,7 +455,7 @@ export function ErdCanvas({
       setPopped(null);
       return;
     }
-    pop.replaceChildren(el);
+    body.replaceChildren(el);
     placePop();
   }, [model, popped]);
 
@@ -764,7 +766,13 @@ export function ErdCanvas({
       )}
       {error && <div className="erd-status error-note">{error}</div>}
 
-      <div className="erd-pop rz-details" ref={popRef} role="dialog" hidden={!popped} />
+      {/* resin 이 채우는 상자 옆에 글자 높이 선택 칠을 둔다 — 상자 안이면 replaceChildren 이 칠 층을 지운다 */}
+      <div className="erd-pop" ref={popRef} role="dialog" hidden={!popped}>
+        <div className="glyph-sel">
+          <div className="rz-details" ref={popBodyRef} />
+          <SelectionPaint containerRef={popBodyRef} />
+        </div>
+      </div>
 
       {inspected && (
         <aside
@@ -799,7 +807,10 @@ export function ErdCanvas({
               </button>
             </Tooltip>
           </div>
-          <div className="erd-panel-body rz-details" ref={panelBodyRef} />
+          <div className="erd-panel-body glyph-sel">
+            <div className="rz-details" ref={panelBodyRef} />
+            <SelectionPaint containerRef={panelBodyRef} />
+          </div>
         </aside>
       )}
     </div>

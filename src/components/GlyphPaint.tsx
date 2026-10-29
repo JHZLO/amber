@@ -16,8 +16,8 @@ import type { Rect } from "../lib/noteAnchor";
 export type GlyphTone = "sel" | "q" | "q-cur";
 export type GlyphMark = { range: Range; tone: GlyphTone };
 
-/** 넘친 글자를 잘라 보이는 블록(styles.css 의 overflow) — 칠도 그 상자 밖으로 새지 않게 자른다 */
-const CLIPS = "pre, table, .md-svg, .mermaid-rendered, .md-toggle-inner";
+/** 넘친 글자를 잘라 보이는 블록(styles.css 의 overflow, resin 표 설명의 가로 스크롤 칸) — 칠도 그 상자 밖으로 새지 않게 자른다 */
+const CLIPS = "pre, table, .md-svg, .mermaid-rendered, .md-toggle-inner, .rz-details .t-wrap";
 
 function clipRect(r: DOMRect, box: DOMRect | null): DOMRect | null {
   if (!box) return r;
@@ -26,6 +26,17 @@ function clipRect(r: DOMRect, box: DOMRect | null): DOMRect | null {
   const top = Math.max(r.top, box.top);
   const bottom = Math.min(r.bottom, box.bottom);
   return right > left && bottom > top ? new DOMRect(left, top, right - left, bottom - top) : null;
+}
+
+/** el 을 감싼 CLIPS 상자들의 교집합 — resin 표는 table 보다 그걸 감싼 스크롤 칸이 좁다. 없으면 null */
+function clipBox(el: Element): DOMRect | null {
+  let box: DOMRect | null = null;
+  for (let b = el.closest(CLIPS); b; b = b.parentElement?.closest(CLIPS) ?? null) {
+    const r = b.getBoundingClientRect();
+    // 겹치지 않으면 다 가려졌다 — 빈 상자라 아무것도 칠하지 않는다
+    box = box ? (clipRect(r, box) ?? new DOMRect(r.left, r.top, 0, 0)) : r;
+  }
+  return box;
 }
 
 /** r 중 본문 c 안의 글자 상자들(화면 좌표). clips = 이번 측정 동안 블록별 자르는 상자 캐시 */
@@ -50,7 +61,7 @@ function glyphRects(c: HTMLElement, r: Range, clips: Map<Element, DOMRect | null
     // 접힌 토글 안의 글자는 잘려 있다 — 그 상자는 아래 블록 위에 놓인다
     if (inCollapsedBody(part)) continue;
     const parent = n.parentElement!;
-    if (!clips.has(parent)) clips.set(parent, parent.closest(CLIPS)?.getBoundingClientRect() ?? null);
+    if (!clips.has(parent)) clips.set(parent, clipBox(parent));
     for (const b of part.getClientRects()) {
       const v = clipRect(b, clips.get(parent)!);
       if (v) out.push(v);
