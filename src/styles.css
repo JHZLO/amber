@@ -3352,8 +3352,14 @@ html.widget-root #root {
    그대로 남는다(어두운 판 = screen, 밝은 판 = multiply). 색은 예전 반투명 칠이 판 위에 섞인 값이다:
    선택 = macOS 기본 선택색, 질문 = 노랑 0.32 / 0.55(밝게), 호박 0.42 / 0.62(어둡게). 지금 것만 진하게(q-cur). */
 .note-read-wrap > .markdown ::selection,
-.report-read > .markdown ::selection {
+.glyph-sel ::selection {
   background: transparent;
+}
+/* 노트 읽기 밖에서 SelectionPaint 를 둔 상자(리포트, 개념, 미리보기, 질문 스레드) — 칠 층의 기준이다.
+   칠 층을 상자 안에 깔아 상자가 스크롤 칸이어도 글자와 같이 구른다. 입력 칸은 이 안에 두지 않는다
+   (위 규칙이 입력 칸의 선택 칠까지 지운다) */
+.glyph-sel {
+  position: relative;
 }
 .glyph-paint {
   position: absolute;
@@ -7242,10 +7248,6 @@ textarea.todo-edit {
 }
 .report-body {
   font-size: 13.5px;
-}
-/* 데일리 리포트 읽기 — 선택 칠(.glyph-paint)이 이 상자를 기준으로 깔린다. 스크롤 칸 안이라 같이 구른다 */
-.report-read {
-  position: relative;
 }
 /* 리포트 직접 수정 — 노트 편집과 **같은 2분할 문법**(좌 원문 / 우 라이브 프리뷰, §7)이지만
    컨테이너 사정이 다르다: 노트는 화면 높이를 차지하는 pane 이라 .note-edit-split 이

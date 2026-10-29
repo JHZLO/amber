@@ -28,6 +28,7 @@ import {
 } from "../lib/reportRun";
 import { formatDayShort, todayStr, weekDays } from "../lib/date";
 import { AiThinking, Modal, Tooltip } from "../ui";
+import { SelectionPaint } from "./GlyphPaint";
 import { Icon } from "../icons";
 import { t, dateLocale } from "../lib/i18n";
 import { errText } from "../lib/errors";
@@ -67,6 +68,7 @@ export function WeeklyReportPanel({
   const [copied, setCopied] = useState(false);
   const [opError, setOpError] = useState<string | null>(null);
   const streamRef = useRef<HTMLPreElement>(null);
+  const bodyRef = useRef<HTMLPreElement>(null);
 
   const days = weekDays(weekStart);
   const weekEnd = days[6];
@@ -314,7 +316,12 @@ export function WeeklyReportPanel({
           {/* 마크다운으로 렌더하지 않는다 — 이 형식은 '들여쓰기 + ㄴ' 으로 계층을 만드는
               평문이라, 마크다운을 태우면 줄바꿈이 사라져 한 문단으로 뭉개진다.
               보이는 그대로가 노션에 붙는 그대로여야 복사 버튼도 신뢰할 수 있다. */}
-          <pre className="report-week-body">{body}</pre>
+          <div className="glyph-sel">
+            <pre className="report-week-body" ref={bodyRef}>
+              {body}
+            </pre>
+            <SelectionPaint containerRef={bodyRef} />
+          </div>
         </>
       )}
 

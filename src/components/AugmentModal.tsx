@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Markdown } from "./Markdown";
+import { SelectionPaint } from "./GlyphPaint";
 import type { AppConfig } from "../lib/config";
 import type { ConceptWithTags } from "../types";
 import { aiAugment, friendlyError } from "../lib/ai";
@@ -47,6 +48,7 @@ export function AugmentModal({
   onApplied: (newBody: string) => void;
 }) {
   const [step, setStep] = useState<Step>("prompt");
+  const previewRef = useRef<HTMLDivElement>(null);
   const [instruction, setInstruction] = useState("");
   // 체크한 빠른 지시(index) — 텍스트는 보낼 때 합친다
   const [chosen, setChosen] = useState<Set<number>>(() => new Set());
@@ -283,8 +285,9 @@ export function AugmentModal({
                 onChange={(e) => setBodyMd(e.target.value)}
               />
             ) : (
-              <div className="markdown md-preview">
+              <div className="markdown md-preview glyph-sel" ref={previewRef}>
                 <Markdown>{bodyMd}</Markdown>
+                <SelectionPaint containerRef={previewRef} />
               </div>
             )}
           </div>

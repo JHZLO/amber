@@ -1328,8 +1328,9 @@ export function NotesView({
                     spellCheck={false}
                   />
                 </div>
-                <div className="markdown note-preview" ref={previewRef}>
+                <div className="markdown note-preview glyph-sel" ref={previewRef}>
                   <Markdown assetBase={assetBase}>{previewMd}</Markdown>
+                  <SelectionPaint containerRef={previewRef} />
                 </div>
               </div>
             ) : (

@@ -34,7 +34,7 @@ import { blockRangeFromSelection } from "../lib/mdBlocks";
 import { openEnclosingToggles } from "../lib/mdDetails";
 import { nthIndex, rangeAt } from "../lib/noteAnchor";
 import { SelectionSweep } from "./SelectionSweep";
-import { GlyphPaint, type GlyphMark } from "./GlyphPaint";
+import { GlyphPaint, SelectionPaint, type GlyphMark } from "./GlyphPaint";
 import { Button } from "@/components/ui/button";
 
 // 패널은 우측 여백에 고정(CSS)이라 좌표를 들고 다니지 않는다 — 상태 하나 = 패널 최대 1개
@@ -73,12 +73,17 @@ function CmtMsg({
   children: React.ReactNode;
 }) {
   const me = who === "me";
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  // 칠 층은 말풍선 밖(줄)에 깐다 — 말풍선 안이면 .cmt-a > *:last-child 가 칠 층을 잡는다
   return (
-    <div className={`cmt-msg ${me ? "me" : "ai"}`}>
+    <div className={`cmt-msg glyph-sel ${me ? "me" : "ai"}`}>
       <span className="cmt-avatar" aria-hidden="true">
         <Icon name={me ? "user" : "sparkles"} size={12} />
       </span>
-      <div className={`${me ? "cmt-q" : "cmt-a"} ${markdown ? "markdown" : ""}`}>{children}</div>
+      <div ref={bubbleRef} className={`${me ? "cmt-q" : "cmt-a"} ${markdown ? "markdown" : ""}`}>
+        {children}
+      </div>
+      <SelectionPaint containerRef={bubbleRef} />
     </div>
   );
 }

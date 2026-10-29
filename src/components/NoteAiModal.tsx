@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Markdown } from "./Markdown";
+import { SelectionPaint } from "./GlyphPaint";
 import { DiffView } from "./DiffView";
 import type { AppConfig } from "../lib/config";
 import { loadPrompts, type SavedPrompt } from "../lib/prompts";
@@ -61,6 +62,7 @@ export function NoteAiModal({
   // 이 노트의 실행(없으면 undefined). 진행·결과·실패 전부 여기서 온다
   const run = useNoteAiRun(path);
   const [instruction, setInstruction] = useState("");
+  const previewRef = useRef<HTMLDivElement>(null);
   // 체크한 저장 프롬프트(`s:<id>`)·빠른 지시(`p:<index>`) — 텍스트는 보낼 때 합친다
   const [chosen, setChosen] = useState<Set<string>>(() => new Set());
   // 내용 보기 모달에 띄운 저장 프롬프트 (null = 닫힘)
@@ -425,8 +427,9 @@ export function NoteAiModal({
           ) : viewMode === "diff" ? (
             <DiffView oldText={currentBody} newText={resultMd} />
           ) : (
-            <div className="markdown md-preview">
+            <div className="markdown md-preview glyph-sel" ref={previewRef}>
               <Markdown>{resultMd}</Markdown>
+              <SelectionPaint containerRef={previewRef} />
             </div>
           )}
           {hasExisting && (

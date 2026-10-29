@@ -2,9 +2,10 @@
 // 선택 텍스트 + 노트 문맥을 개념 생성 파이프라인(aiGenerate)에 넣어 제목/요약/상세/태그를 만들고,
 // 미리보기에서 편집 후 저장한다. 저장 = 개념 생성(source_kind='file') + 노트 쪽 역참조 사이드카 기록.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ulid as genUlid } from "ulid";
 import { Markdown } from "./Markdown";
+import { SelectionPaint } from "./GlyphPaint";
 import type { AppConfig } from "../lib/config";
 import type { Confidence } from "../types";
 import { aiGenerate, friendlyError } from "../lib/ai";
@@ -48,6 +49,7 @@ export function PromoteConceptModal({
 }) {
   const open = !!target;
   const [step, setStep] = useState<Step>("loading");
+  const previewRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showSource, setShowSource] = useState(false);
@@ -253,8 +255,9 @@ export function PromoteConceptModal({
                 onChange={(e) => setBodyMd(e.target.value)}
               />
             ) : (
-              <div className="markdown md-preview">
+              <div className="markdown md-preview glyph-sel" ref={previewRef}>
                 <Markdown>{bodyMd}</Markdown>
+                <SelectionPaint containerRef={previewRef} />
               </div>
             )}
           </div>

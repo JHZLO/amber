@@ -402,17 +402,16 @@ export function DailyReportPanel({
                   spellCheck={false}
                   autoFocus
                 />
-                <div className="markdown note-preview report-body" ref={previewRef}>
+                <div className="markdown note-preview report-body glyph-sel" ref={previewRef}>
                   <Markdown>{draft}</Markdown>
+                  <SelectionPaint containerRef={previewRef} />
                 </div>
               </div>
               <p className="report-hint">{t("report.editHint")}</p>
             </>
           ) : (
-            <div className="report-read">
-              <div className="markdown report-body" ref={bodyRef}>
-                <Markdown>{body}</Markdown>
-              </div>
+            <div className="markdown report-body glyph-sel" ref={bodyRef}>
+              <Markdown>{body}</Markdown>
               <SelectionPaint containerRef={bodyRef} />
             </div>
           )}

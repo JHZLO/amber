@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Markdown } from "./Markdown";
+import { SelectionPaint } from "./GlyphPaint";
 import { ulid as genUlid } from "ulid";
 import type { AppConfig } from "../lib/config";
 import type { Confidence } from "../types";
@@ -33,6 +34,7 @@ export function AddConceptModal({
   config: AppConfig;
 }) {
   const [step, setStep] = useState<Step>("paste");
+  const previewRef = useRef<HTMLDivElement>(null);
   const [transcript, setTranscript] = useState("");
   const [instruction, setInstruction] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -285,8 +287,9 @@ export function AddConceptModal({
               </Button>
             </label>
             {showPreview ? (
-              <div className="markdown md-preview">
+              <div className="markdown md-preview glyph-sel" ref={previewRef}>
                 <Markdown>{bodyMd}</Markdown>
+                <SelectionPaint containerRef={previewRef} />
               </div>
             ) : (
               <textarea

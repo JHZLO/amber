@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
+import { SelectionPaint } from "./GlyphPaint";
 import type { AppConfig } from "../lib/config";
 import type { ConceptWithTags } from "../types";
 import {
@@ -63,6 +64,7 @@ export function ConceptDetail({
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [body, setBody] = useState("");
+  const bodyRef = useRef<HTMLDivElement>(null);
   const [loadingBody, setLoadingBody] = useState(true);
   const [readError, setReadError] = useState<string | null>(null);
   // 파일만 사라진 경우 — 읽기 실패지만 편집/저장은 열어 둬야 복구가 된다
@@ -375,8 +377,9 @@ export function ConceptDetail({
         ) : missingFile ? (
           <div className="hint">{t("concepts.missingFile")}</div>
         ) : (
-          <div className="markdown">
+          <div className="markdown glyph-sel" ref={bodyRef}>
             <Markdown>{body}</Markdown>
+            <SelectionPaint containerRef={bodyRef} />
           </div>
         )}
 

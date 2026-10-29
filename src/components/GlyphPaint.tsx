@@ -130,7 +130,7 @@ export function GlyphPaint({
   );
 }
 
-/** 본문 드래그 선택 — 네이티브 칠은 styles.css 가 지운다(.note-read-wrap, .report-read > .markdown ::selection) */
+/** 본문 드래그 선택 — 네이티브 칠은 styles.css 가 지운다(.note-read-wrap > .markdown, .glyph-sel 의 ::selection) */
 export function SelectionPaint({
   containerRef,
 }: {
