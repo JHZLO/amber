@@ -3351,7 +3351,8 @@ html.widget-root #root {
    WebKit 은 둘째 줄부터 칠을 윗줄 바닥까지 늘려 글자 위가 떠 보였다. 혼합 모드로 깔아 글자 색이
    그대로 남는다(어두운 판 = screen, 밝은 판 = multiply). 색은 예전 반투명 칠이 판 위에 섞인 값이다:
    선택 = macOS 기본 선택색, 질문 = 노랑 0.32 / 0.55(밝게), 호박 0.42 / 0.62(어둡게). 지금 것만 진하게(q-cur). */
-.note-read-wrap > .markdown ::selection {
+.note-read-wrap > .markdown ::selection,
+.report-read > .markdown ::selection {
   background: transparent;
 }
 .glyph-paint {
@@ -7241,6 +7242,10 @@ textarea.todo-edit {
 }
 .report-body {
   font-size: 13.5px;
+}
+/* 데일리 리포트 읽기 — 선택 칠(.glyph-paint)이 이 상자를 기준으로 깔린다. 스크롤 칸 안이라 같이 구른다 */
+.report-read {
+  position: relative;
 }
 /* 리포트 직접 수정 — 노트 편집과 **같은 2분할 문법**(좌 원문 / 우 라이브 프리뷰, §7)이지만
    컨테이너 사정이 다르다: 노트는 화면 높이를 차지하는 pane 이라 .note-edit-split 이
