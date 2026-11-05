@@ -6,13 +6,27 @@ use amber_gpui::dates;
 use amber_gpui::db::Row;
 use amber_gpui::i18n::{t, t_with};
 use amber_gpui::tree::{self, Node};
-use gpui_kit::component::input::Input;
+use gpui_kit::component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
 use crate::Spike;
 use crate::assets::icon;
 use crate::theme::Tokens;
+
+/// 지우기 전에 묻는 것 — 라이브 항목(하위 수를 말한다) 또는 이 날짜에 남은 이월 기록 한 줄
+pub(crate) enum Confirm {
+    Delete {
+        id: i64,
+        parent: Option<i64>,
+        name: String,
+        count: usize,
+    },
+    Record {
+        id: i64,
+        name: String,
+    },
+}
 
 /// 중첩 단계마다 더 들어가는 폭
 const INDENT: f32 = 24.;
@@ -278,6 +292,27 @@ impl Spike {
             })
             .child(self.row(node, group, depth >= 2, false, k, cx))
             .children(kids.into_iter().map(|c| self.unit(c, depth + 1, k, cx)))
+            .when_some(
+                self.adding_child
+                    .as_ref()
+                    .filter(|(pid, _)| *pid == node.id()),
+                |d, (_, input)| {
+                    d.child(
+                        div()
+                            .ml(px(INDENT))
+                            .px(px(8.))
+                            .py(px(6.))
+                            .text_size(px(14.))
+                            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+                                if e.keystroke.key == "escape" {
+                                    this.adding_child = None;
+                                    cx.notify();
+                                }
+                            }))
+                            .child(Input::new(input).appearance(false)),
+                    )
+                },
+            )
     }
 
     fn row(
@@ -321,8 +356,10 @@ impl Spike {
                 .child(format!("{kids_done}/{}", kids.len()))
         });
 
+        let actions = self.row_actions(todo, overdue, carried, gone, k, cx);
         if group {
             return div()
+                .group("todo-row")
                 .flex()
                 .items_center()
                 .gap(px(10.))
@@ -341,17 +378,39 @@ impl Spike {
                         .child(content.to_uppercase()),
                 )
                 .child(div().flex_1().min_w(px(12.)).h(px(1.)).bg(k.border))
-                .children(progress);
+                .children(progress)
+                .children(actions);
         }
 
         let row_id = SharedString::from(format!("row-{id}-{overdue}"));
+        let read_only = overdue || carried;
+        let editing = self
+            .editing
+            .as_ref()
+            .filter(|(eid, _)| *eid == id && !read_only)
+            .map(|(_, s)| s.clone());
+        let text_click = {
+            let content = content.clone();
+            cx.listener(move |this, _, window, cx| {
+                if read_only {
+                    if !gone {
+                        this.toggle(id, parent, !done);
+                    }
+                } else {
+                    this.start_edit(id, &content, window, cx);
+                }
+                cx.notify();
+            })
+        };
         div()
+            .group("todo-row")
             .flex()
             .items_start()
             .gap(px(12.))
             .px(px(8.))
             .py(px(10.))
             .rounded(px(8.))
+            .hover(|s| s.bg(glass(k)))
             .child(
                 div()
                     .id(row_id.clone())
@@ -369,24 +428,54 @@ impl Spike {
                         )
                         .when(!gone, |d| d.on_click(toggle)),
                     )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .text_size(px(if deep { 13. } else { 14. }))
-                            .line_height(relative(1.5))
-                            .text_color(if done || carried {
-                                k.text_3
-                            } else if deep {
-                                k.text_2
-                            } else {
-                                k.text
-                            })
-                            .when(done, |d| d.line_through())
-                            .child(content),
+                    .when_some(editing, |d, state| {
+                        d.child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .text_size(px(14.))
+                                .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+                                    if e.keystroke.key == "escape" {
+                                        this.editing = None;
+                                        cx.notify();
+                                    }
+                                }))
+                                .child(Textarea::new(&state).appearance(false)),
+                        )
+                    })
+                    .when(
+                        self.editing
+                            .as_ref()
+                            .is_none_or(|(eid, _)| *eid != id || read_only),
+                        |d| {
+                            d.child(
+                                div()
+                                    .id(SharedString::from(format!("txt-{id}-{overdue}")))
+                                    .flex_1()
+                                    .min_w_0()
+                                    .cursor(if read_only {
+                                        CursorStyle::PointingHand
+                                    } else {
+                                        CursorStyle::IBeam
+                                    })
+                                    .on_click(text_click)
+                                    .text_size(px(if deep { 13. } else { 14. }))
+                                    .line_height(relative(1.5))
+                                    .text_color(if done || carried {
+                                        k.text_3
+                                    } else if deep {
+                                        k.text_2
+                                    } else {
+                                        k.text
+                                    })
+                                    .when(done, |d| d.line_through())
+                                    .child(content),
+                            )
+                        },
                     ),
             )
             .children(progress)
+            .children(actions)
             .when(carried && !gone, |d| {
                 d.child(
                     div()
@@ -441,6 +530,224 @@ impl Spike {
                         ),
                 )
             })
+    }
+
+    /// 줄 끝 hover 동작 — 글자를 눌러서는 할 수 없는 일에만 아이콘을 둔다(이름 바꾸기는 글자를 누르면 된다).
+    /// 기록만 남은 줄은 그 기록 지우기, 넘긴 줄(고스트)은 하위 추가만, 밀린 줄은 없음
+    fn row_actions(
+        &self,
+        todo: &Row,
+        overdue: bool,
+        carried: bool,
+        gone: bool,
+        k: &Tokens,
+        cx: &mut Context<Self>,
+    ) -> Option<Div> {
+        if overdue {
+            return None;
+        }
+        let (id, parent) = (todo.id(), todo.parent());
+        let name = todo
+            .field("content")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+        let act = |key: &str, icon_name: &str, danger: bool| {
+            let (danger_c, soft, hover_bg, text) = (k.danger, k.danger_soft, glass(k), k.text);
+            div()
+                .id(SharedString::from(format!("{key}-{id}")))
+                .size(px(26.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(6.))
+                .cursor_pointer()
+                .text_color(k.text_3)
+                .when(danger, |d| {
+                    d.hover(move |s| s.bg(soft).text_color(danger_c))
+                })
+                .when(!danger, |d| {
+                    d.hover(move |s| s.bg(hover_bg).text_color(text))
+                })
+                .child(icon(icon_name, 13.))
+        };
+        let row = div()
+            .flex()
+            .flex_shrink_0()
+            .items_center()
+            .gap(px(2.))
+            .opacity(0.)
+            .group_hover("todo-row", |s| s.opacity(1.));
+        Some(if gone {
+            row.child(
+                act("rec", "trash", true).on_click(cx.listener(move |this, _, _, cx| {
+                    this.confirm = Some(Confirm::Record {
+                        id,
+                        name: name.clone(),
+                    });
+                    cx.notify();
+                })),
+            )
+        } else {
+            let add =
+                act("add", "plus", false).on_click(cx.listener(move |this, _, window, cx| {
+                    this.start_child(id, window, cx);
+                    cx.notify();
+                }));
+            if carried {
+                row.child(add)
+            } else {
+                row.child(add)
+                    .child(act("park", "arrow-right", false).on_click(cx.listener(
+                        move |this, _, _, cx| {
+                            this.park(id, parent);
+                            cx.notify();
+                        },
+                    )))
+                    .child(act("del", "trash", true).on_click(cx.listener(
+                        move |this, _, _, cx| {
+                            // 하위가 없어도 묻는다 — 지우는 동작에 예외를 두면 손이 먼저 나간다
+                            let live: Vec<Row> = this
+                                .todos
+                                .iter()
+                                .filter(|r| !r.is("gone", 1))
+                                .cloned()
+                                .collect();
+                            let count = tree::descendant_count(&live, id);
+                            this.confirm = Some(Confirm::Delete {
+                                id,
+                                parent,
+                                name: name.clone(),
+                                count,
+                            });
+                            cx.notify();
+                        },
+                    )))
+            }
+        })
+    }
+
+    /// 글자를 누르면 그 자리에서 고친다 — Enter 저장, Shift+Enter 줄바꿈, Esc 취소, 바깥을 누르면 저장
+    fn start_edit(&mut self, id: i64, content: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let state = cx.new(|cx| {
+            let mut s = TextareaState::new(window, cx)
+                .auto_grow(1, 12)
+                .submit_on_enter(true);
+            s.set_value(content.to_string(), window, cx);
+            s
+        });
+        cx.subscribe_in(&state, window, |this, _, ev: &InputEvent, _, cx| match ev {
+            InputEvent::PressEnter { shift: false, .. } | InputEvent::Blur => {
+                this.save_edit(cx);
+                cx.notify();
+            }
+            _ => {}
+        })
+        .detach();
+        state.update(cx, |s, cx| s.focus(window, cx));
+        self.editing = Some((id, state));
+    }
+
+    /// 빈 값과 바뀌지 않은 값은 취소다
+    fn save_edit(&mut self, cx: &mut Context<Self>) {
+        let Some((id, state)) = self.editing.take() else {
+            return;
+        };
+        let text = state.read(cx).value().to_string();
+        let content = text.trim();
+        let before = self
+            .todos
+            .iter()
+            .find(|r| r.id() == id)
+            .and_then(|r| r.field("content"))
+            .and_then(|v| v.as_str());
+        if content.is_empty() || Some(content) == before {
+            return;
+        }
+        if let Err(e) = amber_gpui::todos::update_todo_content(&self.db, id, content) {
+            eprintln!("updateTodoContent: {e}");
+        }
+        self.reload();
+    }
+
+    fn start_child(&mut self, parent: i64, window: &mut Window, cx: &mut Context<Self>) {
+        let state =
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("todos.child.placeholder")));
+        cx.subscribe_in(
+            &state,
+            window,
+            |this, input, ev: &InputEvent, window, cx| match ev {
+                InputEvent::PressEnter { .. } => {
+                    let text = input.read(cx).value().trim().to_string();
+                    if this.add_child(&text) {
+                        input.update(cx, |s, cx| s.set_value("", window, cx));
+                    }
+                    cx.notify();
+                }
+                // 바깥을 누르면 적던 하위 항목을 버리지 않고 저장하며 닫는다
+                InputEvent::Blur => {
+                    let text = input.read(cx).value().trim().to_string();
+                    this.add_child(&text);
+                    this.adding_child = None;
+                    cx.notify();
+                }
+                _ => {}
+            },
+        )
+        .detach();
+        state.update(cx, |s, cx| s.focus(window, cx));
+        self.adding_child = Some((parent, state));
+    }
+
+    /// 하위 항목을 만들고 조상의 완료를 다시 센다(끝난 묶음에 새 일이 생기면 다시 열린다)
+    fn add_child(&mut self, text: &str) -> bool {
+        let Some((parent, _)) = self.adding_child.as_ref() else {
+            return false;
+        };
+        let parent = *parent;
+        if text.is_empty() {
+            return false;
+        }
+        let r = amber_gpui::todos::create_todo(&self.db, text, &self.date, Some(parent), "day")
+            .and_then(|_| amber_gpui::todos::recompute_chain_from(&self.db, Some(parent)));
+        if let Err(e) = r {
+            eprintln!("addChild: {e}");
+        }
+        self.reload();
+        self.reload_calendar();
+        true
+    }
+
+    /// 언젠가(서랍)로 — 날짜를 뗀다. 빠진 자리를 두고 부모 완료를 다시 센다
+    fn park(&mut self, id: i64, parent: Option<i64>) {
+        let r = amber_gpui::todos::park_subtree(&self.db, id).and_then(|_| match parent {
+            Some(p) => amber_gpui::todos::recompute_chain_from(&self.db, Some(p)),
+            None => Ok(()),
+        });
+        if let Err(e) = r {
+            eprintln!("park: {e}");
+        }
+        self.reload();
+        self.reload_calendar();
+    }
+
+    /// 확인 창에서 '삭제'를 눌렀다
+    pub(crate) fn confirmed(&mut self) {
+        let r = match self.confirm.take() {
+            Some(Confirm::Delete { id, parent, .. }) => {
+                amber_gpui::todos::delete_todo(&self.db, id)
+                    .and_then(|_| amber_gpui::todos::recompute_chain_from(&self.db, parent))
+            }
+            Some(Confirm::Record { id, .. }) => {
+                amber_gpui::todos::remove_carry(&self.db, id, &self.date)
+            }
+            None => Ok(()),
+        };
+        if let Err(e) = r {
+            eprintln!("delete: {e}");
+        }
+        self.reload();
+        self.reload_calendar();
     }
 
     /// 밀린 할 일 — 오늘 계획의 재료라 날짜 바로 아래. 접힌 채 시작하고 머리를 누르면 펼친다

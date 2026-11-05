@@ -19,6 +19,7 @@ pub struct Tokens {
     pub primary_fg: Hsla,
     pub primary_bg_hover: Hsla,
     pub danger: Hsla,
+    pub danger_soft: Hsla,
     pub success: Hsla,
     pub warning: Hsla,
     /// 달력의 일요일(공휴일)/토요일, 휴가(호박색 — 결과 색 예외 둘 중 하나)
@@ -71,6 +72,7 @@ const LIGHT: fn() -> Tokens = || Tokens {
     primary_fg: c(0xffffff),
     primary_bg_hover: c(0x333333),
     danger: c(0xdc2626),
+    danger_soft: c(0xfef2f2),
     success: c(0x1a7f37),
     warning: c(0xa16207),
     cal_sun: c(0xb91c1c),
@@ -101,6 +103,7 @@ const DARK: fn() -> Tokens = || Tokens {
     primary_fg: c(0x18181b),
     primary_bg_hover: c(0xe4e4e7),
     danger: c(0xf87171),
+    danger_soft: c(0x2b1a1c),
     success: c(0x4ade80),
     warning: c(0xfcd34d),
     cal_sun: c(0xfca5a5),

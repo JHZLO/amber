@@ -6,6 +6,7 @@
 mod assets;
 mod calendar;
 mod day_card;
+mod dialog;
 mod figure;
 mod markdown;
 mod note;
@@ -69,6 +70,10 @@ struct Spike {
     overdue: Vec<Row>,
     overdue_open: bool,
     parked_n: usize,
+    /// 고치는 중인 줄, 하위를 적는 중인 부모, 지우기 전에 묻는 것
+    editing: Option<(i64, Entity<gpui_kit::component::input::TextareaState>)>,
+    adding_child: Option<(i64, Entity<InputState>)>,
+    confirm: Option<day_card::Confirm>,
     input: Entity<InputState>,
     note_title: SharedString,
     blocks: Vec<Block>,
@@ -184,6 +189,9 @@ impl Spike {
             overdue: Vec::new(),
             overdue_open: false,
             parked_n: 0,
+            editing: None,
+            adding_child: None,
+            confirm: None,
             input,
             note_title,
             blocks,
@@ -417,7 +425,44 @@ impl Render for Spike {
             _ => div().into_any_element(),
         };
 
+        let confirm = self.confirm.as_ref().map(|c| {
+            let (title, body, name) = match c {
+                day_card::Confirm::Delete { name, count, .. } => (
+                    t("todos.delete.title"),
+                    if *count > 0 {
+                        i18n::t_with(
+                            "todos.delete.confirm",
+                            &[("name", "{name}"), ("n", &count.to_string())],
+                        )
+                    } else {
+                        i18n::t_with("todos.delete.confirmOne", &[("name", "{name}")])
+                    },
+                    name.clone(),
+                ),
+                day_card::Confirm::Record { name, .. } => (
+                    t("todos.record.deleteTitle"),
+                    t("todos.record.deleteConfirm"),
+                    name.clone(),
+                ),
+            };
+            dialog::confirm_delete(
+                &k,
+                title,
+                body,
+                name,
+                cx.listener(|this, _, _, cx| {
+                    this.confirm = None;
+                    cx.notify();
+                }),
+                cx.listener(|this, _, _, cx| {
+                    this.confirmed();
+                    cx.notify();
+                }),
+            )
+        });
+
         div()
+            .relative()
             .size_full()
             .flex()
             .bg(k.surface)
@@ -449,6 +494,7 @@ impl Render for Spike {
                     )
                     .child(div().flex_1().min_h_0().child(body)),
             )
+            .children(confirm)
     }
 }
 
