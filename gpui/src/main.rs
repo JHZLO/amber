@@ -29,6 +29,7 @@ use crate::theme::Tokens;
 const FIGURE_MAX: f32 = 688.0;
 
 /// 왼쪽 레일의 작업공간(App.tsx 의 RAIL) — 이름은 상단바 제목에도 쓴다
+/// 마지막으로 연 탭은 지금 앱처럼 til.section 에 남는다
 #[derive(Clone, Copy, PartialEq)]
 enum Section {
     Todo,
@@ -38,12 +39,17 @@ enum Section {
     Diagrams,
 }
 
-const RAIL: [(Section, &str, &str); 5] = [
-    (Section::Todo, "app.rail.todo", "calendar-check"),
-    (Section::Til, "app.rail.til", "layers"),
-    (Section::Notes, "app.rail.notes", "book"),
-    (Section::Erd, "app.rail.erd", "database"),
-    (Section::Diagrams, "app.rail.diagrams", "workflow"),
+const RAIL: [(Section, &str, &str, &str); 5] = [
+    (Section::Todo, "todo", "app.rail.todo", "calendar-check"),
+    (Section::Til, "til", "app.rail.til", "layers"),
+    (Section::Notes, "notes", "app.rail.notes", "book"),
+    (Section::Erd, "erd", "app.rail.erd", "database"),
+    (
+        Section::Diagrams,
+        "diagrams",
+        "app.rail.diagrams",
+        "workflow",
+    ),
 ];
 
 struct Line {
@@ -99,8 +105,9 @@ impl Spike {
             InputState::new(window, cx).placeholder("할 일 추가 — 한글로 입력하고 Enter")
         });
         // 지금 앱의 기본값(system)처럼 macOS 화면 모드를 따라간다
-        cx.observe_window_appearance(window, |_, window, cx| {
-            theme::apply(window.appearance(), cx);
+        cx.observe_window_appearance(window, |this: &mut Spike, window, cx| {
+            let pref = amber_gpui::prefs::get(&this.db, "til.theme");
+            theme::apply(pref.as_deref(), window.appearance(), cx);
             cx.notify();
         })
         .detach();
@@ -159,6 +166,9 @@ impl Spike {
             .unwrap_or_default()
             .into();
 
+        let section = amber_gpui::prefs::get(&db, "til.section")
+            .and_then(|id| RAIL.iter().find(|r| r.1 == id))
+            .map_or(Section::Todo, |r| r.0);
         let mut this = Spike {
             db,
             date,
@@ -168,7 +178,7 @@ impl Spike {
             blocks,
             sections,
             scroll: ScrollHandle::new(),
-            section: Section::Todo,
+            section,
             mark: None,
             started,
             first_frame: false,
@@ -411,7 +421,7 @@ impl Render for Spike {
                                 div()
                                     .text_size(px(15.))
                                     .font_weight(FontWeight::BOLD)
-                                    .child(t(RAIL.iter().find(|r| r.0 == self.section).unwrap().1)),
+                                    .child(t(RAIL.iter().find(|r| r.0 == self.section).unwrap().2)),
                             ),
                     )
                     .child(div().flex_1().min_h_0().child(body)),
@@ -482,10 +492,11 @@ impl Spike {
             .when_some(self.mark.as_ref(), |d, (_, m)| {
                 d.child(div().mb(px(16.)).child(img(m.image.clone()).size(px(40.))))
             })
-            .children(RAIL.iter().map(|&(section, key, icon_name)| {
+            .children(RAIL.iter().map(|&(section, id, key, icon_name)| {
                 item(key, t(key), icon_name, self.section == section).on_click(cx.listener(
                     move |this, _, _, cx| {
                         this.section = section;
+                        amber_gpui::prefs::set(&this.db, "til.section", id);
                         cx.notify();
                     },
                 ))
@@ -536,9 +547,13 @@ fn main() {
                 ..Default::default()
             };
             gpui_kit::open_window(options, cx, move |window, cx| {
-                theme::apply(window.appearance(), cx);
                 let db = Db::open(&db_path, Clock::System).expect("DB 사본을 못 열었다");
                 amber_gpui::migrate::run(&db).expect("마이그레이션");
+                // 지금 앱에서 고른 언어, 테마, 작업 폴더를 이어받는다(처음 한 번, 아직 없는 키만)
+                amber_gpui::prefs::import_webview(&db);
+                i18n::init(amber_gpui::prefs::get(&db, "amber.lang").as_deref());
+                let pref = amber_gpui::prefs::get(&db, "til.theme");
+                theme::apply(pref.as_deref(), window.appearance(), cx);
                 cx.new(|cx| Spike::new(db, date, &note_path, skip, jump, started, window, cx))
             })
             .expect("창을 못 열었다");

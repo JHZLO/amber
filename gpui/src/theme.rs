@@ -128,12 +128,11 @@ impl Tokens {
     }
 }
 
-/// macOS 화면 모드에 맞춰 토큰을 바꾸고 gpui-component 테마에도 옮긴다.
-/// AMBER_THEME=light|dark 면 그쪽으로 고정한다(시험판에서 두 테마를 다 보려고)
-pub fn apply(appearance: WindowAppearance, cx: &mut App) {
-    let dark = match std::env::var("AMBER_THEME").as_deref() {
-        Ok("dark") => true,
-        Ok("light") => false,
+/// 토큰을 바꾸고 gpui-component 테마에도 옮긴다. pref 는 지금 앱의 til.theme — "light", "dark", 없으면 macOS 화면 모드
+pub fn apply(pref: Option<&str>, appearance: WindowAppearance, cx: &mut App) {
+    let dark = match pref {
+        Some("dark") => true,
+        Some("light") => false,
         _ => matches!(
             appearance,
             WindowAppearance::Dark | WindowAppearance::VibrantDark

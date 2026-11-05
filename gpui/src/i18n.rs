@@ -1,16 +1,27 @@
 // 다국어 — 사전은 지금 앱의 src/lib/messages/*.ts 를 빌드할 때 그대로 굽는다(build.rs). 같은 키, 같은 문구.
-// 언어는 지금 앱처럼 시스템 언어가 한국어면 ko, 아니면 en.
+// 언어는 지금 앱처럼 설정(amber.lang)이 있으면 그것, 없으면 시스템 언어가 한국어면 ko, 아니면 en.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
 include!(concat!(env!("OUT_DIR"), "/messages.rs"));
 
+static DICT: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+
+/// 첫 문구를 그리기 전에 한 번 — 바꾸면 다시 시작해야 한다(지금 앱도 언어를 바꾸면 창을 다시 읽는다)
+pub fn init(pref: Option<&str>) {
+    let ko = match pref {
+        Some("ko") => true,
+        Some("en") => false,
+        _ => sys_locale::get_locale().is_some_and(|l| l.to_lowercase().starts_with("ko")),
+    };
+    let _ = DICT.set((if ko { KO } else { EN }).iter().copied().collect());
+}
+
 fn dict() -> &'static HashMap<&'static str, &'static str> {
-    static DICT: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
     DICT.get_or_init(|| {
-        let ko = sys_locale::get_locale().is_some_and(|l| l.to_lowercase().starts_with("ko"));
-        (if ko { KO } else { EN }).iter().copied().collect()
+        init(None);
+        DICT.get().cloned().unwrap_or_default()
     })
 }
 

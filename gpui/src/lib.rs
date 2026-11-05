@@ -4,6 +4,7 @@ pub mod db;
 pub mod dbconn;
 pub mod mermaid;
 pub mod migrate;
+pub mod prefs;
 pub mod report;
 pub mod todos;
 pub mod vacations;
@@ -247,8 +248,8 @@ fn call_files(db: &Db, op: &str, a: &Args) -> Result<Json, String> {
     }
     let flag = |i: usize| a.0.get(i).and_then(Json::as_bool).unwrap_or(false);
     let notes = vault::notes(db);
-    let diagrams = Tree { db, cfg: &DIAGRAMS };
-    let erd = Tree { db, cfg: &ERD };
+    let diagrams = Tree::new(db, &DIAGRAMS);
+    let erd = Tree::new(db, &ERD);
     match op {
         "notes.listNoteTree" => json(notes.list_tree()),
         "notes.readNoteFile" => json(notes.read_file(a.s(0)?)),

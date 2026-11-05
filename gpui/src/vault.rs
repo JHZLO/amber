@@ -20,8 +20,10 @@ use crate::db::Db;
 type Result<T> = std::result::Result<T, String>;
 
 pub struct TreeConfig {
-    /// 앱 데이터 폴더 기준 상대경로 또는 절대경로
+    /// 기본 보관함 — 앱 데이터 폴더 기준 상대경로
     pub root: &'static str,
+    /// 사용자가 "폴더 열기"로 바꾼 작업 폴더(절대경로)가 든 설정 키 — 지금 앱 workspace.ts 의 getRoot
+    pub root_pref: Option<&'static str>,
     /// 트리에 보일 확장자(소문자, 점 포함). 첫 항목이 새 파일의 확장자
     pub exts: &'static [&'static str],
     pub template: fn(&str) -> String,
@@ -33,6 +35,7 @@ pub const ASSET_DIR: &str = "_assets";
 
 pub const NOTES: TreeConfig = TreeConfig {
     root: "vault/notes",
+    root_pref: Some("amber.root.notes"),
     exts: &[".md"],
     template: |title| format!("# {title}\n\n"),
     hidden_dirs: &[ASSET_DIR],
@@ -40,6 +43,7 @@ pub const NOTES: TreeConfig = TreeConfig {
 
 pub const DIAGRAMS: TreeConfig = TreeConfig {
     root: "vault/diagrams",
+    root_pref: Some("amber.root.diagrams"),
     exts: &[".mmd", ".mermaid"],
     template: |_| {
         "erDiagram
@@ -62,6 +66,7 @@ pub const DIAGRAMS: TreeConfig = TreeConfig {
 
 pub const ERD: TreeConfig = TreeConfig {
     root: "vault/erd",
+    root_pref: None,
     exts: &[".json"],
     template: |_| String::new(),
     hidden_dirs: &[],
@@ -160,14 +165,24 @@ fn rename(from: &Path, to: &Path) -> Result<()> {
 pub struct Tree<'a> {
     pub db: &'a Db,
     pub cfg: &'a TreeConfig,
+    root: String,
 }
 
-impl Tree<'_> {
+impl<'a> Tree<'a> {
+    pub fn new(db: &'a Db, cfg: &'a TreeConfig) -> Self {
+        let root = cfg
+            .root_pref
+            .and_then(|k| crate::prefs::get(db, k))
+            .filter(|r| !r.is_empty())
+            .unwrap_or_else(|| cfg.root.to_string());
+        Tree { db, cfg, root }
+    }
+
     fn full(&self, rel: &str) -> String {
         if rel.is_empty() {
-            self.cfg.root.to_string()
+            self.root.clone()
         } else {
-            format!("{}/{rel}", self.cfg.root)
+            format!("{}/{rel}", self.root)
         }
     }
 
@@ -189,7 +204,7 @@ impl Tree<'_> {
 
     /// 전체 트리 (폴더 먼저, 이름순). 기본 보관함이면 루트 폴더가 없을 때 만든다
     pub fn list_tree(&self) -> Result<Vec<Node>> {
-        if !Path::new(self.cfg.root).is_absolute() {
+        if !Path::new(&self.root).is_absolute() {
             mkdir_all(&self.path(""))?;
         }
         self.read_tree("")
@@ -468,15 +483,12 @@ pub fn concepts_path_for(rel: &str) -> String {
 }
 
 pub fn notes(db: &Db) -> Tree<'_> {
-    Tree { db, cfg: &NOTES }
+    Tree::new(db, &NOTES)
 }
 
 /// 노트가 들어 있는 폴더의 경로(작업 폴더 포함) — 그림 저장/해석의 기준
-pub fn note_dir_path(rel: &str) -> String {
-    match parent_of(rel) {
-        "" => NOTES.root.to_string(),
-        p => format!("{}/{p}", NOTES.root),
-    }
+pub fn note_dir_path(tree: &Tree, rel: &str) -> String {
+    tree.full(parent_of(rel))
 }
 
 fn move_sidecars(tree: &Tree, old_rel: &str, new_rel: &str) -> Result<()> {
@@ -508,7 +520,12 @@ pub fn move_note_entry(db: &Db, rel: &str, target_dir: &str) -> Result<String> {
     if is_md(rel) {
         // 그림 복사 실패가 이동을 실패로 만들지 않는다
         if let Ok(md) = tree.read_file(&new_rel) {
-            let _ = copy_assets_for_move(db, &md, &note_dir_path(rel), &note_dir_path(&new_rel));
+            let _ = copy_assets_for_move(
+                db,
+                &md,
+                &note_dir_path(&tree, rel),
+                &note_dir_path(&tree, &new_rel),
+            );
         }
         move_sidecars(&tree, rel, &new_rel)?;
     }
