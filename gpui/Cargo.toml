@@ -26,6 +26,9 @@ pulldown-cmark = { version = "0.13", default-features = false }
 markdown = "=1.0.0"
 # 노트 폴더 감시(FSEvents) — 다른 프로그램이 고친 노트를 다시 열지 않아도 반영한다(lib/noteWatch.ts)
 notify = "=8.2.1"
+# AI 실행 — amber-core 의 AI 함수는 tokio 위에서 CLI 를 띄운다. 화면(GPUI 실행기)과 따로 돌리고 결과만 받는다
+tokio = { version = "1", features = ["rt-multi-thread"] }
+futures = "0.3"
 resvg = "0.45.1"
 merman = { version = "=0.10.0-alpha.1", features = ["math"] }
 

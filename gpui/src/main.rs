@@ -3,6 +3,7 @@
 //
 //   cargo run --release -- --db <amber.db 사본> [--note <보관함 기준 노트 경로>] [--date YYYY-MM-DD] [--jump 2-3]
 
+mod ai;
 mod assets;
 mod calendar;
 mod day_card;
