@@ -1,19 +1,20 @@
 // GPUI 시험판: 웹 엔진 없이 그린 할 일 하루치(DB 사본) + 노트 하나(글, svg, mermaid).
 // 확인하려는 것은 셋 — 한글 입력(IME), 그림이 지금 앱과 같게 나오는지, 시작 시간과 메모리.
 //
-//   cargo run --release -- --db <amber.db 사본> --note <노트.md> [--date YYYY-MM-DD]
+//   cargo run --release -- --db <amber.db 사본> --note <노트.md> [--date YYYY-MM-DD] [--jump 2-3]
 
 mod figure;
+mod markdown;
 mod note;
 
 use std::collections::{HashMap, HashSet};
-use std::time::Instant;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use amber_gpui::db::{Clock, Db, Row, get_i64};
 use amber_gpui::todos;
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
-use gpui_kit::component::text::TextView;
 use gpui_kit::component::theme::{Theme, ThemeMode};
 use gpui_kit::component::{ActiveTheme, Disableable};
 use gpui_kit::prelude::FluentBuilder;
@@ -49,6 +50,9 @@ struct Spike {
     input: Entity<InputState>,
     note_title: SharedString,
     blocks: Vec<Block>,
+    /// 절 번호 → 노트 판의 자식 번호(제목으로 시작하는 글 덩어리)
+    sections: HashMap<String, usize>,
+    scroll: ScrollHandle,
     started: Instant,
     first_frame: bool,
 }
@@ -59,6 +63,7 @@ impl Spike {
         date: String,
         note_path: &str,
         skip: usize,
+        jump: Option<String>,
         started: Instant,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -90,9 +95,18 @@ impl Spike {
             std::fs::read_to_string(note_path).unwrap_or_else(|e| format!("노트를 못 읽었다: {e}"));
         let text = "#d4d4d8";
         // --skip: 앞 덩어리를 건너뛴다. 스크롤 입력을 못 보내는 환경에서 뒤쪽 그림을 찍으려고 둔다
-        let blocks = note::split(&source)
+        let segments: Vec<_> = note::split(&source).into_iter().skip(skip).collect();
+        let mut sections = HashMap::new();
+        for (i, s) in segments.iter().enumerate() {
+            if let note::Segment::Markdown(md) = s
+                && let Some(sec) = note::section_of(md)
+            {
+                // 판의 첫 자식은 노트 제목이라 +1. 같은 번호가 또 나오면 앞의 것(querySelector 와 같다)
+                sections.entry(sec.to_string()).or_insert(i + 1);
+            }
+        }
+        let blocks = segments
             .into_iter()
-            .skip(skip)
             .map(|s| match s {
                 note::Segment::Markdown(md) => Block::Text(md.into()),
                 note::Segment::Svg(src) => figure::svg(&src, text).map_or_else(
@@ -118,11 +132,32 @@ impl Spike {
             input,
             note_title,
             blocks,
+            sections,
+            scroll: ScrollHandle::new(),
             started,
             first_frame: false,
         };
         this.reload();
+        // --jump: 절 링크를 누른 것처럼 그 절로 간다. 클릭을 못 보내는 환경에서 확인하려고 둔다 —
+        // 글이 다 그려진 뒤에 가야 해서 잠깐 기다린다
+        if let Some(sec) = jump {
+            cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(Duration::from_secs(2)).await;
+                let _ = this.update(cx, |s, cx| {
+                    s.jump(&sec);
+                    cx.notify();
+                });
+            })
+            .detach();
+        }
         this
+    }
+
+    /// 절 링크 → 그 번호를 단 제목이 판 맨 위에 오게 (NotesView 의 data-sec 탐색)
+    fn jump(&self, sec: &str) {
+        if let Some(&ix) = self.sections.get(sec) {
+            self.scroll.scroll_to_top_of_item(ix);
+        }
     }
 
     /// listTodos 의 평평한 줄을 화면 순서(부모 아래 자식)로 편다. 부모가 이 날짜에 없는 자식은 맨 위로 — todoTree.visibleRoots
@@ -199,6 +234,18 @@ impl Render for Spike {
             theme.background,
         );
         let this = cx.entity().downgrade();
+        let on_link: markdown::OnLink = {
+            let this = this.clone();
+            Arc::new(move |url, _, _, cx| match url.strip_prefix('#') {
+                Some(sec) => {
+                    let _ = this.update(cx, |s, cx| {
+                        s.jump(sec);
+                        cx.notify();
+                    });
+                }
+                None => cx.open_url(url),
+            })
+        };
 
         let list = div()
             .id("todos")
@@ -248,6 +295,7 @@ impl Render for Spike {
             .min_w_0()
             .h_full()
             .overflow_y_scroll()
+            .track_scroll(&self.scroll)
             .p_6()
             .flex()
             .flex_col()
@@ -260,11 +308,11 @@ impl Render for Spike {
             )
             .children(self.blocks.iter().enumerate().map(|(i, b)| {
                 match b {
-                    Block::Text(md) => TextView::markdown(
+                    Block::Text(md) => markdown::text(
                         ElementId::NamedInteger("md".into(), i as u64),
                         md.clone(),
+                        on_link.clone(),
                     )
-                    .selectable(true)
                     .into_any_element(),
                     Block::Figure { fig, light } => div()
                         .p_4()
@@ -325,24 +373,28 @@ fn main() {
     let note_path = arg("--note").expect("--note <노트.md>");
     let date = arg("--date").unwrap_or_else(|| chrono::Local::now().format("%Y-%m-%d").to_string());
     let skip = arg("--skip").and_then(|s| s.parse().ok()).unwrap_or(0);
+    let jump = arg("--jump");
 
-    gpui_kit::application().run(move |cx| {
-        gpui_kit::init(cx);
-        Theme::change(ThemeMode::Dark, None, cx);
-        let bounds = Bounds::centered(None, size(px(1440.), px(920.)), cx);
-        let options = WindowOptions {
-            window_bounds: Some(WindowBounds::Windowed(bounds)),
-            titlebar: Some(TitlebarOptions {
-                title: Some("Amber GPUI 시험판".into()),
+    // 알림 상자 아이콘(전구, 말풍선, 팔각형)은 기본 묶음에 없어 전체 아이콘 묶음을 싣는다
+    gpui_kit::application()
+        .with_assets(gpui_kit::assets::AllAssets)
+        .run(move |cx| {
+            gpui_kit::init(cx);
+            Theme::change(ThemeMode::Dark, None, cx);
+            let bounds = Bounds::centered(None, size(px(1440.), px(920.)), cx);
+            let options = WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(bounds)),
+                titlebar: Some(TitlebarOptions {
+                    title: Some("Amber GPUI 시험판".into()),
+                    ..Default::default()
+                }),
                 ..Default::default()
-            }),
-            ..Default::default()
-        };
-        gpui_kit::open_window(options, cx, move |window, cx| {
-            let db = Db::open(&db_path, Clock::System).expect("DB 사본을 못 열었다");
-            cx.new(|cx| Spike::new(db, date, &note_path, skip, started, window, cx))
-        })
-        .expect("창을 못 열었다");
-        cx.activate(true);
-    });
+            };
+            gpui_kit::open_window(options, cx, move |window, cx| {
+                let db = Db::open(&db_path, Clock::System).expect("DB 사본을 못 열었다");
+                cx.new(|cx| Spike::new(db, date, &note_path, skip, jump, started, window, cx))
+            })
+            .expect("창을 못 열었다");
+            cx.activate(true);
+        });
 }
