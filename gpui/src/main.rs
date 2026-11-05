@@ -1,11 +1,14 @@
-// GPUI 시험판: 웹 엔진 없이 그린 할 일 하루치(DB 사본) + 노트 하나(글, svg, mermaid).
-// 확인하려는 것은 셋 — 한글 입력(IME), 그림이 지금 앱과 같게 나오는지, 시작 시간과 메모리.
+// GPUI 시험판: 지금 앱의 셸(왼쪽 레일 + 작업 영역) 위에 할 일 하루치(DB 사본)와 노트 하나(글, svg, mermaid).
+// 확인하려는 것 — 한글 입력(IME), 그림이 지금 앱과 같게 나오는지, 시작 시간과 메모리. 탭 내용은 하나씩 옮긴다.
 //
 //   cargo run --release -- --db <amber.db 사본> --note <노트.md> [--date YYYY-MM-DD] [--jump 2-3]
 
+mod assets;
 mod figure;
+mod i18n;
 mod markdown;
 mod note;
+mod theme;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -13,14 +16,35 @@ use std::time::{Duration, Instant};
 
 use amber_gpui::db::{Clock, Db, Row, get_i64};
 use amber_gpui::todos;
+use gpui_kit::component::Disableable;
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
-use gpui_kit::component::theme::{Theme, ThemeMode};
-use gpui_kit::component::{ActiveTheme, Disableable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
+use crate::assets::icon;
+use crate::i18n::t;
+use crate::theme::Tokens;
+
 const FIGURE_MAX: f32 = 688.0;
+
+/// 왼쪽 레일의 작업공간(App.tsx 의 RAIL) — 이름은 상단바 제목에도 쓴다
+#[derive(Clone, Copy, PartialEq)]
+enum Section {
+    Todo,
+    Til,
+    Notes,
+    Erd,
+    Diagrams,
+}
+
+const RAIL: [(Section, &str, &str); 5] = [
+    (Section::Todo, "app.rail.todo", "calendar-check"),
+    (Section::Til, "app.rail.til", "layers"),
+    (Section::Notes, "app.rail.notes", "book"),
+    (Section::Erd, "app.rail.erd", "database"),
+    (Section::Diagrams, "app.rail.diagrams", "workflow"),
+];
 
 struct Line {
     id: i64,
@@ -53,6 +77,9 @@ struct Spike {
     /// 절 번호 → 노트 판의 자식 번호(제목으로 시작하는 글 덩어리)
     sections: HashMap<String, usize>,
     scroll: ScrollHandle,
+    section: Section,
+    /// 앱 표식(책상 스탠드). 스탠드 색이 테마를 따르므로 테마별로 굽는다
+    mark: Option<(bool, figure::Figure)>,
     started: Instant,
     first_frame: bool,
 }
@@ -71,6 +98,12 @@ impl Spike {
         let input = cx.new(|cx| {
             InputState::new(window, cx).placeholder("할 일 추가 — 한글로 입력하고 Enter")
         });
+        // 지금 앱의 기본값(system)처럼 macOS 화면 모드를 따라간다
+        cx.observe_window_appearance(window, |_, window, cx| {
+            theme::apply(window.appearance(), cx);
+            cx.notify();
+        })
+        .detach();
         cx.subscribe_in(
             &input,
             window,
@@ -93,7 +126,8 @@ impl Spike {
 
         let source =
             std::fs::read_to_string(note_path).unwrap_or_else(|e| format!("노트를 못 읽었다: {e}"));
-        let text = "#d4d4d8";
+        // 노트 svg 의 currentColor = 본문 글자색(--text)
+        let text = hex(Tokens::get(cx).text);
         // --skip: 앞 덩어리를 건너뛴다. 스크롤 입력을 못 보내는 환경에서 뒤쪽 그림을 찍으려고 둔다
         let segments: Vec<_> = note::split(&source).into_iter().skip(skip).collect();
         let mut sections = HashMap::new();
@@ -109,7 +143,7 @@ impl Spike {
             .into_iter()
             .map(|s| match s {
                 note::Segment::Markdown(md) => Block::Text(md.into()),
-                note::Segment::Svg(src) => figure::svg(&src, text).map_or_else(
+                note::Segment::Svg(src) => figure::svg(&src, &text).map_or_else(
                     |e| Block::Broken(format!("svg: {e}").into()),
                     |fig| Block::Figure { fig, light: false },
                 ),
@@ -134,6 +168,8 @@ impl Spike {
             blocks,
             sections,
             scroll: ScrollHandle::new(),
+            section: Section::Todo,
+            mark: None,
             started,
             first_frame: false,
         };
@@ -226,13 +262,8 @@ impl Render for Spike {
                 eprintln!("첫 화면까지 {} ms", started.elapsed().as_millis())
             });
         }
-        let theme = cx.theme();
-        let (fg, muted, border, bg) = (
-            theme.foreground,
-            theme.muted_foreground,
-            theme.border,
-            theme.background,
-        );
+        let k = Tokens::get(cx);
+        let (fg, muted, border) = (k.text, k.text_3, k.border);
         let this = cx.entity().downgrade();
         let on_link: markdown::OnLink = {
             let this = this.clone();
@@ -337,27 +368,143 @@ impl Render for Spike {
                 }
             }));
 
+        let body = match self.section {
+            Section::Todo => div()
+                .size_full()
+                .p_5()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .child(div().text_color(muted).child(self.date.clone()))
+                .child(Input::new(&self.input))
+                .child(list)
+                .into_any_element(),
+            Section::Notes => note.into_any_element(),
+            // 아직 옮기지 않은 탭 — 체크리스트(D)에서 하나씩
+            _ => div().into_any_element(),
+        };
+
         div()
             .size_full()
             .flex()
-            .bg(bg)
+            .bg(k.surface)
             .text_color(fg)
+            .child(self.rail(&k, cx))
             .child(
                 div()
-                    .w(px(440.))
+                    .flex_1()
+                    .min_w_0()
                     .h_full()
-                    .p_5()
                     .flex()
                     .flex_col()
-                    .gap_3()
-                    .border_r_1()
-                    .border_color(border)
-                    .child(div().text_lg().child(format!("할 일 {}", self.date)))
-                    .child(Input::new(&self.input))
-                    .child(list),
+                    .bg(k.surface)
+                    .child(
+                        // .topbar: 위 10px, 옆 8+6px, 아래 2px. 제목 .brand 15px 700
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(10.))
+                            .pt(px(10.))
+                            .px(px(14.))
+                            .pb(px(2.))
+                            .child(
+                                div()
+                                    .text_size(px(15.))
+                                    .font_weight(FontWeight::BOLD)
+                                    .child(t(RAIL.iter().find(|r| r.0 == self.section).unwrap().1)),
+                            ),
+                    )
+                    .child(div().flex_1().min_h_0().child(body)),
             )
-            .child(note)
     }
+}
+
+impl Spike {
+    /// .rail — 68px, 표식 + 작업공간 탭 + (아래로 밀린) 설정. 선을 긋지 않는다: 판과 같은 바닥이다
+    fn rail(&mut self, k: &Tokens, cx: &mut Context<Self>) -> Div {
+        if self.mark.as_ref().is_none_or(|(dark, _)| *dark != k.dark) {
+            let src = include_str!("../assets/amber-mark.svg");
+            self.mark = figure::svg(src, &hex(k.text_2)).ok().map(|f| (k.dark, f));
+        }
+        let item = |id: &'static str, label: String, icon_name: &str, active: bool| {
+            let (fill, edge) = if active {
+                (k.glass_fill_accent, k.glass_edge_accent)
+            } else {
+                (k.glass_fill, k.glass_edge)
+            };
+            let glass = linear_gradient(
+                150.,
+                linear_color_stop(fill.0, 0.),
+                linear_color_stop(fill.1, 1.),
+            );
+            div()
+                .id(id)
+                .w(px(54.))
+                .pt(px(9.))
+                .pb(px(7.))
+                .border_1()
+                .border_color(transparent_black())
+                .rounded(px(12.))
+                .flex()
+                .flex_col()
+                .items_center()
+                .gap(px(5.))
+                .text_color(k.text_3)
+                .text_size(px(10.5))
+                // 버튼 글자는 줄 높이가 'normal' — 지금 앱 실측 11px(칸 높이 53px)
+                .line_height(px(11.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .cursor_pointer()
+                .when(active, |d| {
+                    d.bg(glass)
+                        .border_color(edge)
+                        .shadow(k.glass_shadow(true))
+                        .text_color(k.text)
+                })
+                .when(!active, |d| {
+                    let (k2, shadow) = (k.text_2, k.glass_shadow(false));
+                    d.hover(move |s| s.bg(glass).border_color(edge).shadow(shadow).text_color(k2))
+                })
+                .child(icon(icon_name, 20.).text_color(if active { k.text } else { k.text_3 }))
+                .child(label)
+        };
+        div()
+            .w(px(68.))
+            .flex_shrink_0()
+            .h_full()
+            .flex()
+            .flex_col()
+            .items_center()
+            .gap(px(4.))
+            .pt(px(14.))
+            .pb(px(12.))
+            .bg(k.surface)
+            .when_some(self.mark.as_ref(), |d, (_, m)| {
+                d.child(div().mb(px(16.)).child(img(m.image.clone()).size(px(40.))))
+            })
+            .children(RAIL.iter().map(|&(section, key, icon_name)| {
+                item(key, t(key), icon_name, self.section == section).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.section = section;
+                        cx.notify();
+                    },
+                ))
+            }))
+            .child(div().flex_1())
+            .child(item(
+                "app.rail.settings",
+                t("app.rail.settings"),
+                "settings",
+                false,
+            ))
+    }
+}
+
+/// 토큰 색을 SVG 글자색("#rrggbb")으로
+fn hex(c: Hsla) -> String {
+    let c = Rgba::from(c);
+    let b = |v: f32| (v * 255.).round() as u8;
+    format!("#{:02x}{:02x}{:02x}", b(c.r), b(c.g), b(c.b))
 }
 
 fn arg(name: &str) -> Option<String> {
@@ -375,12 +522,10 @@ fn main() {
     let skip = arg("--skip").and_then(|s| s.parse().ok()).unwrap_or(0);
     let jump = arg("--jump");
 
-    // 알림 상자 아이콘(전구, 말풍선, 팔각형)은 기본 묶음에 없어 전체 아이콘 묶음을 싣는다
     gpui_kit::application()
-        .with_assets(gpui_kit::assets::AllAssets)
+        .with_assets(assets::Assets)
         .run(move |cx| {
             gpui_kit::init(cx);
-            Theme::change(ThemeMode::Dark, None, cx);
             let bounds = Bounds::centered(None, size(px(1440.), px(920.)), cx);
             let options = WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -391,6 +536,7 @@ fn main() {
                 ..Default::default()
             };
             gpui_kit::open_window(options, cx, move |window, cx| {
+                theme::apply(window.appearance(), cx);
                 let db = Db::open(&db_path, Clock::System).expect("DB 사본을 못 열었다");
                 amber_gpui::migrate::run(&db).expect("마이그레이션");
                 cx.new(|cx| Spike::new(db, date, &note_path, skip, jump, started, window, cx))

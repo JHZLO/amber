@@ -1,0 +1,180 @@
+// 색 토큰 — 지금 앱 styles.css 의 :root(라이트), :root[data-theme="dark"](다크) 값 그대로(DESIGN.md §2).
+// 화면은 토큰 이름으로만 색을 쓴다. gpui-component(입력칸, 체크박스, 마크다운)도 같은 토큰을 보게 맞춘다.
+// 테마는 지금 앱의 기본값(system)처럼 macOS 화면 모드를 따른다.
+
+use gpui_kit::component::theme::{Theme, ThemeMode};
+use gpui_kit::{App, BoxShadow, Global, Hsla, Rgba, WindowAppearance, point, px, rgb};
+
+#[derive(Clone, Copy)]
+pub struct Tokens {
+    pub dark: bool,
+    pub surface: Hsla,
+    pub surface_2: Hsla,
+    pub text: Hsla,
+    pub text_2: Hsla,
+    pub text_3: Hsla,
+    pub border: Hsla,
+    pub border_strong: Hsla,
+    pub primary_bg: Hsla,
+    pub primary_fg: Hsla,
+    pub primary_bg_hover: Hsla,
+    pub danger: Hsla,
+    pub success: Hsla,
+    pub warning: Hsla,
+    /// 유리(§2 유리): 손이 닿은 면 / 강조(활성). CSS 는 사선 그라디언트 세 칸인데 여기선 양 끝 두 칸으로 근사한다
+    pub glass_fill: (Hsla, Hsla),
+    pub glass_edge: Hsla,
+    pub glass_fill_accent: (Hsla, Hsla),
+    pub glass_edge_accent: Hsla,
+    /// --glass-sheen(위쪽 한 줄기 빛, 늘 흰색) / 손이 닿았을 때
+    pub sheen: Hsla,
+    pub sheen_hover: Hsla,
+    /// --glass-seat: 안쪽 아래 한 줄(유리 두께) + 바깥 그림자 0 1px 2px
+    pub seat_in: Hsla,
+    pub seat: Hsla,
+}
+
+impl Global for Tokens {}
+
+fn c(v: u32) -> Hsla {
+    rgb(v).into()
+}
+
+fn a(r: u8, g: u8, b: u8, alpha: f32) -> Hsla {
+    Rgba {
+        r: r as f32 / 255.,
+        g: g as f32 / 255.,
+        b: b as f32 / 255.,
+        a: alpha,
+    }
+    .into()
+}
+
+const LIGHT: fn() -> Tokens = || Tokens {
+    dark: false,
+    surface: c(0xffffff),
+    surface_2: c(0xf4f4f5),
+    text: c(0x18181b),
+    text_2: c(0x52525b),
+    text_3: c(0x71717a),
+    border: c(0xececee),
+    border_strong: c(0xdcdce0),
+    primary_bg: c(0x18181b),
+    primary_fg: c(0xffffff),
+    primary_bg_hover: c(0x333333),
+    danger: c(0xdc2626),
+    success: c(0x1a7f37),
+    warning: c(0xa16207),
+    glass_fill: (a(24, 24, 27, 0.05), a(24, 24, 27, 0.04)),
+    glass_edge: a(24, 24, 27, 0.12),
+    glass_fill_accent: (a(24, 24, 27, 0.16), a(24, 24, 27, 0.125)),
+    glass_edge_accent: a(24, 24, 27, 0.34),
+    sheen: a(255, 255, 255, 0.6),
+    sheen_hover: a(255, 255, 255, 0.8),
+    seat_in: a(24, 24, 27, 0.08),
+    seat: a(24, 24, 27, 0.1),
+};
+
+const DARK: fn() -> Tokens = || Tokens {
+    dark: true,
+    surface: c(0x161618),
+    surface_2: c(0x1f1f23),
+    text: c(0xf4f4f5),
+    text_2: c(0xa1a1aa),
+    text_3: c(0x8b8b95),
+    border: c(0x26262a),
+    border_strong: c(0x3a3a40),
+    primary_bg: c(0xf4f4f5),
+    primary_fg: c(0x18181b),
+    primary_bg_hover: c(0xe4e4e7),
+    danger: c(0xf87171),
+    success: c(0x4ade80),
+    warning: c(0xfcd34d),
+    glass_fill: (a(255, 255, 255, 0.05), a(255, 255, 255, 0.04)),
+    glass_edge: a(255, 255, 255, 0.09),
+    glass_fill_accent: (a(255, 255, 255, 0.18), a(255, 255, 255, 0.14)),
+    glass_edge_accent: a(255, 255, 255, 0.3),
+    sheen: a(255, 255, 255, 0.1),
+    sheen_hover: a(255, 255, 255, 0.24),
+    seat_in: a(0, 0, 0, 0.35),
+    seat: a(0, 0, 0, 0.5),
+};
+
+impl Tokens {
+    pub fn get(cx: &App) -> Tokens {
+        *cx.global::<Tokens>()
+    }
+
+    /// 유리의 그림자 겹: 빛줄기(sheen 또는 sheen-hover) + 두께(seat). CSS 의 box-shadow 와 같은 순서
+    pub fn glass_shadow(&self, bright: bool) -> Vec<BoxShadow> {
+        let line = |color, y: f32| BoxShadow {
+            color,
+            offset: point(px(0.), px(y)),
+            blur_radius: px(0.),
+            spread_radius: px(0.),
+            inset: true,
+        };
+        vec![
+            line(if bright { self.sheen_hover } else { self.sheen }, 0.5),
+            line(self.seat_in, -0.5),
+            BoxShadow {
+                color: self.seat,
+                offset: point(px(0.), px(1.)),
+                blur_radius: px(2.),
+                spread_radius: px(0.),
+                inset: false,
+            },
+        ]
+    }
+}
+
+/// macOS 화면 모드에 맞춰 토큰을 바꾸고 gpui-component 테마에도 옮긴다.
+/// AMBER_THEME=light|dark 면 그쪽으로 고정한다(시험판에서 두 테마를 다 보려고)
+pub fn apply(appearance: WindowAppearance, cx: &mut App) {
+    let dark = match std::env::var("AMBER_THEME").as_deref() {
+        Ok("dark") => true,
+        Ok("light") => false,
+        _ => matches!(
+            appearance,
+            WindowAppearance::Dark | WindowAppearance::VibrantDark
+        ),
+    };
+    let t = if dark { DARK() } else { LIGHT() };
+    cx.set_global(t);
+    Theme::change(
+        if dark {
+            ThemeMode::Dark
+        } else {
+            ThemeMode::Light
+        },
+        None,
+        cx,
+    );
+    Theme::update(cx, |theme| {
+        // --font 의 첫 두 칸(Pretendard)은 깔려 있지 않으면 건너뛴다 — 지금 앱이 실제로 그리는 글꼴이 이것이다
+        theme.font_family = "Apple SD Gothic Neo".into();
+        let k = &mut theme.colors;
+        k.background = t.surface;
+        k.foreground = t.text;
+        k.border = t.border;
+        k.input = t.border_strong;
+        k.ring = t.text_3;
+        k.muted = t.surface_2;
+        k.muted_foreground = t.text_3;
+        k.accent = t.surface_2;
+        k.accent_foreground = t.text;
+        k.secondary = t.surface_2;
+        k.secondary_foreground = t.text;
+        k.popover = t.surface;
+        k.popover_foreground = t.text;
+        k.primary = t.primary_bg;
+        k.primary_foreground = t.primary_fg;
+        k.primary_hover = t.primary_bg_hover;
+        k.danger = t.danger;
+        k.success = t.success;
+        k.warning = t.warning;
+        k.link = t.text;
+        k.caret = t.text;
+        k.selection = a(128, 128, 140, 0.28);
+    });
+}

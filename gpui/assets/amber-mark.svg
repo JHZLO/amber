@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 32 32" fill="none">
+  <!-- 지금 앱의 icons.tsx AmberMark 와 같은 그림(책상 스탠드). 스탠드는 currentColor, 빛만 호박색 -->
+  <defs>
+    <linearGradient id="amber-beam" gradientUnits="userSpaceOnUse" x1="470" y1="496" x2="412" y2="710">
+      <stop offset="0" stop-color="#FFD47E" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#FFAE3D" stop-opacity="0.1"/>
+    </linearGradient>
+    <filter id="amber-soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+  </defs>
+  <g transform="translate(16 16) scale(0.064) translate(-496 -515)">
+    <path d="M575 522L365 469L268 710L555 710Z" fill="url(#amber-beam)" filter="url(#amber-soft)"/>
+    <ellipse cx="412" cy="710" rx="132" ry="18" fill="#FFAE3D" filter="url(#amber-soft)"/>
+    <ellipse cx="412" cy="708" rx="80" ry="10" fill="#FFF6E0"/>
+    <g stroke="currentColor" fill="currentColor">
+      <path d="M650 684L694 480" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M694 480L506 352" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="694" cy="480" r="30" stroke="none"/>
+      <rect x="574" y="676" width="150" height="36" rx="18" stroke="none"/>
+      <g transform="translate(506 352) rotate(104)">
+        <circle r="50" stroke="none"/>
+        <path d="M10 -45C61.2 -57.5 106.08 -92.88 136 -108L136 108C106.08 92.88 61.2 57.5 10 45Z" stroke-width="24" stroke-linejoin="round"/>
+      </g>
+    </g>
+    <ellipse cx="452" cy="420" rx="30" ry="18" transform="rotate(-40 452 420)" fill="#fff" fill-opacity="0.45"/>
+    <ellipse cx="470" cy="496" rx="95" ry="14" transform="rotate(194 470 496)" fill="#FFF4D8"/>
+  </g>
+</svg>

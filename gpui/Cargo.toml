@@ -17,8 +17,15 @@ sha2 = "0.10"
 icu_collator = "2"
 icu_locale_core = "2"
 regex = "1"
+# 시스템 언어(지금 앱의 navigator.language 와 같은 기본값)
+sys-locale = "0.3"
 # 휴지통, 백업, AI 실행 등 지금 앱과 같이 쓰는 Rust
 amber-core = { path = "../core" }
 pulldown-cmark = { version = "0.13", default-features = false }
 resvg = "0.45.1"
 merman = { version = "=0.10.0-alpha.1", features = ["math"] }
+
+[build-dependencies]
+# build.rs 가 지금 앱 소스(아이콘, 다국어 사전)를 읽어 굽는다
+regex = "1"
+serde_json = "1"
