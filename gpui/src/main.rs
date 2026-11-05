@@ -4,6 +4,7 @@
 //   cargo run --release -- --db <amber.db 사본> --note <노트.md> [--date YYYY-MM-DD] [--jump 2-3]
 
 mod assets;
+mod calendar;
 mod figure;
 mod markdown;
 mod note;
@@ -85,6 +86,9 @@ struct Spike {
     section: Section,
     /// 앱 표식(책상 스탠드). 스탠드 색이 테마를 따르므로 테마별로 굽는다
     mark: Option<(bool, figure::Figure)>,
+    /// 할 일 탭의 달력(보고 있는 달, 단위, 날짜별 진행, 휴가)과 달력 판 폭(amber.todo.cal-width)
+    cal: calendar::CalendarData,
+    cal_w: f32,
     started: Instant,
     first_frame: bool,
 }
@@ -124,6 +128,7 @@ impl Spike {
                     }
                     input.update(cx, |s, cx| s.set_value("", window, cx));
                     this.reload();
+                    this.reload_calendar();
                     cx.notify();
                 }
             },
@@ -168,6 +173,19 @@ impl Spike {
         let section = amber_gpui::prefs::get(&db, "til.section")
             .and_then(|id| RAIL.iter().find(|r| r.1 == id))
             .map_or(Section::Todo, |r| r.0);
+        let cal = calendar::CalendarData {
+            cursor: amber_gpui::dates::month_of(&date).expect("--date YYYY-MM-DD"),
+            unit: match amber_gpui::prefs::get(&db, "amber.todo.unit").as_deref() {
+                Some("week") => calendar::Unit::Week,
+                _ => calendar::Unit::Day,
+            },
+            counts: HashMap::new(),
+            vacations: HashMap::new(),
+        };
+        // 지금 앱의 CAL_W_MIN/MAX/DEFAULT
+        let cal_w = amber_gpui::prefs::get(&db, "amber.todo.cal-width")
+            .and_then(|w| w.parse::<f32>().ok())
+            .map_or(460., |w| w.clamp(260., 780.));
         let mut this = Spike {
             db,
             date,
@@ -179,10 +197,13 @@ impl Spike {
             scroll: ScrollHandle::new(),
             section,
             mark: None,
+            cal,
+            cal_w,
             started,
             first_frame: false,
         };
         this.reload();
+        this.reload_calendar();
         // --jump: 절 링크를 누른 것처럼 그 절로 간다. 클릭을 못 보내는 환경에서 확인하려고 둔다 —
         // 글이 다 그려진 뒤에 가야 해서 잠깐 기다린다
         if let Some(sec) = jump {
@@ -259,6 +280,54 @@ impl Spike {
             eprintln!("toggle: {e}");
         }
         self.reload();
+        self.reload_calendar();
+    }
+
+    /// 날짜를 고른다 — 다른 달이면 달력도 그 달로
+    fn go_date(&mut self, date: String) {
+        if let Some(m) = amber_gpui::dates::month_of(&date) {
+            self.cal.cursor = m;
+        }
+        self.date = date;
+        self.reload();
+        self.reload_calendar();
+    }
+
+    fn set_unit(&mut self, unit: calendar::Unit, cx: &mut Context<Self>) {
+        self.cal.unit = unit;
+        amber_gpui::prefs::set(&self.db, "amber.todo.unit", unit.id());
+        cx.notify();
+    }
+
+    /// 보고 있는 달 격자 범위의 날짜별 진행(목록 아래 요약과 같은 dayProgress 규칙)과 휴가
+    fn reload_calendar(&mut self) {
+        use amber_gpui::{dates, tree, vacations};
+        let grid = dates::month_grid_dates(self.cal.cursor.year, self.cal.cursor.month, 0);
+        let (Some(from), Some(to)) = (grid.first(), grid.last()) else {
+            return;
+        };
+        let rows = todos::list_range_rows(&self.db, from, to).unwrap_or_default();
+        let mut by_day: HashMap<String, Vec<Row>> = HashMap::new();
+        for r in rows {
+            let day = r
+                .get("day")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            by_day.entry(day).or_default().push(r);
+        }
+        self.cal.counts = by_day
+            .into_iter()
+            .map(|(day, list)| (day, tree::day_progress(&list)))
+            .filter(|(_, (_, total))| *total > 0)
+            .collect();
+        self.cal.vacations = vacations::list_vacations(&self.db, from, to)
+            .map(|m| {
+                m.into_iter()
+                    .map(|(d, k)| (d, k.as_str().unwrap_or_default().to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
     }
 }
 
@@ -378,15 +447,34 @@ impl Render for Spike {
             }));
 
         let body = match self.section {
+            // .todo-body: 달력 판(폭 cal_w, 안쪽 여백 0 4 8 8, 카드 위 8) | 하루 판
             Section::Todo => div()
                 .size_full()
-                .p_5()
                 .flex()
-                .flex_col()
-                .gap_3()
-                .child(div().text_color(muted).child(self.date.clone()))
-                .child(Input::new(&self.input))
-                .child(list)
+                .child(
+                    div()
+                        .w(px(self.cal_w))
+                        .flex_shrink_0()
+                        .h_full()
+                        .pl(px(8.))
+                        .pr(px(4.))
+                        .pb(px(8.))
+                        .pt(px(8.))
+                        .child(self.calendar(&k, self.cal_w - 8. - 4. - 2. - 24., cx)),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .p_5()
+                        .flex()
+                        .flex_col()
+                        .gap_3()
+                        .child(div().text_color(muted).child(self.date.clone()))
+                        .child(Input::new(&self.input))
+                        .child(list),
+                )
                 .into_any_element(),
             Section::Notes => note.into_any_element(),
             // 아직 옮기지 않은 탭 — 체크리스트(D)에서 하나씩

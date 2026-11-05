@@ -21,6 +21,14 @@ pub struct Tokens {
     pub danger: Hsla,
     pub success: Hsla,
     pub warning: Hsla,
+    /// 달력의 일요일(공휴일)/토요일, 휴가(호박색 — 결과 색 예외 둘 중 하나)
+    pub cal_sun: Hsla,
+    pub cal_sat: Hsla,
+    pub vacation: Hsla,
+    /// --glass-raise(면 78%): 눌린 탭처럼 판에서 한 단 솟은 유리의 바탕
+    pub glass_raise: Hsla,
+    /// --shadow-sm
+    pub shadow_sm: Hsla,
     /// 유리(§2 유리): 손이 닿은 면 / 강조(활성). CSS 는 사선 그라디언트 세 칸인데 여기선 양 끝 두 칸으로 근사한다
     pub glass_fill: (Hsla, Hsla),
     pub glass_edge: Hsla,
@@ -65,6 +73,11 @@ const LIGHT: fn() -> Tokens = || Tokens {
     danger: c(0xdc2626),
     success: c(0x1a7f37),
     warning: c(0xa16207),
+    cal_sun: c(0xb91c1c),
+    cal_sat: c(0x1d4ed8),
+    vacation: c(0xa16207),
+    glass_raise: a(255, 255, 255, 0.78),
+    shadow_sm: a(24, 24, 27, 0.06),
     glass_fill: (a(24, 24, 27, 0.05), a(24, 24, 27, 0.04)),
     glass_edge: a(24, 24, 27, 0.12),
     glass_fill_accent: (a(24, 24, 27, 0.16), a(24, 24, 27, 0.125)),
@@ -90,6 +103,11 @@ const DARK: fn() -> Tokens = || Tokens {
     danger: c(0xf87171),
     success: c(0x4ade80),
     warning: c(0xfcd34d),
+    cal_sun: c(0xfca5a5),
+    cal_sat: c(0x93b4ff),
+    vacation: c(0xfcd34d),
+    glass_raise: a(22, 22, 24, 0.78),
+    shadow_sm: a(0, 0, 0, 0.4),
     glass_fill: (a(255, 255, 255, 0.05), a(255, 255, 255, 0.04)),
     glass_edge: a(255, 255, 255, 0.09),
     glass_fill_accent: (a(255, 255, 255, 0.18), a(255, 255, 255, 0.14)),
@@ -103,6 +121,22 @@ const DARK: fn() -> Tokens = || Tokens {
 impl Tokens {
     pub fn get(cx: &App) -> Tokens {
         *cx.global::<Tokens>()
+    }
+
+    /// 글자색을 alpha 만큼 — CSS 의 color-mix(in srgb, var(--text) N%, transparent)
+    pub fn text_mix(&self, alpha: f32) -> Hsla {
+        self.text.opacity(alpha)
+    }
+
+    /// 안쪽 테 — CSS 의 inset 0 0 0 Npx color
+    pub fn ring(color: Hsla, width: f32) -> BoxShadow {
+        BoxShadow {
+            color,
+            offset: point(px(0.), px(0.)),
+            blur_radius: px(0.),
+            spread_radius: px(width),
+            inset: true,
+        }
     }
 
     /// 유리의 그림자 겹: 빛줄기(sheen 또는 sheen-hover) + 두께(seat). CSS 의 box-shadow 와 같은 순서
