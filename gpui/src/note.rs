@@ -69,6 +69,20 @@ pub fn section_of(md: &str) -> Option<&str> {
     section(heading(first)?)
 }
 
+/// 덩어리 첫 줄이 `#`~`###` 제목이면 (단계, 보이는 글자) — 목차가 쓴다(지금 앱은 h1~h3 의 textContent).
+/// 강조, 코드 표식과 링크 주소는 떼고 글자만 남긴다
+pub fn heading_of(md: &str) -> Option<(u8, String)> {
+    let first = md.lines().find(|l| !l.trim().is_empty())?;
+    let title = heading(first)?;
+    let level = (first.len() - first.trim_start_matches('#').len()) as u8;
+    static LINK: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let link = LINK.get_or_init(|| regex::Regex::new(r"\[([^\]]*)\]\([^)]*\)").unwrap());
+    let text = link.replace_all(title, "$1");
+    let text: String = text.chars().filter(|c| !matches!(c, '*' | '`')).collect();
+    let text = text.trim().to_string();
+    (!text.is_empty()).then_some((level, text))
+}
+
 /// 코드 펜스 줄이면 (문자, 길이, 정보 문자열) — mdSections.ts 의 FENCE
 fn fence(line: &str) -> Option<(char, usize, &str)> {
     let t = line.trim_start();

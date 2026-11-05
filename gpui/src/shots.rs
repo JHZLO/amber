@@ -22,6 +22,12 @@ fn seed(dir: &Path) -> String {
     let notes = dir.join("vault/notes");
     std::fs::create_dir_all(notes.join("Engineering/Runbooks")).unwrap();
     std::fs::write(notes.join("Inbox.md"), "# Inbox\n\n- Read the GPUI docs\n").unwrap();
+    // 읽기 충실도 견본 — 지금 앱(웹)과 나란히 찍어 맞춘다
+    std::fs::write(
+        notes.join("Reading.md"),
+        include_str!("../assets/reading-sample.md"),
+    )
+    .unwrap();
     std::fs::write(
         notes.join("Engineering/Runbooks/Release.md"),
         "# Release\n\n1. Tag\n2. Push\n",
@@ -110,7 +116,10 @@ impl Shots {
 }
 
 pub fn run(dir: &str) {
-    let db = seed(&std::env::temp_dir().join(format!("amber-shots-{}", std::process::id())));
+    let data = std::env::temp_dir().join(format!("amber-shots-{}", std::process::id()));
+    let db = seed(&data);
+    // 웹 하네스가 같은 데이터를 읽게 자리를 알린다
+    eprintln!("data {}", data.display());
     let mut cx = VisualTestAppContext::with_asset_source(
         gpui_kit::platform::current_platform(false),
         Arc::new(assets::Assets),
@@ -204,6 +213,14 @@ fn notes(s: &mut Shots) {
         .unwrap();
     s.mouse(point(px(160.), px(150.)), false);
     s.shot("notes-open");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.open_note("Reading.md", cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.mouse(point(px(1300.), px(880.)), false);
+    s.shot("notes-reading");
     s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.notes.selected = None;

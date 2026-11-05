@@ -2,7 +2,9 @@
 // 트리 행은 세 단계가 서로 다르다: hover = 틴트, 열린 폴더 = 면 유리 + 왼쪽 회색 바, 고른 파일 = 강조 유리 + 왼쪽 글자색 바.
 // 펼친 폴더와 고른 노트는 저장하지 않는다(지금 앱도 앱을 다시 열면 처음부터). 탭에 들어올 때마다 트리를 다시 읽는다.
 
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 use amber_gpui::i18n::t;
 use amber_gpui::vault::{self, Node};
@@ -49,8 +51,49 @@ pub struct NotesState {
     pub blocks: Vec<Block>,
     /// 절 번호 → 본문 판의 자식 번호(제목으로 시작하는 글 덩어리)
     pub sections: HashMap<String, usize>,
+    /// 목차 — (덩어리 번호, 단계 1~3, 글자). 두 개 이상일 때만 보인다
+    pub toc: Vec<(usize, u8, String)>,
+    pub mtime: Option<i64>,
     pub width: f32,
     pub copied: bool,
+    /// 그린 뒤 잰 자리 — 덩어리마다(창 좌표), 머리(경로 줄 ~ 동작 줄) 높이
+    pub marks: Rc<RefCell<HashMap<usize, Bounds<Pixels>>>>,
+    pub head_h: Rc<Cell<Pixels>>,
+}
+
+/// 본문 판의 위 여백(.detail padding-top)
+const DETAIL_PAD_T: f32 = 32.;
+/// 목차가 보이는 창 폭 — 더 좁으면 숨기고 본문 폭 제한도 푼다(@media max-width: 1140px)
+const TOC_MIN_WINDOW: f32 = 1140.;
+
+/// 지금 앱 timeAgo — 30일 넘으면 날짜
+fn time_ago(ms: i64, now: i64) -> String {
+    use amber_gpui::i18n::t_with;
+    let m = (now - ms).div_euclid(60_000);
+    if m < 1 {
+        return t("common.timeago.now");
+    }
+    if m < 60 {
+        return t_with("common.timeago.minutes", &[("m", &m.to_string())]);
+    }
+    let h = m / 60;
+    if h < 24 {
+        return t_with("common.timeago.hours", &[("h", &h.to_string())]);
+    }
+    let d = h / 24;
+    if d < 30 {
+        return t_with("common.timeago.days", &[("d", &d.to_string())]);
+    }
+    let date = chrono::DateTime::from_timestamp_millis(ms)
+        .map(|d| d.with_timezone(&chrono::Local).date_naive())
+        .unwrap_or_default();
+    // toLocaleDateString — ko "2026. 11. 5.", en "11/5/2026"
+    use chrono::Datelike;
+    if amber_gpui::i18n::is_ko() {
+        format!("{}. {}. {}.", date.year(), date.month(), date.day())
+    } else {
+        format!("{}/{}/{}", date.month(), date.day(), date.year())
+    }
 }
 
 /// 노트 본문 → 글 덩어리와 그림. svg 의 currentColor 는 본문 글자색이다
@@ -138,7 +181,20 @@ impl Spike {
             Ok(body) => {
                 let text = hex(Tokens::get(cx).text);
                 let (blocks, sections) = build_blocks(&body, &text);
+                let toc = note::split(&body)
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, s)| match s {
+                        note::Segment::Markdown(md) => {
+                            note::heading_of(md).map(|(lv, text)| (i, lv, text))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                let mtime = vault::notes(&self.db).mtime(rel);
                 let n = &mut self.notes;
+                n.toc = toc;
+                n.mtime = mtime;
                 n.body = body;
                 n.blocks = blocks;
                 n.sections = sections;
@@ -149,9 +205,12 @@ impl Spike {
                 n.body.clear();
                 n.blocks.clear();
                 n.sections.clear();
+                n.toc.clear();
+                n.mtime = None;
                 n.read_error = Some(e);
             }
         }
+        self.notes.marks.borrow_mut().clear();
         self.scroll.set_offset(point(px(0.), px(0.)));
     }
 
@@ -179,12 +238,37 @@ impl Spike {
         r
     }
 
-    /// 절 링크 → 그 번호를 단 제목이 판 맨 위에 오게 (NotesView 의 data-sec 탐색)
+    /// 절 링크 → 그 번호를 단 제목으로 (NotesView 의 data-sec 탐색)
     pub(crate) fn jump(&self, sec: &str) {
         if let Some(&ix) = self.notes.sections.get(sec) {
-            // 판의 자식은 경로 줄, 제목, 동작 줄 다음에 본문 덩어리
-            self.scroll.scroll_to_top_of_item(ix + DETAIL_HEAD_ITEMS);
+            self.scroll_to_block(ix);
         }
+    }
+
+    /// 그 덩어리가 판 맨 위에서 18px 아래 오게(scroll-margin-top 18px)
+    fn scroll_to_block(&self, ix: usize) {
+        let Some(b) = self.notes.marks.borrow().get(&ix).copied() else {
+            return;
+        };
+        let view = self.scroll.bounds();
+        let off = self.scroll.offset();
+        let y = (off.y - (b.origin.y - view.origin.y) + px(18.)).min(px(0.));
+        self.scroll.set_offset(point(off.x, y));
+    }
+
+    /// 스크롤 스파이 — 판 위에서 96px 안에 들어온 마지막 제목. 처음엔 첫 제목
+    fn active_heading(&self) -> Option<usize> {
+        let marks = self.notes.marks.borrow();
+        let top = self.scroll.bounds().origin.y;
+        let mut cur = self.notes.toc.first().map(|t| t.0)?;
+        for (ix, ..) in &self.notes.toc {
+            match marks.get(ix) {
+                Some(b) if b.origin.y - top <= px(96.) => cur = *ix,
+                Some(_) => break,
+                None => {}
+            }
+        }
+        Some(cur)
     }
 
     pub(crate) fn notes_body(&self, body_w: f32, k: &Tokens, cx: &mut Context<Self>) -> Div {
@@ -231,7 +315,11 @@ impl Spike {
                     .pr(px(8.))
                     .pl(px(4.))
                     .child(
-                        card(div().size_full().overflow_hidden()).child(self.note_detail(k, cx)),
+                        card(div().size_full().overflow_hidden()).child(self.note_detail(
+                            body_w + 68. > TOC_MIN_WINDOW,
+                            k,
+                            cx,
+                        )),
                     ),
             )
     }
@@ -483,13 +571,14 @@ impl Spike {
     }
 
     /// 오른쪽 카드 — 고른 노트(경로 줄, 제목, 동작 줄, 본문) 또는 빈 안내
-    fn note_detail(&self, k: &Tokens, cx: &mut Context<Self>) -> Stateful<Div> {
+    fn note_detail(&self, wide: bool, k: &Tokens, cx: &mut Context<Self>) -> Stateful<Div> {
         let scroll = div()
             .id("note")
+            .tag("note-scroll")
             .size_full()
             .overflow_y_scroll()
             .track_scroll(&self.scroll)
-            .pt(px(32.))
+            .pt(px(DETAIL_PAD_T))
             .pb(px(32.))
             .px(px(40.))
             .flex()
@@ -565,66 +654,206 @@ impl Spike {
                         cx.notify();
                     }))
             });
-        let head = [
+        let head_h = self.notes.head_h.clone();
+        let head = div()
+            .flex()
+            .flex_col()
+            .flex_shrink_0()
             // .note-crumb — 경로 줄(복사는 D2 경로 복사에서)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .mb(px(4.))
+                    .text_size(px(12.))
+                    .text_color(k.text_3)
+                    .child(icon("folder", 12.).text_color(k.text_3))
+                    .child(crumb),
+            )
+            // .detail-title
+            .child(
+                div()
+                    .mb(px(6.))
+                    .text_size(px(23.))
+                    .line_height(relative(1.3))
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(k.text)
+                    .child(name),
+            )
+            .child(actions)
+            .child(
+                canvas(move |b, _, _| head_h.set(b.size.height), |_, _, _, _| {})
+                    .absolute()
+                    .size_full(),
+            )
+            .relative();
+        let on_link = self.on_link(cx);
+        let body = self.notes.blocks.iter().enumerate().map(|(i, b)| {
+            let el = match b {
+                Block::Text(md) => markdown::text(
+                    ElementId::NamedInteger("md".into(), i as u64),
+                    md.clone(),
+                    on_link.clone(),
+                    k,
+                )
+                .into_any_element(),
+                Block::Figure { fig, light } => div()
+                    .my(px(8.))
+                    .p_4()
+                    .border_1()
+                    .border_color(k.border)
+                    .rounded_md()
+                    .when(*light, |d| d.bg(gpui_kit::white()))
+                    .flex()
+                    .justify_center()
+                    .child({
+                        let w = fig.width.min(FIGURE_MAX);
+                        img(fig.image.clone())
+                            .w(px(w))
+                            .h(px(fig.height * w / fig.width))
+                    })
+                    .into_any_element(),
+                Block::Broken(msg) => div()
+                    .text_color(k.danger)
+                    .child(msg.clone())
+                    .into_any_element(),
+            };
+            // 덩어리마다 자리를 잰다 — 절 이동, 목차, 스크롤 스파이가 쓴다
+            let marks = self.notes.marks.clone();
             div()
-                .flex()
-                .items_center()
-                .gap(px(5.))
-                .mb(px(4.))
+                .id(("note-block", i))
+                .tag(format!("note-block-{i}"))
+                .relative()
+                .child(el)
+                .child(
+                    canvas(
+                        move |b, _, _| {
+                            marks.borrow_mut().insert(i, b);
+                        },
+                        |_, _, _, _| {},
+                    )
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full(),
+                )
+        });
+        let show_toc = wide && self.notes.toc.len() >= 2;
+        let column = div()
+            .flex_1()
+            .min_w_0()
+            .flex()
+            .flex_col()
+            // 목차가 있으면 본문은 720px 까지(넓은 창에서 줄이 너무 길어지지 않게)
+            .when(wide, |d| d.max_w(px(720.)))
+            .children(body);
+        let meta = {
+            let mut line = format!("{}/{rel}", self.notes_root_name());
+            if let Some(ms) = self.notes.mtime {
+                let now = chrono::Local::now().timestamp_millis();
+                // 지금 앱과 같은 구분자(U+00B7)
+                line.push_str(" \u{b7} ");
+                line.push_str(&amber_gpui::i18n::t_with(
+                    "notes.meta.modified",
+                    &[("time", &time_ago(ms, now))],
+                ));
+            }
+            div()
+                .mt(px(28.))
+                .pt(px(12.))
+                .border_t_1()
+                .border_color(k.border)
                 .text_size(px(12.))
                 .text_color(k.text_3)
-                .child(icon("folder", 12.).text_color(k.text_3))
-                .child(crumb)
-                .into_any_element(),
-            // .detail-title
-            div()
-                .mb(px(6.))
-                .text_size(px(23.))
-                .line_height(relative(1.3))
-                .font_weight(FontWeight::BOLD)
-                .text_color(k.text)
-                .child(name)
-                .into_any_element(),
-            actions.into_any_element(),
-        ];
-        let on_link = self.on_link(cx);
-        let body = self.notes.blocks.iter().enumerate().map(|(i, b)| match b {
-            Block::Text(md) => markdown::text(
-                ElementId::NamedInteger("md".into(), i as u64),
-                md.clone(),
-                on_link.clone(),
-            )
-            .into_any_element(),
-            Block::Figure { fig, light } => div()
-                .my(px(8.))
-                .p_4()
-                .border_1()
-                .border_color(k.border)
-                .rounded_md()
-                .when(*light, |d| d.bg(gpui_kit::white()))
-                .flex()
-                .justify_center()
-                .child({
-                    let w = fig.width.min(FIGURE_MAX);
-                    img(fig.image.clone())
-                        .w(px(w))
-                        .h(px(fig.height * w / fig.width))
-                })
-                .into_any_element(),
-            Block::Broken(msg) => div()
-                .text_color(k.danger)
-                .child(msg.clone())
-                .into_any_element(),
-        });
+                .child(line)
+        };
         scroll
-            .children(head)
+            .child(head)
             .when_some(self.notes.read_error.clone(), |d, e| {
                 d.child(div().text_size(px(13.)).text_color(k.danger).child(
                     amber_gpui::i18n::t_with("notes.readError", &[("error", &e)]),
                 ))
             })
-            .children(body)
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .child(column)
+                    .when(show_toc, |d| d.child(self.note_toc(k, cx))),
+            )
+            .when(self.notes.read_error.is_none(), |d| d.child(meta))
+    }
+
+    /// 오른쪽 목차(.note-toc) — 본문을 굴려도 판 위 4px 에 머문다(sticky). 지금 절은 굵게
+    fn note_toc(&self, k: &Tokens, cx: &mut Context<Self>) -> Div {
+        let sy = -f32::from(self.scroll.offset().y);
+        let wrap_top = DETAIL_PAD_T + f32::from(self.notes.head_h.get());
+        let dy = (sy + 4. - wrap_top).max(0.);
+        let active = self.active_heading();
+        let view_h = f32::from(self.scroll.bounds().size.height);
+        div()
+            .relative()
+            .top(px(dy))
+            .ml_auto()
+            .w(px(190.))
+            .flex_shrink_0()
+            .pl(px(14.))
+            .border_l_1()
+            .border_color(k.border)
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .child(
+                div()
+                    .mb(px(6.))
+                    .pl(px(6.))
+                    .text_size(px(10.5))
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(k.text_3)
+                    .child(t("notes.toc").to_uppercase()),
+            )
+            .child(
+                div()
+                    .id("note-toc")
+                    .flex()
+                    .flex_col()
+                    .gap(px(1.))
+                    .max_h(px((view_h - 230. + 64.).max(120.)))
+                    .overflow_y_scroll()
+                    .children(self.notes.toc.iter().map(|(ix, lv, text)| {
+                        let ix = *ix;
+                        let on = active == Some(ix);
+                        let tag = format!("toc-{ix}");
+                        let (hover_bg, hover_fg) = (k.surface_2, k.text);
+                        div()
+                            .id(SharedString::from(tag.clone()))
+                            .tag(tag)
+                            .flex_shrink_0()
+                            .py(px(3.))
+                            .pr(px(6.))
+                            .pl(px(match lv {
+                                1 => 6.,
+                                2 => 16.,
+                                _ => 26.,
+                            }))
+                            .rounded(px(5.))
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .text_size(px(12.5))
+                            .line_height(relative(1.5))
+                            .cursor_pointer()
+                            .text_color(if on { k.text } else { k.text_3 })
+                            .when(on, |d| d.font_weight(FontWeight::SEMIBOLD))
+                            .hover(move |s| s.bg(hover_bg).text_color(hover_fg))
+                            .child(text.clone())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.scroll_to_block(ix);
+                                cx.notify();
+                            }))
+                    })),
+            )
     }
 
     /// .notes-empty — 아무 노트도 고르지 않았을 때
@@ -673,6 +902,3 @@ impl Spike {
             )
     }
 }
-
-/// 본문 판에서 글 덩어리 앞에 놓인 자식 수(경로 줄, 제목, 동작 줄)
-const DETAIL_HEAD_ITEMS: usize = 3;

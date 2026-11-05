@@ -622,3 +622,32 @@ fn deleting_a_note_asks_then_moves_it_to_the_trash(cx: &mut TestAppContext) {
     );
     assert!(ui.debug_bounds("tree-Inbox.md").is_none());
 }
+
+#[gpui_kit::test]
+fn the_contents_list_jumps_to_a_heading(cx: &mut TestAppContext) {
+    let db = seeded("notes-toc", &[]);
+    let mut long = String::from("# Top\n\nintro\n\n");
+    for i in 1..=4 {
+        long.push_str(&format!("## {i}. Part\n\n"));
+        long.push_str(&"line\n\n".repeat(30));
+    }
+    vault_note(&db, "Long.md", &long);
+    vault_note(&db, "Short.md", "# Only one heading\n\nbody\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-Short.md");
+    assert!(
+        ui.debug_bounds("toc-0").is_none(),
+        "제목이 하나면 목차가 없다"
+    );
+    click(&mut ui, "tree-Long.md");
+    let before = bounds(&mut ui, "note-block-3").top();
+    click(&mut ui, "toc-3");
+    let view = bounds(&mut ui, "note-scroll").top();
+    let after = bounds(&mut ui, "note-block-3").top();
+    assert!(after < before, "본문이 그 절까지 굴러간다");
+    assert!(
+        (f32::from(after - view) - 18.).abs() < 1.,
+        "그 절 제목이 판 위 18px 에 온다"
+    );
+}

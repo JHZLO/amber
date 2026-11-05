@@ -253,6 +253,12 @@ impl<'a> Tree<'a> {
         Ok(nodes)
     }
 
+    /// 고친 시각(ms) — 읽기 화면 아래 '수정 N분 전'
+    pub fn mtime(&self, rel: &str) -> Option<i64> {
+        let m = std::fs::metadata(self.path(rel)).ok()?.modified().ok()?;
+        Some(m.duration_since(std::time::UNIX_EPOCH).ok()?.as_millis() as i64)
+    }
+
     pub fn read_file(&self, rel: &str) -> Result<String> {
         read_text(&self.path(rel))
     }
