@@ -21,6 +21,7 @@ mod row_drag;
 #[cfg(feature = "shots")]
 mod shots;
 mod theme;
+mod tree_drag;
 mod tt_card;
 mod tt_drag;
 #[cfg(test)]
@@ -410,6 +411,9 @@ impl Render for Spike {
             if self.pane_drag.is_some() {
                 self.pane_drop();
             }
+            if self.notes.tree_drag.is_some() {
+                self.tree_drop();
+            }
         }
         // 판 폭은 희망 폭 — 창이 좁으면 오른쪽 몫(340px)을 남기고 줄인다. 몸통은 레일을 뺀 전부다
         // (지금 앱의 .todo-body 처럼 서랍 칸도 몸통 안이다)
@@ -571,6 +575,10 @@ impl Render for Spike {
                     }
                 },
             ))
+            .on_drop(cx.listener(|this, _: &tree_drag::TreeGrab, _, cx| {
+                this.tree_drop();
+                cx.notify();
+            }))
             .on_drop(cx.listener(|this, _: &pane::PaneGrab, _, cx| {
                 this.pane_drop();
                 cx.notify();
@@ -603,6 +611,7 @@ impl Render for Spike {
                     .child(div().flex_1().min_h_0().child(body)),
             )
             .children(self.drop_line(&k))
+            .children(self.tree_drag_ghost(&k))
             .children(self.name_modal_view(&k, window, cx))
             .children(self.note_prompt(&k, cx))
             .children(confirm)

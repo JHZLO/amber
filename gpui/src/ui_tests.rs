@@ -872,3 +872,38 @@ fn renaming_from_the_row_keeps_the_open_note(cx: &mut TestAppContext) {
         "열린 노트가 새 이름을 따라간다"
     );
 }
+
+#[gpui_kit::test]
+fn dragging_a_note_onto_a_folder_moves_it(cx: &mut TestAppContext) {
+    let db = seeded("tree-dnd", &[]);
+    vault_note(&db, "A.md", "# A\n");
+    vault_note(&db, "CS/x.md", "# x\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    let to = bounds(&mut ui, "tree-CS").center();
+    drag(&mut ui, "tree-A.md", to);
+    assert!(!vault_has(&db, "A.md") && vault_has(&db, "CS/A.md"));
+    assert!(
+        ui.debug_bounds("tree-CS/A.md").is_some(),
+        "옮겨 간 자리를 펼친다"
+    );
+}
+
+#[gpui_kit::test]
+fn the_tree_margin_is_the_root_and_a_folder_cannot_go_inside_itself(cx: &mut TestAppContext) {
+    let db = seeded("tree-dnd-root", &[]);
+    vault_note(&db, "CS/x.md", "# x\n");
+    vault_note(&db, "CS/Sub/y.md", "# y\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-CS");
+    // 폴더를 자기 안의 파일 위로 = 자기 자신 — 옮기지 않는다
+    let inside = bounds(&mut ui, "tree-CS/x.md").center();
+    drag(&mut ui, "tree-CS", inside);
+    assert!(vault_has(&db, "CS/x.md"));
+    // 트리 아래 여백 = 루트
+    let tree = bounds(&mut ui, "notes-tree");
+    let x = tree.center().x;
+    drag(&mut ui, "tree-CS/x.md", point(x, tree.bottom() - px(12.)));
+    assert!(vault_has(&db, "x.md") && !vault_has(&db, "CS/x.md"));
+}

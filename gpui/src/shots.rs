@@ -232,6 +232,35 @@ fn notes(s: &mut Shots) {
             cx.notify();
         })
         .unwrap();
+    // 트리 끌기 — Inbox 를 Engineering 위로
+    s.cx.run_until_parked();
+    let (from, to) = s
+        .window
+        .update(&mut s.cx, |sp, _, _| {
+            let rows = sp.notes.tree_rows.borrow();
+            (rows["Inbox.md"].0.center(), rows["Engineering"].0.center())
+        })
+        .unwrap();
+    let w = s.any();
+    s.mouse(from, false);
+    s.cx.simulate_mouse_down(w, from, MouseButton::Left, Modifiers::none());
+    s.mouse(point(from.x, from.y - px(6.)), true);
+    s.mouse(to, true);
+    s.mouse(point(to.x + px(2.), to.y), true);
+    s.shot("tree-drag");
+    s.cx.simulate_mouse_up(
+        w,
+        point(px(-40.), to.y),
+        MouseButton::Left,
+        Modifiers::none(),
+    );
+    s.cx.run_until_parked();
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.notes.names = None;
+            cx.notify();
+        })
+        .unwrap();
     s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.open_note("Reading.md", cx);

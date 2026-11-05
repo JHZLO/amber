@@ -135,6 +135,11 @@ pub struct NotesState {
     pub prompt: Option<crate::note_edit::NotePrompt>,
     /// 새 노트, 새 폴더, 이름 바꾸기 모달
     pub names: Option<crate::note_names::NameModal>,
+    /// 트리 끌기: 끄는 중인 것, 행마다(경로 → 자리, 폴더인가)와 트리 판의 자리, 누른 자리
+    pub tree_drag: Option<crate::tree_drag::TreeDrag>,
+    pub tree_rows: crate::tree_drag::RowBounds,
+    pub tree_area: crate::tree_drag::ListBounds,
+    pub tree_press: Option<Point<Pixels>>,
     pub width: f32,
     pub copied: bool,
     /// 경로 줄을 눌러 복사한 직후(1.5초 동안 체크 표식)
@@ -525,14 +530,42 @@ impl Spike {
     }
 
     fn tree_list(&self, k: &Tokens, cx: &mut Context<Self>) -> Stateful<Div> {
+        // 이번 그림의 행 자리만 남긴다 — 접혀 사라진 행이 놓을 곳으로 잡히지 않게
+        self.notes.tree_rows.borrow_mut().clear();
+        let area = self.notes.tree_area.clone();
+        let drop_root = self
+            .notes
+            .tree_drag
+            .as_ref()
+            .is_some_and(|d| d.target.as_deref() == Some(""));
         let list = div()
             .id("notes-tree")
+            .tag("notes-tree")
+            .relative()
             .flex_1()
             .min_h_0()
             .overflow_y_scroll()
             .pt(px(6.))
             .px(px(8.))
-            .pb(px(24.));
+            .pb(px(24.))
+            // 루트(트리 여백)로 놓을 때 — 판 안쪽 2px 링
+            .when(drop_root, |d| {
+                d.rounded(px(8.)).shadow(vec![Tokens::ring(k.text_3, 2.)])
+            })
+            .on_drag_move::<crate::tree_drag::TreeGrab>(cx.listener(
+                |this, e: &DragMoveEvent<crate::tree_drag::TreeGrab>, _, cx| {
+                    if this.tree_drag_move(e.event.position) {
+                        cx.notify();
+                    }
+                },
+            ))
+            .child(
+                canvas(move |b, _, _| area.set(b), |_, _, _, _| {})
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full(),
+            );
         if let Some(e) = &self.notes.error {
             return list.child(
                 div()
@@ -612,6 +645,17 @@ impl Spike {
         let is_dir = n.is_dir;
         let tag = format!("tree-{}", n.path);
         let actions = self.tree_row_actions(n, k, cx);
+        let drag = self.notes.tree_drag.as_ref();
+        let lifted = drag.is_some_and(|d| d.grab.path == n.path);
+        let target = is_dir && drag.is_some_and(|d| d.target.as_deref() == Some(n.path.as_str()));
+        let rows = self.notes.tree_rows.clone();
+        let (rec_path, pad) = (n.path.clone(), px(8. + depth as f32 * 14.));
+        let this = cx.entity().downgrade();
+        let grab = crate::tree_drag::TreeGrab {
+            path: n.path.clone(),
+            is_dir,
+            name: n.name.clone(),
+        };
         div()
             .id(SharedString::from(tag.clone()))
             .tag(tag)
@@ -630,10 +674,12 @@ impl Spike {
             .text_size(px(13.5))
             .text_color(if is_dir || selected { k.text } else { k.text_2 })
             .when(is_dir || selected, |d| d.font_weight(FontWeight::SEMIBOLD))
-            .when(!selected && !active, |d| {
+            .when(!selected && !active && drag.is_none(), |d| {
                 let bg = fill(k.glass_fill);
                 d.hover(move |s| s.bg(bg))
             })
+            // 들린 원본은 자리에 흐리게 남는다
+            .when(lifted, |d| d.opacity(0.4))
             .when(active, |d| {
                 let mut shadow = k.glass_shadow(false);
                 shadow.push(bar(k.border_strong));
@@ -648,6 +694,12 @@ impl Spike {
                 d.bg(fill(k.glass_fill_accent))
                     .border_color(k.glass_edge_accent)
                     .shadow(shadow)
+            })
+            // 놓을 폴더 — 채움 + 굵은 링(받아들이는 표시)
+            .when(target, |d| {
+                d.bg(k.surface_3)
+                    .shadow(vec![Tokens::ring(k.text_3, 2.)])
+                    .text_color(k.text)
             })
             .child(div().w(px(13.)).flex_shrink_0().when(is_dir, |d| {
                 d.child(
@@ -666,7 +718,7 @@ impl Spike {
                 icon(
                     if !is_dir {
                         "file"
-                    } else if open {
+                    } else if open || target {
                         "folder-open"
                     } else {
                         "folder"
@@ -690,6 +742,35 @@ impl Spike {
                     .child(n.name.clone()),
             )
             .child(actions)
+            .child(
+                canvas(
+                    move |b, _, _| {
+                        rows.borrow_mut().insert(rec_path, (b, is_dir));
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full(),
+            )
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, e: &MouseDownEvent, _, _| {
+                    this.notes.tree_press = Some(e.position);
+                }),
+            )
+            .on_drag(
+                grab,
+                move |g: &crate::tree_drag::TreeGrab, _, _, cx: &mut App| {
+                    let g = g.clone();
+                    let _ = this.update(cx, |s, cx| {
+                        s.begin_tree_drag(g, pad);
+                        cx.notify();
+                    });
+                    cx.new(|_| crate::tree_drag::Nothing)
+                },
+            )
             .on_click(cx.listener(move |this, _, _, cx| {
                 if is_dir {
                     this.toggle_dir(&path);

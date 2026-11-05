@@ -411,6 +411,8 @@ impl Spike {
             ))
             .opacity(0.)
             .group_hover("tree-row", |s| s.opacity(1.))
+            // 행 안 버튼을 누른 것은 끌기가 아니다
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .when(is_dir, |d| {
                 let (p1, p2) = (path.clone(), path.clone());
                 d.child(
