@@ -359,7 +359,8 @@ impl Spike {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // super::* 는 gpui 의 test 매크로까지 끌어와 #[test] 를 가린다
+    use super::{DAY_MS, parked_days};
 
     #[test]
     fn days_floor_and_never_negative() {
