@@ -9,8 +9,8 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
 use crate::assets::icon;
-use crate::i18n::t;
 use crate::theme::Tokens;
+use amber_gpui::i18n::t;
 
 pub type OnLink = Arc<dyn Fn(&SharedString, &ClickEvent, &mut Window, &mut App) + Send + Sync>;
 

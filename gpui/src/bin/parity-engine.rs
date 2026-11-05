@@ -9,6 +9,8 @@ use amber_gpui::db::{Clock, Db};
 use serde_json::{Value as Json, json};
 
 fn main() {
+    // 하네스의 TS 엔진은 node 에서 돌아 언어가 ko 다(i18n.getLang)
+    amber_gpui::i18n::init(Some("ko"));
     let now = Arc::new(AtomicI64::new(0));
     let mut db: Option<Db> = None;
     let stdout = std::io::stdout();

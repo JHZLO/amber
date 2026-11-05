@@ -6,7 +6,7 @@ use std::sync::OnceLock;
 
 include!(concat!(env!("OUT_DIR"), "/messages.rs"));
 
-static DICT: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+static KO_LANG: OnceLock<bool> = OnceLock::new();
 
 /// 첫 문구를 그리기 전에 한 번 — 바꾸면 다시 시작해야 한다(지금 앱도 언어를 바꾸면 창을 다시 읽는다)
 pub fn init(pref: Option<&str>) {
@@ -15,14 +15,19 @@ pub fn init(pref: Option<&str>) {
         Some("en") => false,
         _ => sys_locale::get_locale().is_some_and(|l| l.to_lowercase().starts_with("ko")),
     };
-    let _ = DICT.set((if ko { KO } else { EN }).iter().copied().collect());
+    let _ = KO_LANG.set(ko);
+}
+
+/// 지금 언어가 한국어인가 — 날짜 표기처럼 사전 밖에서 언어를 가르는 곳이 쓴다
+pub fn is_ko() -> bool {
+    *KO_LANG.get_or_init(|| {
+        sys_locale::get_locale().is_some_and(|l| l.to_lowercase().starts_with("ko"))
+    })
 }
 
 fn dict() -> &'static HashMap<&'static str, &'static str> {
-    DICT.get_or_init(|| {
-        init(None);
-        DICT.get().cloned().unwrap_or_default()
-    })
+    static DICT: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    DICT.get_or_init(|| (if is_ko() { KO } else { EN }).iter().copied().collect())
 }
 
 /// 지금 언어의 문구. 없는 키는 키 그대로(지금 앱과 같다)

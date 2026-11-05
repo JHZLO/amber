@@ -2,6 +2,7 @@
 //  - 마이그레이션 목록(src-tauri/src/lib.rs)
 //  - 아이콘(src/icons.tsx 의 PATHS) → OUT_DIR/icons.rs
 //  - 다국어 사전(src/lib/messages/*.ts) → OUT_DIR/messages.rs
+//  - 공휴일 표(src/lib/holidays.ts 의 LUNAR, ONE_OFF, 제헌절 시작 해) → OUT_DIR/holidays.rs
 //
 // 마이그레이션 목록은 지금 앱의 src-tauri/src/lib.rs 가 정본이다. 두 벌로 적으면 등록을 빠뜨린 채 나가기 쉬워서
 // (실제로 0016 이 등록 없이 태그까지 나갔다) 빌드할 때 그 목록을 읽어 그대로 싣는다 — 동등성 하네스와 같은 읽기다.
@@ -13,6 +14,41 @@ fn main() {
     migrations();
     icons();
     messages();
+    holidays();
+}
+
+fn holidays() {
+    let src = "../src/lib/holidays.ts";
+    println!("cargo:rerun-if-changed={src}");
+    let text = std::fs::read_to_string(src).expect("src/lib/holidays.ts");
+    let block = |name: &str| {
+        let start = text
+            .find(&format!("const {name}"))
+            .unwrap_or_else(|| panic!("{name}"));
+        let body = &text[start..];
+        body[body.find('{').unwrap() + 1..body.find("\n};").unwrap()].to_string()
+    };
+    let lunar =
+        regex::Regex::new(r#"(\d{4}):\s*\["(\d\d-\d\d)",\s*"(\d\d-\d\d)",\s*"(\d\d-\d\d)"\]"#)
+            .unwrap();
+    let one_off = regex::Regex::new(r#""(\d{4}-\d\d-\d\d)":\s*"([\w.]+)""#).unwrap();
+    let from = regex::Regex::new(r"const CONSTITUTION_DAY_FROM = (\d+);").unwrap();
+    let mut code = String::from("pub const LUNAR: &[(i32, [&str; 3])] = &[\n");
+    for c in lunar.captures_iter(&block("LUNAR")) {
+        writeln!(
+            code,
+            "    ({}, [{:?}, {:?}, {:?}]),",
+            &c[1], &c[2], &c[3], &c[4]
+        )
+        .unwrap();
+    }
+    code.push_str("];\npub const ONE_OFF: &[(&str, &str)] = &[\n");
+    for c in one_off.captures_iter(&block("ONE_OFF")) {
+        writeln!(code, "    ({:?}, {:?}),", &c[1], &c[2]).unwrap();
+    }
+    let year = &from.captures(&text).expect("CONSTITUTION_DAY_FROM")[1];
+    writeln!(code, "];\npub const CONSTITUTION_DAY_FROM: i32 = {year};").unwrap();
+    out("holidays.rs", code);
 }
 
 fn out(name: &str, body: String) {

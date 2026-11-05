@@ -5,7 +5,6 @@
 
 mod assets;
 mod figure;
-mod i18n;
 mod markdown;
 mod note;
 mod theme;
@@ -23,8 +22,8 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
 use crate::assets::icon;
-use crate::i18n::t;
 use crate::theme::Tokens;
+use amber_gpui::i18n::{self, t};
 
 const FIGURE_MAX: f32 = 688.0;
 

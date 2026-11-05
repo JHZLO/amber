@@ -1,7 +1,9 @@
 pub mod blocks;
 pub mod concepts;
+pub mod dates;
 pub mod db;
 pub mod dbconn;
+pub mod i18n;
 pub mod mermaid;
 pub mod migrate;
 pub mod prefs;
@@ -104,6 +106,24 @@ pub const OPS: &[&str] = &[
     "erdStore.deleteErdEntry",
     "vaultTree.writeAtomic",
     "vaultTree.searchFiles",
+    "date.todayStr",
+    "date.shiftDay",
+    "date.addMonths",
+    "date.weekStartOf",
+    "date.weekDays",
+    "date.monthOf",
+    "date.dayRangeMs",
+    "date.monthGridDates",
+    "date.formatDayLong",
+    "date.weekdayShort",
+    "date.formatDayShort",
+    "date.formatMonthTitle",
+    "date.formatYearTitle",
+    "date.monthsShort",
+    "date.weekdaysShort",
+    "holidays.holidaysOfYear",
+    "holidays.holidayOf",
+    "holidays.hasLunarData",
 ];
 
 pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
@@ -286,7 +306,7 @@ fn call_files(db: &Db, op: &str, a: &Args) -> Result<Json, String> {
             let limit = a.0.get(2).and_then(Json::as_u64).unwrap_or(20) as usize;
             json(tree.search(a.s(1)?, limit))
         }
-        _ => Err(format!("모르는 op: {op}")),
+        _ => dates::call(op, a.0, db.now()).unwrap_or_else(|| Err(format!("모르는 op: {op}"))),
     }
 }
 
