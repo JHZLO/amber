@@ -17,6 +17,7 @@ mod note_edit;
 mod note_find;
 mod note_names;
 mod note_page_find;
+mod note_watch;
 mod notes_view;
 mod pane;
 mod root_picker;
@@ -146,6 +147,16 @@ impl Spike {
             let pref = amber_gpui::prefs::get(&this.db, "til.theme");
             theme::apply(pref.as_deref(), window.appearance(), cx);
             cx.notify();
+        })
+        .detach();
+        // 창으로 돌아오면(Finder, 다른 편집기에서 고치고 복귀) 노트 탭일 때 트리와 열린 노트를 맞춘다 —
+        // 파일 이벤트가 주력이고 이건 안전망이다(잠자기나 감시 실패로 이벤트를 놓쳐도 돌아오는 순간 따라잡는다)
+        cx.observe_window_activation(window, |this: &mut Spike, window, cx| {
+            if window.is_window_active() && this.section == Section::Notes {
+                this.reload_notes();
+                this.sync_from_disk(cx);
+                cx.notify();
+            }
         })
         .detach();
         cx.subscribe_in(
@@ -407,6 +418,23 @@ impl Render for Spike {
         let fg = k.text;
         // 창 밖에서 놓으면 GPUI 는 놓기(on_drop)를 건너뛰고 끌기를 취소한다. 지금 앱은 어디서 놓든
         // 놓은 것이다(window 의 mouseup) — 끌기가 끝났는데 상태가 남아 있으면 여기서 마저 놓는다
+        // 노트 탭이면 보관함을 감시한다(작업 폴더가 바뀌면 다시) — 밖에서 고친 노트를 다시 열지 않아도 반영
+        if self.section == Section::Notes {
+            self.watch_notes_root(cx);
+        }
+        // 디스크 내용으로 바꿀 초안 — 입력칸 값은 창이 있어야 바뀐다
+        if let Some(d) = self.notes.pending_draft.take()
+            && let Some(e) = self.notes.edit.as_ref()
+        {
+            let state = e.state.clone();
+            state.update(cx, |s, cx| s.set_value(d.clone(), window, cx));
+            let text = hex(k.text);
+            let (preview, _) = notes_view::build_blocks(&d, &text, cx);
+            if let Some(e) = self.notes.edit.as_mut() {
+                e.preview = preview;
+                e.dirty = false;
+            }
+        }
         if !cx.has_active_drag() {
             if self.row_drag.is_some() {
                 self.drop_row();

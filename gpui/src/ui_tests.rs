@@ -1051,3 +1051,69 @@ fn command_f_in_the_note_finds_rendered_text(cx: &mut TestAppContext) {
     ui.run_until_parked();
     assert!(ui.debug_bounds("page-find-count").is_none());
 }
+
+/// 바깥(다른 편집기)이 고친 것을 감시가 받을 때까지 — FSEvents 는 실제 시간으로 온다
+fn let_watch_fire(ui: &mut VisualTestContext) {
+    for _ in 0..20 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        ui.executor()
+            .advance_clock(std::time::Duration::from_millis(300));
+        ui.run_until_parked();
+    }
+}
+
+fn copied_text(ui: &mut VisualTestContext) -> Option<String> {
+    click(ui, "note-copy");
+    ui.read_from_clipboard().and_then(|c| c.text())
+}
+
+#[gpui_kit::test]
+fn an_outside_edit_reloads_the_open_note(cx: &mut TestAppContext) {
+    let db = seeded("watch-read", &[]);
+    vault_note(&db, "A.md", "# A\n\nold\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-A.md");
+    ui.run_until_parked();
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    vault_note(&db, "A.md", "# A\n\nfrom vim\n");
+    vault_note(&db, "B.md", "# B\n");
+    let_watch_fire(&mut ui);
+    assert_eq!(
+        copied_text(&mut ui).as_deref(),
+        Some("# A\n\nfrom vim\n"),
+        "읽던 노트가 바뀐다"
+    );
+    assert!(ui.debug_bounds("tree-B.md").is_some(), "트리도 다시 읽는다");
+}
+
+#[gpui_kit::test]
+fn an_outside_edit_during_unsaved_edits_asks_first(cx: &mut TestAppContext) {
+    let db = seeded("watch-edit", &[]);
+    vault_note(&db, "A.md", "# A\n");
+    let mut ui = open(cx, &db);
+    edit_note(&mut ui, "tree-A.md", "# mine\n");
+    vault_note(&db, "A.md", "# theirs\n");
+    // 창으로 돌아온 것처럼 맞춘다
+    ui.update(|_, cx| {
+        spike().update(cx, |s, cx| {
+            s.sync_from_disk(cx);
+            cx.notify();
+        })
+    });
+    ui.run_until_parked();
+    assert!(
+        ui.debug_bounds("disk-load").is_some(),
+        "초안을 덮지 않고 묻는다"
+    );
+    click(&mut ui, "disk-load");
+    ui.update(|_, cx| {
+        let d = spike().read(cx).note_draft(cx);
+        assert_eq!(
+            d.as_deref(),
+            Some("# theirs\n"),
+            "새 내용으로 편집을 이어 간다"
+        );
+    });
+    assert!(ui.debug_bounds("note-save").is_some());
+}

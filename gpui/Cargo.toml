@@ -24,6 +24,8 @@ amber-core = { path = "../core" }
 pulldown-cmark = { version = "0.13", default-features = false }
 # 토글 머리의 '안에 든 것'을 센다 — gpui-base 의 마크다운 렌더러가 쓰는 것과 같은 파서(mdast)
 markdown = "=1.0.0"
+# 노트 폴더 감시(FSEvents) — 다른 프로그램이 고친 노트를 다시 열지 않아도 반영한다(lib/noteWatch.ts)
+notify = "=8.2.1"
 resvg = "0.45.1"
 merman = { version = "=0.10.0-alpha.1", features = ["math"] }
 

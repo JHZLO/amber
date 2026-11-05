@@ -203,6 +203,7 @@ dependencies = [
  "icu_locale_core",
  "markdown",
  "merman",
+ "notify",
  "pulldown-cmark",
  "regex",
  "resvg 0.45.1",

@@ -147,6 +147,15 @@ pub struct NotesState {
     pub find: Option<crate::note_find::TreeFindState>,
     /// 노트 안에서 찾기(⌘F, 트리 밖에서)
     pub page_find: Option<crate::note_page_find::PageFindState>,
+    /// 보관함 감시(FSEvents)와 그 세대 — 뿌리가 바뀌면 옛 감시의 일은 버린다
+    pub watcher: Option<notify::RecommendedWatcher>,
+    pub watch_epoch: u64,
+    /// 감시를 건(또는 걸려다 못 건) 뿌리 — 달라지면 다시 건다
+    pub watch_root: Option<String>,
+    /// 저장 안 된 편집 중에 바깥이 고친 내용(배너), '내 것 유지'로 넘긴 내용, 다음 그림에서 넣을 초안
+    pub disk_change: Option<crate::note_watch::DiskChange>,
+    pub dismissed_disk: Option<String>,
+    pub pending_draft: Option<String>,
     /// 작업 폴더 고르기 판이 열렸는가, 트리거 자리
     pub root_menu: bool,
     pub root_anchor: Rc<Cell<Bounds<Pixels>>>,
@@ -310,6 +319,8 @@ impl Spike {
         self.notes.marks.borrow_mut().clear();
         self.notes.toggled.clear();
         self.notes.page_find = None;
+        self.notes.disk_change = None;
+        self.notes.dismissed_disk = None;
         self.scroll.set_offset(point(px(0.), px(0.)));
     }
 
@@ -1069,6 +1080,7 @@ impl Spike {
                 ),
             )
             .child(actions)
+            .children(self.disk_banner(k, cx))
             .child(
                 canvas(move |b, _, _| head_h.set(b.size.height), |_, _, _, _| {})
                     .absolute()
