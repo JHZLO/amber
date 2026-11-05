@@ -907,3 +907,46 @@ fn the_tree_margin_is_the_root_and_a_folder_cannot_go_inside_itself(cx: &mut Tes
     drag(&mut ui, "tree-CS/x.md", point(x, tree.bottom() - px(12.)));
     assert!(vault_has(&db, "x.md") && !vault_has(&db, "CS/x.md"));
 }
+
+#[gpui_kit::test]
+fn the_root_picker_switches_workspace_folders(cx: &mut TestAppContext) {
+    let db = seeded("notes-root", &[]);
+    vault_note(&db, "Inbox.md", "# Inbox\n");
+    // 전에 열었던 작업 폴더(최근 목록에 있다)
+    let ws = db.parent().unwrap().join("work-folder");
+    std::fs::create_dir_all(&ws).unwrap();
+    std::fs::write(ws.join("Ext.md"), "# Ext\n").unwrap();
+    {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        let recents = serde_json::to_string(&[ws.to_str().unwrap()]).unwrap();
+        amber_gpui::prefs::set(&d, "amber.recent-roots.notes", &recents);
+    }
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-Inbox.md");
+    click(&mut ui, "note-edit");
+    ui.simulate_input("dirty ");
+    ui.run_until_parked();
+    // 기본 보관함이면 판에 [최근 폴더, 폴더 열기]
+    click(&mut ui, "root-picker");
+    click(&mut ui, "root-menu-0");
+    assert!(
+        ui.debug_bounds("unsaved-discard").is_some(),
+        "고치던 초안이 있으면 먼저 묻는다"
+    );
+    click(&mut ui, "unsaved-discard");
+    assert!(ui.debug_bounds("tree-Ext.md").is_some(), "고른 폴더의 트리");
+    assert!(ui.debug_bounds("tree-Inbox.md").is_none());
+    // 다른 폴더면 맨 위에 기본 보관함
+    click(&mut ui, "root-picker");
+    click(&mut ui, "root-menu-0");
+    assert!(
+        ui.debug_bounds("tree-Inbox.md").is_some(),
+        "기본 보관함으로 돌아왔다"
+    );
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    assert_eq!(
+        amber_gpui::prefs::get(&d, "amber.root.notes").as_deref(),
+        Some("")
+    );
+}

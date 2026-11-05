@@ -11,9 +11,14 @@ use crate::assets::icon;
 use crate::day_card::Tag;
 use crate::theme::Tokens;
 
+#[derive(Default)]
 pub struct MenuItem {
     pub label: String,
     pub checked: bool,
+    /// 둘째 줄(작은 흐린 글자) — 작업 폴더 고르기의 경로 등
+    pub sub: Option<String>,
+    /// 이 항목 위에 가는 선(.root-menu-divider)
+    pub divider_before: bool,
 }
 
 /// anchor = 트리거의 창 좌표. 트리거를 다시 누른 것은 바깥이 아니다(트리거가 스스로 닫는다)
@@ -46,8 +51,9 @@ pub fn select_menu(
         .rounded(px(6.))
         .border_1()
         .border_color(k.glass_edge)
-        // 판 유리: 바탕을 86% 남기고 그 위에 면 유리
-        .bg(k.surface.opacity(0.86))
+        // 판 유리: 웹은 바탕 86% + 뒤 흐림(blur 20px)이라 뒤의 글이 안 읽힌다. GPUI 엔 뒤 흐림이 없어
+        // 바탕을 96% 로 올려 같은 효과(뒤가 비치되 읽히지는 않게)를 낸다
+        .bg(k.surface.opacity(0.96))
         .shadow(shadow)
         .on_mouse_down_out(move |e: &MouseDownEvent, window, cx| {
             if !anchor.contains(&e.position) {
@@ -61,10 +67,18 @@ pub fn select_menu(
                 .rounded(px(6.))
                 .bg(fill(k.glass_fill)),
         )
-        .children(items.into_iter().enumerate().map(|(i, it)| {
+        .children(items.into_iter().enumerate().flat_map(|(i, it)| {
             let (hover_bg, text) = (fill(k.glass_fill_hover), k.text);
             let pick = on_pick.clone();
-            div()
+            let divider = it.divider_before.then(|| {
+                div()
+                    .h(px(1.))
+                    .mx(px(6.))
+                    .my(px(4.))
+                    .bg(k.border)
+                    .into_any_element()
+            });
+            let row = div()
                 .id(SharedString::from(format!("{id}-{i}")))
                 .tag(format!("{id}-{i}"))
                 .flex()
@@ -87,8 +101,28 @@ pub fn select_menu(
                 .child(div().w(px(14.)).flex_shrink_0().when(it.checked, |d| {
                     d.child(icon("check", 12.).text_color(k.text))
                 }))
-                .child(it.label)
+                .child(match it.sub {
+                    None => div().child(it.label),
+                    Some(sub) => div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(1.))
+                        .min_w_0()
+                        .child(div().font_weight(FontWeight::SEMIBOLD).child(it.label))
+                        .child(
+                            div()
+                                .max_w(px(280.))
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .text_size(px(11.))
+                                .font_weight(FontWeight::NORMAL)
+                                .text_color(k.text_3)
+                                .child(sub),
+                        ),
+                })
                 .on_click(move |_, window, cx| pick(i, window, cx))
+                .into_any_element();
+            divider.into_iter().chain(std::iter::once(row))
         }));
     deferred(
         anchored()

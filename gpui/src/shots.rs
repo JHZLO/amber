@@ -229,6 +229,25 @@ fn notes(s: &mut Shots) {
     s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.notes.names = None;
+            amber_gpui::prefs::set(
+                &sp.db,
+                "amber.recent-roots.notes",
+                "[\"/Users/demo/rust-notes\"]",
+            );
+            sp.notes.root_menu = true;
+            cx.notify();
+        })
+        .unwrap();
+    s.shot("root-menu");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.notes.root_menu = false;
+            cx.notify();
+        })
+        .unwrap();
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.notes.names = None;
             cx.notify();
         })
         .unwrap();

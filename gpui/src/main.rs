@@ -17,6 +17,7 @@ mod note_edit;
 mod note_names;
 mod notes_view;
 mod pane;
+mod root_picker;
 mod row_drag;
 #[cfg(feature = "shots")]
 mod shots;

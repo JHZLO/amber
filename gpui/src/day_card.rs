@@ -469,12 +469,13 @@ impl Spike {
             .map(|kind| MenuItem {
                 label: t(&format!("todos.vac.kind.{kind}")),
                 checked: cur.as_deref() == Some(*kind),
+                ..Default::default()
             })
             .collect();
         if cur.is_some() {
             items.push(MenuItem {
                 label: t("todos.vac.clear"),
-                checked: false,
+                ..Default::default()
             });
         }
         let (pick, close) = (cx.entity().downgrade(), cx.entity().downgrade());

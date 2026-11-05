@@ -140,6 +140,9 @@ pub struct NotesState {
     pub tree_rows: crate::tree_drag::RowBounds,
     pub tree_area: crate::tree_drag::ListBounds,
     pub tree_press: Option<Point<Pixels>>,
+    /// 작업 폴더 고르기 판이 열렸는가, 트리거 자리
+    pub root_menu: bool,
+    pub root_anchor: Rc<Cell<Bounds<Pixels>>>,
     pub width: f32,
     pub copied: bool,
     /// 경로 줄을 눌러 복사한 직후(1.5초 동안 체크 표식)
@@ -464,10 +467,13 @@ impl Spike {
             .pl(px(16.))
             .border_b_1()
             .border_color(k.glass_edge)
-            .child(
-                // .root-picker — 고르기 판은 작업 폴더를 붙일 때(D2)
+            .child({
+                // .root-picker — 누르면 기본 보관함, 최근 폴더, 폴더 열기
+                let anchor = self.notes.root_anchor.clone();
                 div()
                     .id("root-picker")
+                    .tag("root-picker")
+                    .relative()
                     .flex()
                     .items_center()
                     .gap(px(6.))
@@ -489,8 +495,18 @@ impl Spike {
                             .text_ellipsis()
                             .child(self.notes_root_name()),
                     )
-                    .child(icon("chevron-down", 10.).text_color(k.text_3)),
-            )
+                    .child(icon("chevron-down", 10.).text_color(k.text_3))
+                    .child(
+                        canvas(move |b, _, _| anchor.set(b), |_, _, _, _| {})
+                            .absolute()
+                            .inset_0(),
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.notes.root_menu = !this.notes.root_menu;
+                        cx.notify();
+                    }))
+            })
+            .children(self.root_menu(k, cx))
             .child(div().flex_1())
             .child(
                 icon_btn("notes-new-note", "file-plus", 15.).on_click(cx.listener(

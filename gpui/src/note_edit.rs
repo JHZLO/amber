@@ -27,6 +27,8 @@ pub struct NoteEdit {
 pub enum NotePrompt {
     /// 저장 안 한 변경이 있는데 다른 노트를 열려 했다
     Unsaved { target: String },
+    /// 저장 안 한 변경이 있는데 작업 폴더를 바꾸려 했다(None = 기본 보관함)
+    UnsavedRoot { root: Option<String> },
     /// 저장하려는데 디스크가 더 새롭다(그 시각)
     Conflict { disk: i64 },
 }
@@ -232,6 +234,31 @@ impl Spike {
                                 this.notes.prompt = None;
                                 this.notes.edit = None;
                                 this.open_note(&target, cx);
+                                cx.notify();
+                            })),
+                    ],
+                    close,
+                )
+            }
+            NotePrompt::UnsavedRoot { root } => {
+                let root = root.clone();
+                dialog::shell(
+                    k,
+                    440.,
+                    t("common.unsaved.title"),
+                    div().child(t("common.unsaved.body")).into_any_element(),
+                    vec![
+                        button("unsaved-keep", k, false, false)
+                            .child(t("common.unsaved.keep"))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.notes.prompt = None;
+                                cx.notify();
+                            })),
+                        danger_button("unsaved-discard", k)
+                            .child(t("common.unsaved.discard"))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.notes.prompt = None;
+                                this.apply_root(root.clone());
                                 cx.notify();
                             })),
                     ],

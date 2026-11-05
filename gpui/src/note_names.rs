@@ -329,6 +329,7 @@ impl Spike {
                 .map(|d| MenuItem {
                     label: encode_dir(d),
                     checked: *d == m.dir,
+                    ..Default::default()
                 })
                 .collect();
             let (pick, close) = (cx.entity().downgrade(), cx.entity().downgrade());
