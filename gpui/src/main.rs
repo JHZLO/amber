@@ -14,6 +14,7 @@ mod highlight;
 mod markdown;
 mod menu;
 mod note;
+mod note_comments;
 mod note_edit;
 mod note_find;
 mod note_names;
@@ -436,6 +437,8 @@ impl Render for Spike {
                 e.dirty = false;
             }
         }
+        // 질문/후속 입력칸 — 창이 있어야 만들어진다
+        self.apply_cmt_rebuild(window, cx);
         if !cx.has_active_drag() {
             if self.row_drag.is_some() {
                 self.drop_row();
@@ -534,6 +537,11 @@ impl Render for Spike {
                     }),
                     name.clone(),
                 ),
+                day_card::Confirm::Comment { name, .. } => (
+                    t("notes.cmt.deleteTitle"),
+                    i18n::t_with("notes.cmt.deleteConfirm", &[("name", "{name}")]),
+                    name.clone(),
+                ),
                 day_card::Confirm::Block { name, .. } => (
                     t("todos.tt.deleteBlockTitle"),
                     i18n::t_with("todos.tt.deleteBlockConfirm", &[("name", "{name}")]),
@@ -550,7 +558,7 @@ impl Render for Spike {
                     cx.notify();
                 }),
                 cx.listener(|this, _, _, cx| {
-                    this.confirmed();
+                    this.confirmed(cx);
                     cx.notify();
                 }),
             )
@@ -657,6 +665,7 @@ impl Render for Spike {
             )
             .children(self.drop_line(&k))
             .children(self.tree_drag_ghost(&k))
+            .children(self.comment_fab(&k, cx))
             .children(self.name_modal_view(&k, window, cx))
             .children(self.note_prompt(&k, cx))
             .children(confirm)

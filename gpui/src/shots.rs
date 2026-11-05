@@ -47,6 +47,26 @@ against the Rust one. See [the steps](#2).\n\n> [!NOTE]\n> Fixtures live in `par
 ```mermaid\nflowchart LR\n  TS[TS engine] --> F[(fixtures)]\n  F --> RS[Rust engine]\n```\n",
     )
     .unwrap();
+    // 인라인 질문 둘 — 하나는 이어 물은 스레드
+    let now = chrono::Local::now().timestamp_millis();
+    std::fs::write(
+        notes.join("Engineering/Parity harness.comments.json"),
+        serde_json::to_string_pretty(&serde_json::json!({ "version": 1, "comments": [
+            { "id": "c1", "anchor": "records every step", "occurrence": 0,
+              "question": "Does it record the DB too?",
+              "answer": "Yes. Each step stores the return value **and** the DB diff, so a replay compares both.",
+              "createdAt": now - 2 * 3_600_000, "model": "sonnet" },
+            { "id": "c2", "anchor": "Replay with", "occurrence": 0,
+              "question": "What engine runs on replay?",
+              "answer": "The Rust engine, through `AMBER_PARITY_ENGINE`.",
+              "createdAt": now - 26 * 3_600_000, "model": "sonnet",
+              "followUps": [{ "question": "And without it?",
+                "answer": "The reference engine replays the fixtures, so the harness checks itself.",
+                "createdAt": now - 25 * 3_600_000, "model": "sonnet" }] }
+        ]}))
+        .unwrap(),
+    )
+    .unwrap();
     let db = Db::open(db_path.to_str().unwrap(), Clock::System).unwrap();
     amber_gpui::migrate::run(&db).unwrap();
     // 묶음 하나(하위 셋) + 낱개 셋
@@ -191,6 +211,7 @@ pub fn run(dir: &str) {
         Modifiers::none(),
     );
     notes(&mut s);
+    comments(&mut s);
     for (name, level) in [
         ("cal-month", crate::calendar::Level::Month),
         ("cal-year", crate::calendar::Level::Year),
@@ -356,6 +377,84 @@ fn notes(s: &mut Shots) {
         })
         .unwrap();
     s.shot("notes-empty");
+}
+
+/// 인라인 질문 — 형광펜과 '질문 N', 목록, 이어 물은 스레드, 드래그 뒤 [질문] 버튼, 질문 패널
+fn comments(s: &mut Shots) {
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.open_note("Engineering/Parity harness.md", cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.mouse(point(px(1300.), px(880.)), false);
+    s.shot("cmt-marks");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.notes.cmts.list_open = true;
+            cx.notify();
+        })
+        .unwrap();
+    s.shot("cmt-list");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.open_thread("c2".into(), true, cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.shot("cmt-thread");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.close_pop(cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.cx.run_until_parked();
+    // [질문] 버튼 — 오프스크린 창에선 끌기 선택이 그려지지 않는다(선택 흐름은 ui_tests 가 실제 끌기로 본다).
+    // 그래서 놓은 자리와 앵커만 둔다
+    let b = s
+        .window
+        .update(&mut s.cx, |sp, _, _| {
+            sp.notes.marks.borrow().get(&0).copied()
+        })
+        .unwrap()
+        .expect("첫 덩어리");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.notes.cmts.sel = Some(crate::note_comments::Sel {
+                anchor: "replays it against the Rust one".into(),
+                occurrence: 0,
+                at: point(b.left() + px(560.), b.top() + px(68.)),
+            });
+            cx.notify();
+        })
+        .unwrap();
+    s.shot("cmt-fab");
+    let fab = s
+        .window
+        .update(&mut s.cx, |sp, _, _| sp.notes.cmts.sel.clone())
+        .unwrap();
+    if let Some(sel) = fab {
+        s.window
+            .update(&mut s.cx, |sp, _, cx| {
+                sp.open_pop(
+                    crate::note_comments::Pop::Ask {
+                        anchor: sel.anchor,
+                        occurrence: sel.occurrence,
+                    },
+                    cx,
+                );
+                cx.notify();
+            })
+            .unwrap();
+        s.shot("cmt-ask");
+    }
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.close_pop(cx);
+            cx.notify();
+        })
+        .unwrap();
 }
 
 /// 휴가 고르기 판 — 트리거 아래 유리 판, 첫 항목에 손을 올린 채

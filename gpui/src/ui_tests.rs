@@ -1117,3 +1117,212 @@ fn an_outside_edit_during_unsaved_edits_asks_first(cx: &mut TestAppContext) {
     });
     assert!(ui.debug_bounds("note-save").is_some());
 }
+
+/// 사이드카(<이름>.comments.json)를 노트 옆에 깐다
+fn vault_sidecar(db: &PathBuf, rel: &str, json: &str) {
+    let note = db.parent().unwrap().join("vault/notes").join(rel);
+    let path = note.with_file_name(format!(
+        "{}.comments.json",
+        note.file_stem().unwrap().to_str().unwrap()
+    ));
+    std::fs::write(path, json).unwrap();
+}
+
+fn sidecar_ids(db: &PathBuf, rel: &str) -> Vec<String> {
+    let note = db.parent().unwrap().join("vault/notes").join(rel);
+    let path = note.with_file_name(format!(
+        "{}.comments.json",
+        note.file_stem().unwrap().to_str().unwrap()
+    ));
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    let d: serde_json::Value = serde_json::from_str(&text).unwrap();
+    d["comments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["id"].as_str().unwrap().to_string())
+        .collect()
+}
+
+#[gpui_kit::test]
+fn note_questions_list_in_text_order_and_open_threads(cx: &mut TestAppContext) {
+    let db = seeded("cmt-list", &[]);
+    vault_note(&db, "Q.md", "# Q\n\nalpha beta gamma\n\nbeta again\n");
+    vault_sidecar(
+        &db,
+        "Q.md",
+        r#"{"version":1,"comments":[
+  {"id":"c1","anchor":"beta","occurrence":1,"question":"second beta?","answer":"yes","createdAt":3},
+  {"id":"c2","anchor":"not in the text","occurrence":0,"question":"lost?","answer":"gone","createdAt":1},
+  {"id":"c3","anchor":"alpha","occurrence":0,"question":"why alpha?","answer":"**first**","createdAt":2,
+   "followUps":[{"question":"more?","answer":"more","createdAt":4}]}
+]}"#,
+    );
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-Q.md");
+    ui.update(|_, cx| {
+        let c = &spike().read(cx).notes.cmts;
+        assert_eq!(c.list.len(), 3);
+        assert!(c.at.contains_key("c1") && c.at.contains_key("c3"));
+        assert!(!c.at.contains_key("c2"), "본문에 없는 앵커");
+        // 두 번째 beta = 'beta again' 의 것(앞 덩어리의 beta 보다 뒤)
+        assert!(c.at["c1"].2 > c.at["c3"].2);
+    });
+    ui.update(|_, cx| {
+        // 형광펜 범위가 그 덩어리의 그려진 글자에서 'beta again' 의 beta 를 가리킨다
+        let s = spike().read(cx);
+        let (bi, r, _) = s.notes.cmts.at["c1"].clone();
+        let crate::notes_view::Block::Text(state) = &s.notes.blocks[bi] else {
+            panic!("글 덩어리")
+        };
+        let text = state.read(cx).rendered_text();
+        assert_eq!(&text.as_str()[r.clone()], "beta");
+        assert!(text.as_str()[r.start..].starts_with("beta again"));
+    });
+    click(&mut ui, "cmt-trigger");
+    // 본문 등장 순서: alpha(c3), beta again(c1), 사라진 것(c2)은 끝
+    let y = |ui: &mut VisualTestContext, n: &'static str| bounds(ui, n).origin.y;
+    let (y3, y1, y2) = (
+        y(&mut ui, "cmt-open-c3"),
+        y(&mut ui, "cmt-open-c1"),
+        y(&mut ui, "cmt-open-c2"),
+    );
+    assert!(y3 < y1 && y1 < y2, "{y3:?} {y1:?} {y2:?}");
+    click(&mut ui, "cmt-open-c3");
+    assert!(ui.debug_bounds("cmt-thread").is_some());
+    assert!(ui.debug_bounds("cmt-back").is_some(), "목록에서 왔다");
+    ui.update(|_, cx| {
+        let c = &spike().read(cx).notes.cmts;
+        assert_eq!(
+            c.pop,
+            Some(crate::note_comments::Pop::View {
+                id: "c3".into(),
+                from_list: true
+            })
+        );
+        assert!(c.input.is_some(), "이어 묻기 입력칸");
+    });
+    click(&mut ui, "cmt-back");
+    assert!(ui.debug_bounds("cmt-open-c1").is_some(), "다시 목록");
+    // 스레드에서 지운다 — 확인 뒤 사이드카에서 빠진다
+    click(&mut ui, "cmt-open-c1");
+    click(&mut ui, "cmt-delete");
+    assert_eq!(sidecar_ids(&db, "Q.md").len(), 3, "확인 전엔 그대로");
+    click(&mut ui, "confirm-delete");
+    assert_eq!(sidecar_ids(&db, "Q.md"), vec!["c2", "c3"]);
+    assert!(
+        ui.debug_bounds("cmt-thread").is_none(),
+        "지운 스레드는 닫힌다"
+    );
+    assert!(ui.debug_bounds("cmt-trigger").is_some());
+}
+
+/// 가짜 claude — 받은 입력을 옆 파일에 남기고 정해진 답을 봉투로 낸다
+fn fake_claude(dir: &std::path::Path, answer: &str) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let bin = dir.join("fake-claude");
+    let log = dir.join("fake-claude.in");
+    std::fs::write(
+        &bin,
+        format!(
+            "#!/bin/sh\ncat >> '{}'\nprintf '%s' '{{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"{answer}\",\"session_id\":\"s\"}}'\n",
+            log.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+    bin
+}
+
+/// AI 는 진짜 스레드(tokio)에서 돈다 — 답이 올 때까지 실제 시간을 기다린다
+fn wait_answer(ui: &mut VisualTestContext) {
+    for _ in 0..50 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        ui.executor()
+            .advance_clock(std::time::Duration::from_millis(100));
+        ui.run_until_parked();
+        if ui.update(|_, cx| spike().read(cx).notes.cmts.asking.is_none()) {
+            return;
+        }
+    }
+    panic!("답이 오지 않았다");
+}
+
+#[gpui_kit::test]
+fn dragging_over_text_asks_ai_and_keeps_the_thread(cx: &mut TestAppContext) {
+    let db = seeded("cmt-ask", &[]);
+    vault_note(
+        &db,
+        "A.md",
+        "# A\n\nThe quick brown fox jumps over the lazy dog\n",
+    );
+    let dir = db.parent().unwrap().to_path_buf();
+    let bin = fake_claude(&dir, "Because it is quick.");
+    {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        amber_gpui::ai_config::connect_provider(&d, "claude", bin.to_str().unwrap(), None).unwrap();
+    }
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-A.md");
+    // 첫 덩어리(제목 + 문단)의 문단 줄을 왼쪽에서 가운데까지 끈다
+    let b = bounds(&mut ui, "note-block-0");
+    let y = b.origin.y + b.size.height - px(14.);
+    let from = point(b.origin.x + px(2.), y);
+    let to = point(b.origin.x + px(120.), y);
+    drag_points(&mut ui, from, to, Modifiers::none());
+    let sel = ui.update(|_, cx| spike().read(cx).notes.cmts.sel.clone());
+    let sel = sel.expect("선택하면 [질문] 버튼");
+    assert!(
+        "The quick brown fox jumps over the lazy dog".starts_with(&sel.anchor),
+        "앵커는 그려진 글자: {:?}",
+        sel.anchor
+    );
+    assert_eq!(sel.occurrence, 0);
+    click(&mut ui, "cmt-fab");
+    assert!(ui.debug_bounds("cmt-submit").is_some(), "질문 패널");
+    ui.simulate_input("why quick?");
+    ui.simulate_keystrokes("enter");
+    ui.run_until_parked();
+    wait_answer(&mut ui);
+    ui.update(|_, cx| {
+        let c = &spike().read(cx).notes.cmts;
+        assert_eq!(c.error, None);
+        assert_eq!(c.list.len(), 1);
+        assert_eq!(c.list[0]["answer"], "Because it is quick.");
+        assert_eq!(c.list[0]["question"], "why quick?");
+        assert_eq!(c.list[0]["anchor"].as_str(), Some(sel.anchor.as_str()));
+        assert!(
+            matches!(
+                &c.pop,
+                Some(crate::note_comments::Pop::View {
+                    from_list: false,
+                    ..
+                })
+            ),
+            "답이 오면 그 스레드"
+        );
+        assert!(
+            c.at.contains_key(c.list[0]["id"].as_str().unwrap()),
+            "형광펜"
+        );
+    });
+    assert_eq!(sidecar_ids(&db, "A.md").len(), 1, "사이드카에 남는다");
+    // 이어 묻기 — 이전 문답을 문맥으로 싣는다
+    ui.simulate_input("and lazy?");
+    ui.simulate_keystrokes("enter");
+    ui.run_until_parked();
+    wait_answer(&mut ui);
+    let sent = std::fs::read_to_string(dir.join("fake-claude.in")).unwrap();
+    assert!(
+        sent.contains("[이전 문답]\nQ: why quick?\nA: Because it is quick."),
+        "{sent}"
+    );
+    ui.update(|_, cx| {
+        let c = &spike().read(cx).notes.cmts;
+        assert_eq!(c.list[0]["followUps"][0]["question"], "and lazy?");
+    });
+}

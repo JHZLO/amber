@@ -168,6 +168,8 @@ pub struct NotesState {
     /// 그린 뒤 잰 자리 — 덩어리마다(창 좌표), 머리(경로 줄 ~ 동작 줄) 높이
     pub marks: Rc<RefCell<HashMap<usize, Bounds<Pixels>>>>,
     pub head_h: Rc<Cell<Pixels>>,
+    /// 인라인 질문(사이드카) — note_comments.rs
+    pub cmts: crate::note_comments::Cmts,
 }
 
 /// 본문 판의 위 여백(.detail padding-top)
@@ -271,6 +273,7 @@ impl Spike {
 
     pub(crate) fn open_note(&mut self, rel: &str, cx: &mut Context<Self>) {
         let n = &mut self.notes;
+        let same = n.selected.as_deref() == Some(rel);
         n.selected = Some(rel.to_string());
         n.copied = false;
         let dir = vault::parent_of(rel).to_string();
@@ -322,6 +325,7 @@ impl Spike {
         self.notes.disk_change = None;
         self.notes.dismissed_disk = None;
         self.scroll.set_offset(point(px(0.), px(0.)));
+        self.load_note_comments(rel, same, cx);
     }
 
     fn toggle_dir(&mut self, path: &str) {
@@ -489,6 +493,7 @@ impl Spike {
                     .child(
                         card(div().relative().size_full().overflow_hidden())
                             .child(self.note_detail(body_w + 68. > TOC_MIN_WINDOW, k, cx))
+                            .children(self.comment_layer(k, cx))
                             .children(self.page_find_bar(k, cx)),
                     ),
             )
@@ -1088,6 +1093,17 @@ impl Spike {
             )
             .relative();
         let on_link = self.on_link(cx);
+        // 드래그로 고른 글에 [질문] 버튼 — 놓을 때 선택을 읽는다(글자 선택은 TextView 가 먼저 끝낸다)
+        let press = cx.listener(|this, _: &MouseDownEvent, _, cx| {
+            if this.notes.cmts.sel.is_some() {
+                this.note_mouse_down();
+                cx.notify();
+            }
+        });
+        let release = cx.listener(|this, e: &MouseUpEvent, _, cx| {
+            this.note_mouse_up(e.position, cx);
+            cx.notify();
+        });
         let body = self.notes.blocks.iter().enumerate().map(|(i, b)| {
             let el = self.note_block(b, i as u64, &on_link, k, cx);
             // 덩어리마다 자리를 잰다 — 절 이동, 목차, 스크롤 스파이가 쓴다
@@ -1118,6 +1134,8 @@ impl Spike {
             .flex_col()
             // 목차가 있으면 본문은 720px 까지(넓은 창에서 줄이 너무 길어지지 않게)
             .when(wide, |d| d.max_w(px(720.)))
+            .on_mouse_down(MouseButton::Left, press)
+            .on_mouse_up(MouseButton::Left, release)
             .children(body);
         let meta = {
             let mut line = format!("{}/{rel}", self.notes_root_name());

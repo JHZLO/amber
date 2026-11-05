@@ -52,6 +52,11 @@ pub(crate) enum Confirm {
         name: String,
         is_dir: bool,
     },
+    /// 노트의 질문 스레드 — 사이드카에서 지운다(이어 물은 것까지)
+    Comment {
+        id: String,
+        name: String,
+    },
     /// 타임테이블 블록
     Block {
         id: i64,
@@ -1086,7 +1091,7 @@ impl Spike {
     }
 
     /// 확인 창에서 '삭제'를 눌렀다
-    pub(crate) fn confirmed(&mut self) {
+    pub(crate) fn confirmed(&mut self, cx: &mut Context<Self>) {
         let r = match self.confirm.take() {
             Some(Confirm::Delete { id, parent, .. }) => {
                 amber_gpui::todos::delete_todo(&self.db, id)
@@ -1104,6 +1109,10 @@ impl Spike {
                 let r = amber_gpui::blocks::delete_block(&self.db, id);
                 self.reload_blocks();
                 r
+            }
+            Some(Confirm::Comment { id, .. }) => {
+                self.delete_thread(&id, cx);
+                Ok(())
             }
             None => Ok(()),
         };

@@ -4,10 +4,12 @@
 
 use std::future::Future;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use amber_core::ai::AiError;
 use amber_gpui::i18n::{t, t_with};
 use futures::channel::oneshot;
+use gpui_kit::BackgroundExecutor;
 
 fn runtime() -> &'static tokio::runtime::Runtime {
     static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
@@ -21,13 +23,27 @@ fn runtime() -> &'static tokio::runtime::Runtime {
     })
 }
 
-/// tokio 위에서 돌리고 결과를 받을 수신기 — GPUI 작업에서 await 한다
-pub fn spawn<T: Send + 'static>(fut: impl Future<Output = T> + Send + 'static) -> oneshot::Receiver<T> {
+/// tokio 위에서 돌리고 결과를 받을 수신기 — GPUI 작업에서 [`wait`] 로 기다린다
+pub fn spawn<T: Send + 'static>(
+    fut: impl Future<Output = T> + Send + 'static,
+) -> oneshot::Receiver<T> {
     let (tx, rx) = oneshot::channel();
     runtime().spawn(async move {
         let _ = tx.send(fut.await);
     });
     rx
+}
+
+/// 결과를 기다린다 — tokio 스레드가 화면 작업을 직접 깨우게 두지 않고, 화면 실행기의 타이머로 들여다본다.
+/// 시험 실행기는 다른 스레드의 깨우기를 받지 않는다. 답은 초 단위라 50ms 간격이면 충분하다. None = 버려졌다
+pub async fn wait<T>(mut rx: oneshot::Receiver<T>, ex: BackgroundExecutor) -> Option<T> {
+    loop {
+        match rx.try_recv() {
+            Ok(Some(v)) => return Some(v),
+            Ok(None) => ex.timer(Duration::from_millis(50)).await,
+            Err(_) => return None,
+        }
+    }
 }
 
 /// 코드 → 사전 키(lib/errors.ts 의 CODE_KEY). 새 코드를 만들면 여기에 같이 더한다
@@ -84,7 +100,11 @@ const CODE_KEY: &[(&str, &str)] = &[
 /// errText — 코드가 있으면 번역, 미등록 코드는 Rust 의 폴백 문구(비면 코드)
 pub fn err_text(e: &AiError) -> String {
     let Some((_, key)) = CODE_KEY.iter().find(|(c, _)| *c == e.code) else {
-        return if e.message.is_empty() { e.code.clone() } else { e.message.clone() };
+        return if e.message.is_empty() {
+            e.code.clone()
+        } else {
+            e.message.clone()
+        };
     };
     let text = t_with(key, &[("detail", e.detail.as_deref().unwrap_or(""))]);
     // detail 이 없는데 문구가 "… — " 로 끝나면 매달린 대시를 떼어 낸다
@@ -94,5 +114,9 @@ pub fn err_text(e: &AiError) -> String {
         .or_else(|| trimmed.strip_suffix('-'))
         .map(str::trim_end)
         .unwrap_or(trimmed);
-    if trimmed.is_empty() { t(key) } else { trimmed.to_string() }
+    if trimmed.is_empty() {
+        t(key)
+    } else {
+        trimmed.to_string()
+    }
 }

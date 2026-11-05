@@ -6,7 +6,6 @@
 use std::ops::Range;
 
 use amber_gpui::i18n::t;
-use gpui_kit::base::text::RangeHighlight;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
@@ -99,11 +98,8 @@ impl Spike {
 
     pub(crate) fn close_page_find(&mut self, cx: &mut Context<Self>) {
         self.notes.page_find = None;
-        for b in &self.notes.blocks {
-            if let Block::Text(state) = b {
-                state.update(cx, |s, cx| s.clear_range_highlights(cx));
-            }
-        }
+        // 질문 형광펜은 남긴다
+        self.repaint_marks(cx);
     }
 
     fn page_find_step(&mut self, delta: i64, cx: &mut Context<Self>) {
@@ -117,16 +113,31 @@ impl Spike {
         self.paint_page_find(cx);
     }
 
-    /// 덩어리마다 다시 찾고 칠한다. 지금 것은 그 줄로 굴린다
+    /// 덩어리마다 다시 찾아 칠한다(질문 형광펜과 한 번에). 지금 것은 그 줄로 굴린다
     pub(crate) fn paint_page_find(&mut self, cx: &mut Context<Self>) {
+        self.repaint_marks(cx);
         let Some(f) = self.notes.page_find.as_ref() else {
             return;
         };
-        let query = f.query.clone();
-        let idx = f.idx;
-        let dark = crate::theme::Tokens::get(cx).dark;
-        // 질문 형광펜과 구분되는 색 — 맞은 것은 회색, 지금 것은 노랑(styles.css 의 ::highlight(page-find))
-        let (hit, cur) = if dark {
+        if let Some((bi, r)) = f.hits.get(f.idx).cloned()
+            && let Some(Block::Text(state)) = self.notes.blocks.get(bi)
+        {
+            state.update(cx, |s, cx| {
+                let _ = s.reveal_range(r, cx);
+            });
+        }
+    }
+
+    /// 찾기의 칠 — 맞은 것은 회색, 지금 것은 노랑(styles.css 의 ::highlight(page-find)). 맞은 목록도 새로 단다
+    pub(crate) fn page_find_marks(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Vec<(usize, Range<usize>, Hsla)> {
+        let Some(f) = self.notes.page_find.as_ref() else {
+            return Vec::new();
+        };
+        let (query, idx) = (f.query.clone(), f.idx);
+        let (hit, cur) = if Tokens::get(cx).dark {
             (
                 hsla(240. / 360., 0.09, 0.66, 0.3),
                 hsla(43. / 360., 0.96, 0.40, 0.62),
@@ -138,40 +149,27 @@ impl Spike {
             )
         };
         let mut hits = Vec::new();
-        let mut n = 0usize;
         for (bi, b) in self.notes.blocks.iter().enumerate() {
             let Block::Text(state) = b else {
                 continue;
             };
             let text = state.read(cx).rendered_text();
-            let ranges = find_in_text(
-                text.as_str(),
-                &query,
-                FIND_LIMIT - hits.len().min(FIND_LIMIT),
+            let left = FIND_LIMIT - hits.len().min(FIND_LIMIT);
+            hits.extend(
+                find_in_text(text.as_str(), &query, left)
+                    .into_iter()
+                    .map(|r| (bi, r)),
             );
-            let marks: Vec<RangeHighlight> = ranges
-                .iter()
-                .map(|r| {
-                    let me = n == idx;
-                    n += 1;
-                    RangeHighlight::new(r.clone(), if me { cur } else { hit })
-                })
-                .collect();
-            hits.extend(ranges.into_iter().map(|r| (bi, r)));
-            state.update(cx, |s, cx| {
-                let _ = s.set_range_highlights(marks, cx);
-            });
         }
-        if let Some((bi, r)) = hits.get(idx).cloned()
-            && let Some(Block::Text(state)) = self.notes.blocks.get(bi)
-        {
-            state.update(cx, |s, cx| {
-                let _ = s.reveal_range(r, cx);
-            });
-        }
+        let marks = hits
+            .iter()
+            .enumerate()
+            .map(|(n, (bi, r))| (*bi, r.clone(), if n == idx { cur } else { hit }))
+            .collect();
         if let Some(f) = self.notes.page_find.as_mut() {
             f.hits = hits;
         }
+        marks
     }
 
     /// TextView 가 그 줄을 보여 달라고 했다 — 판 밖이면 판 위에서 3분의 1 자리로 굴린다
