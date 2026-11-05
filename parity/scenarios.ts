@@ -908,6 +908,50 @@ const todoTrees: Scenario = {
   },
 };
 
+/** 타임테이블 배치 — 포함(들여쓰기), 교차(칸 나누기), 같은 범위, 칸이 모자라 얹히는 경우, 만드는 중 블록 */
+const timetable: Scenario = {
+  name: "timetable/layout",
+  plan(ctx) {
+    const block = (id: number, start: number, end: number) => ({
+      id, date: "2026-11-05", start_min: start, end_min: end, title: `b${id}`, todo_id: null, created_at: 0, updated_at: 0,
+    });
+    const root = { pctL: 0, pxL: 0, pctW: 100, pxW: -12 };
+    const steps: Step[] = [
+      s("timeBlocks.nowMinute"),
+      s("ttLayout.boxLeft", { pctL: 33.333333333, pxL: -0, pctW: 0, pxW: 0 }),
+      s("ttLayout.boxLeft", { pctL: 12.5, pxL: -14.00004, pctW: 0, pxW: 0 }),
+      s("ttLayout.boxWidth", { pctL: 0, pxL: 0, pctW: 33.33335, pxW: 2 }),
+      s("ttLayout.boxWidth", { pctL: 0, pxL: 0, pctW: 50, pxW: -12 }, 0),
+      s("ttLayout.layoutColumn", [], root, 300),
+      s("ttLayout.layoutColumn", [block(1, 540, 1080), block(2, 600, 660), block(3, 630, 720), block(4, 600, 660)], root, 320),
+      s("ttLayout.withGhost", [block(1, 540, 600)], null),
+      s("ttLayout.withGhost", [block(1, 540, 600)], { id: null, date: "2026-11-05", start: 550, end: 610 }),
+      s("ttLayout.withGhost", [block(1, 540, 600), block(2, 700, 760)], { id: 2, date: "2026-11-06", start: 500, end: 520 }),
+    ];
+    for (let f = 0; f < 60; f++) {
+      const n = 1 + Math.floor(ctx.rng() * 12);
+      const blocks = Array.from({ length: n }, (_, i) => {
+        const start = Math.floor(ctx.rng() * 48) * 15 + 480;
+        const len = (1 + Math.floor(ctx.rng() * (ctx.rng() < 0.2 ? 40 : 8))) * 15;
+        return block(i + 1 + (f % 2) * 50, start, Math.min(1440, start + len));
+      });
+      if (ctx.rng() < 0.3 && n > 1) blocks.push({ ...blocks[0], id: 900 + f }); // 같은 범위
+      const gridW = [120, 180, 260, 340, 520, 900][Math.floor(ctx.rng() * 6)];
+      const box = ctx.rng() < 0.5 ? root : { pctL: 14.285714, pxL: 3, pctW: 14.285714, pxW: -15 };
+      steps.push(s("ttLayout.layoutColumn", blocks, box, gridW));
+      const ghost =
+        ctx.rng() < 0.5
+          ? { id: null, date: "2026-11-05", start: 600, end: 690 }
+          : { id: blocks[0].id, date: "2026-11-05", start: 660, end: 780 };
+      steps.push(s("ttLayout.withGhost", blocks, ghost));
+      steps.push(after("ttLayout.layoutColumn", (bl) => [bl, root, gridW]));
+      steps.push(s("timeBlocks.findFreeSlot", blocks, Math.floor(ctx.rng() * 96) * 15, (1 + Math.floor(ctx.rng() * 8)) * 15));
+      steps.push(s("timeBlocks.findFreeSlot", blocks, 1430, 60));
+    }
+    return steps;
+  },
+};
+
 /** 노트 트리에서 아무 일이나 한다 — 없는 경로, 겹치는 이름, 대소문자만 다른 이름이 섞인다 */
 function notesWalk(seed: number, length: number): Scenario["walk"] {
   const NAMES = ["노트", "Note", "note", "가/나", "CS", "테스트 노트", "a b"];
@@ -957,6 +1001,7 @@ export const SCENARIOS: Scenario[] = [
   diagramsFiles,
   dates,
   todoTrees,
+  timetable,
   conceptNotes,
   erdFiles,
   ...Array.from({ length: 4 }, (_, i) => ({

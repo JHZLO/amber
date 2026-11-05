@@ -18,6 +18,7 @@ import * as report from "../src/lib/report";
 import * as timeBlocks from "../src/lib/timeBlocks";
 import * as todos from "../src/lib/todos";
 import * as todoTree from "../src/lib/todoTree";
+import * as ttLayout from "../src/lib/ttLayout";
 import * as vacations from "../src/lib/vacations";
 import * as vault from "../src/lib/vault";
 import * as vaultTree from "../src/lib/vaultTree";
@@ -43,6 +44,7 @@ export const MODULES = [
   "date",
   "holidays",
   "todoTree",
+  "ttLayout",
 ] as const;
 
 export const OPS: Record<string, Op> = {
@@ -191,6 +193,14 @@ export const OPS: Record<string, Op> = {
     invalidParents?: number[],
   ) => todoTree.resolveDrop(nodes, candidates, draggedId, slot, invalidParents ? new Set(invalidParents) : undefined),
   "todoTree.dayProgress": todoTree.dayProgress,
+
+  // 타임테이블 — 겹친 블록의 칸 나누기와 들여쓰기, CSS 위치 문자열, 빈 자리 찾기
+  "ttLayout.withGhost": ttLayout.withGhost,
+  "ttLayout.boxLeft": ttLayout.boxLeft,
+  "ttLayout.boxWidth": ttLayout.boxWidth,
+  "ttLayout.layoutColumn": ttLayout.layoutColumn,
+  "timeBlocks.nowMinute": timeBlocks.nowMinute,
+  "timeBlocks.findFreeSlot": timeBlocks.findFreeSlot,
 };
 
 const FILES_AND_RUST = "파일이나 Rust 명령을 함께 건드린다";
@@ -244,8 +254,6 @@ export const PURE = new Set([
   "dbconn.connStatusLabel",
   "dbconn.connStatusDot",
   "dbconn.folderNameFor",
-  "timeBlocks.nowMinute",
-  "timeBlocks.findFreeSlot",
   "vacations.isVacationKind",
   "vacations.vacationLabel",
   "notes.noteDirPath",
