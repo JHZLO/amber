@@ -583,6 +583,62 @@ fn note_ai(s: &mut Shots) {
     s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.dismiss_note_ai(path);
+            sp.open_span_modal(crate::note_span_ai::SpanMode::Section, None, cx);
+            if let Some(m) = sp.notes.span_modal.as_mut() {
+                m.picked = vec![1];
+            }
+            cx.notify();
+        })
+        .unwrap();
+    s.shot("span-pick");
+    let sections = amber_gpui::note_ai_text::split_sections(&body);
+    let sec = sections[1].clone();
+    let span = crate::note_ai::Span {
+        section: true,
+        start: sec.start,
+        end: sec.end,
+        label: sec.title.clone(),
+    };
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            if let Some(m) = sp.notes.span_modal.as_mut() {
+                m.picking = false;
+                m.runs = vec![span.clone()];
+                m.seed = Some("Explain what each command checks.".into());
+            }
+            cx.notify();
+        })
+        .unwrap();
+    s.shot("span-prompt");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            let p = crate::note_ai::StartSpan {
+                path: path.into(),
+                title: "Parity harness".into(),
+                markdown: body.clone(),
+                spans: vec![span.clone()],
+                instruction: "x".into(),
+                ref_dirs: vec![],
+            };
+            let seq = sp.notes.ai.begin_span(&p, "s1", now - 20_000).unwrap();
+            sp.notes.ai.finish_ok(
+                path,
+                seq,
+                Outcome::Span {
+                    texts: vec!["## 2. Steps\n\n- Record with `pnpm parity:record` (writes every step)\n- Replay with `pnpm parity` (compares the Rust engine)".into()],
+                    truncated: false,
+                },
+                now - 5_000,
+            );
+            cx.notify();
+        })
+        .unwrap();
+    s.cx.run_until_parked();
+    s.shot("span-review");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.notes.span_modal = None;
+            sp.dismiss_note_ai(path);
             cx.notify();
         })
         .unwrap();

@@ -20,6 +20,8 @@ pub struct NoteEdit {
     pub state: Entity<TextareaState>,
     pub preview: Vec<Block>,
     pub dirty: bool,
+    /// 원문 칸에 고른 구간이 있나 — '선택 수정' 단추가 켜진다(바뀔 때만 다시 그린다)
+    pub has_sel: bool,
     /// 미리보기를 늦춰 그리는 작업 — 새 글자가 오면 버리고 다시 건다
     debounce: Option<Task<()>>,
 }
@@ -61,6 +63,17 @@ impl Spike {
             }
         })
         .detach();
+        // 고른 구간이 생기거나 사라질 때만 판을 다시 그린다(커서가 움직일 때마다가 아니라)
+        cx.observe(&state, |this, state, cx| {
+            let has = !state.read(cx).selected_range().is_empty();
+            if let Some(e) = this.notes.edit.as_mut()
+                && e.has_sel != has
+            {
+                e.has_sel = has;
+                cx.notify();
+            }
+        })
+        .detach();
         state.update(cx, |s, cx| s.focus(window, cx));
         let text = hex(Tokens::get(cx).text);
         let (preview, _) = crate::notes_view::build_blocks(&body, &text, cx);
@@ -68,6 +81,7 @@ impl Spike {
             state,
             preview,
             dirty: false,
+            has_sel: false,
             debounce: None,
         });
     }
@@ -210,7 +224,24 @@ impl Spike {
             } else {
                 off("note-ai", "sparkles", t("notes.aiWrite"))
             })
-            .child(off("note-span-ai", "scissors", t("notes.spanAi.selBtn")))
+            // 고른 구간만 고쳐 쓴다 — 출력이 짧아 초 단위로 끝난다. 구간은 누르는 순간의 원문 선택(바이트 = 소스 좌표)
+            .child(
+                if self.ai_connected() && self.notes.edit.as_ref().is_some_and(|e| e.has_sel) {
+                    button("note-span-ai", k, false, false)
+                        .child(crate::assets::icon("scissors", 14.).text_color(k.text_2))
+                        .child(t("notes.spanAi.selBtn"))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            let sel = this
+                                .notes
+                                .edit
+                                .as_ref()
+                                .map(|e| e.state.read(cx).selected_range());
+                            this.open_span_modal(crate::note_span_ai::SpanMode::Selection, sel, cx);
+                        }))
+                } else {
+                    off("note-span-ai", "scissors", t("notes.spanAi.selBtn"))
+                },
+            )
     }
 
     /// 저장 안 한 변경 / 디스크 충돌 확인 창

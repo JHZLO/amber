@@ -194,6 +194,8 @@ pub struct NotesState {
     pub ai_modal: Option<crate::note_ai_view::AiModal>,
     /// 적용한 AI 결과 — render 가 편집 초안으로 넣는다(입력칸은 창이 있어야 바뀐다)
     pub pending_apply: Option<String>,
+    /// 부분 수정 모달 — note_span_ai.rs
+    pub span_modal: Option<crate::note_span_ai::SpanModal>,
 }
 
 /// 본문 판의 위 여백(.detail padding-top)
@@ -1013,12 +1015,22 @@ impl Spike {
                             cx.notify();
                         })),
                     )
-                    .child(labeled(
-                        "note-span-ai",
-                        "scissors",
-                        t("notes.spanAi.secBtn"),
-                        false,
-                    ))
+                    .child({
+                        // 절 하나만 고쳐 쓰기 — 읽다가 눈에 걸린 절을 그 자리에서 손본다
+                        let on = ok && !self.notes.body.is_empty() && self.ai_connected();
+                        labeled("note-span-ai", "scissors", t("notes.spanAi.secBtn"), on).when(
+                            on,
+                            |d| {
+                                d.on_click(cx.listener(|this, _, _, cx| {
+                                    this.open_span_modal(
+                                        crate::note_span_ai::SpanMode::Section,
+                                        None,
+                                        cx,
+                                    )
+                                }))
+                            },
+                        )
+                    })
             })
             .child({
                 let (rel, name) = (rel.clone(), name.clone());

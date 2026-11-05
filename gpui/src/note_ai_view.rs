@@ -95,7 +95,7 @@ pub fn load_prompts(db: &amber_gpui::db::Db) -> Vec<Prompt> {
         .collect()
 }
 
-fn load_recent(db: &amber_gpui::db::Db) -> Vec<String> {
+pub(crate) fn load_recent(db: &amber_gpui::db::Db) -> Vec<String> {
     amber_gpui::prefs::get(db, REF_KEY)
         .and_then(|raw| serde_json::from_str::<Vec<serde_json::Value>>(&raw).ok())
         .map(|v| {
@@ -108,7 +108,7 @@ fn load_recent(db: &amber_gpui::db::Db) -> Vec<String> {
 }
 
 /// refDirs.pushRecent — 맨 앞에 끼운다(있으면 앞으로)
-fn push_recent(list: &[String], dir: &str) -> Vec<String> {
+pub(crate) fn push_recent(list: &[String], dir: &str) -> Vec<String> {
     let d = dir.trim();
     if d.is_empty() {
         return list.to_vec();
@@ -120,7 +120,7 @@ fn push_recent(list: &[String], dir: &str) -> Vec<String> {
 }
 
 /// refDirs.refDirName — 칩 라벨은 마지막 이름
-fn ref_dir_name(path: &str) -> String {
+pub(crate) fn ref_dir_name(path: &str) -> String {
     let p = path.trim_end_matches('/');
     match p.rsplit('/').next() {
         Some(n) if !n.is_empty() => n.to_string(),
@@ -128,14 +128,14 @@ fn ref_dir_name(path: &str) -> String {
     }
 }
 
-fn hash2(a: &str, b: &str) -> u64 {
+pub(crate) fn hash2(a: &str, b: &str) -> u64 {
     let mut h = DefaultHasher::new();
     a.hash(&mut h);
     b.hash(&mut h);
     h.finish()
 }
 
-fn glass(pair: (Hsla, Hsla)) -> Background {
+pub(crate) fn glass(pair: (Hsla, Hsla)) -> Background {
     linear_gradient(
         150.,
         linear_color_stop(pair.0, 0.),
@@ -170,7 +170,7 @@ pub fn note_box(kind: Note, k: &Tokens) -> Div {
         .text_size(px(13.))
 }
 
-fn field_label(text: String, k: &Tokens) -> Div {
+pub(crate) fn field_label(text: String, k: &Tokens) -> Div {
     div()
         .mb(px(5.))
         .text_size(px(12.))
@@ -179,7 +179,7 @@ fn field_label(text: String, k: &Tokens) -> Div {
         .child(text)
 }
 
-fn hint(text: String, k: &Tokens) -> Div {
+pub(crate) fn hint(text: String, k: &Tokens) -> Div {
     div()
         .mt(px(6.))
         .text_size(px(12.))
@@ -188,7 +188,7 @@ fn hint(text: String, k: &Tokens) -> Div {
 }
 
 /// .chip.chip-choice — 누르면 '요청에 포함'만 켠다. 켜짐 = 결과 색 채움 + 체크
-fn choice_chip(
+pub(crate) fn choice_chip(
     id: SharedString,
     label: String,
     on: bool,
@@ -305,11 +305,11 @@ pub fn ai_thinking(
         })
 }
 
-fn now_ms() -> i64 {
+pub(crate) fn now_ms() -> i64 {
     chrono::Local::now().timestamp_millis()
 }
 
-fn run_wait_line(run: &Run) -> String {
+pub(crate) fn run_wait_line(run: &Run) -> String {
     let act = run
         .activity
         .as_ref()
@@ -325,7 +325,7 @@ fn run_wait_line(run: &Run) -> String {
 
 impl Spike {
     /// 지금 보이는 본문 — 편집 중이면 초안
-    fn ai_current_body(&self, cx: &App) -> String {
+    pub(crate) fn ai_current_body(&self, cx: &App) -> String {
         self.note_draft(cx)
             .unwrap_or_else(|| self.notes.body.clone())
     }
@@ -499,7 +499,7 @@ impl Spike {
     }
 
     /// 폴더 첨부 — 작업 폴더 고르기와 같은 macOS 폴더 창
-    fn pick_ref_dir(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn pick_ref_dir(&mut self, cx: &mut Context<Self>) {
         let rx = cx.prompt_for_paths(PathPromptOptions {
             files: false,
             directories: true,
@@ -525,10 +525,17 @@ impl Spike {
             REF_KEY,
             &serde_json::to_string(&next).unwrap_or_default(),
         );
+        let dir = dir.trim().to_string();
         if let Some(m) = self.notes.ai_modal.as_mut() {
+            m.recent = next.clone();
+            if !m.ref_on.contains(&dir) {
+                m.ref_on.push(dir.clone());
+            }
+        }
+        if let Some(m) = self.notes.span_modal.as_mut() {
             m.recent = next;
-            if !m.ref_on.iter().any(|d| d == dir.trim()) {
-                m.ref_on.push(dir.trim().to_string());
+            if !m.ref_on.contains(&dir) {
+                m.ref_on.push(dir);
             }
         }
         cx.notify();
@@ -1145,8 +1152,9 @@ impl Spike {
         let path = self.notes.selected.clone()?;
         let run = self.notes.ai.get(&path)?.clone();
         let span = run.kind == Kind::Span;
+        // 되돌아갈 곳은 그 실행을 시작한 모달
         let open = cx.listener(|this, _, _, cx| {
-            this.open_ai_modal(cx);
+            this.reopen_note_ai(cx);
         });
         let bar = |d: Div| d.flex().items_center().gap(px(14.)).mt(px(-6.)).mb(px(18.));
         let actions = div().flex().flex_shrink_0().items_center().gap(px(8.));
@@ -1271,8 +1279,11 @@ impl Spike {
                                     crate::day_card::danger_button("ai-bg-discard", k)
                                         .child(t("notes.ai.discard"))
                                         .on_click(cx.listener(|this, _, _, cx| {
-                                            this.open_ai_modal(cx);
+                                            this.reopen_note_ai(cx);
                                             if let Some(m) = this.notes.ai_modal.as_mut() {
+                                                m.confirm_discard = true;
+                                            }
+                                            if let Some(m) = this.notes.span_modal.as_mut() {
                                                 m.confirm_discard = true;
                                             }
                                             cx.notify();
@@ -1314,7 +1325,7 @@ impl Spike {
 }
 
 /// DiffView — 요약(+n −m 줄)과 줄 단위 변경점. 긴 무변경 구간은 접혀 있다
-fn diff_view(d: &(Vec<Row>, usize, usize), k: &Tokens) -> Div {
+pub(crate) fn diff_view(d: &(Vec<Row>, usize, usize), k: &Tokens) -> Div {
     let (rows, add, del) = d;
     let summary = div()
         .flex()

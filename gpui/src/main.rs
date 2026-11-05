@@ -21,6 +21,7 @@ mod note_edit;
 mod note_find;
 mod note_names;
 mod note_page_find;
+mod note_span_ai;
 mod note_watch;
 mod notes_view;
 mod pane;
@@ -442,6 +443,7 @@ impl Render for Spike {
         // 질문/후속 입력칸, AI 작성 입력칸과 적용한 초안 — 창이 있어야 만들어진다
         self.apply_cmt_rebuild(window, cx);
         self.apply_ai_pending(window, cx);
+        self.apply_span_pending(window, cx);
         // 노트 탭을 보고 있으면 완료 점은 꺼진다(본 알림을 남겨 둘 이유가 없다)
         if self.section == Section::Notes {
             self.notes.rail_done = false;
@@ -508,10 +510,10 @@ impl Render for Spike {
         };
 
         // AI 작성 모달(실행 상태는 스토어, 이건 보기만)
-        let ai_modal = if self.section == Section::Notes {
-            self.ai_modal_view(&k, cx)
+        let (ai_modal, span_modal) = if self.section == Section::Notes {
+            (self.ai_modal_view(&k, cx), self.span_modal_view(&k, cx))
         } else {
-            None
+            (None, None)
         };
         let confirm = self.confirm.as_ref().map(|c| {
             let (title, body, name) = match c {
@@ -680,6 +682,7 @@ impl Render for Spike {
             .children(self.tree_drag_ghost(&k))
             .children(self.comment_fab(&k, cx))
             .children(ai_modal)
+            .children(span_modal)
             .children(self.name_modal_view(&k, window, cx))
             .children(self.note_prompt(&k, cx))
             .children(confirm)

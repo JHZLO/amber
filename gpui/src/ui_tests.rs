@@ -1616,3 +1616,115 @@ fn a_run_finished_on_another_tab_lights_the_rail(cx: &mut TestAppContext) {
     assert!(ui.debug_bounds("ai-diff").is_none());
     assert!(ui.debug_bounds("ai-preview").is_some());
 }
+
+#[gpui_kit::test]
+fn editing_one_section_with_ai_splices_it_back(cx: &mut TestAppContext) {
+    let db = seeded("span-sec", &[]);
+    let body = "# 1. A\n\nold a\n\n## 2. B\n\nold b\n\n## 3. C\n\nold c\n";
+    vault_note(&db, "S.md", body);
+    let dir = db.parent().unwrap().to_path_buf();
+    let bin = fake_claude_stream(&dir, &[], "## 2. B\n\nnew b", 0);
+    connect_fake(&db, &bin);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-S.md");
+    click(&mut ui, "note-span-ai");
+    assert!(ui.debug_bounds("span-pick-1").is_some(), "절 고르기부터");
+    click(&mut ui, "span-pick-1");
+    click(&mut ui, "span-next");
+    ui.simulate_input("make it new");
+    ui.simulate_keystrokes("cmd-enter");
+    ui.run_until_parked();
+    wait_note_ai(&mut ui, "S.md");
+    let sent = std::fs::read_to_string(dir.join("fake-claude.in")).unwrap();
+    assert!(sent.contains("[대상 종류]\n절 전체"), "{sent}");
+    assert!(sent.contains("[선택한 부분]\n## 2. B\n\nold b"), "{sent}");
+    let want = "# 1. A\n\nold a\n\n## 2. B\n\nnew b\n\n## 3. C\n\nold c\n";
+    ui.update(|_, cx| {
+        let r = spike().read(cx).notes.ai.get("S.md").cloned().unwrap();
+        assert_eq!(r.phase, crate::note_ai::Phase::Done);
+        assert_eq!(r.result.as_deref(), Some(want), "절 사이 빈 줄은 그대로");
+    });
+    assert!(ui.debug_bounds("ai-diff").is_some(), "조각별 변경점");
+    click(&mut ui, "span-apply");
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        assert!(s.notes.span_modal.is_none());
+        assert_eq!(s.note_draft(cx).as_deref(), Some(want));
+    });
+}
+
+#[gpui_kit::test]
+fn editing_the_selected_source_with_ai_uses_its_bytes(cx: &mut TestAppContext) {
+    let db = seeded("span-sel", &[]);
+    vault_note(&db, "E.md", "# E\n\nfix this\n");
+    let dir = db.parent().unwrap().to_path_buf();
+    let bin = fake_claude_stream(&dir, &[], "# E\n\nfixed", 0);
+    connect_fake(&db, &bin);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-E.md");
+    click(&mut ui, "note-edit");
+    ui.update(|_, cx| assert!(!spike().read(cx).notes.edit.as_ref().unwrap().has_sel));
+    ui.simulate_keystrokes("cmd-a");
+    ui.run_until_parked();
+    ui.update(|_, cx| {
+        assert!(
+            spike().read(cx).notes.edit.as_ref().unwrap().has_sel,
+            "고르면 단추가 켜진다"
+        )
+    });
+    click(&mut ui, "note-span-ai");
+    assert!(
+        ui.debug_bounds("span-pick-0").is_none(),
+        "고른 구간이면 바로 지시"
+    );
+    ui.simulate_input("fix it");
+    click(&mut ui, "span-run");
+    wait_note_ai(&mut ui, "E.md");
+    let sent = std::fs::read_to_string(dir.join("fake-claude.in")).unwrap();
+    assert!(sent.contains("[대상 종류]\n선택 영역"), "{sent}");
+    ui.update(|_, cx| {
+        let r = spike().read(cx).notes.ai.get("E.md").cloned().unwrap();
+        assert_eq!(
+            r.result.as_deref(),
+            Some("# E\n\nfixed\n"),
+            "끝 개행은 원래 조각의 것"
+        );
+    });
+}
+
+#[gpui_kit::test]
+fn separate_sections_run_one_after_another(cx: &mut TestAppContext) {
+    let db = seeded("span-runs", &[]);
+    vault_note(&db, "M.md", "# A\n\na\n\n# B\n\nb\n\n# C\n\nc\n");
+    let dir = db.parent().unwrap().to_path_buf();
+    let bin = fake_claude_stream(&dir, &[], "# X\n\nx", 0);
+    connect_fake(&db, &bin);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-M.md");
+    click(&mut ui, "note-span-ai");
+    click(&mut ui, "span-pick-0");
+    click(&mut ui, "span-pick-2");
+    click(&mut ui, "span-next");
+    ui.update(|_, cx| {
+        let m = spike().read(cx);
+        let runs = &m.notes.span_modal.as_ref().unwrap().runs;
+        assert_eq!(runs.len(), 2, "떨어진 절은 따로");
+    });
+    ui.simulate_input("redo");
+    click(&mut ui, "span-run");
+    wait_note_ai(&mut ui, "M.md");
+    ui.update(|_, cx| {
+        let r = spike().read(cx).notes.ai.get("M.md").cloned().unwrap();
+        assert_eq!(r.span_results.len(), 2);
+        assert_eq!(
+            r.result.as_deref(),
+            Some("# X\n\nx\n\n# B\n\nb\n\n# X\n\nx\n"),
+            "뒤에서부터 되끼운다"
+        );
+    });
+    let sent = std::fs::read_to_string(dir.join("fake-claude.in")).unwrap();
+    assert_eq!(sent.matches("[수정 지시]").count(), 2, "묶음마다 한 번");
+}
