@@ -12,6 +12,7 @@ mod figure;
 mod markdown;
 mod menu;
 mod note;
+mod pane;
 mod row_drag;
 #[cfg(feature = "shots")]
 mod shots;
@@ -116,6 +117,9 @@ struct Spike {
     tt_editing: Option<(i64, Entity<InputState>)>,
     /// 휴가 고르기 판이 열렸는가, 트리거의 자리
     vac_open: bool,
+    /// 판 폭 끌기: 손잡이를 누른 x, 끄는 중인 것
+    pane_press: Option<Pixels>,
+    pane_drag: Option<pane::PaneDrag>,
     vac_anchor: Rc<Cell<Bounds<Pixels>>>,
     /// 줄 끌기: 손잡이를 누른 자리, 끄는 중인 것, 줄마다 잰 자리와 목록 판의 자리
     grip_down: Option<Point<Pixels>>,
@@ -259,6 +263,8 @@ impl Spike {
             tt_grid: Default::default(),
             tt_editing: None,
             vac_open: false,
+            pane_press: None,
+            pane_drag: None,
             vac_anchor: Default::default(),
             grip_down: None,
             row_drag: None,
@@ -428,10 +434,18 @@ impl Render for Spike {
         }
         let k = Tokens::get(cx);
         let (fg, border) = (k.text, k.border);
-        // 창 밖에서 놓으면 놓을 자리 없이 끌기가 끝난다 — 남은 상태를 걷는다
+        // 창 밖에서 놓으면 GPUI 는 놓기(on_drop)를 건너뛰고 끌기를 취소한다. 지금 앱은 어디서 놓든
+        // 놓은 것이다(window 의 mouseup) — 끌기가 끝났는데 상태가 남아 있으면 여기서 마저 놓는다
         if !cx.has_active_drag() {
-            self.row_drag = None;
-            self.tt_drag = None;
+            if self.row_drag.is_some() {
+                self.drop_row();
+            }
+            if self.tt_drag.is_some() {
+                self.tt_drop(window, cx);
+            }
+            if self.pane_drag.is_some() {
+                self.pane_drop();
+            }
         }
         let this = cx.entity().downgrade();
         let on_link: markdown::OnLink = {
@@ -496,6 +510,11 @@ impl Render for Spike {
                 }
             }));
 
+        // 판 폭은 희망 폭 — 창이 좁으면 오른쪽 몫(340px)을 남기고 줄인다. 몸통은 레일을 뺀 전부다
+        // (지금 앱의 .todo-body 처럼 서랍 칸도 몸통 안이다)
+        let parked = self.parked_open && self.cal.unit == calendar::Unit::Day;
+        let body_w = f32::from(window.viewport_size().width) - 68.;
+        let cal_w = pane::effective(self.cal_w, CAL_PANE.min, body_w);
         let body = match self.section {
             // .todo-body: 달력 판(폭 cal_w, 안쪽 여백 0 4 8 8, 카드 위 8) | 하루 판
             Section::Todo => div()
@@ -503,7 +522,8 @@ impl Render for Spike {
                 .flex()
                 .child(
                     div()
-                        .w(px(self.cal_w))
+                        .relative()
+                        .w(px(cal_w))
                         .flex_shrink_0()
                         .h_full()
                         .pl(px(8.))
@@ -512,8 +532,9 @@ impl Render for Spike {
                         .pt(px(8.))
                         .flex()
                         .flex_col()
-                        .child(self.calendar(&k, self.cal_w - 8. - 4. - 2. - 24., cx))
-                        .child(self.tt_card(&k, self.cal_w - 8. - 4. - 2., cx)),
+                        .child(self.calendar(&k, cal_w - 8. - 4. - 2. - 24., cx))
+                        .child(self.tt_card(&k, cal_w - 8. - 4. - 2., cx))
+                        .child(self.pane_resizer(CAL_PANE, cal_w, body_w, &k, cx)),
                 )
                 .child(
                     // .detail: 바깥 여백 8 8 8 4(판의 반 칸)
@@ -529,10 +550,7 @@ impl Render for Spike {
                         .flex_col()
                         .child(self.day_card(&k, cx)),
                 )
-                .when(
-                    self.parked_open && self.cal.unit == calendar::Unit::Day,
-                    |d| d.child(self.drawer(&k, cx)),
-                )
+                .when(parked, |d| d.child(self.drawer(&k, cx)))
                 .into_any_element(),
             Section::Notes => note.into_any_element(),
             // 아직 옮기지 않은 탭 — 체크리스트(D)에서 하나씩
@@ -597,6 +615,17 @@ impl Render for Spike {
             }))
             .on_drop(cx.listener(|this, _: &tt_drag::TtGrab, window, cx| {
                 this.tt_drop(window, cx);
+                cx.notify();
+            }))
+            .on_drag_move::<pane::PaneGrab>(cx.listener(
+                |this, e: &DragMoveEvent<pane::PaneGrab>, _, cx| {
+                    if this.pane_move(e.event.position.x) {
+                        cx.notify();
+                    }
+                },
+            ))
+            .on_drop(cx.listener(|this, _: &pane::PaneGrab, _, cx| {
+                this.pane_drop();
                 cx.notify();
             }))
             .child(self.rail(&k, cx))
@@ -719,6 +748,13 @@ fn hex(c: Hsla) -> String {
     let b = |v: f32| (v * 255.).round() as u8;
     format!("#{:02x}{:02x}{:02x}", b(c.r), b(c.g), b(c.b))
 }
+
+/// 할 일 탭 달력 판(지금 앱의 CAL_W_MIN/MAX, 키 amber.todo.cal-width)
+const CAL_PANE: pane::PaneGrab = pane::PaneGrab {
+    key: "amber.todo.cal-width",
+    min: 260.,
+    max: 780.,
+};
 
 fn arg(name: &str) -> Option<String> {
     let args: Vec<String> = std::env::args().collect();

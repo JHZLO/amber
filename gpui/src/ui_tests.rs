@@ -518,3 +518,56 @@ fn the_calendar_title_drills_up_to_months_and_years(cx: &mut TestAppContext) {
     assert!(ui.debug_bounds("cal-2031-03-01").is_some());
     assert!(ui.debug_bounds("unit-day").is_some());
 }
+
+#[gpui_kit::test]
+fn dragging_the_pane_edge_resizes_the_calendar_and_remembers_it(cx: &mut TestAppContext) {
+    let (db, note) = seeded("pane", &[]);
+    let mut ui = open(cx, &db, &note);
+    let edge = bounds(&mut ui, "resizer-amber.todo.cal-width").center();
+    drag(
+        &mut ui,
+        "resizer-amber.todo.cal-width",
+        point(edge.x + px(100.), edge.y),
+    );
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    // 기본 460 + 100. 잡은 지점을 존중하므로 손잡이 어디를 잡았든 움직인 만큼만
+    assert_eq!(
+        amber_gpui::prefs::get(&d, "amber.todo.cal-width").as_deref(),
+        Some("560")
+    );
+    let edge = bounds(&mut ui, "resizer-amber.todo.cal-width").center();
+    drag(
+        &mut ui,
+        "resizer-amber.todo.cal-width",
+        point(edge.x - px(900.), edge.y),
+    );
+    assert_eq!(
+        amber_gpui::prefs::get(&d, "amber.todo.cal-width").as_deref(),
+        Some("260"),
+        "최소 폭에서 멈춘다"
+    );
+}
+
+#[gpui_kit::test]
+fn releasing_outside_the_window_still_drops(cx: &mut TestAppContext) {
+    let (db, note) = seeded("drag-outside", &[("a", None), ("b", None)]);
+    let mut ui = open(cx, &db, &note);
+    let grip = bounds(&mut ui, "grip-2").center();
+    let first = bounds(&mut ui, "txt-1-false");
+    // 맨 앞 자리까지 끈 뒤 창 밖(왼쪽)에서 놓는다 — 슬롯은 마지막으로 고른 자리
+    let from = grip;
+    let mid = point(grip.x, first.top() + px(2.));
+    ui.simulate_mouse_move(from, None, Modifiers::none());
+    ui.simulate_mouse_down(from, MouseButton::Left, Modifiers::none());
+    for p in [
+        point(from.x, from.y - px(5.)),
+        mid,
+        point(mid.x, mid.y - px(1.)),
+    ] {
+        ui.simulate_mouse_move(p, MouseButton::Left, Modifiers::none());
+        ui.run_until_parked();
+    }
+    ui.simulate_mouse_up(point(px(-50.), mid.y), MouseButton::Left, Modifiers::none());
+    ui.run_until_parked();
+    assert_eq!(order(&db, None), vec![2, 1]);
+}

@@ -149,6 +149,21 @@ pub fn run(dir: &str) {
 
     timetable(&mut s);
     vacation(&mut s);
+    let w = s.any();
+    // 달력 판 폭 — 경계를 오른쪽으로 끄는 중(끄는 동안만 선이 보인다)
+    let w_now = s.window.update(&mut s.cx, |sp, _, _| sp.cal_w).unwrap();
+    let edge = point(px(68. + w_now), px(600.));
+    s.mouse(edge, false);
+    s.cx.simulate_mouse_down(w, edge, MouseButton::Left, Modifiers::none());
+    s.mouse(point(edge.x + px(4.), edge.y), true);
+    s.mouse(point(edge.x + px(160.), edge.y), true);
+    s.shot("pane-resizing");
+    s.cx.simulate_mouse_up(
+        w,
+        point(edge.x + px(160.), edge.y),
+        MouseButton::Left,
+        Modifiers::none(),
+    );
     for (name, level) in [
         ("cal-month", crate::calendar::Level::Month),
         ("cal-year", crate::calendar::Level::Year),
