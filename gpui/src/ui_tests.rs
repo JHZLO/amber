@@ -7,8 +7,8 @@ use std::time::Instant;
 use amber_gpui::db::{Clock, Db, get_i64};
 use amber_gpui::todos;
 use gpui_kit::{
-    AppContext, Bounds, Modifiers, Point, TestAppContext, VisualTestContext, WindowAppearance,
-    WindowBounds, WindowOptions, px, size,
+    AppContext, Bounds, Modifiers, MouseButton, Pixels, Point, TestAppContext, VisualTestContext,
+    WindowAppearance, WindowBounds, WindowOptions, point, px, size,
 };
 
 use crate::{Spike, theme};
@@ -82,6 +82,43 @@ fn click(cx: &mut VisualTestContext, name: &'static str) {
         .unwrap_or_else(|| panic!("화면에 {name} 이 없다"));
     cx.simulate_click(bounds.center(), Modifiers::none());
     cx.run_until_parked();
+}
+
+fn bounds(cx: &mut VisualTestContext, name: &'static str) -> Bounds<Pixels> {
+    cx.update(|window, _| window.refresh());
+    cx.run_until_parked();
+    cx.debug_bounds(name)
+        .unwrap_or_else(|| panic!("화면에 {name} 이 없다"))
+}
+
+/// 그 이름의 요소를 눌러 to 까지 네 번에 나눠 끌고 놓는다(첫 움직임이 끌기를 시작한다)
+fn drag(cx: &mut VisualTestContext, name: &'static str, to: Point<Pixels>) {
+    let from = bounds(cx, name).center();
+    cx.simulate_mouse_down(from, MouseButton::Left, Modifiers::none());
+    for i in 1..=4 {
+        let f = i as f32 / 4.;
+        let p = point(from.x + (to.x - from.x) * f, from.y + (to.y - from.y) * f);
+        cx.simulate_mouse_move(p, MouseButton::Left, Modifiers::none());
+        cx.run_until_parked();
+    }
+    cx.simulate_mouse_up(to, MouseButton::Left, Modifiers::none());
+    cx.run_until_parked();
+}
+
+/// 같은 부모 아래 형제 순서(sort_order)
+fn order(db: &PathBuf, parent: Option<i64>) -> Vec<i64> {
+    let db = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    db.select(
+        "SELECT id FROM todos WHERE parent_id IS ?1 ORDER BY sort_order, id",
+        &[parent.map_or(
+            rusqlite::types::Value::Null,
+            rusqlite::types::Value::Integer,
+        )],
+    )
+    .unwrap()
+    .iter()
+    .filter_map(|r| get_i64(r, "id"))
+    .collect()
 }
 
 fn row(db: &PathBuf, id: i64) -> Option<amber_gpui::db::Row> {
@@ -228,4 +265,51 @@ fn pulling_from_the_drawer_brings_it_to_today(cx: &mut TestAppContext) {
         today,
         "서랍에서 꺼내면 보고 있는 날이 아니라 오늘로"
     );
+}
+
+#[gpui_kit::test]
+fn dragging_a_row_up_puts_it_first(cx: &mut TestAppContext) {
+    let (db, note) = seeded("drag-order", &[("a", None), ("b", None), ("c", None)]);
+    let mut ui = open(cx, &db, &note);
+    let grip = bounds(&mut ui, "grip-3").center();
+    let first = bounds(&mut ui, "txt-1-false");
+    // 첫 줄의 가운데보다 위 = 맨 앞 자리. 가로로는 움직이지 않는다(깊이 그대로)
+    drag(&mut ui, "grip-3", point(grip.x, first.top() + px(2.)));
+    assert_eq!(order(&db, None), vec![3, 1, 2]);
+}
+
+#[gpui_kit::test]
+fn dragging_right_makes_it_a_sub_item(cx: &mut TestAppContext) {
+    let (db, note) = seeded("drag-indent", &[("a", None), ("b", None)]);
+    let mut ui = open(cx, &db, &note);
+    let grip = bounds(&mut ui, "grip-2").center();
+    // 한 단(24px) 남짓 오른쪽 = 바로 위 줄의 하위
+    drag(&mut ui, "grip-2", point(grip.x + px(30.), grip.y));
+    assert_eq!(get_i64(&row(&db, 2).unwrap(), "parent_id"), Some(1));
+    assert_eq!(order(&db, None), vec![1]);
+}
+
+#[gpui_kit::test]
+fn a_group_moves_with_its_children(cx: &mut TestAppContext) {
+    let (db, note) = seeded(
+        "drag-group",
+        &[("g", None), ("k1", Some(0)), ("k2", Some(0)), ("x", None)],
+    );
+    let mut ui = open(cx, &db, &note);
+    let grip = bounds(&mut ui, "grip-1").center();
+    let last = bounds(&mut ui, "txt-4-false");
+    drag(&mut ui, "grip-1", point(grip.x, last.bottom() + px(12.)));
+    assert_eq!(order(&db, None), vec![4, 1], "묶음이 x 아래로");
+    assert_eq!(order(&db, Some(1)), vec![2, 3], "하위는 그대로 따라온다");
+}
+
+#[gpui_kit::test]
+fn dropping_in_place_changes_nothing(cx: &mut TestAppContext) {
+    let (db, note) = seeded("drag-noop", &[("a", None), ("b", None)]);
+    let mut ui = open(cx, &db, &note);
+    let grip = bounds(&mut ui, "grip-1").center();
+    // 집은 줄이 빠지면 아래 줄이 그 자리로 올라온다 — 원래 가운데보다 위에서 놓아야 제자리다(지금 앱과 같다)
+    drag(&mut ui, "grip-1", point(grip.x, grip.y - px(4.)));
+    assert_eq!(order(&db, None), vec![1, 2]);
+    assert!(get_i64(&row(&db, 2).unwrap(), "parent_id").is_none());
 }

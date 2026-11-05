@@ -25,6 +25,10 @@ pulldown-cmark = { version = "0.13", default-features = false }
 resvg = "0.45.1"
 merman = { version = "=0.10.0-alpha.1", features = ["math"] }
 
+[features]
+# 화면 찍기(--shots): 실제 macOS 렌더링으로 화면 밖 창에 그리고 hover, 끌기 같은 조작을 보내 PNG 로 남긴다(src/shots.rs)
+shots = ["gpui-kit/test-support"]
+
 [dev-dependencies]
 # 화면 조작 시험대 — 헤드리스 창에 실제 화면을 그리고 클릭, 끌기, 키 입력을 보낸다(src/ui_tests.rs)
 gpui-kit = { version = "=0.9.0", features = ["test-support"] }

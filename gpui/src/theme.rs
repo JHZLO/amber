@@ -156,6 +156,23 @@ impl Tokens {
         }
     }
 
+    /// --shadow: 떠 있는 것(끌고 있는 줄, 메뉴)
+    pub fn shadow(&self) -> Vec<BoxShadow> {
+        let (far, near) = if self.dark {
+            (a(0, 0, 0, 0.6), a(0, 0, 0, 0.45))
+        } else {
+            (a(24, 24, 27, 0.12), a(24, 24, 27, 0.07))
+        };
+        let layer = |color, y: f32, blur: f32, spread: f32| BoxShadow {
+            color,
+            offset: point(px(0.), px(y)),
+            blur_radius: px(blur),
+            spread_radius: px(spread),
+            inset: false,
+        };
+        vec![layer(far, 10., 30., -8.), layer(near, 4., 10., -4.)]
+    }
+
     /// 유리의 그림자 겹: 빛줄기(sheen 또는 sheen-hover) + 두께(seat). CSS 의 box-shadow 와 같은 순서
     pub fn glass_shadow(&self, bright: bool) -> Vec<BoxShadow> {
         let line = |color, y: f32| BoxShadow {

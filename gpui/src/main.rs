@@ -11,6 +11,9 @@ mod drawer;
 mod figure;
 mod markdown;
 mod note;
+mod row_drag;
+#[cfg(feature = "shots")]
+mod shots;
 mod theme;
 mod tt_card;
 #[cfg(test)]
@@ -102,6 +105,11 @@ struct Spike {
     tt_blocks: Vec<Row>,
     tt_scroll: ScrollHandle,
     tt_scrolled: Option<String>,
+    /// 줄 끌기: 손잡이를 누른 자리, 끄는 중인 것, 줄마다 잰 자리와 목록 판의 자리
+    grip_down: Option<Point<Pixels>>,
+    row_drag: Option<row_drag::RowDrag>,
+    row_bounds: row_drag::RowBounds,
+    list_bounds: row_drag::ListBounds,
     started: Instant,
     first_frame: bool,
 }
@@ -233,6 +241,10 @@ impl Spike {
             tt_blocks: Vec::new(),
             tt_scroll: ScrollHandle::new(),
             tt_scrolled: None,
+            grip_down: None,
+            row_drag: None,
+            row_bounds: Default::default(),
+            list_bounds: Default::default(),
             started,
             first_frame: false,
         };
@@ -395,6 +407,10 @@ impl Render for Spike {
         }
         let k = Tokens::get(cx);
         let (fg, border) = (k.text, k.border);
+        // 창 밖에서 놓으면 놓을 자리 없이 끌기가 끝난다 — 남은 상태를 걷는다
+        if self.row_drag.is_some() && !cx.has_active_drag() {
+            self.row_drag = None;
+        }
         let this = cx.entity().downgrade();
         let on_link: markdown::OnLink = {
             let this = this.clone();
@@ -548,6 +564,10 @@ impl Render for Spike {
             .flex()
             .bg(k.surface)
             .text_color(fg)
+            .on_drop(cx.listener(|this, _: &row_drag::DragRow, _, cx| {
+                this.drop_row();
+                cx.notify();
+            }))
             .child(self.rail(&k, cx))
             .child(
                 div()
@@ -575,6 +595,7 @@ impl Render for Spike {
                     )
                     .child(div().flex_1().min_h_0().child(body)),
             )
+            .children(self.drop_line(&k))
             .children(confirm)
     }
 }
@@ -676,6 +697,10 @@ fn arg(name: &str) -> Option<String> {
 }
 
 fn main() {
+    #[cfg(feature = "shots")]
+    if let Some(dir) = arg("--shots") {
+        return shots::run(&dir);
+    }
     let started = Instant::now();
     let db_path = arg("--db").expect("--db <amber.db 사본>");
     let note_path = arg("--note").expect("--note <노트.md>");

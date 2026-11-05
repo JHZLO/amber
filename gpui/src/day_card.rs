@@ -13,6 +13,7 @@ use gpui_kit::*;
 use crate::Spike;
 use crate::assets::icon;
 use crate::calendar::Unit;
+use crate::row_drag::DragRow;
 use crate::theme::Tokens;
 
 /// 화면 조작 시험대(ui_tests)가 이 이름으로 요소를 찾는다 — 시험 빌드가 아니면 아무 일도 안 한다
@@ -309,6 +310,21 @@ impl Spike {
                     .px(px(16.))
                     .pt(px(10.))
                     .overflow_y_scroll()
+                    .on_drag_move::<DragRow>(cx.listener(
+                        |this, e: &DragMoveEvent<DragRow>, _, cx| {
+                            if this.row_drag_move(e.event.position) {
+                                cx.notify();
+                            }
+                        },
+                    ))
+                    .child({
+                        let lb = self.list_bounds.clone();
+                        canvas(move |b, _, _| lb.set(b), |_, _, _, _| {})
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .size_full()
+                    })
                     .when(self.rows().is_empty(), |d| {
                         d.child(
                             div()
@@ -324,7 +340,11 @@ impl Spike {
                         )
                     })
                     .children({
-                        let roots = tree::visible_roots(self.rows());
+                        // 끄는 줄은 하위째 목록에서 빠진다
+                        let roots: Vec<Row> = tree::visible_roots(self.rows())
+                            .into_iter()
+                            .filter(|r| !self.dragging(r.id()))
+                            .collect();
                         let mut prev_group = false;
                         roots
                             .iter()
@@ -403,6 +423,10 @@ impl Spike {
             .filter(|c| c.parent() == Some(node.id()))
             .collect();
         let group = depth == 0 && !kids.is_empty();
+        let kids: Vec<&Row> = kids
+            .into_iter()
+            .filter(|c| !self.dragging(c.id()))
+            .collect();
         div()
             .flex()
             .flex_col()
@@ -477,8 +501,9 @@ impl Spike {
         });
 
         let actions = self.row_actions(todo, overdue, carried, gone, k, cx);
+        let read_only = overdue || carried;
         if group {
-            return div()
+            let header = div()
                 .group("todo-row")
                 .flex()
                 .items_center()
@@ -500,10 +525,10 @@ impl Spike {
                 .child(div().flex_1().min_w(px(12.)).h(px(1.)).bg(k.border))
                 .children(progress)
                 .children(actions);
+            return self.drag_frame(header, id, !read_only, k, cx);
         }
 
         let row_id = SharedString::from(format!("row-{id}-{overdue}"));
-        let read_only = overdue || carried;
         let editing = self
             .editing
             .as_ref()
@@ -522,7 +547,7 @@ impl Spike {
                 cx.notify();
             })
         };
-        div()
+        let el = div()
             .group("todo-row")
             .flex()
             .items_start()
@@ -530,7 +555,8 @@ impl Spike {
             .px(px(8.))
             .py(px(10.))
             .rounded(px(8.))
-            .hover(|s| s.bg(glass(k)))
+            // 끄는 동안엔 hover 배경을 끈다 — 들고 있는 줄만 보이게
+            .when(self.row_drag.is_none(), |d| d.hover(|s| s.bg(glass(k))))
             .child(
                 div()
                     .id(row_id.clone())
@@ -648,6 +674,83 @@ impl Spike {
                                     this.move_here(&[id]);
                                     cx.notify();
                                 })),
+                        ),
+                )
+            });
+        // 밀린 줄은 다른 날의 것이라 이 목록에서 끌지 않는다
+        if overdue {
+            el
+        } else {
+            self.drag_frame(el, id, !read_only, k, cx)
+        }
+    }
+
+    /// 끄는 중인 줄(과 그 하위)인가
+    pub(crate) fn dragging(&self, id: i64) -> bool {
+        self.row_drag.as_ref().is_some_and(|d| d.id == id)
+    }
+
+    /// 끌기의 바탕 — 잰 자리(틈을 뺀 위치), 놓일 자리의 틈, hover 때 왼쪽 여백에 뜨는 손잡이.
+    /// 넘긴 줄(고스트)과 지워진 기록은 손잡이가 없지만 자리는 잰다(그 사이로도 놓을 수 있다)
+    fn drag_frame(&self, el: Div, id: i64, grip: bool, k: &Tokens, cx: &mut Context<Self>) -> Div {
+        let drag = self.row_drag.as_ref();
+        let shift = drag.filter(|d| d.shifted(id)).map(|d| d.gap);
+        let gap = drag.filter(|d| d.gap_before(id)).map(|d| d.gap);
+        let map = self.row_bounds.clone();
+        let this = cx.entity().downgrade();
+        el.relative()
+            .when_some(gap, |d, g| d.mt(g))
+            .child(
+                canvas(
+                    move |mut b, _, _| {
+                        if let Some(s) = shift {
+                            b.origin.y -= s;
+                        }
+                        map.borrow_mut().insert(id, b);
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full(),
+            )
+            .when(grip, |d| {
+                d.child(
+                    // .todo-grip: 왼쪽 여백(-16px)에 세로 가운데, hover 때만 보인다(자리를 밀지 않는다)
+                    div()
+                        .absolute()
+                        .left(px(-16.))
+                        .top_0()
+                        .bottom_0()
+                        .flex()
+                        .items_center()
+                        .child(
+                            div()
+                                .id(SharedString::from(format!("grip-{id}")))
+                                .tag(format!("grip-{id}"))
+                                .flex()
+                                .cursor(CursorStyle::OpenHand)
+                                .opacity(0.)
+                                .group_hover("todo-row", |s| s.opacity(1.))
+                                .hover(|s| s.opacity(1.))
+                                .child(icon("grip", 14.).text_color(k.text_3))
+                                .on_mouse_down(
+                                    MouseButton::Left,
+                                    cx.listener(|this, e: &MouseDownEvent, _, _| {
+                                        this.grip_down = Some(e.position);
+                                    }),
+                                )
+                                .on_drag(DragRow { id }, move |d, offset, _, cx| {
+                                    let ghost = this
+                                        .update(cx, |s, cx| {
+                                            let g = s.begin_row_drag(d.id, offset);
+                                            cx.notify();
+                                            g
+                                        })
+                                        .unwrap_or_default();
+                                    cx.new(|_| ghost)
+                                }),
                         ),
                 )
             })
