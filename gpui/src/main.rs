@@ -9,6 +9,7 @@ mod day_card;
 mod dialog;
 mod drawer;
 mod figure;
+mod highlight;
 mod markdown;
 mod menu;
 mod note;

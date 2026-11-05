@@ -110,6 +110,8 @@ fn note_style(k: &Tokens) -> TextViewStyle {
                 .border_color(strong)
                 .pl(px(14.)),
         )
+        // 표는 내용 폭(display: block) — 칸이 내용에 맞고, 판보다 넓으면 가로로 굴린다. 모서리는 각지게
+        .with_table(sr().rounded(px(0.)).self_start())
         .with_table_head(
             sr().bg(transparent_black())
                 .text_color(text)
@@ -157,6 +159,56 @@ fn parse_code(node: &markdown_ast::Node, _: &MarkdownParseContext) -> Option<Mar
             body: code.value.clone(),
         },
     ))
+}
+
+/// (키워드, 문자열, 숫자, 함수, 타입, 주석) — styles.css 의 --code-kw ~ --code-dim
+fn dark_palette(dark: bool) -> [u32; 6] {
+    if dark {
+        [0xd2a8ff, 0x7ee787, 0xffa657, 0x79c0ff, 0xffa198, 0x8b8b95]
+    } else {
+        [0x8250df, 0x0a7b34, 0xb3460f, 0x0550ae, 0x953800, 0x6b6b76]
+    }
+}
+
+/// 줄마다 StyledText — 칠할 구간을 그 줄 안으로 잘라 옮긴다. 주석은 기울인다
+fn code_lines(code: &Code, palette: [u32; 6]) -> Vec<StyledText> {
+    use crate::highlight::{Kind, highlight};
+    let spans = highlight(code.lang.as_deref(), &code.body);
+    let body = code.body.strip_suffix('\n').unwrap_or(&code.body);
+    let mut out = Vec::new();
+    let mut start = 0;
+    for line in body.split('\n') {
+        let end = start + line.len();
+        let hl: Vec<_> = spans
+            .iter()
+            .filter(|(r, _)| r.start < end && r.end > start)
+            .map(|(r, kind)| {
+                let color: Hsla = rgb(palette[match kind {
+                    Kind::Keyword => 0,
+                    Kind::Str => 1,
+                    Kind::Num => 2,
+                    Kind::Func => 3,
+                    Kind::Type => 4,
+                    Kind::Comment => 5,
+                }])
+                .into();
+                let style = HighlightStyle {
+                    color: Some(color),
+                    font_style: (*kind == Kind::Comment).then_some(FontStyle::Italic),
+                    ..Default::default()
+                };
+                (r.start.max(start) - start..r.end.min(end) - start, style)
+            })
+            .collect();
+        // 빈 줄도 한 줄 높이를 지킨다
+        out.push(if line.is_empty() {
+            StyledText::new(" ")
+        } else {
+            StyledText::new(line.to_string()).with_highlights(hl)
+        });
+        start = end + 1;
+    }
+    out
 }
 
 /// 코드 블록 = macOS 창 — 신호등 막대 + 그 아래 코드. 장식이 아니라 경계다(본문 중간 코드의 시작과 끝)
@@ -208,13 +260,11 @@ fn render_code(node: &MarkdownNode, k: &Tokens) -> AnyElement {
                 .text_size(px(12.04))
                 .line_height(px(20.47))
                 .text_color(rgb(fg))
-                .children(code.body.lines().map(|l| {
-                    div().whitespace_nowrap().child(if l.is_empty() {
-                        " ".to_string()
-                    } else {
-                        l.to_string()
-                    })
-                })),
+                .children(
+                    code_lines(code, dark_palette(k.dark))
+                        .into_iter()
+                        .map(|l| div().whitespace_nowrap().child(l)),
+                ),
         )
         .into_any_element()
 }

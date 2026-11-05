@@ -201,6 +201,7 @@ dependencies = [
  "gpui-kit",
  "icu_collator",
  "icu_locale_core",
+ "markdown",
  "merman",
  "pulldown-cmark",
  "regex",

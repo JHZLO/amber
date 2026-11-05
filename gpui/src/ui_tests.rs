@@ -651,3 +651,28 @@ fn the_contents_list_jumps_to_a_heading(cx: &mut TestAppContext) {
         "그 절 제목이 판 위 18px 에 온다"
     );
 }
+
+#[gpui_kit::test]
+fn a_details_toggle_opens_and_closes(cx: &mut TestAppContext) {
+    let db = seeded("notes-toggle", &[]);
+    vault_note(
+        &db,
+        "T.md",
+        "# T\n\n<details>\n<summary>More</summary>\n\n<details open>\n<summary>Inner</summary>\n\ndeep\n\n</details>\n\n</details>\n",
+    );
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-T.md");
+    assert!(ui.debug_bounds("toggle-1").is_some(), "접힌 카드");
+    assert!(
+        ui.debug_bounds("toggle-1/0").is_none(),
+        "접힌 카드 안은 안 그린다"
+    );
+    click(&mut ui, "toggle-1");
+    assert!(
+        ui.debug_bounds("toggle-1/0").is_some(),
+        "펴면 안쪽 토글(open)도 보인다"
+    );
+    click(&mut ui, "toggle-1");
+    assert!(ui.debug_bounds("toggle-1/0").is_none());
+}

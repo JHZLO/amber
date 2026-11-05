@@ -8,6 +8,85 @@ pub enum Segment {
     Markdown(String),
     Svg(String),
     Mermaid(String),
+    /// `<details><summary>제목</summary> … </details>` — 접고 펴는 카드(lib/mdDetails.ts).
+    /// 안쪽은 같은 규칙으로 다시 쪼갠다. 닫는 태그가 없으면 끝까지 접힌다(브라우저와 같다)
+    Toggle {
+        summary: Option<String>,
+        open: bool,
+        body: String,
+    },
+}
+
+/// `<details>` 로 시작하는 줄이면 (open 속성, 태그 뒤의 나머지) — `<details-panel>` 같은 다른 태그는 아니다
+fn details_open(line: &str) -> Option<(bool, &str)> {
+    let t = line.trim_start();
+    let rest = t.strip_prefix("<details")?;
+    let end = rest.find('>')?;
+    let attrs = &rest[..end];
+    if !(attrs.is_empty() || attrs.starts_with(char::is_whitespace)) {
+        return None;
+    }
+    let open = attrs
+        .split_whitespace()
+        .any(|a| a == "open" || a.starts_with("open="));
+    Some((open, &rest[end + 1..]))
+}
+
+/// `<summary>제목</summary>` 의 제목 — 안의 태그는 걷어낸다
+fn summary_of(s: &str) -> Option<String> {
+    let start = s.find("<summary")?;
+    let after = &s[start..];
+    let body = &after[after.find('>')? + 1..];
+    let end = body.find("</summary")?;
+    static TAG: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let tag = TAG.get_or_init(|| regex::Regex::new(r"<[^>]*>").unwrap());
+    Some(tag.replace_all(&body[..end], "").trim().to_string())
+}
+
+/// 토글 하나를 거둔다 — 첫 줄(여는 태그) 다음부터 짝 맞는 `</details>` 까지. 펜스 안의 태그는 세지 않는다
+fn take_toggle<'a>(
+    first_rest: &str,
+    lines: &mut std::iter::Peekable<std::str::Lines<'a>>,
+) -> (Option<String>, String) {
+    let mut summary = summary_of(first_rest);
+    let mut body = String::new();
+    let mut depth = 1;
+    let mut code: Option<(char, usize)> = None;
+    // 제목은 여는 태그 바로 뒤(빈 줄 전)에서만 — 본문 중간의 <summary> 는 글로 둔다
+    let mut head = summary.is_none();
+    while let Some(line) = lines.next() {
+        if code.is_none() {
+            if head && summary.is_none() {
+                if let Some(t) = summary_of(line) {
+                    summary = Some(t);
+                    head = false;
+                    continue;
+                }
+                if !line.trim().is_empty() {
+                    head = false;
+                }
+            }
+            let t = line.trim();
+            if details_open(t).is_some() {
+                depth += 1;
+            } else if t.starts_with("</details") {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+        }
+        match (fence(line), code) {
+            (Some((c, n, _)), None) => code = Some((c, n)),
+            (Some((c, n, info)), Some((open, len))) if c == open && n >= len && info.is_empty() => {
+                code = None
+            }
+            _ => {}
+        }
+        body.push_str(line);
+        body.push('\n');
+    }
+    (summary, body)
 }
 
 pub fn split(md: &str) -> Vec<Segment> {
@@ -15,8 +94,23 @@ pub fn split(md: &str) -> Vec<Segment> {
     let mut text = String::new();
     // 그림이 아닌 코드 펜스 안인지 — 여는 펜스의 문자와 길이(mdSections.ts 와 같은 닫기 판정)
     let mut code: Option<(char, usize)> = None;
-    let mut lines = md.lines();
+    let mut lines = md.lines().peekable();
     while let Some(line) = lines.next() {
+        if code.is_none()
+            && let Some((open, rest)) = details_open(line)
+        {
+            let (summary, body) = take_toggle(rest, &mut lines);
+            if !text.trim().is_empty() {
+                out.push(Segment::Markdown(std::mem::take(&mut text)));
+            }
+            text.clear();
+            out.push(Segment::Toggle {
+                summary,
+                open,
+                body,
+            });
+            continue;
+        }
         let lang = line.trim_start().strip_prefix("```").map(str::trim);
         if let (None, Some(lang @ ("svg" | "mermaid"))) = (code, lang) {
             let mut body = String::new();
@@ -189,6 +283,33 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    #[test]
+    fn details_become_toggles_with_nested_bodies() {
+        let md = "앞\n\n<details open>\n<summary>제목 <b>굵게</b></summary>\n\n본문\n\n<details>\n<summary>안</summary>\n\n깊은 글\n\n</details>\n\n</details>\n\n뒤\n";
+        let seg = split(md);
+        assert_eq!(seg.len(), 3);
+        let Segment::Toggle {
+            summary,
+            open,
+            body,
+        } = &seg[1]
+        else {
+            panic!("토글")
+        };
+        assert_eq!(summary.as_deref(), Some("제목 굵게"));
+        assert!(*open);
+        let inner = split(body);
+        assert!(
+            matches!(&inner[1], Segment::Toggle { summary: Some(s), open: false, .. } if s == "안")
+        );
+        // 펜스 안의 태그는 토글이 아니다
+        let code = "```html\n<details>\n```\n";
+        assert!(matches!(split(code).as_slice(), [Segment::Markdown(_)]));
+        // 닫는 태그가 없으면 끝까지
+        let open_end = split("<details>\n<summary>t</summary>\n\n남은 글\n");
+        assert!(matches!(&open_end[0], Segment::Toggle { body, .. } if body.contains("남은 글")));
     }
 
     #[test]

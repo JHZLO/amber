@@ -22,6 +22,8 @@ sys-locale = "0.3"
 # 휴지통, 백업, AI 실행 등 지금 앱과 같이 쓰는 Rust
 amber-core = { path = "../core" }
 pulldown-cmark = { version = "0.13", default-features = false }
+# 토글 머리의 '안에 든 것'을 센다 — gpui-base 의 마크다운 렌더러가 쓰는 것과 같은 파서(mdast)
+markdown = "=1.0.0"
 resvg = "0.45.1"
 merman = { version = "=0.10.0-alpha.1", features = ["math"] }
 

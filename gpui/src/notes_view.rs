@@ -6,7 +6,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use amber_gpui::i18n::t;
+use amber_gpui::i18n::{t, t_with};
 use amber_gpui::vault::{self, Node};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
@@ -35,6 +35,80 @@ pub enum Block {
         light: bool,
     },
     Broken(SharedString),
+    /// `<details>` 카드 — key 는 판 안의 자리("3", 안쪽은 "3/1"), meta 는 '문단 1, 코드 1'
+    Toggle {
+        key: String,
+        summary: Option<String>,
+        meta: String,
+        open: bool,
+        blocks: Vec<Block>,
+    },
+}
+
+/// 토글 머리에 흐리게 적는 '안에 든 것' — 이 순서로(mdDetails.ts 의 BLOCK_KINDS)
+fn toggle_meta(body: &str) -> String {
+    const KINDS: [&str; 6] = ["paragraph", "list", "code", "figure", "table", "toggle"];
+    let mut n = [0usize; 6];
+    for seg in note::split(body) {
+        match seg {
+            note::Segment::Markdown(md) => {
+                let Ok(tree) = ::markdown::to_mdast(&md, &::markdown::ParseOptions::gfm()) else {
+                    continue;
+                };
+                for c in tree.children().into_iter().flatten() {
+                    let k = match c {
+                        ::markdown::mdast::Node::Paragraph(_) => 0,
+                        ::markdown::mdast::Node::List(_) => 1,
+                        ::markdown::mdast::Node::Code(_) => 2,
+                        ::markdown::mdast::Node::Table(_) => 4,
+                        _ => continue,
+                    };
+                    n[k] += 1;
+                }
+            }
+            note::Segment::Svg(_) | note::Segment::Mermaid(_) => n[3] += 1,
+            note::Segment::Toggle { .. } => n[5] += 1,
+        }
+    }
+    KINDS
+        .iter()
+        .zip(n)
+        .filter(|(_, c)| *c > 0)
+        .map(|(k, c)| t_with(&format!("common.toggle.{k}"), &[("n", &c.to_string())]))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn blocks_of(src: &str, text_hex: &str, prefix: &str) -> Vec<Block> {
+    note::split(src)
+        .into_iter()
+        .enumerate()
+        .map(|(i, s)| match s {
+            note::Segment::Markdown(md) => Block::Text(md.into()),
+            note::Segment::Svg(src) => figure::svg(&src, text_hex).map_or_else(
+                |e| Block::Broken(format!("svg: {e}").into()),
+                |fig| Block::Figure { fig, light: false },
+            ),
+            note::Segment::Mermaid(src) => figure::mermaid(&src).map_or_else(
+                |e| Block::Broken(format!("mermaid: {e}").into()),
+                |fig| Block::Figure { fig, light: true },
+            ),
+            note::Segment::Toggle {
+                summary,
+                open,
+                body,
+            } => {
+                let key = format!("{prefix}{i}");
+                Block::Toggle {
+                    meta: toggle_meta(&body),
+                    blocks: blocks_of(&body, text_hex, &format!("{key}/")),
+                    key,
+                    summary,
+                    open,
+                }
+            }
+        })
+        .collect()
 }
 
 #[derive(Default)]
@@ -56,6 +130,8 @@ pub struct NotesState {
     pub mtime: Option<i64>,
     pub width: f32,
     pub copied: bool,
+    /// 기본(open 속성)에서 뒤집힌 토글 — 노트를 바꾸면 비운다
+    pub toggled: HashSet<String>,
     /// 그린 뒤 잰 자리 — 덩어리마다(창 좌표), 머리(경로 줄 ~ 동작 줄) 높이
     pub marks: Rc<RefCell<HashMap<usize, Bounds<Pixels>>>>,
     pub head_h: Rc<Cell<Pixels>>,
@@ -108,21 +184,7 @@ pub fn build_blocks(src: &str, text_hex: &str) -> (Vec<Block>, HashMap<String, u
             sections.entry(sec.to_string()).or_insert(i);
         }
     }
-    let blocks = segments
-        .into_iter()
-        .map(|s| match s {
-            note::Segment::Markdown(md) => Block::Text(md.into()),
-            note::Segment::Svg(src) => figure::svg(&src, text_hex).map_or_else(
-                |e| Block::Broken(format!("svg: {e}").into()),
-                |fig| Block::Figure { fig, light: false },
-            ),
-            note::Segment::Mermaid(src) => figure::mermaid(&src).map_or_else(
-                |e| Block::Broken(format!("mermaid: {e}").into()),
-                |fig| Block::Figure { fig, light: true },
-            ),
-        })
-        .collect();
-    (blocks, sections)
+    (blocks_of(src, text_hex, ""), sections)
 }
 
 /// 'TIL/이름.md' → '이름'
@@ -211,6 +273,7 @@ impl Spike {
             }
         }
         self.notes.marks.borrow_mut().clear();
+        self.notes.toggled.clear();
         self.scroll.set_offset(point(px(0.), px(0.)));
     }
 
@@ -690,35 +753,7 @@ impl Spike {
             .relative();
         let on_link = self.on_link(cx);
         let body = self.notes.blocks.iter().enumerate().map(|(i, b)| {
-            let el = match b {
-                Block::Text(md) => markdown::text(
-                    ElementId::NamedInteger("md".into(), i as u64),
-                    md.clone(),
-                    on_link.clone(),
-                    k,
-                )
-                .into_any_element(),
-                Block::Figure { fig, light } => div()
-                    .my(px(8.))
-                    .p_4()
-                    .border_1()
-                    .border_color(k.border)
-                    .rounded_md()
-                    .when(*light, |d| d.bg(gpui_kit::white()))
-                    .flex()
-                    .justify_center()
-                    .child({
-                        let w = fig.width.min(FIGURE_MAX);
-                        img(fig.image.clone())
-                            .w(px(w))
-                            .h(px(fig.height * w / fig.width))
-                    })
-                    .into_any_element(),
-                Block::Broken(msg) => div()
-                    .text_color(k.danger)
-                    .child(msg.clone())
-                    .into_any_element(),
-            };
+            let el = self.note_block(b, i as u64, &on_link, k, cx);
             // 덩어리마다 자리를 잰다 — 절 이동, 목차, 스크롤 스파이가 쓴다
             let marks = self.notes.marks.clone();
             div()
@@ -783,6 +818,166 @@ impl Spike {
                     .when(show_toc, |d| d.child(self.note_toc(k, cx))),
             )
             .when(self.notes.read_error.is_none(), |d| d.child(meta))
+    }
+
+    /// 본문 덩어리 하나 — 글(TextView), 그림, 깨진 그림, 토글(안쪽은 같은 규칙으로 다시)
+    fn note_block(
+        &self,
+        b: &Block,
+        id: u64,
+        on_link: &markdown::OnLink,
+        k: &Tokens,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        match b {
+            Block::Text(md) => markdown::text(
+                ElementId::NamedInteger("md".into(), id),
+                md.clone(),
+                on_link.clone(),
+                k,
+            )
+            .into_any_element(),
+            Block::Figure { fig, light } => div()
+                .my(px(8.))
+                .p_4()
+                .border_1()
+                .border_color(k.border)
+                .rounded_md()
+                .when(*light, |d| d.bg(gpui_kit::white()))
+                .flex()
+                .justify_center()
+                .child({
+                    let w = fig.width.min(FIGURE_MAX);
+                    img(fig.image.clone())
+                        .w(px(w))
+                        .h(px(fig.height * w / fig.width))
+                })
+                .into_any_element(),
+            Block::Broken(msg) => div()
+                .text_color(k.danger)
+                .child(msg.clone())
+                .into_any_element(),
+            Block::Toggle {
+                key,
+                summary,
+                meta,
+                open,
+                blocks,
+            } => self.toggle_card(key, summary.as_deref(), meta, *open, blocks, on_link, k, cx),
+        }
+    }
+
+    /// 마크다운 토글(.md-toggle) — 앉은 유리 카드 한 장이 머리이자 그릇이다. 안쪽 토글은 테만 남긴다
+    #[allow(clippy::too_many_arguments)]
+    fn toggle_card(
+        &self,
+        key: &str,
+        summary: Option<&str>,
+        meta: &str,
+        open_default: bool,
+        blocks: &[Block],
+        on_link: &markdown::OnLink,
+        k: &Tokens,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let open = open_default != self.notes.toggled.contains(key);
+        let nested = key.contains('/');
+        let group: SharedString = format!("toggle-{key}").into();
+        let (edge_hover, shadow_hover, text) = (k.glass_edge_hover, k.glass_shadow_hover(), k.text);
+        let key_owned = key.to_string();
+        let id_base = key
+            .bytes()
+            .fold(0u64, |h, b| h.wrapping_mul(131).wrapping_add(b as u64));
+        div()
+            .my(px(4.))
+            .border_1()
+            .border_color(k.glass_edge)
+            .rounded(px(12.))
+            .when(!nested, |d| {
+                d.bg(linear_gradient(
+                    150.,
+                    linear_color_stop(k.glass_fill.0, 0.),
+                    linear_color_stop(k.glass_fill.1, 1.),
+                ))
+                .shadow(k.glass_shadow(false))
+            })
+            .child(
+                div()
+                    .id(SharedString::from(format!("toggle-{key}")))
+                    .tag(format!("toggle-{key}"))
+                    .group(group.clone())
+                    .flex()
+                    .items_start()
+                    .gap(px(8.))
+                    .pt(px(9.))
+                    .pb(px(9.))
+                    .pl(px(12.))
+                    .pr(px(14.))
+                    .rounded(px(12.))
+                    .cursor_pointer()
+                    .text_size(px(14.))
+                    .line_height(relative(1.7))
+                    .child(
+                        icon(
+                            if open {
+                                "chevron-down"
+                            } else {
+                                "chevron-right"
+                            },
+                            14.,
+                        )
+                        .flex_shrink_0()
+                        // 꺾쇠를 제목 첫 줄 가운데에 — (1.7em - 14px) / 2
+                        .mt(px(4.9))
+                        .text_color(k.text_3)
+                        .group_hover(group.clone(), move |s| s.text_color(text)),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(k.text)
+                            .child(
+                                summary.map_or_else(|| t("common.toggle.untitled"), str::to_string),
+                            ),
+                    )
+                    .when(!meta.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .flex_shrink_0()
+                                .mt(px(2.9))
+                                .text_size(px(12.))
+                                .line_height(relative(1.5))
+                                .text_color(k.text_3)
+                                .child(meta.to_string()),
+                        )
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if !this.notes.toggled.remove(&key_owned) {
+                            this.notes.toggled.insert(key_owned.clone());
+                        }
+                        cx.notify();
+                    })),
+            )
+            .when(open, |d| {
+                d.child(
+                    div()
+                        .pl(px(34.))
+                        .pr(px(16.))
+                        .pb(px(12.))
+                        // 머리와 몸통 사이 한 줄 — 꺾쇠 자리부터(왼쪽 -22px)
+                        .child(div().h(px(1.)).ml(px(-22.)).mb(px(10.)).bg(k.glass_edge))
+                        .children(blocks.iter().enumerate().map(|(i, b)| {
+                            self.note_block(b, id_base.wrapping_add(i as u64 + 1), on_link, k, cx)
+                        })),
+                )
+            })
+            // 머리에 손이 닿으면 카드 테와 빛줄기가 함께 짙어진다
+            .group_hover(group, move |s| {
+                s.border_color(edge_hover).shadow(shadow_hover)
+            })
+            .into_any_element()
     }
 
     /// 오른쪽 목차(.note-toc) — 본문을 굴려도 판 위 4px 에 머문다(sticky). 지금 절은 굵게

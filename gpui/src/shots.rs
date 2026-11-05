@@ -223,6 +223,14 @@ fn notes(s: &mut Shots) {
     s.shot("notes-reading");
     s.window
         .update(&mut s.cx, |sp, _, cx| {
+            sp.scroll.set_offset(point(px(0.), px(-2000.)));
+            cx.notify();
+        })
+        .unwrap();
+    s.cx.run_until_parked();
+    s.shot("notes-reading-end");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
             sp.notes.selected = None;
             cx.notify();
         })
