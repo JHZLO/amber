@@ -472,3 +472,27 @@ fn a_click_outside_keeps_a_half_typed_sub_item(cx: &mut TestAppContext) {
     let kid = row(&db, 2).expect("바깥을 눌러도 적던 하위 항목은 저장된다");
     assert_eq!(get_i64(&kid, "parent_id"), Some(1));
 }
+
+fn vacation_of(db: &PathBuf) -> Option<String> {
+    let db = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    amber_gpui::vacations::get_vacation(&db, DATE).unwrap()
+}
+
+#[gpui_kit::test]
+fn the_vacation_picker_sets_and_clears_the_day(cx: &mut TestAppContext) {
+    let (db, note) = seeded("vacation", &[]);
+    let mut ui = open(cx, &db, &note);
+    click(&mut ui, "vac");
+    click(&mut ui, "vac-menu-1");
+    assert_eq!(vacation_of(&db).as_deref(), Some("half"));
+    assert!(ui.debug_bounds("vac-menu").is_none(), "고르면 닫힌다");
+    // 바깥을 누르면 아무것도 바꾸지 않고 닫힌다
+    click(&mut ui, "vac");
+    click(&mut ui, "today");
+    assert!(ui.debug_bounds("vac-menu").is_none());
+    assert_eq!(vacation_of(&db).as_deref(), Some("half"));
+    // 잡혀 있을 때만 맨 끝에 '해제'
+    click(&mut ui, "vac");
+    click(&mut ui, "vac-menu-5");
+    assert_eq!(vacation_of(&db), None);
+}

@@ -10,6 +10,7 @@ mod dialog;
 mod drawer;
 mod figure;
 mod markdown;
+mod menu;
 mod note;
 mod row_drag;
 #[cfg(feature = "shots")]
@@ -20,7 +21,9 @@ mod tt_drag;
 #[cfg(test)]
 mod ui_tests;
 
+use std::cell::Cell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -111,6 +114,9 @@ struct Spike {
     tt_drag: Option<tt_drag::TtDrag>,
     tt_grid: tt_drag::GridBounds,
     tt_editing: Option<(i64, Entity<InputState>)>,
+    /// 휴가 고르기 판이 열렸는가, 트리거의 자리
+    vac_open: bool,
+    vac_anchor: Rc<Cell<Bounds<Pixels>>>,
     /// 줄 끌기: 손잡이를 누른 자리, 끄는 중인 것, 줄마다 잰 자리와 목록 판의 자리
     grip_down: Option<Point<Pixels>>,
     row_drag: Option<row_drag::RowDrag>,
@@ -251,6 +257,8 @@ impl Spike {
             tt_drag: None,
             tt_grid: Default::default(),
             tt_editing: None,
+            vac_open: false,
+            vac_anchor: Default::default(),
             grip_down: None,
             row_drag: None,
             row_bounds: Default::default(),

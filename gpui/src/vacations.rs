@@ -4,7 +4,7 @@ use serde_json::{Map, Value as Json};
 
 use crate::db::{Db, Result, int, text};
 
-const KINDS: [&str; 5] = ["annual", "half", "sick", "public", "special"];
+pub const KINDS: [&str; 5] = ["annual", "half", "sick", "public", "special"];
 
 /// 모르는 코드(예전 버전이 넣었거나 손으로 고친 값)는 기본값으로 읽는다
 fn kind_of(raw: Option<&str>) -> String {

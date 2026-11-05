@@ -148,6 +148,23 @@ pub fn run(dir: &str) {
     s.shot("drag-4-dropped");
 
     timetable(&mut s);
+    vacation(&mut s);
+}
+
+/// 휴가 고르기 판 — 트리거 아래 유리 판, 첫 항목에 손을 올린 채
+fn vacation(s: &mut Shots) {
+    let w = s.any();
+    s.cx.run_until_parked();
+    let a = s
+        .window
+        .update(&mut s.cx, |sp, _, _| sp.vac_anchor.get())
+        .unwrap();
+    s.cx.simulate_click(w, a.center(), Modifiers::none());
+    s.mouse(
+        point(a.left() + px(30.), a.bottom() + px(6. + 4. + 16.)),
+        false,
+    );
+    s.shot("vac-menu");
 }
 
 /// 타임테이블 — 08:30 이 판 위에 오게 굴려 두고 블록을 hover, 만들기, 겹쳐 옮기기, 제목 입력

@@ -13,6 +13,7 @@ use gpui_kit::*;
 use crate::Spike;
 use crate::assets::icon;
 use crate::calendar::Unit;
+use crate::menu::{MenuItem, select_menu};
 use crate::row_drag::DragRow;
 use crate::theme::Tokens;
 
@@ -50,6 +51,10 @@ pub(crate) enum Confirm {
         id: i64,
         name: String,
     },
+}
+
+fn vac_of(s: &Spike) -> Option<String> {
+    s.cal.vacations.get(&s.date).cloned()
 }
 
 /// 중첩 단계마다 더 들어가는 폭
@@ -100,8 +105,8 @@ pub fn button(
             let hover = k.glass_shadow(true);
             let fill_hover = linear_gradient(
                 150.,
-                linear_color_stop(k.glass_fill.0.opacity(2.), 0.),
-                linear_color_stop(k.glass_fill.1.opacity(2.), 1.),
+                linear_color_stop(k.glass_fill_hover.0, 0.),
+                linear_color_stop(k.glass_fill_hover.1, 1.),
             );
             let text = k.text;
             d.cursor_pointer()
@@ -221,10 +226,11 @@ impl Spike {
             // 휴가는 하루에 거는 표식이라 주 단위에서는 숨긴다
             .when(!week, |d| {
                 d.child({
-                    // 휴가 — 꺼짐은 표준 트리거, 켜짐은 호박 글자. 고르기(목록)는 다음 단계에서
-                    let vac = self.cal.vacations.get(&self.date);
+                    // 휴가 — 꺼짐은 표준 트리거, 켜짐은 호박 글자. 누르면 곧장 쓰이지 않고 종류 목록이 열린다
+                    let vac = self.cal.vacations.get(&self.date).cloned();
+                    let anchor = self.vac_anchor.clone();
                     button("vac", k, true, false)
-                        .when_some(vac, |d, kind| {
+                        .when_some(vac.clone(), |d, kind| {
                             d.text_color(k.vacation)
                                 .child(t(&format!("todos.vac.kind.{kind}")))
                         })
@@ -234,6 +240,18 @@ impl Spike {
                         } else {
                             k.text_3
                         }))
+                        .child(
+                            canvas(move |b, _, _| anchor.set(b), |_, _, _, _| {})
+                                .absolute()
+                                .inset_0(),
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.vac_open = !this.vac_open;
+                            cx.notify();
+                        }))
+                })
+                .when(self.vac_open, |d| {
+                    d.child(self.vac_menu(vac_of(self), k, cx))
                 })
             })
             .child(div().flex_1())
@@ -400,6 +418,53 @@ impl Spike {
                         ))
                 })
             })
+    }
+
+    /// 휴가 종류 목록 — 해제는 이미 잡혀 있을 때만(빈 상태에서 '해제'는 고를 게 없다)
+    fn vac_menu(&self, cur: Option<String>, k: &Tokens, cx: &mut Context<Self>) -> Deferred {
+        let kinds = amber_gpui::vacations::KINDS;
+        let mut items: Vec<MenuItem> = kinds
+            .iter()
+            .map(|kind| MenuItem {
+                label: t(&format!("todos.vac.kind.{kind}")),
+                checked: cur.as_deref() == Some(*kind),
+            })
+            .collect();
+        if cur.is_some() {
+            items.push(MenuItem {
+                label: t("todos.vac.clear"),
+                checked: false,
+            });
+        }
+        let (pick, close) = (cx.entity().downgrade(), cx.entity().downgrade());
+        select_menu(
+            "vac-menu",
+            self.vac_anchor.get(),
+            items,
+            k,
+            move |i, _, cx| {
+                let _ = pick.update(cx, |this, cx| {
+                    this.vac_open = false;
+                    let r = match kinds.get(i) {
+                        Some(kind) => {
+                            amber_gpui::vacations::set_vacation(&this.db, &this.date, kind)
+                        }
+                        None => amber_gpui::vacations::remove_vacation(&this.db, &this.date),
+                    };
+                    if let Err(e) = r {
+                        eprintln!("vacation: {e}");
+                    }
+                    this.reload_calendar();
+                    cx.notify();
+                });
+            },
+            move |_, cx| {
+                let _ = close.update(cx, |this, cx| {
+                    this.vac_open = false;
+                    cx.notify();
+                });
+            },
+        )
     }
 
     /// 지금 단위의 목록 — 일이면 그 날, 주면 그 주의 '주 할 일'
