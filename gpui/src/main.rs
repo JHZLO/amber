@@ -16,6 +16,7 @@ mod note;
 mod note_edit;
 mod note_find;
 mod note_names;
+mod note_page_find;
 mod notes_view;
 mod pane;
 mod root_picker;
@@ -543,7 +544,7 @@ impl Render for Spike {
                 }),
             )
             // ⌥⌘C — 노트 탭에서 지금 노트의 경로 복사(NoteCrumb)
-            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
                 let m = &e.keystroke.modifiers;
                 if this.section == Section::Notes
                     && m.platform
@@ -553,6 +554,16 @@ impl Render for Spike {
                     && e.keystroke.key == "c"
                 {
                     this.copy_note_path(cx);
+                }
+                // ⌘F — 노트 안에서 찾기(트리 판에 포커스가 있으면 트리 찾기가 먼저 받아 멈춘다)
+                if this.section == Section::Notes
+                    && m.platform
+                    && !m.alt
+                    && !m.shift
+                    && e.keystroke.key == "f"
+                {
+                    this.start_page_find(window, cx);
+                    cx.notify();
                 }
                 // ⌘S — 노트를 고치는 중일 때 저장
                 if this.section == Section::Notes

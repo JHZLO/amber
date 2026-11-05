@@ -63,7 +63,7 @@ impl Spike {
         .detach();
         state.update(cx, |s, cx| s.focus(window, cx));
         let text = hex(Tokens::get(cx).text);
-        let (preview, _) = crate::notes_view::build_blocks(&body, &text);
+        let (preview, _) = crate::notes_view::build_blocks(&body, &text, cx);
         self.notes.edit = Some(NoteEdit {
             state,
             preview,
@@ -76,7 +76,7 @@ impl Spike {
         let text = hex(Tokens::get(cx).text);
         if let Some(e) = self.notes.edit.as_mut() {
             let draft = e.state.read(cx).value().to_string();
-            e.preview = crate::notes_view::build_blocks(&draft, &text).0;
+            e.preview = crate::notes_view::build_blocks(&draft, &text, cx).0;
         }
     }
 

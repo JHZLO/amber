@@ -28,7 +28,8 @@ pub const LIST_DEFAULT: f32 = 340.;
 const FIGURE_MAX: f32 = 688.0;
 
 pub enum Block {
-    Text(SharedString),
+    /// 글 덩어리 — 상태를 직접 들어야 노트 안 찾기가 그려진 글자에서 찾고 칠하고 그 자리로 굴린다
+    Text(Entity<gpui_kit::base::text::TextViewState>),
     /// light = 흰 판(mermaid). 지금 앱도 mermaid 는 밝은 판, svg 는 어두운 판에 놓는다
     Figure {
         fig: figure::Figure,
@@ -79,12 +80,14 @@ fn toggle_meta(body: &str) -> String {
         .join(", ")
 }
 
-fn blocks_of(src: &str, text_hex: &str, prefix: &str) -> Vec<Block> {
+fn blocks_of(src: &str, text_hex: &str, prefix: &str, cx: &mut App) -> Vec<Block> {
     note::split(src)
         .into_iter()
         .enumerate()
         .map(|(i, s)| match s {
-            note::Segment::Markdown(md) => Block::Text(md.into()),
+            note::Segment::Markdown(md) => {
+                Block::Text(cx.new(|cx| gpui_kit::base::text::TextViewState::markdown(&md, cx)))
+            }
             note::Segment::Svg(src) => figure::svg(&src, text_hex).map_or_else(
                 |e| Block::Broken(format!("svg: {e}").into()),
                 |fig| Block::Figure { fig, light: false },
@@ -101,7 +104,7 @@ fn blocks_of(src: &str, text_hex: &str, prefix: &str) -> Vec<Block> {
                 let key = format!("{prefix}{i}");
                 Block::Toggle {
                     meta: toggle_meta(&body),
-                    blocks: blocks_of(&body, text_hex, &format!("{key}/")),
+                    blocks: blocks_of(&body, text_hex, &format!("{key}/"), cx),
                     key,
                     summary,
                     open,
@@ -142,6 +145,8 @@ pub struct NotesState {
     pub tree_press: Option<Point<Pixels>>,
     /// 트리에서 찾기(⌘F)
     pub find: Option<crate::note_find::TreeFindState>,
+    /// 노트 안에서 찾기(⌘F, 트리 밖에서)
+    pub page_find: Option<crate::note_page_find::PageFindState>,
     /// 작업 폴더 고르기 판이 열렸는가, 트리거 자리
     pub root_menu: bool,
     pub root_anchor: Rc<Cell<Bounds<Pixels>>>,
@@ -192,7 +197,11 @@ pub(crate) fn time_ago(ms: i64, now: i64) -> String {
 }
 
 /// 노트 본문 → 글 덩어리와 그림. svg 의 currentColor 는 본문 글자색이다
-pub fn build_blocks(src: &str, text_hex: &str) -> (Vec<Block>, HashMap<String, usize>) {
+pub fn build_blocks(
+    src: &str,
+    text_hex: &str,
+    cx: &mut App,
+) -> (Vec<Block>, HashMap<String, usize>) {
     let segments = note::split(src);
     let mut sections = HashMap::new();
     for (i, s) in segments.iter().enumerate() {
@@ -203,7 +212,7 @@ pub fn build_blocks(src: &str, text_hex: &str) -> (Vec<Block>, HashMap<String, u
             sections.entry(sec.to_string()).or_insert(i);
         }
     }
-    (blocks_of(src, text_hex, ""), sections)
+    (blocks_of(src, text_hex, "", cx), sections)
 }
 
 /// 'TIL/이름.md' → '이름'
@@ -268,7 +277,7 @@ impl Spike {
         match vault::notes(&self.db).read_file(rel) {
             Ok(body) => {
                 let text = hex(Tokens::get(cx).text);
-                let (blocks, sections) = build_blocks(&body, &text);
+                let (blocks, sections) = build_blocks(&body, &text, cx);
                 let toc = note::split(&body)
                     .iter()
                     .enumerate()
@@ -300,6 +309,7 @@ impl Spike {
         }
         self.notes.marks.borrow_mut().clear();
         self.notes.toggled.clear();
+        self.notes.page_find = None;
         self.scroll.set_offset(point(px(0.), px(0.)));
     }
 
@@ -435,6 +445,12 @@ impl Spike {
                                         }
                                     }),
                                 )
+                                // 바깥을 누르면 트리에서 포커스를 놓는다 — 그래야 본문에서의 ⌘F 가 노트 안 찾기로 간다
+                                .on_mouse_down_out(cx.listener(|this, _, window, cx| {
+                                    if this.tree_focus.is_focused(window) {
+                                        this.focus.focus(window, cx);
+                                    }
+                                }))
                                 .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
                                     let m = &e.keystroke.modifiers;
                                     if m.platform && !m.alt && e.keystroke.key == "f" {
@@ -460,11 +476,9 @@ impl Spike {
                     .pr(px(8.))
                     .pl(px(4.))
                     .child(
-                        card(div().size_full().overflow_hidden()).child(self.note_detail(
-                            body_w + 68. > TOC_MIN_WINDOW,
-                            k,
-                            cx,
-                        )),
+                        card(div().relative().size_full().overflow_hidden())
+                            .child(self.note_detail(body_w + 68. > TOC_MIN_WINDOW, k, cx))
+                            .children(self.page_find_bar(k, cx)),
                     ),
             )
     }
@@ -1155,14 +1169,16 @@ impl Spike {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         match b {
-            Block::Text(md) => markdown::text(
-                ElementId::NamedInteger("md".into(), id),
-                md.clone(),
-                on_link.clone(),
-                k,
-                self.notes.asset_base.clone(),
-            )
-            .into_any_element(),
+            Block::Text(state) => {
+                let _ = id;
+                let this = cx.entity().downgrade();
+                markdown::view(state, on_link.clone(), k, self.notes.asset_base.clone())
+                    // 찾기가 그 줄을 보여 달라고 하면 본문 판을 굴린다(판이 TextView 밖의 스크롤이라 직접)
+                    .on_reveal(move |b, _, cx| {
+                        let _ = this.update(cx, |s, _| s.reveal_in_note(b));
+                    })
+                    .into_any_element()
+            }
             Block::Figure { fig, light } => div()
                 .my(px(8.))
                 .p_4()

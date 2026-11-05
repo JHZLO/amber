@@ -32,8 +32,12 @@ impl Spike {
             window,
             |this, input, ev: &InputEvent, _, cx| match ev {
                 InputEvent::Change => {
-                    if let Some(f) = this.notes.find.as_mut() {
-                        f.query = input.read(cx).value().to_string();
+                    let q = input.read(cx).value().to_string();
+                    // Enter 뒤에도 값이 그대로인 Change 가 온다 — 검색어가 바뀔 때만 처음으로
+                    if let Some(f) = this.notes.find.as_mut()
+                        && f.query != q
+                    {
+                        f.query = q;
                         f.idx = 0;
                     }
                     cx.notify();

@@ -42,6 +42,15 @@ fn open_fixed(cx: &mut TestAppContext, db: &PathBuf) -> VisualTestContext {
     open_with(cx, db, Clock::Fixed(at))
 }
 
+thread_local! {
+    /// 마지막으로 연 화면 — 화면에 안 보이는 상태(찾기 결과 수 등)를 시험이 읽는다
+    static LAST: std::cell::RefCell<Option<gpui_kit::Entity<Spike>>> = const { std::cell::RefCell::new(None) };
+}
+
+fn spike() -> gpui_kit::Entity<Spike> {
+    LAST.with(|l| l.borrow().clone()).expect("연 화면")
+}
+
 fn open_with(cx: &mut TestAppContext, db: &PathBuf, clock: Clock) -> VisualTestContext {
     let db = db.to_str().unwrap().to_string();
     let window = cx.update(|cx| {
@@ -56,11 +65,12 @@ fn open_with(cx: &mut TestAppContext, db: &PathBuf, clock: Clock) -> VisualTestC
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             ..Default::default()
         };
-        let (window, _) = gpui_kit::open_window(options, cx, move |window, cx| {
+        let (window, view) = gpui_kit::open_window(options, cx, move |window, cx| {
             let db = Db::open(&db, clock).unwrap();
             cx.new(|cx| Spike::new(db, DATE.to_string(), None, None, Instant::now(), window, cx))
         })
         .unwrap();
+        LAST.with(|l| *l.borrow_mut() = Some(view));
         window
     });
     let vcx = VisualTestContext::from_window(window, cx);
@@ -999,4 +1009,45 @@ fn tree_find_reaches_into_collapsed_folders(cx: &mut TestAppContext) {
         ui.debug_bounds("tree-Inbox.md").is_some(),
         "Esc 로 닫으면 원래 트리"
     );
+}
+
+#[gpui_kit::test]
+fn command_f_in_the_note_finds_rendered_text(cx: &mut TestAppContext) {
+    let db = seeded("page-find", &[]);
+    vault_note(
+        &db,
+        "T.md",
+        "# Title\n\nfoo **bar** foo\n\n## 2. Next\n\nFOO end\n",
+    );
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-T.md");
+    // 트리를 누른 뒤 본문을 누르면 ⌘F 는 노트 안 찾기
+    click(&mut ui, "note-scroll");
+    ui.simulate_keystrokes("cmd-f");
+    ui.simulate_input("foo");
+    ui.run_until_parked();
+    assert!(ui.debug_bounds("page-find-count").is_some());
+    assert!(
+        ui.debug_bounds("tree-find-count").is_none(),
+        "트리 찾기가 아니다"
+    );
+    let hits = |ui: &mut VisualTestContext| {
+        ui.update(|_, cx| {
+            let n = &spike().read(cx).notes;
+            let f = n.page_find.as_ref().unwrap();
+            (f.hits.len(), f.idx)
+        })
+    };
+    assert_eq!(hits(&mut ui), (3, 0), "대소문자 무시, 덩어리를 넘어");
+    ui.simulate_keystrokes("enter");
+    ui.run_until_parked();
+    assert_eq!(hits(&mut ui), (3, 1));
+    ui.simulate_keystrokes("shift-enter");
+    ui.simulate_keystrokes("shift-enter");
+    ui.run_until_parked();
+    assert_eq!(hits(&mut ui), (3, 2), "앞으로 돌면 끝으로");
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert!(ui.debug_bounds("page-find-count").is_none());
 }

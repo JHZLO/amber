@@ -307,6 +307,27 @@ fn notes(s: &mut Shots) {
     s.mouse(point(px(1300.), px(880.)), false);
     s.shot("notes-reading");
     s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.start_page_find(window, cx);
+            if let Some(f) = sp.notes.page_find.as_mut() {
+                f.input
+                    .update(cx, |st, cx| st.set_value("line", window, cx));
+                f.query = "line".into();
+                f.idx = 1;
+            }
+            sp.paint_page_find(cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.cx.run_until_parked();
+    s.shot("page-find");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.close_page_find(cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.scroll.set_offset(point(px(0.), px(-2000.)));
             cx.notify();

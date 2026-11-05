@@ -129,10 +129,23 @@ pub fn text(
     k: &Tokens,
     base: Option<SharedString>,
 ) -> TextView {
+    configure(TextView::markdown(id, md), on_link, k, base)
+}
+
+/// 상태를 직접 든 글 덩어리 — 노트 안 찾기가 그려진 글자에서 찾고 칠하고 그 자리로 굴린다
+pub fn view(
+    state: &Entity<gpui_kit::base::text::TextViewState>,
+    on_link: OnLink,
+    k: &Tokens,
+    base: Option<SharedString>,
+) -> TextView {
+    configure(TextView::new(state), on_link, k, base)
+}
+
+fn configure(view: TextView, on_link: OnLink, k: &Tokens, base: Option<SharedString>) -> TextView {
     let click = on_link.clone();
     let img_base = base.clone();
-    TextView::markdown(id, md)
-        .style(note_style(k))
+    view.style(note_style(k))
         // 원격 URL 이나 기준 폴더가 없는 곳은 주소 그대로
         .image_source(move |uri| {
             match img_base
