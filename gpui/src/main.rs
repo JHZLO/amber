@@ -68,6 +68,8 @@ struct Spike {
     date: String,
     /// 고른 날의 목록(listTodos)과 그 날 이전의 밀린 항목(listOverdueOpen), 서랍(언젠가)에 든 수
     todos: Vec<Row>,
+    /// 주 단위일 때 그 주의 '주 할 일'(scope = week)
+    week_todos: Vec<Row>,
     overdue: Vec<Row>,
     overdue_open: bool,
     parked_n: usize,
@@ -125,7 +127,8 @@ impl Spike {
                     if text.is_empty() {
                         return;
                     }
-                    if let Err(e) = todos::create_todo(&this.db, &text, &this.date, None, "day") {
+                    let (due, scope) = this.add_target();
+                    if let Err(e) = todos::create_todo(&this.db, &text, &due, None, scope) {
                         eprintln!("createTodo: {e}");
                     }
                     input.update(cx, |s, cx| s.set_value("", window, cx));
@@ -182,6 +185,7 @@ impl Spike {
                 _ => calendar::Unit::Day,
             },
             counts: HashMap::new(),
+            week_counts: HashMap::new(),
             vacations: HashMap::new(),
         };
         // 지금 앱의 CAL_W_MIN/MAX/DEFAULT
@@ -194,6 +198,7 @@ impl Spike {
             db,
             date,
             todos: Vec::new(),
+            week_todos: Vec::new(),
             overdue: Vec::new(),
             overdue_open: false,
             parked_n: 0,
@@ -218,6 +223,11 @@ impl Spike {
         };
         this.reload();
         this.reload_calendar();
+        if this.cal.unit == calendar::Unit::Week {
+            this.input.update(cx, |s, cx| {
+                s.set_placeholder(t("todos.week.add"), window, cx)
+            });
+        }
         // --jump: 절 링크를 누른 것처럼 그 절로 간다. 클릭을 못 보내는 환경에서 확인하려고 둔다 —
         // 글이 다 그려진 뒤에 가야 해서 잠깐 기다린다
         if let Some(sec) = jump {
@@ -248,6 +258,12 @@ impl Spike {
             log("listTodos", e);
             Vec::new()
         });
+        self.week_todos = if self.cal.unit == calendar::Unit::Week {
+            let ws = amber_gpui::dates::week_start_of(&self.date);
+            todos::list_week_todos(&self.db, &ws).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         let today = amber_gpui::dates::today_str(chrono::Local::now().timestamp_millis());
         self.overdue = if self.date <= today {
             todos::list_overdue_open(&self.db, &self.date).unwrap_or_else(|e| {
@@ -291,9 +307,17 @@ impl Spike {
         self.reload_calendar();
     }
 
-    fn set_unit(&mut self, unit: calendar::Unit, cx: &mut Context<Self>) {
+    fn set_unit(&mut self, unit: calendar::Unit, window: &mut Window, cx: &mut Context<Self>) {
         self.cal.unit = unit;
         amber_gpui::prefs::set(&self.db, "amber.todo.unit", unit.id());
+        let hint = t(if unit == calendar::Unit::Week {
+            "todos.week.add"
+        } else {
+            "todos.quick.placeholder"
+        });
+        self.input
+            .update(cx, |s, cx| s.set_placeholder(hint, window, cx));
+        self.reload();
         cx.notify();
     }
 
@@ -319,6 +343,20 @@ impl Spike {
             .map(|(day, list)| (day, tree::day_progress(&list)))
             .filter(|(_, (_, total))| *total > 0)
             .collect();
+        // 주 표식은 그 주 첫 칸에만 찍으므로 주 시작일 키로 따로 센다
+        self.cal.week_counts = todos::list_week_counts(
+            &self.db,
+            &dates::week_start_of(from),
+            &dates::week_start_of(to),
+        )
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|r| {
+            let day = r.get("due_date")?.as_str()?.to_string();
+            let n = |k: &str| r.get(k).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+            Some((day, (n("done"), n("total"))))
+        })
+        .collect();
         self.cal.vacations = vacations::list_vacations(&self.db, from, to)
             .map(|m| {
                 m.into_iter()
@@ -433,7 +471,10 @@ impl Render for Spike {
                         .flex_col()
                         .child(self.day_card(&k, cx)),
                 )
-                .when(self.parked_open, |d| d.child(self.drawer(&k, cx)))
+                .when(
+                    self.parked_open && self.cal.unit == calendar::Unit::Day,
+                    |d| d.child(self.drawer(&k, cx)),
+                )
                 .into_any_element(),
             Section::Notes => note.into_any_element(),
             // 아직 옮기지 않은 탭 — 체크리스트(D)에서 하나씩

@@ -12,6 +12,7 @@ use gpui_kit::*;
 
 use crate::Spike;
 use crate::assets::icon;
+use crate::calendar::Unit;
 use crate::theme::Tokens;
 
 /// 지우기 전에 묻는 것 — 라이브 항목(하위 수를 말한다) 또는 이 날짜에 남은 이월 기록 한 줄
@@ -113,6 +114,7 @@ impl Spike {
     pub(crate) fn day_card(&self, k: &Tokens, cx: &mut Context<Self>) -> Div {
         let today = dates::today_str(chrono::Local::now().timestamp_millis());
         let is_today = self.date == today;
+        let week = self.cal.unit == Unit::Week;
 
         let nav = |id: &'static str, name: &str, delta: i64, cx: &mut Context<Self>| {
             div()
@@ -126,7 +128,9 @@ impl Spike {
                 .hover(|s| s.bg(k.text_mix(0.06)))
                 .child(icon(name, 16.).text_color(k.text_2))
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    let d = dates::shift_day(&this.date, delta);
+                    // 주 단위면 한 주씩
+                    let step = if this.cal.unit == Unit::Week { 7 } else { 1 };
+                    let d = dates::shift_day(&this.date, delta * step);
                     this.go_date(d);
                     cx.notify();
                 }))
@@ -148,22 +152,35 @@ impl Spike {
                     .text_size(px(15.))
                     .font_weight(FontWeight::BOLD)
                     .text_color(k.text)
-                    .child(dates::format_day_long(&self.date)),
-            )
-            .child({
-                // 휴가 — 꺼짐은 표준 트리거, 켜짐은 호박 글자. 고르기(목록)는 다음 단계에서
-                let vac = self.cal.vacations.get(&self.date);
-                button("vac", k, true, false)
-                    .when_some(vac, |d, kind| {
-                        d.text_color(k.vacation)
-                            .child(t(&format!("todos.vac.kind.{kind}")))
-                    })
-                    .when(vac.is_none(), |d| d.child(t("todos.vac.set")))
-                    .child(icon("chevron-down", 13.).text_color(if vac.is_some() {
-                        k.vacation
+                    .child(if week {
+                        let ws = dates::week_start_of(&self.date);
+                        let range = format!(
+                            "{} – {}",
+                            dates::format_day_short(&ws),
+                            dates::format_day_short(&dates::shift_day(&ws, 6))
+                        );
+                        t_with("todos.week.title", &[("range", &range)])
                     } else {
-                        k.text_3
-                    }))
+                        dates::format_day_long(&self.date)
+                    }),
+            )
+            // 휴가는 하루에 거는 표식이라 주 단위에서는 숨긴다
+            .when(!week, |d| {
+                d.child({
+                    // 휴가 — 꺼짐은 표준 트리거, 켜짐은 호박 글자. 고르기(목록)는 다음 단계에서
+                    let vac = self.cal.vacations.get(&self.date);
+                    button("vac", k, true, false)
+                        .when_some(vac, |d, kind| {
+                            d.text_color(k.vacation)
+                                .child(t(&format!("todos.vac.kind.{kind}")))
+                        })
+                        .when(vac.is_none(), |d| d.child(t("todos.vac.set")))
+                        .child(icon("chevron-down", 13.).text_color(if vac.is_some() {
+                            k.vacation
+                        } else {
+                            k.text_3
+                        }))
+                })
             })
             .child(div().flex_1())
             .child(
@@ -178,24 +195,27 @@ impl Spike {
             )
             .child(nav("prev-day", "chevron-left", -1, cx))
             .child(nav("next-day", "chevron-right", 1, cx))
-            .child(
-                button("drawer", k, !self.parked_open, false)
-                    .ml(px(8.))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.set_parked_open(!this.parked_open);
-                        cx.notify();
-                    }))
-                    .child(icon("panel", 14.).text_color(k.text_2))
-                    .child(t("todos.drawer.title"))
-                    .when(self.parked_n > 0, |d| {
-                        d.child(
-                            div()
-                                .text_size(px(11.))
-                                .text_color(k.text_3)
-                                .child(self.parked_n.to_string()),
-                        )
-                    }),
-            );
+            // 서랍은 일 단위에서만 — 주 목록은 '이번 주'라는 기한이 있어 '날짜 없음'과 섞이지 않는다
+            .when(!week, |d| {
+                d.child(
+                    button("drawer", k, !self.parked_open, false)
+                        .ml(px(8.))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.set_parked_open(!this.parked_open);
+                            cx.notify();
+                        }))
+                        .child(icon("panel", 14.).text_color(k.text_2))
+                        .child(t("todos.drawer.title"))
+                        .when(self.parked_n > 0, |d| {
+                            d.child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(k.text_3)
+                                    .child(self.parked_n.to_string()),
+                            )
+                        }),
+                )
+            });
 
         let quick = div()
             .flex()
@@ -215,7 +235,7 @@ impl Spike {
                     .child(Input::new(&self.input).appearance(false)),
             );
 
-        let progress = tree::day_progress(&self.todos);
+        let progress = tree::day_progress(self.rows());
         let mut card = div()
             .flex()
             .flex_col()
@@ -228,7 +248,7 @@ impl Spike {
             .bg(glass(k))
             .shadow(k.glass_shadow(false))
             .child(head);
-        if self.date <= today && !self.overdue.is_empty() {
+        if !week && self.date <= today && !self.overdue.is_empty() {
             card = card.child(self.overdue_strip(k, is_today, cx));
         }
         card.child(quick)
@@ -241,24 +261,28 @@ impl Spike {
                     .px(px(16.))
                     .pt(px(10.))
                     .overflow_y_scroll()
-                    .when(self.todos.is_empty(), |d| {
+                    .when(self.rows().is_empty(), |d| {
                         d.child(
                             div()
                                 .py(px(16.))
                                 .px(px(10.))
                                 .text_size(px(12.))
                                 .text_color(k.text_3)
-                                .child(t("todos.empty.day")),
+                                .child(t(if week {
+                                    "todos.week.empty"
+                                } else {
+                                    "todos.empty.day"
+                                })),
                         )
                     })
                     .children({
-                        let roots = tree::visible_roots(&self.todos);
+                        let roots = tree::visible_roots(self.rows());
                         let mut prev_group = false;
                         roots
                             .iter()
                             .enumerate()
                             .map(|(i, r)| {
-                                let group = self.todos.iter().any(|c| c.parent() == Some(r.id()));
+                                let group = self.rows().iter().any(|c| c.parent() == Some(r.id()));
                                 // 묶음 앞뒤는 22px 띄운다(.todo-unit.is-group + .todo-unit)
                                 let gap = i > 0 && (prev_group || group);
                                 prev_group = group;
@@ -267,10 +291,31 @@ impl Spike {
                             .collect::<Vec<_>>()
                     }),
             )
-            .when(progress.1 > 0, |d| {
-                d.child(
-                    div()
-                        .mt(px(14.))
+            .child(if week {
+                // 주 목록은 묶음 규칙 없이 전부 센다. 늘 '이번 주에 할 것' 안내가 붙는다
+                let rows = self.rows();
+                let mut meta = String::new();
+                if !rows.is_empty() {
+                    let done = rows.iter().filter(|r| r.is("done", 1)).count();
+                    meta = t_with(
+                        "todos.week.done",
+                        &[
+                            ("total", &rows.len().to_string()),
+                            ("done", &done.to_string()),
+                        ],
+                    );
+                    // 지금 앱과 같은 구분자(U+00B7)
+                    meta.push_str(" \u{b7} ");
+                }
+                meta.push_str(&t("todos.week.hint"));
+                div()
+                    .mt(px(14.))
+                    .text_size(px(12.))
+                    .text_color(k.text_3)
+                    .child(meta)
+            } else {
+                div().when(progress.1 > 0, |d| {
+                    d.mt(px(14.))
                         .text_size(px(12.))
                         .text_color(k.text_3)
                         .child(t_with(
@@ -279,15 +324,33 @@ impl Spike {
                                 ("total", &progress.1.to_string()),
                                 ("done", &progress.0.to_string()),
                             ],
-                        )),
-                )
+                        ))
+                })
             })
+    }
+
+    /// 지금 단위의 목록 — 일이면 그 날, 주면 그 주의 '주 할 일'
+    pub(crate) fn rows(&self) -> &[Row] {
+        if self.cal.unit == Unit::Week {
+            &self.week_todos
+        } else {
+            &self.todos
+        }
+    }
+
+    /// 새 항목이 들어갈 자리 — (날짜, scope). 주 할 일은 그 주의 시작일에 단다
+    pub(crate) fn add_target(&self) -> (String, &'static str) {
+        if self.cal.unit == Unit::Week {
+            (dates::week_start_of(&self.date), "week")
+        } else {
+            (self.date.clone(), "day")
+        }
     }
 
     /// 항목 + 그 서브트리. 깊이 > 0 은 24px 들여쓰고, 셋째 단부터는 왼쪽 가는 선이 묶는다
     fn unit(&self, node: &Row, depth: usize, k: &Tokens, cx: &mut Context<Self>) -> Div {
         let kids: Vec<&Row> = self
-            .todos
+            .rows()
             .iter()
             .filter(|c| c.parent() == Some(node.id()))
             .collect();
@@ -346,7 +409,7 @@ impl Spike {
         let kids: Vec<&Row> = if overdue {
             Vec::new()
         } else {
-            self.todos
+            self.rows()
                 .iter()
                 .filter(|c| c.parent() == Some(id) && !c.is("gone", 1))
                 .collect()
@@ -617,7 +680,7 @@ impl Spike {
                         move |this, _, _, cx| {
                             // 하위가 없어도 묻는다 — 지우는 동작에 예외를 두면 손이 먼저 나간다
                             let live: Vec<Row> = this
-                                .todos
+                                .rows()
                                 .iter()
                                 .filter(|r| !r.is("gone", 1))
                                 .cloned()
@@ -717,7 +780,8 @@ impl Spike {
         if text.is_empty() {
             return false;
         }
-        let r = amber_gpui::todos::create_todo(&self.db, text, &self.date, Some(parent), "day")
+        let (due, scope) = self.add_target();
+        let r = amber_gpui::todos::create_todo(&self.db, text, &due, Some(parent), scope)
             .and_then(|_| amber_gpui::todos::recompute_chain_from(&self.db, Some(parent)));
         if let Err(e) = r {
             eprintln!("addChild: {e}");

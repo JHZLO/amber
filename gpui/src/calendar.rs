@@ -33,6 +33,8 @@ pub struct CalendarData {
     pub cursor: YearMonth,
     pub unit: Unit,
     pub counts: HashMap<String, (usize, usize)>,
+    /// 주 시작일 → 그 주의 '주 할 일' (끝낸 수, 전체). 주 단위에서 그 주 첫 칸에 표식으로만 쓴다
+    pub week_counts: HashMap<String, (usize, usize)>,
     pub vacations: HashMap<String, String>,
 }
 
@@ -94,7 +96,7 @@ impl Spike {
                     })
                     .when(!active, |d| d.hover(|s| s.text_color(k.text)))
                     .child(label)
-                    .on_click(cx.listener(move |this, _, _, cx| this.set_unit(u, cx)))
+                    .on_click(cx.listener(move |this, _, window, cx| this.set_unit(u, window, cx)))
             }));
 
         let nav = |id: &'static str, name: &str, delta: i32, cx: &mut Context<Self>| {
@@ -211,6 +213,11 @@ impl Spike {
                     _ => String::new(),
                 };
                 let count = cal.counts.get(date).copied();
+                // 주 할 일은 일별 진행을 뺏지 않고 그 주 첫 칸에 표식을 더한다(있을 때만)
+                let week_mark = (cal.unit == Unit::Week && dates::week_start_of(date) == *date)
+                    .then(|| cal.week_counts.get(date).copied())
+                    .flatten()
+                    .filter(|(_, total)| *total > 0);
                 let date_owned = date.clone();
 
                 // 고른 휴가 날(일 모드)은 강조 유리 대신 흐린 링 — 휴가 이름의 호박색이 묻히지 않게
@@ -316,6 +323,21 @@ impl Spike {
                                             .child(format!("{done}/{total}")),
                                     )
                                 }),
+                        )
+                    })
+                    .when_some(week_mark, |d, (done, total)| {
+                        let on = done >= total;
+                        d.child(
+                            div()
+                                .absolute()
+                                .top(px(7.))
+                                .right(px(8.))
+                                .w(px(7.))
+                                .h(px(2.))
+                                .rounded(px(1.))
+                                .border_1()
+                                .border_color(if on { k.text } else { k.text_3 })
+                                .when(on, |d| d.bg(k.text)),
                         )
                     })
                     .on_click(cx.listener(move |this, _, _, cx| {
