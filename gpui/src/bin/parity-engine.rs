@@ -22,7 +22,7 @@ fn main() {
             }
         };
         let out = match msg["cmd"].as_str().unwrap_or_default() {
-            "ops" => json!({"ok": true, "ops": amber_gpui::OPS, "migrate": false}),
+            "ops" => json!({"ok": true, "ops": amber_gpui::OPS, "migrate": true}),
             "open" => match {
                 // "오늘"(리포트 digest 등)은 하네스가 정한 시간대로 센다. 엔진은 한 줄씩 도는 단일 스레드다
                 if let Some(tz) = msg["tz"].as_str() {
@@ -49,6 +49,17 @@ fn main() {
                     }
                 }
                 None => json!({"ok": false, "error": "열린 DB 가 없다"}),
+            },
+            // 빈 파일에 마이그레이션을 깐다 — 하네스가 장부와 스키마를 지금 앱의 것과 견준다
+            "migrate" => match Db::open(
+                msg["db"].as_str().unwrap_or_default(),
+                Clock::Fixed(now.clone()),
+            )
+            .map_err(|e| e.to_string())
+            .and_then(|d| amber_gpui::migrate::run(&d))
+            {
+                Ok(()) => json!({"ok": true}),
+                Err(e) => json!({"ok": false, "error": e}),
             },
             "close" => {
                 db = None;

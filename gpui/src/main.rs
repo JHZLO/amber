@@ -392,6 +392,7 @@ fn main() {
             };
             gpui_kit::open_window(options, cx, move |window, cx| {
                 let db = Db::open(&db_path, Clock::System).expect("DB 사본을 못 열었다");
+                amber_gpui::migrate::run(&db).expect("마이그레이션");
                 cx.new(|cx| Spike::new(db, date, &note_path, skip, jump, started, window, cx))
             })
             .expect("창을 못 열었다");

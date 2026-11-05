@@ -3,6 +3,7 @@ pub mod concepts;
 pub mod db;
 pub mod dbconn;
 pub mod mermaid;
+pub mod migrate;
 pub mod report;
 pub mod todos;
 pub mod vacations;
