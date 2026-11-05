@@ -18,6 +18,7 @@ import * as report from "../src/lib/report";
 import * as timeBlocks from "../src/lib/timeBlocks";
 import * as todos from "../src/lib/todos";
 import * as todoTree from "../src/lib/todoTree";
+import * as treeFind from "../src/lib/treeFind";
 import * as ttLayout from "../src/lib/ttLayout";
 import * as vacations from "../src/lib/vacations";
 import * as vault from "../src/lib/vault";
@@ -45,6 +46,7 @@ export const MODULES = [
   "holidays",
   "todoTree",
   "ttLayout",
+  "treeFind",
 ] as const;
 
 export const OPS: Record<string, Op> = {
@@ -157,6 +159,14 @@ export const OPS: Record<string, Op> = {
   "vaultTree.remapPaths": (paths: string[], oldPrefix: string, newPrefix: string) => [
     ...vaultTree.remapPaths(paths, oldPrefix, newPrefix),
   ],
+
+  // 트리에서 찾기(⌘F) — 접힌 폴더 안까지 거르고 조상을 펼친다
+  "treeFind.hits": treeFind.hits,
+  "treeFind.splitHit": treeFind.splitHit,
+  "treeFind.filterTree": (nodes: treeFind.FindableNode[], query: string) => {
+    const r = treeFind.filterTree(nodes, query);
+    return { nodes: r.nodes, matches: r.matches, expand: [...r.expand] };
+  },
   // 검색 화면(SearchModal)이 부르는 그대로 — 트리와 읽기를 노트 또는 다이어그램 쪽으로 묶는다
   "vaultTree.searchFiles": (section: "notes" | "diagrams", query: string, limit?: number) =>
     vaultTree.searchFiles(

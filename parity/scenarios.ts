@@ -1013,6 +1013,37 @@ const vaultTreePure: Scenario = {
   },
 };
 
+/** 트리에서 찾기 — 대소문자, 한글, 이모지(UTF-16 짝), 폴더가 맞으면 아래 통째, 조상 펼침 순서 */
+const treeFindSweep: Scenario = {
+  name: "treeFind/sweep",
+  plan() {
+    const tree = [
+      { name: "CS", path: "CS", isDir: true, children: [
+        { name: "Network", path: "CS/Network", isDir: true, children: [
+          { name: "TCP 혼잡 제어", path: "CS/Network/TCP 혼잡 제어.md", isDir: false },
+          { name: "tcp-handshake", path: "CS/Network/tcp-handshake.md", isDir: false },
+        ] },
+        { name: "운영체제", path: "CS/운영체제", isDir: true, children: [
+          { name: "스케줄링", path: "CS/운영체제/스케줄링.md", isDir: false },
+        ] },
+        { name: "빈 폴더", path: "CS/빈 폴더", isDir: true },
+      ] },
+      { name: "Inbox", path: "Inbox.md", isDir: false },
+      { name: "😀 emoji note", path: "😀 emoji note.md", isDir: false },
+      { name: "ΣΊΣΥΦΟΣ", path: "Sisyphus.md", isDir: false },
+    ];
+    const queries = ["", "  ", "tcp", "TCP", " tcp ", "net", "운영", "스케", "o", "😀", "emoji", "σ", "ς", "zzz", "CS"];
+    const steps: Step[] = [];
+    for (const q of queries) steps.push(s("treeFind.filterTree", tree, q));
+    for (const [name, q] of [
+      ["TCP 혼잡 제어", "tcp"], ["tcp-handshake", "TCP"], ["aaaa", "aa"], ["😀 emoji note", "e"], ["😀😀", "😀"],
+      ["ΣΊΣΥΦΟΣ", "σ"], ["스케줄링", "케줄"], ["Inbox", ""], ["Inbox", "x"], ["İstanbul", "i"],
+    ])
+      steps.push(s("treeFind.splitHit", name, q), s("treeFind.hits", name, q));
+    return steps;
+  },
+};
+
 export const SCENARIOS: Scenario[] = [
   todosTreeBasics,
   todosDoneChain,
@@ -1038,6 +1069,7 @@ export const SCENARIOS: Scenario[] = [
   todoTrees,
   timetable,
   vaultTreePure,
+  treeFindSweep,
   conceptNotes,
   erdFiles,
   ...Array.from({ length: 4 }, (_, i) => ({
