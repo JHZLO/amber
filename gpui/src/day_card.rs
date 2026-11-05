@@ -26,6 +26,11 @@ pub(crate) enum Confirm {
         id: i64,
         name: String,
     },
+    /// 서랍(언젠가)의 카드 — 날짜가 없어 조상 재계산이 필요 없다
+    Parked {
+        id: i64,
+        name: String,
+    },
 }
 
 /// 중첩 단계마다 더 들어가는 폭
@@ -174,8 +179,12 @@ impl Spike {
             .child(nav("prev-day", "chevron-left", -1, cx))
             .child(nav("next-day", "chevron-right", 1, cx))
             .child(
-                button("drawer", k, true, false)
+                button("drawer", k, !self.parked_open, false)
                     .ml(px(8.))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.set_parked_open(!this.parked_open);
+                        cx.notify();
+                    }))
                     .child(icon("panel", 14.).text_color(k.text_2))
                     .child(t("todos.drawer.title"))
                     .when(self.parked_n > 0, |d| {
@@ -741,6 +750,7 @@ impl Spike {
             Some(Confirm::Record { id, .. }) => {
                 amber_gpui::todos::remove_carry(&self.db, id, &self.date)
             }
+            Some(Confirm::Parked { id, .. }) => amber_gpui::todos::delete_todo(&self.db, id),
             None => Ok(()),
         };
         if let Err(e) = r {

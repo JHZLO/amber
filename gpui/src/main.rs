@@ -7,6 +7,7 @@ mod assets;
 mod calendar;
 mod day_card;
 mod dialog;
+mod drawer;
 mod figure;
 mod markdown;
 mod note;
@@ -70,6 +71,11 @@ struct Spike {
     overdue: Vec<Row>,
     overdue_open: bool,
     parked_n: usize,
+    /// 서랍: 열렸는가(amber.todo.parked-open), 탭, 내려놓은 행과 그 조상(묶음 이름을 단다)
+    parked_open: bool,
+    drawer_tab: drawer::Tab,
+    parked: Vec<Row>,
+    parked_anc: Vec<Row>,
     /// 고치는 중인 줄, 하위를 적는 중인 부모, 지우기 전에 묻는 것
     editing: Option<(i64, Entity<gpui_kit::component::input::TextareaState>)>,
     adding_child: Option<(i64, Entity<InputState>)>,
@@ -182,6 +188,8 @@ impl Spike {
         let cal_w = amber_gpui::prefs::get(&db, "amber.todo.cal-width")
             .and_then(|w| w.parse::<f32>().ok())
             .map_or(460., |w| w.clamp(260., 780.));
+        let parked_open =
+            amber_gpui::prefs::get(&db, "amber.todo.parked-open").as_deref() == Some("1");
         let mut this = Spike {
             db,
             date,
@@ -189,6 +197,10 @@ impl Spike {
             overdue: Vec::new(),
             overdue_open: false,
             parked_n: 0,
+            parked_open,
+            drawer_tab: drawer::Tab::Suggest,
+            parked: Vec::new(),
+            parked_anc: Vec::new(),
             editing: None,
             adding_child: None,
             confirm: None,
@@ -245,7 +257,9 @@ impl Spike {
         } else {
             Vec::new()
         };
-        self.parked_n = todos::list_parked(&self.db).map_or(0, |r| r.len());
+        self.parked = todos::list_parked(&self.db).unwrap_or_default();
+        self.parked_anc = todos::list_parked_ancestors(&self.db).unwrap_or_default();
+        self.parked_n = self.parked.len();
     }
 
     /// 밀린 항목을 고른 날로 가져온다. 끝내는 게 아니라 옮기는 것이라 완료 재계산을 하지 않는다
@@ -419,6 +433,7 @@ impl Render for Spike {
                         .flex_col()
                         .child(self.day_card(&k, cx)),
                 )
+                .when(self.parked_open, |d| d.child(self.drawer(&k, cx)))
                 .into_any_element(),
             Section::Notes => note.into_any_element(),
             // 아직 옮기지 않은 탭 — 체크리스트(D)에서 하나씩
@@ -442,6 +457,11 @@ impl Render for Spike {
                 day_card::Confirm::Record { name, .. } => (
                     t("todos.record.deleteTitle"),
                     t("todos.record.deleteConfirm"),
+                    name.clone(),
+                ),
+                day_card::Confirm::Parked { name, .. } => (
+                    t("todos.parked.deleteTitle"),
+                    i18n::t_with("todos.parked.deleteConfirm", &[("name", "{name}")]),
                     name.clone(),
                 ),
             };
