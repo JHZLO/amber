@@ -1,0 +1,32 @@
+{
+  "format": 1,
+  "name": "timeBlocks/blocks-and-vacations",
+  "tz": "Asia/Seoul",
+  "start": 1793836800000,
+  "seed": [
+    {
+      "sql": "INSERT INTO vacations (date, kind) VALUES ('2026-11-03', 'weird')"
+    }
+  ],
+  "final": "064129413fd8b6aa315b1e0f77cc49cf7b747d57e657b823a1e65c4957a76d2d",
+  "steps": [
+    {"op":"timeBlocks.createBlock","args":["2026-11-05",540,600,"집중"],"at":1793836800000,"ok":true,"result":1,"changes":{"sqlite_sequence":{"added":[{"name":"time_blocks","seq":1}],"removed":[{"name":"time_blocks","seq":0}],"changed":[]},"time_blocks":{"added":[{"id":1,"date":"2026-11-05","start_min":540,"end_min":600,"title":"집중","todo_id":null,"created_at":1793836800000,"updated_at":1793836800000}],"removed":[],"changed":[]}}},
+    {"op":"timeBlocks.createBlock","args":["2026-11-05",600,630],"at":1793836801000,"ok":true,"result":2,"changes":{"sqlite_sequence":{"added":[{"name":"time_blocks","seq":2}],"removed":[{"name":"time_blocks","seq":1}],"changed":[]},"time_blocks":{"added":[{"id":2,"date":"2026-11-05","start_min":600,"end_min":630,"title":"","todo_id":null,"created_at":1793836801000,"updated_at":1793836801000}],"removed":[],"changed":[]}}},
+    {"op":"timeBlocks.createBlock","args":["2026-11-06",0,1440,"종일"],"at":1793836802000,"ok":true,"result":3,"changes":{"sqlite_sequence":{"added":[{"name":"time_blocks","seq":3}],"removed":[{"name":"time_blocks","seq":2}],"changed":[]},"time_blocks":{"added":[{"id":3,"date":"2026-11-06","start_min":0,"end_min":1440,"title":"종일","todo_id":null,"created_at":1793836802000,"updated_at":1793836802000}],"removed":[],"changed":[]}}},
+    {"op":"timeBlocks.listBlocks","args":["2026-11-05","2026-11-05"],"at":1793836803000,"ok":true,"result":[{"id":1,"date":"2026-11-05","start_min":540,"end_min":600,"title":"집중","todo_id":null,"created_at":1793836800000,"updated_at":1793836800000},{"id":2,"date":"2026-11-05","start_min":600,"end_min":630,"title":"","todo_id":null,"created_at":1793836801000,"updated_at":1793836801000}],"changes":{}},
+    {"op":"timeBlocks.updateBlockTime","args":[1,"2026-11-06",60,120],"at":1793836804000,"ok":true,"result":null,"changes":{"time_blocks":{"added":[],"removed":[],"changed":[{"before":{"id":1,"date":"2026-11-05","start_min":540,"end_min":600,"title":"집중","todo_id":null,"created_at":1793836800000,"updated_at":1793836800000},"after":{"id":1,"date":"2026-11-06","start_min":60,"end_min":120,"title":"집중","todo_id":null,"created_at":1793836800000,"updated_at":1793836804000}}]}}},
+    {"op":"timeBlocks.renameBlock","args":[2,"회의"],"at":1793836805000,"ok":true,"result":null,"changes":{"time_blocks":{"added":[],"removed":[],"changed":[{"before":{"id":2,"date":"2026-11-05","start_min":600,"end_min":630,"title":"","todo_id":null,"created_at":1793836801000,"updated_at":1793836801000},"after":{"id":2,"date":"2026-11-05","start_min":600,"end_min":630,"title":"회의","todo_id":null,"created_at":1793836801000,"updated_at":1793836805000}}]}}},
+    {"op":"timeBlocks.deleteBlock","args":[3],"at":1793836806000,"ok":true,"result":null,"changes":{"time_blocks":{"added":[],"removed":[{"id":3,"date":"2026-11-06","start_min":0,"end_min":1440,"title":"종일","todo_id":null,"created_at":1793836802000,"updated_at":1793836802000}],"changed":[]}}},
+    {"op":"timeBlocks.deleteBlock","args":[99],"at":1793836807000,"ok":true,"result":null,"changes":{}},
+    {"op":"timeBlocks.listBlocks","args":["2026-11-05","2026-11-30"],"at":1793836808000,"ok":true,"result":[{"id":2,"date":"2026-11-05","start_min":600,"end_min":630,"title":"회의","todo_id":null,"created_at":1793836801000,"updated_at":1793836805000},{"id":1,"date":"2026-11-06","start_min":60,"end_min":120,"title":"집중","todo_id":null,"created_at":1793836800000,"updated_at":1793836804000}],"changes":{}},
+    {"op":"vacations.listVacations","args":["2026-11-01","2026-11-30"],"at":1793836809000,"ok":true,"result":{"2026-11-03":"annual"},"changes":{}},
+    {"op":"vacations.getVacation","args":["2026-11-03"],"at":1793836810000,"ok":true,"result":"annual","changes":{}},
+    {"op":"vacations.getVacation","args":["2026-11-05"],"at":1793836811000,"ok":true,"result":null,"changes":{}},
+    {"op":"vacations.setVacation","args":["2026-11-05","half"],"at":1793836812000,"ok":true,"result":null,"changes":{"vacations":{"added":[{"date":"2026-11-05","kind":"half","created_at":1793836812000,"updated_at":1793836812000}],"removed":[],"changed":[]}}},
+    {"op":"vacations.setVacation","args":["2026-11-05","annual"],"at":1793836813000,"ok":true,"result":null,"changes":{"vacations":{"added":[],"removed":[],"changed":[{"before":{"date":"2026-11-05","kind":"half","created_at":1793836812000,"updated_at":1793836812000},"after":{"date":"2026-11-05","kind":"annual","created_at":1793836812000,"updated_at":1793836813000}}]}}},
+    {"op":"vacations.listVacations","args":["2026-11-01","2026-11-30"],"at":1793836814000,"ok":true,"result":{"2026-11-03":"annual","2026-11-05":"annual"},"changes":{}},
+    {"op":"vacations.removeVacation","args":["2026-11-05"],"at":1793836815000,"ok":true,"result":null,"changes":{"vacations":{"added":[],"removed":[{"date":"2026-11-05","kind":"annual","created_at":1793836812000,"updated_at":1793836813000}],"changed":[]}}},
+    {"op":"vacations.removeVacation","args":["2026-11-05"],"at":1793836816000,"ok":true,"result":null,"changes":{}},
+    {"op":"vacations.getVacation","args":["2026-11-05"],"at":1793836817000,"ok":true,"result":null,"changes":{}}
+  ]
+}

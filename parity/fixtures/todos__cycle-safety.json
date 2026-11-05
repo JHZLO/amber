@@ -1,0 +1,28 @@
+{
+  "format": 1,
+  "name": "todos/cycle-safety",
+  "tz": "Asia/Seoul",
+  "start": 1793836800000,
+  "seed": [
+    {
+      "sql": "INSERT INTO todos (id, content, due_date) VALUES (1, 'a', ?1), (2, 'b', ?1)",
+      "params": [
+        "2026-11-05"
+      ]
+    },
+    {
+      "sql": "UPDATE todos SET parent_id = 2 WHERE id = 1"
+    },
+    {
+      "sql": "UPDATE todos SET parent_id = 1 WHERE id = 2"
+    }
+  ],
+  "final": "3dc59d54275a774a499c44f4c889385e7952a785ad38d5eaa5f8c17e57932c8c",
+  "steps": [
+    {"op":"todos.setSubtreeDone","args":[1,1],"at":1793836800000,"ok":true,"result":null,"changes":{"todos":{"added":[],"removed":[],"changed":[{"before":{"id":1,"content":"a","due_date":"2026-11-05","done":0,"completed_at":null,"created_at":1793836800000,"updated_at":1793836800000,"sort_order":0,"parent_id":2,"scope":"day","parked_at":null},"after":{"id":1,"content":"a","due_date":"2026-11-05","done":1,"completed_at":1793836800000,"created_at":1793836800000,"updated_at":1793836800000,"sort_order":0,"parent_id":2,"scope":"day","parked_at":null}},{"before":{"id":2,"content":"b","due_date":"2026-11-05","done":0,"completed_at":null,"created_at":1793836800000,"updated_at":1793836800000,"sort_order":0,"parent_id":1,"scope":"day","parked_at":null},"after":{"id":2,"content":"b","due_date":"2026-11-05","done":1,"completed_at":1793836800000,"created_at":1793836800000,"updated_at":1793836800000,"sort_order":0,"parent_id":1,"scope":"day","parked_at":null}}]}}},
+    {"op":"todos.listTodos","args":["2026-11-05"],"at":1793836801000,"ok":true,"result":[{"id":1,"content":"a","due_date":"2026-11-05","scope":"day","done":1,"completed_at":1793836800000,"parent_id":2,"sort_order":0,"created_at":1793836800000,"updated_at":1793836800000,"parked_at":null,"carried":0,"gone":0},{"id":2,"content":"b","due_date":"2026-11-05","scope":"day","done":1,"completed_at":1793836800000,"parent_id":1,"sort_order":0,"created_at":1793836800000,"updated_at":1793836800000,"parked_at":null,"carried":0,"gone":0}],"changes":{}},
+    {"op":"todos.moveTodos","args":[[1],"2026-11-06"],"at":1793836802000,"ok":true,"result":null,"changes":{"todo_carries":{"added":[{"todo_id":1,"date":"2026-11-05","content":"a","parent_id":2,"done":1}],"removed":[],"changed":[]},"todos":{"added":[],"removed":[],"changed":[{"before":{"id":1,"content":"a","due_date":"2026-11-05","done":1,"completed_at":1793836800000,"created_at":1793836800000,"updated_at":1793836800000,"sort_order":0,"parent_id":2,"scope":"day","parked_at":null},"after":{"id":1,"content":"a","due_date":"2026-11-06","done":1,"completed_at":1793836800000,"created_at":1793836800000,"updated_at":1793836802000,"sort_order":0,"parent_id":2,"scope":"day","parked_at":null}}]}}},
+    {"op":"todos.deleteTodo","args":[1],"at":1793836803000,"ok":true,"result":null,"changes":{"todos":{"added":[],"removed":[{"id":1,"content":"a","due_date":"2026-11-06","done":1,"completed_at":1793836800000,"created_at":1793836800000,"updated_at":1793836802000,"sort_order":0,"parent_id":2,"scope":"day","parked_at":null},{"id":2,"content":"b","due_date":"2026-11-05","done":1,"completed_at":1793836800000,"created_at":1793836800000,"updated_at":1793836800000,"sort_order":0,"parent_id":1,"scope":"day","parked_at":null}],"changed":[]}}},
+    {"op":"todos.listTodos","args":["2026-11-05"],"at":1793836804000,"ok":true,"result":[{"id":1,"content":"a","due_date":"2026-11-05","scope":"day","done":1,"completed_at":null,"parent_id":2,"sort_order":0,"created_at":0,"updated_at":0,"parked_at":null,"carried":1,"gone":1}],"changes":{}}
+  ]
+}

@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "test": "pnpm test:ts && cargo test --manifest-path src-tauri/Cargo.toml",
     "tauri": "tauri",
-    "test:ts": "vitest run"
+    "test:ts": "vitest run",
+    "parity": "vitest run parity",
+    "parity:record": "PARITY_RECORD=1 vitest run parity/parity.test.ts"
   },
   "dependencies": {
     "@jhzlo/resin": "0.2.7",

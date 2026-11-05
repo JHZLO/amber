@@ -1,0 +1,214 @@
+{
+  "ledger": [
+    {
+      "version": 1,
+      "checksum": "6143962d17114d588dbf519a683e59ae9ece45d076e569599635c5982f91319f6935342549bb4597e9523bee2059095d"
+    },
+    {
+      "version": 2,
+      "checksum": "40594e81c16c3ea822029de7f2ebb8af0f58b1754734961f46944ec47d863f3cdb21a6dcd81b38a2cd7b47c4bccc8a54"
+    },
+    {
+      "version": 3,
+      "checksum": "eb9cbfd3606b20d816bacb0e25107fb242016739c8b23ccb7ffe411b8c7c458131f7074b43f402b5da65863d00ce717e"
+    },
+    {
+      "version": 4,
+      "checksum": "02c9689602deb596325f6f9b5846110763928d1156ec79ec9fb405b53fcbc4f181bba1c4e0910608df913965cc3b2b52"
+    },
+    {
+      "version": 5,
+      "checksum": "6d27e7a25c3bff35bf8e33095a0daa25bb19dc63c3703575eb89eb6d27c8307d3621c3093955cd4e1c7059cd0592696f"
+    },
+    {
+      "version": 6,
+      "checksum": "97b8fb59e8049f3efb3e6b0fa8fae61d70dbfaf772d39af9b8ef09e905f3027c989554ea65fe2b02b0ba6e57a82fa154"
+    },
+    {
+      "version": 7,
+      "checksum": "7224ca3effd4629c8688c10c96f0e9538660de0144e50cfc4d1939af2f9c32bc216cd375a8a5828f5c84a286a60c2a33"
+    },
+    {
+      "version": 8,
+      "checksum": "bb17e7f5577d48470f3f8100c5c583f73e7414cf750f5a55dd50797260c9f1a1c8b5338d05d6b464bac5ac545cfc7cd2"
+    },
+    {
+      "version": 9,
+      "checksum": "3afaefbd9998d2621a7a9bc184c0392395f498eaacfc842c71d7b2c87dd36871c6f752b99cfe2e073cc2abe20729cf68"
+    },
+    {
+      "version": 10,
+      "checksum": "5ebbae1d97efee0af965f86dcc4610e18972ef81ca9de2dc08e46993d4d4e97cf5102e81840eab4825cc516894593dfa"
+    },
+    {
+      "version": 11,
+      "checksum": "f2a8f8b3df1731e35448e86ff5108264c500800e76439cdc0f39cc1bcd662cf6c3c6c5e3f0130a32c04e2749ffddb813"
+    },
+    {
+      "version": 12,
+      "checksum": "f934adff29642bd72014443e9e2b16f0e5c9dcfd968e1a113610602364c9f20571bd10869c8de0141628c40c09f7c902"
+    },
+    {
+      "version": 13,
+      "checksum": "754843993ba61df2542b1a1e9da79fb041db0f0c4c38a061e8d1982effa9bd7b9c8a021789aa783901bdeb994b7e4941"
+    },
+    {
+      "version": 14,
+      "checksum": "d11841c8795a776598c10c2c811fb8a4f9075e1971f1647e925355e855b883ebee0114a99f24451f072f9a2ebd1ce591"
+    },
+    {
+      "version": 15,
+      "checksum": "ff77ae62eac3e1c5de986e050b3329b6ed7eeccfce51a602a05538369a67de0d9fc14c31c2d0734c83d61f0e39c061db"
+    },
+    {
+      "version": 16,
+      "checksum": "a53d3d5e3ba8b46768478d2b2950ef2810edf3fb2bb36ff64fb46d79a25d5e34c079861319bb3abef29714880119e02f"
+    },
+    {
+      "version": 17,
+      "checksum": "34dabc5aa4ad0e50c4a810ea8fa1c6882a7bd26f7a59f30869630a161339a32dbd2fb1d91a978176432170e7fc69f287"
+    }
+  ],
+  "schema": [
+    {
+      "type": "index",
+      "name": "idx_blocks_day",
+      "sql": "CREATE INDEX idx_blocks_day ON time_blocks (date, start_min)"
+    },
+    {
+      "type": "index",
+      "name": "idx_carries_date",
+      "sql": "CREATE INDEX idx_carries_date ON todo_carries (date)"
+    },
+    {
+      "type": "index",
+      "name": "idx_concept_tags_tag",
+      "sql": "CREATE INDEX idx_concept_tags_tag ON concept_tags (tag_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_concepts_learned_at",
+      "sql": "CREATE INDEX idx_concepts_learned_at ON concepts (learned_at DESC) WHERE status = 'learned'"
+    },
+    {
+      "type": "index",
+      "name": "idx_concepts_status_updated",
+      "sql": "CREATE INDEX idx_concepts_status_updated ON concepts (status, updated_at DESC)"
+    },
+    {
+      "type": "index",
+      "name": "idx_concepts_widget",
+      "sql": "CREATE INDEX idx_concepts_widget ON concepts (confidence, last_seen_at, id) WHERE status = 'learning'"
+    },
+    {
+      "type": "index",
+      "name": "idx_todos_day",
+      "sql": "CREATE INDEX idx_todos_day ON todos (due_date, done, id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_todos_open",
+      "sql": "CREATE INDEX idx_todos_open ON todos (due_date) WHERE done = 0"
+    },
+    {
+      "type": "index",
+      "name": "idx_todos_parent",
+      "sql": "CREATE INDEX idx_todos_parent ON todos (parent_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_todos_parked",
+      "sql": "CREATE INDEX idx_todos_parked ON todos (parked_at, sort_order, id) WHERE parked_at IS NOT NULL"
+    },
+    {
+      "type": "index",
+      "name": "idx_todos_sort",
+      "sql": "CREATE INDEX idx_todos_sort ON todos (due_date, sort_order, id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_todos_week",
+      "sql": "CREATE INDEX idx_todos_week ON todos (scope, due_date, sort_order, id)"
+    },
+    {
+      "type": "table",
+      "name": "ai_invocations",
+      "sql": "CREATE TABLE \"ai_invocations\" ( id INTEGER PRIMARY KEY AUTOINCREMENT, concept_id INTEGER REFERENCES concepts(id) ON DELETE SET NULL, -- 실패/삭제 시 NULL model TEXT NOT NULL, session_id TEXT, input_tokens INTEGER, output_tokens INTEGER, cost_usd REAL, duration_ms INTEGER, status TEXT NOT NULL, -- 'success' | 'error' retry_count INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)) ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "concept_tags",
+      "sql": "CREATE TABLE concept_tags ( concept_id INTEGER NOT NULL REFERENCES concepts(id) ON DELETE CASCADE, tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE, PRIMARY KEY (concept_id, tag_id) ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "concepts",
+      "sql": "CREATE TABLE concepts ( id INTEGER PRIMARY KEY AUTOINCREMENT, -- 내부 대리키(정렬/FK/creation-order tie-break) ulid TEXT NOT NULL UNIQUE, -- 외부 앵커(파일 디렉터리명/frontmatter) title TEXT NOT NULL, summary TEXT NOT NULL, -- 위젯용 짧은 요약 detail_path TEXT NOT NULL, -- vault 기준 상대경로 'concepts/<ulid>/index.md' status TEXT NOT NULL DEFAULT 'learning' CHECK (status IN ('learning','learned')), confidence INTEGER NOT NULL DEFAULT 1 CHECK (confidence BETWEEN 1 AND 3), source TEXT, -- 원문(붙여넣은 Q&A) 참조/발췌 source_kind TEXT CHECK (source_kind IN ('paste','url','file') OR source_kind IS NULL), seen_count INTEGER NOT NULL DEFAULT 0, -- 위젯 노출 누적(표시·통계용, 정렬키 아님) last_seen_at INTEGER, -- 마지막 위젯 노출(UTC ms). NULL=미노출 created_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)), updated_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)), learned_at INTEGER -- learned 전이 시각, 아니면 NULL (트리거가 관리) ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "daily_reports",
+      "sql": "CREATE TABLE daily_reports ( id INTEGER PRIMARY KEY AUTOINCREMENT, report_date TEXT NOT NULL UNIQUE CHECK (report_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'), file_path TEXT NOT NULL, -- vault 기준 상대경로 'reports/<date>.md' sources_json TEXT NOT NULL DEFAULT '[]', -- 생성 근거 스냅샷 [{id,rank,ok,items,error}] provider TEXT, -- claude|codex|gemini model TEXT, duration_ms INTEGER, created_at INTEGER NOT NULL DEFAULT (unixepoch('subsec')*1000), updated_at INTEGER NOT NULL DEFAULT (unixepoch('subsec')*1000) ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "db_connections",
+      "sql": "CREATE TABLE db_connections ( id INTEGER PRIMARY KEY AUTOINCREMENT, ulid TEXT NOT NULL UNIQUE, -- 키체인 account 키 · Rust 커맨드 식별자 name TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('mysql','postgres')), env TEXT NOT NULL DEFAULT 'dev' CHECK (env IN ('dev','staging','prod')), host TEXT NOT NULL, port INTEGER NOT NULL CHECK (port BETWEEN 1 AND 65535), username TEXT NOT NULL, tls TEXT NOT NULL DEFAULT 'preferred' CHECK (tls IN ('disabled','preferred','required')), folder_path TEXT NOT NULL UNIQUE, -- 다이어그램 루트 기준 상대경로 ('dev'). 이름 변경/이동 시 갱신 schemas_json TEXT NOT NULL DEFAULT '[]', -- [{name, label, enabled}] last_sync_at INTEGER, -- UTC ms. NULL = 아직 동기화 안 함 last_error TEXT, -- 마지막 실패의 에러 코드만 ('DB_REFUSED'). 문장 아님 created_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)), updated_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)) , credential_command TEXT NOT NULL DEFAULT '') STRICT"
+    },
+    {
+      "type": "table",
+      "name": "settings",
+      "sql": "CREATE TABLE settings ( key TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "tags",
+      "sql": "CREATE TABLE tags ( id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL COLLATE NOCASE UNIQUE ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "time_blocks",
+      "sql": "CREATE TABLE \"time_blocks\" ( id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'), start_min INTEGER NOT NULL CHECK (start_min BETWEEN 0 AND 1435), end_min INTEGER NOT NULL CHECK (end_min > start_min AND end_min <= 1440), title TEXT NOT NULL DEFAULT '', todo_id INTEGER REFERENCES todos(id) ON DELETE SET NULL, created_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)), updated_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)) ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "todo_carries",
+      "sql": "CREATE TABLE \"todo_carries\" ( todo_id INTEGER NOT NULL, date TEXT NOT NULL CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'), -- 아래 세 개가 스냅샷 — 이월한 순간의 그 줄. content 는 그 날의 텍스트라 이후 편집에 -- 따라가지 않고, done 은 마지막으로 알려진 상태다(하드 삭제 직전에 한 번 더 찍는다). content TEXT NOT NULL CHECK (length(content) > 0), parent_id INTEGER, done INTEGER NOT NULL DEFAULT 0 CHECK (done IN (0, 1)), PRIMARY KEY (todo_id, date) ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "todos",
+      "sql": "CREATE TABLE todos ( id INTEGER PRIMARY KEY AUTOINCREMENT, content TEXT NOT NULL CHECK (length(content) > 0), due_date TEXT NOT NULL CHECK (due_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'), done INTEGER NOT NULL DEFAULT 0 CHECK (done IN (0, 1)), completed_at INTEGER, -- done 전이 시각(UTC ms), 트리거가 관리 created_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)), updated_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)) , sort_order INTEGER NOT NULL DEFAULT 0, parent_id INTEGER, scope TEXT NOT NULL DEFAULT 'day' CHECK (scope IN ('day', 'week')), parked_at INTEGER) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "vacations",
+      "sql": "CREATE TABLE vacations ( date TEXT PRIMARY KEY CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'), kind TEXT NOT NULL DEFAULT 'annual', created_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)), updated_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)) ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "weekly_reports",
+      "sql": "CREATE TABLE weekly_reports ( id INTEGER PRIMARY KEY AUTOINCREMENT, week_start TEXT NOT NULL UNIQUE CHECK (week_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'), file_path TEXT NOT NULL, -- vault 기준 상대경로 'reports/<주 시작일>-week.md' -- 재료 스냅샷: 어느 날짜의 일간 리포트를 묶었는지 [\"2026-08-17\", …]. 빈 날은 안 담긴다. sources_json TEXT NOT NULL DEFAULT '[]', provider TEXT, -- claude|codex|gemini model TEXT, duration_ms INTEGER, created_at INTEGER NOT NULL DEFAULT (unixepoch('subsec')*1000), updated_at INTEGER NOT NULL DEFAULT (unixepoch('subsec')*1000) ) STRICT"
+    },
+    {
+      "type": "trigger",
+      "name": "trg_learned_stamp",
+      "sql": "CREATE TRIGGER trg_learned_stamp AFTER UPDATE OF status ON concepts FOR EACH ROW WHEN NEW.status = 'learned' AND OLD.status <> 'learned' BEGIN UPDATE concepts SET learned_at = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE id = NEW.id; END"
+    },
+    {
+      "type": "trigger",
+      "name": "trg_relearn_clear",
+      "sql": "CREATE TRIGGER trg_relearn_clear AFTER UPDATE OF status ON concepts FOR EACH ROW WHEN NEW.status = 'learning' AND OLD.status = 'learned' BEGIN UPDATE concepts SET learned_at = NULL WHERE id = NEW.id; END"
+    },
+    {
+      "type": "trigger",
+      "name": "trg_todo_done_stamp",
+      "sql": "CREATE TRIGGER trg_todo_done_stamp AFTER UPDATE OF done ON todos FOR EACH ROW WHEN NEW.done = 1 AND OLD.done = 0 BEGIN UPDATE todos SET completed_at = CAST(unixepoch('subsec') * 1000 AS INTEGER), updated_at = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE id = NEW.id; END"
+    },
+    {
+      "type": "trigger",
+      "name": "trg_todo_undone_clear",
+      "sql": "CREATE TRIGGER trg_todo_undone_clear AFTER UPDATE OF done ON todos FOR EACH ROW WHEN NEW.done = 0 AND OLD.done = 1 BEGIN UPDATE todos SET completed_at = NULL, updated_at = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE id = NEW.id; END"
+    }
+  ]
+}
