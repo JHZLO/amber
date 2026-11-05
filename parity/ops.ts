@@ -7,10 +7,12 @@
 //  - NOT_COVERED: 이 단에서 재지 않는다(키체인, 외부 DB, AI 실행 등). 이유를 남긴다
 //  - PURE: DB 와 파일을 안 쓰는 계산 — 동기 함수여야 한다
 
+import * as date from "../src/lib/date";
 import * as db from "../src/lib/db";
 import * as dbconn from "../src/lib/dbconn";
 import * as diagrams from "../src/lib/diagrams";
 import * as erdStore from "../src/lib/erdStore";
+import * as holidays from "../src/lib/holidays";
 import * as notes from "../src/lib/notes";
 import * as report from "../src/lib/report";
 import * as timeBlocks from "../src/lib/timeBlocks";
@@ -37,6 +39,8 @@ export const MODULES = [
   "vault",
   "erdStore",
   "vaultTree",
+  "date",
+  "holidays",
 ] as const;
 
 export const OPS: Record<string, Op> = {
@@ -146,6 +150,27 @@ export const OPS: Record<string, Op> = {
       query,
       limit,
     ),
+
+  // 날짜와 공휴일 — 순수 계산이지만 달력이 이걸로 그려진다. 하네스에서는 언어가 ko 다(i18n.getLang)
+  "date.todayStr": date.todayStr,
+  "date.shiftDay": date.shiftDay,
+  "date.addMonths": date.addMonths,
+  "date.weekStartOf": date.weekStartOf,
+  "date.weekDays": date.weekDays,
+  "date.monthOf": date.monthOf,
+  "date.dayRangeMs": date.dayRangeMs,
+  "date.monthGridDates": date.monthGridDates,
+  "date.formatDayLong": date.formatDayLong,
+  "date.weekdayShort": date.weekdayShort,
+  "date.formatDayShort": date.formatDayShort,
+  "date.formatMonthTitle": date.formatMonthTitle,
+  "date.formatYearTitle": date.formatYearTitle,
+  "date.monthsShort": date.monthsShort,
+  "date.weekdaysShort": date.weekdaysShort,
+  // Map 은 JSON 으로 안 넘어간다 — 날짜 순 객체로
+  "holidays.holidaysOfYear": (year: number) => Object.fromEntries(holidays.holidaysOfYear(year)),
+  "holidays.holidayOf": holidays.holidayOf,
+  "holidays.hasLunarData": holidays.hasLunarData,
 };
 
 const FILES_AND_RUST = "파일이나 Rust 명령을 함께 건드린다";
@@ -178,6 +203,8 @@ export const NOT_COVERED: Record<string, string> = {
   "notes.noteMtime": "파일 수정 시각은 녹화할 때마다 다르다",
   "diagrams.diagramMtime": "파일 수정 시각은 녹화할 때마다 다르다",
   "vaultTree.createVaultTree": "트리를 만드는 함수 — notes, diagrams, erdStore 의 op 로 잰다",
+  "date.localDateStr": "Date 객체를 받는다 — 다른 date op 가 모두 거친다",
+  "date.parseLocalDate": "Date 객체를 돌려준다 — 다른 date op 가 모두 거친다",
 };
 
 export const PURE = new Set([

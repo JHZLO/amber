@@ -815,6 +815,35 @@ const erdFiles: Scenario = {
   ],
 };
 
+/** 날짜 계산 훑기 — 월 경계, 윤년, 연 경계, 주 시작, 달력 격자, 공휴일(대체공휴일, 음력 표 밖 연도) */
+const dates: Scenario = {
+  name: "dates/sweep",
+  plan() {
+    const steps: Step[] = [s("date.todayStr"), s("date.monthsShort"), s("date.weekdaysShort"), s("date.weekdaysShort", 1)];
+    for (let y = 2023; y <= 2029; y++)
+      for (let m = 1; m <= 12; m++) {
+        steps.push(s("date.monthGridDates", y, m), s("date.formatMonthTitle", y, m));
+        if (m === 1) steps.push(s("date.monthGridDates", y, m, 1), s("date.formatYearTitle", y));
+      }
+    const edges = ["2024-02-28", "2024-02-29", "2025-02-28", "2026-01-01", "2026-12-31", "2027-03-31", "2028-02-29", "2100-02-28"];
+    for (const d of edges)
+      for (const delta of [-400, -31, -7, -1, 0, 1, 7, 31, 365])
+        steps.push(s("date.shiftDay", d, delta));
+    for (const [y, m] of [[2026, 1], [2026, 11], [2026, 12], [2024, 2], [2030, 6]])
+      for (const delta of [-25, -13, -12, -1, 0, 1, 11, 12, 13])
+        steps.push(s("date.addMonths", { year: y, month: m }, delta));
+    for (let i = 0; i < 400; i++) {
+      const d = new Date(Date.UTC(2025, 11, 1 + i)).toISOString().slice(0, 10);
+      steps.push(s("date.weekStartOf", d), s("date.formatDayLong", d), s("date.weekdayShort", d), s("date.formatDayShort", d));
+      if (i % 7 === 0) steps.push(s("date.weekDays", d), s("date.monthOf", d), s("date.dayRangeMs", d));
+    }
+    for (let y = 2015; y <= 2055; y++) steps.push(s("holidays.holidaysOfYear", y), s("holidays.hasLunarData", y));
+    for (const d of ["2026-01-01", "2026-02-17", "2026-02-18", "2026-03-02", "2026-05-25", "2026-10-05", "2026-11-05", "bad", "1999-12-25"])
+      steps.push(s("holidays.holidayOf", d));
+    return steps;
+  },
+};
+
 /** 노트 트리에서 아무 일이나 한다 — 없는 경로, 겹치는 이름, 대소문자만 다른 이름이 섞인다 */
 function notesWalk(seed: number, length: number): Scenario["walk"] {
   const NAMES = ["노트", "Note", "note", "가/나", "CS", "테스트 노트", "a b"];
@@ -862,6 +891,7 @@ export const SCENARIOS: Scenario[] = [
   })),
   notesFiles,
   diagramsFiles,
+  dates,
   conceptNotes,
   erdFiles,
   ...Array.from({ length: 4 }, (_, i) => ({
