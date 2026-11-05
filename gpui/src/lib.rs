@@ -2,6 +2,7 @@ pub mod blocks;
 pub mod db;
 pub mod mermaid;
 pub mod todos;
+pub mod vacations;
 
 use serde_json::{Value as Json, json};
 
@@ -33,6 +34,10 @@ pub const OPS: &[&str] = &[
     "timeBlocks.updateBlockTime",
     "timeBlocks.renameBlock",
     "timeBlocks.deleteBlock",
+    "vacations.listVacations",
+    "vacations.getVacation",
+    "vacations.setVacation",
+    "vacations.removeVacation",
 ];
 
 pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
@@ -84,6 +89,14 @@ pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
         )),
         "timeBlocks.renameBlock" => unit(blocks::rename_block(db, a.i(0)?, a.s(1)?)),
         "timeBlocks.deleteBlock" => unit(blocks::delete_block(db, a.i(0)?)),
+        "vacations.listVacations" => vacations::list_vacations(db, a.s(0)?, a.s(1)?)
+            .map(Json::Object)
+            .map_err(err),
+        "vacations.getVacation" => vacations::get_vacation(db, a.s(0)?)
+            .map(Json::from)
+            .map_err(err),
+        "vacations.setVacation" => unit(vacations::set_vacation(db, a.s(0)?, a.s(1)?)),
+        "vacations.removeVacation" => unit(vacations::remove_vacation(db, a.s(0)?)),
         _ => Err(format!("모르는 op: {op}")),
     }
 }
