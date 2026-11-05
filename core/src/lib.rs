@@ -4,6 +4,7 @@ pub mod ai;
 pub mod auth;
 pub mod dbconn;
 pub mod detect;
+pub mod files;
 pub mod report;
 pub mod shellenv;
 

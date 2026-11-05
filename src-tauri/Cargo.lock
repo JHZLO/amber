@@ -65,7 +65,6 @@ dependencies = [
  "tauri-plugin-sql",
  "tauri-plugin-window-state",
  "tokio",
- "trash",
 ]
 
 [[package]]
@@ -78,6 +77,7 @@ dependencies = [
  "sqlx",
  "tauri",
  "tokio",
+ "trash",
 ]
 
 [[package]]

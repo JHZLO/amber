@@ -18,6 +18,8 @@ tokio = { version = "1", features = ["process", "io-util", "time", "rt", "macros
 # AI CLI 자식 프로세스 취소, 종료 정리용 kill(2). tokio 의 kill_on_drop 은 트레이 "종료"(process::exit)에서
 # Drop 이 안 돌아 발화하지 않는다.
 libc = "0.2"
+# 지운 노트, 개념은 영구 삭제 대신 macOS 휴지통으로(files.rs)
+trash = "5"
 # DB 스키마 연동(dbconn.rs) — MySQL information_schema 를 읽기 전용으로 introspect 한다.
 # tauri-plugin-sql 이 이미 끌어온 sqlx 0.8 과 같은 계열이라 한 번만 컴파일된다. TLS 는 rustls.
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "mysql"] }
