@@ -844,6 +844,70 @@ const dates: Scenario = {
   },
 };
 
+/** 할 일 트리 계산 — 무작위 숲(없는 부모, 순환, 지워진 기록, 체크 섞임)마다 함수 전부를 부른다 */
+const todoTrees: Scenario = {
+  name: "todoTree/forests",
+  plan(ctx) {
+    const steps: Step[] = [
+      s("todoTree.clampDropDepth", 3, { id: 1, parent_id: null, depth: 0 }, null),
+      s("todoTree.clampDropDepth", 0, { id: 1, parent_id: null, depth: 0 }, { id: 2, parent_id: 1, depth: 1 }),
+      s("todoTree.clampDropDepth", 2, null, null),
+      s("todoTree.dayProgress", []),
+      s("todoTree.flattenTree", []),
+    ];
+    for (let f = 0; f < 40; f++) {
+      const n = 2 + Math.floor(ctx.rng() * 14);
+      const nodes = Array.from({ length: n }, (_, i) => {
+        const id = i + 1 + (f % 3) * 100;
+        const r = ctx.rng();
+        const parent_id =
+          r < 0.35 ? null : r < 0.85 && i > 0 ? id - 1 - Math.floor(ctx.rng() * i) : r < 0.93 ? 999 : id + 1;
+        return { id, parent_id, content: `n${id}`, done: ctx.rng() < 0.4 ? 1 : 0, gone: ctx.rng() < 0.1 ? 1 : 0 };
+      });
+      const ids = nodes.map((x) => x.id);
+      const pickId = () => ids[Math.floor(ctx.rng() * ids.length)];
+      const rows = (() => {
+        // 화면이 쓰는 그대로 — 루트에서 펼친 순서에 깊이
+        const out: { id: number; parent_id: number | null; depth: number }[] = [];
+        const walk = (p: number | null, d: number) => {
+          for (const x of nodes.filter((y) => (y.parent_id ?? null) === p)) {
+            out.push({ id: x.id, parent_id: x.parent_id, depth: d });
+            walk(x.id, d + 1);
+          }
+        };
+        walk(null, 0);
+        return out;
+      })();
+      const dragged = pickId();
+      const sub = new Set<number>([dragged]);
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const x of nodes) if (x.parent_id != null && sub.has(x.parent_id) && !sub.has(x.id)) (sub.add(x.id), (grew = true));
+      }
+      const candidates = rows.filter((r) => !sub.has(r.id));
+      steps.push(
+        s("todoTree.childrenOf", nodes, null),
+        s("todoTree.childrenOf", nodes, pickId()),
+        s("todoTree.ancestorPath", nodes, pickId()),
+        s("todoTree.flattenTree", nodes),
+        s("todoTree.visibleRoots", nodes),
+        s("todoTree.flattenSubset", nodes),
+        s("todoTree.subtreeIds", nodes, pickId()),
+        s("todoTree.descendantCount", nodes, pickId()),
+        s("todoTree.dayProgress", nodes),
+      );
+      for (let k = 0; k < 4; k++) {
+        const idx = Math.floor(ctx.rng() * (candidates.length + 1));
+        const depth = Math.floor(ctx.rng() * 4);
+        const invalid = ctx.rng() < 0.3 ? [pickId()] : undefined;
+        steps.push(s("todoTree.resolveDrop", nodes, candidates, dragged, { idx, depth }, ...(invalid ? [invalid] : [])));
+        steps.push(s("todoTree.clampDropDepth", depth, candidates[idx - 1] ?? null, candidates[idx] ?? null));
+      }
+    }
+    return steps;
+  },
+};
+
 /** 노트 트리에서 아무 일이나 한다 — 없는 경로, 겹치는 이름, 대소문자만 다른 이름이 섞인다 */
 function notesWalk(seed: number, length: number): Scenario["walk"] {
   const NAMES = ["노트", "Note", "note", "가/나", "CS", "테스트 노트", "a b"];
@@ -892,6 +956,7 @@ export const SCENARIOS: Scenario[] = [
   notesFiles,
   diagramsFiles,
   dates,
+  todoTrees,
   conceptNotes,
   erdFiles,
   ...Array.from({ length: 4 }, (_, i) => ({
@@ -919,6 +984,13 @@ export function realSweep(file: string): Scenario {
       const months = [...new Set(days.map((d) => d.slice(0, 7)))];
       const steps: Step[] = [
         ...days.map((d) => s("todos.listTodos", d)),
+        // 화면이 받은 목록 그대로 트리 계산에 넘긴다(앞 단계의 결과가 다음 단계의 인자)
+        ...days.flatMap((d) =>
+          ["todoTree.flattenSubset", "todoTree.visibleRoots", "todoTree.dayProgress"].flatMap((op) => [
+            s("todos.listTodos", d),
+            after(op, (rows) => [rows]),
+          ]),
+        ),
         ...days.map((d) => s("report.buildTodosDigest", d)),
         ...months.map((m) => s("todos.listRangeRows", `${m}-01`, `${m}-31`)),
         ...months.map((m) => s("timeBlocks.listBlocks", `${m}-01`, `${m}-31`)),

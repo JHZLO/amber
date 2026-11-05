@@ -17,6 +17,7 @@ import * as notes from "../src/lib/notes";
 import * as report from "../src/lib/report";
 import * as timeBlocks from "../src/lib/timeBlocks";
 import * as todos from "../src/lib/todos";
+import * as todoTree from "../src/lib/todoTree";
 import * as vacations from "../src/lib/vacations";
 import * as vault from "../src/lib/vault";
 import * as vaultTree from "../src/lib/vaultTree";
@@ -41,6 +42,7 @@ export const MODULES = [
   "vaultTree",
   "date",
   "holidays",
+  "todoTree",
 ] as const;
 
 export const OPS: Record<string, Op> = {
@@ -171,6 +173,24 @@ export const OPS: Record<string, Op> = {
   "holidays.holidaysOfYear": (year: number) => Object.fromEntries(holidays.holidaysOfYear(year)),
   "holidays.holidayOf": holidays.holidayOf,
   "holidays.hasLunarData": holidays.hasLunarData,
+
+  // 할 일 트리 계산 — 목록, 진행률, 끌어 놓기가 이걸로 정해진다. Set 은 JSON 으로 안 넘어가 배열로 주고받는다
+  "todoTree.childrenOf": todoTree.childrenOf,
+  "todoTree.ancestorPath": todoTree.ancestorPath,
+  "todoTree.flattenTree": todoTree.flattenTree,
+  "todoTree.visibleRoots": todoTree.visibleRoots,
+  "todoTree.flattenSubset": todoTree.flattenSubset,
+  "todoTree.subtreeIds": (nodes: todoTree.TodoNode[], rootId: number) => [...todoTree.subtreeIds(nodes, rootId)],
+  "todoTree.descendantCount": todoTree.descendantCount,
+  "todoTree.clampDropDepth": todoTree.clampDropDepth,
+  "todoTree.resolveDrop": (
+    nodes: todoTree.TodoNode[],
+    candidates: todoTree.TreeRow[],
+    draggedId: number,
+    slot: todoTree.DropSlot,
+    invalidParents?: number[],
+  ) => todoTree.resolveDrop(nodes, candidates, draggedId, slot, invalidParents ? new Set(invalidParents) : undefined),
+  "todoTree.dayProgress": todoTree.dayProgress,
 };
 
 const FILES_AND_RUST = "파일이나 Rust 명령을 함께 건드린다";
