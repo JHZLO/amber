@@ -15,6 +15,18 @@ use crate::assets::icon;
 use crate::calendar::Unit;
 use crate::theme::Tokens;
 
+/// 화면 조작 시험대(ui_tests)가 이 이름으로 요소를 찾는다 — 시험 빌드가 아니면 아무 일도 안 한다
+pub trait Tag {
+    fn tag(self, name: impl Into<SharedString>) -> Self;
+}
+
+impl Tag for Stateful<Div> {
+    fn tag(self, name: impl Into<SharedString>) -> Self {
+        let name: SharedString = name.into();
+        self.debug_selector(move || name.to_string())
+    }
+}
+
 /// 지우기 전에 묻는 것 — 라이브 항목(하위 수를 말한다) 또는 이 날짜에 남은 이월 기록 한 줄
 pub(crate) enum Confirm {
     Delete {
@@ -47,10 +59,17 @@ fn glass(k: &Tokens) -> Background {
 }
 
 /// .btn.btn-sm — 유리 버튼. ghost 면 평소엔 테두리, 바탕이 없다(카드 머리 띠의 버튼)
-pub fn button(id: impl Into<ElementId>, k: &Tokens, ghost: bool, disabled: bool) -> Stateful<Div> {
+pub fn button(
+    id: impl Into<SharedString>,
+    k: &Tokens,
+    ghost: bool,
+    disabled: bool,
+) -> Stateful<Div> {
     let (fill, edge, shadow) = (glass(k), k.glass_edge, k.glass_shadow(false));
+    let id: SharedString = id.into();
     div()
-        .id(id)
+        .id(id.clone())
+        .tag(id)
         .h(px(28.))
         .px(px(10.))
         .flex()
@@ -84,15 +103,43 @@ pub fn button(id: impl Into<ElementId>, k: &Tokens, ghost: bool, disabled: bool)
         })
 }
 
+/// .btn-danger — 지우기 확인의 '삭제'. 평소엔 빨간 글자, 손이 닿으면 빨간 테와 옅은 바탕
+pub fn danger_button(id: impl Into<SharedString>, k: &Tokens) -> Stateful<Div> {
+    let id: SharedString = id.into();
+    let (danger, soft) = (k.danger, k.danger_soft);
+    div()
+        .id(id.clone())
+        .tag(id)
+        .h(px(28.))
+        .px(px(10.))
+        .flex()
+        .items_center()
+        .rounded(px(6.))
+        .border_1()
+        .border_color(k.glass_edge)
+        .text_size(px(12.))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(danger)
+        .cursor_pointer()
+        .hover(move |s| s.bg(soft).border_color(danger))
+}
+
 /// 둥근 체크 — 끝낸 일은 강조 유리 필에 체크 표시(.checkbox)
-fn checkbox(id: impl Into<ElementId>, k: &Tokens, checked: bool, disabled: bool) -> Stateful<Div> {
+fn checkbox(
+    id: impl Into<SharedString>,
+    k: &Tokens,
+    checked: bool,
+    disabled: bool,
+) -> Stateful<Div> {
+    let id: SharedString = id.into();
     let accent = linear_gradient(
         150.,
         linear_color_stop(k.glass_fill_accent.0, 0.),
         linear_color_stop(k.glass_fill_accent.1, 1.),
     );
     div()
-        .id(id)
+        .id(id.clone())
+        .tag(id)
         .size(px(20.))
         .flex_shrink_0()
         .flex()
@@ -119,6 +166,7 @@ impl Spike {
         let nav = |id: &'static str, name: &str, delta: i64, cx: &mut Context<Self>| {
             div()
                 .id(id)
+                .tag(id)
                 .size(px(32.))
                 .flex()
                 .items_center()
@@ -523,6 +571,7 @@ impl Spike {
                             d.child(
                                 div()
                                     .id(SharedString::from(format!("txt-{id}-{overdue}")))
+                                    .tag(format!("txt-{id}-{overdue}"))
                                     .flex_1()
                                     .min_w_0()
                                     .cursor(if read_only {
@@ -628,6 +677,7 @@ impl Spike {
             let (danger_c, soft, hover_bg, text) = (k.danger, k.danger_soft, glass(k), k.text);
             div()
                 .id(SharedString::from(format!("{key}-{id}")))
+                .tag(format!("{key}-{id}"))
                 .size(px(26.))
                 .flex()
                 .items_center()
@@ -837,6 +887,7 @@ impl Spike {
             .child(
                 div()
                     .id("overdue-head")
+                    .tag("overdue-head")
                     .flex()
                     .items_center()
                     .gap(px(8.))

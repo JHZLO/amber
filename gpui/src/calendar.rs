@@ -11,6 +11,7 @@ use gpui_kit::*;
 
 use crate::Spike;
 use crate::assets::icon;
+use crate::day_card::Tag;
 use crate::theme::Tokens;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -75,6 +76,7 @@ impl Spike {
                 });
                 div()
                     .id(u.id())
+                    .tag(format!("unit-{}", u.id()))
                     .px(px(8.))
                     .py(px(2.))
                     .rounded(px(6.))
@@ -102,6 +104,7 @@ impl Spike {
         let nav = |id: &'static str, name: &str, delta: i32, cx: &mut Context<Self>| {
             div()
                 .id(id)
+                .tag(id)
                 .size(px(26.))
                 .flex()
                 .items_center()
@@ -239,6 +242,7 @@ impl Spike {
 
                 div()
                     .id(SharedString::from(format!("cal-{date}")))
+                    .tag(format!("cal-{date}"))
                     .relative()
                     .flex_1()
                     .min_w_0()

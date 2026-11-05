@@ -5,7 +5,7 @@ use amber_gpui::i18n::t;
 use gpui_kit::*;
 
 use crate::assets::icon;
-use crate::day_card::button;
+use crate::day_card::{button, danger_button};
 use crate::theme::Tokens;
 
 /// body 는 `{name}` 자리를 가진 한 문장
@@ -117,14 +117,11 @@ pub fn confirm_delete(
                                 .child(t("common.cancel"))
                                 .on_click(move |e, w, cx| on_cancel(e, w, cx)),
                         )
-                        .child({
-                            let (danger, soft) = (k.danger, k.danger_soft);
-                            button("confirm-delete", k, false, false)
-                                .text_color(danger)
-                                .hover(move |s| s.bg(soft).border_color(danger).text_color(danger))
+                        .child(
+                            danger_button("confirm-delete", k)
                                 .child(t("common.delete"))
-                                .on_click(on_confirm)
-                        }),
+                                .on_click(on_confirm),
+                        ),
                 ),
         )
 }

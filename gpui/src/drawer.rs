@@ -10,7 +10,7 @@ use gpui_kit::*;
 
 use crate::Spike;
 use crate::assets::icon;
-use crate::day_card::Confirm;
+use crate::day_card::{Confirm, Tag};
 use crate::theme::Tokens;
 
 pub const WIDTH: f32 = 296.;
@@ -56,6 +56,7 @@ impl Spike {
                 let active = self.drawer_tab == which;
                 div()
                     .id(id)
+                    .tag(id)
                     .flex()
                     .items_center()
                     .gap(px(4.))
@@ -255,6 +256,7 @@ impl Spike {
         let (danger, soft) = (k.danger, k.danger_soft);
         div()
             .id(SharedString::from(format!("parked-{id}")))
+            .tag(format!("parked-{id}"))
             .group("parked-card")
             .relative()
             .flex()
@@ -305,6 +307,7 @@ impl Spike {
             .child(
                 div()
                     .id(SharedString::from(format!("parked-del-{id}")))
+                    .tag(format!("parked-del-{id}"))
                     .size(px(26.))
                     .flex()
                     .items_center()

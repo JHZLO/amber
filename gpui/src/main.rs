@@ -13,6 +13,8 @@ mod markdown;
 mod note;
 mod theme;
 mod tt_card;
+#[cfg(test)]
+mod ui_tests;
 
 use std::collections::HashMap;
 use std::sync::Arc;
