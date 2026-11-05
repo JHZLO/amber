@@ -11,6 +11,7 @@ pub mod report;
 pub mod timetable;
 pub mod todos;
 pub mod tree;
+pub mod tree_find;
 pub mod vacations;
 pub mod vault;
 
@@ -116,6 +117,9 @@ pub const OPS: &[&str] = &[
     "vaultTree.ancestorPaths",
     "vaultTree.remapPath",
     "vaultTree.remapPaths",
+    "treeFind.hits",
+    "treeFind.filterTree",
+    "treeFind.splitHit",
     "date.todayStr",
     "date.shiftDay",
     "date.addMonths",
@@ -333,6 +337,7 @@ fn call_files(db: &Db, op: &str, a: &Args) -> Result<Json, String> {
             json(tree.search(a.s(1)?, limit))
         }
         _ => vault::call_pure(op, a.0)
+            .or_else(|| tree_find::call(op, a.0))
             .or_else(|| dates::call(op, a.0, db.now()))
             .or_else(|| tree::call(op, a.0))
             .or_else(|| timetable::call(op, a.0, db.now()))
