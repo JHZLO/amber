@@ -2,7 +2,7 @@
 // 오른쪽 패널에서 물으면 AI 가 짧게 답하고 사이드카(<이름>.comments.json)에 남는다. 물은 문장은 본문에
 // 형광펜으로 칠한다(글을 고치지 않는다). 앵커 = 그려진 글자 문자열 + n번째 출현 — 지금 앱이 남긴 사이드카를 그대로 읽는다.
 // 질문은 오른쪽 위 '질문 N' 으로 목록을 열어 본문 등장 순서로 본다. 한 줄을 누르면 스레드, 거기서 이어 묻는다.
-// 아직: 형광펜을 눌러 스레드 열기(TextView 에 글자 히트 테스트가 없다 — 목록으로 연다), 기다리는 동안 훑는 빛(정지한 칠로 대신),
+// 코드 창, 알림 제목, 그림 안 글자는 세지 않는다(지금 앱은 textContent 전부). 아직: 형광펜을 눌러 스레드 열기(TextView 에 글자 히트 테스트가 없다 — 목록으로 연다), 기다리는 동안 훑는 빛(정지한 칠로 대신),
 // 패널을 본문과 목차 사이 여백에 붙이기(오른쪽 위 고정), 답 고쳐 쓰기, 개념으로, 부분 수정.
 
 use std::collections::HashMap;
@@ -21,7 +21,7 @@ use serde_json::{Value as Json, json};
 use crate::Spike;
 use crate::assets::icon;
 use crate::day_card::{Confirm, Tag, button, primary_button};
-use crate::notes_view::{Block, time_ago};
+use crate::notes_view::{text_states, time_ago};
 use crate::theme::Tokens;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -47,7 +47,7 @@ pub struct Sel {
 #[derive(Default)]
 pub struct Cmts {
     pub list: Vec<Json>,
-    /// id → (덩어리 번호, 그 덩어리의 그려진 글자 범위, 본문 전체에서의 위치). 없으면 본문에서 사라진 앵커
+    /// id → (글 덩어리 번호 — text_states 순서, 그 덩어리의 그려진 글자 범위, 본문 전체에서의 위치). 없으면 본문에서 사라진 앵커
     pub at: HashMap<String, (usize, Range<usize>, usize)>,
     pub sel: Option<Sel>,
     pub pop: Option<Pop>,
@@ -63,7 +63,7 @@ pub struct Cmts {
     /// 마지막으로 마우스를 놓은 자리 — [질문] 버튼이 거기 뜬다
     pub mouse: Point<Pixels>,
     /// 덩어리마다 마지막으로 본 글자(파싱이 끝났는지 알려고)
-    seen: Vec<Option<RenderedText>>,
+    seen: Vec<RenderedText>,
 }
 
 fn s(v: &Json, k: &str) -> String {
@@ -133,24 +133,17 @@ impl Spike {
                 ..Default::default()
             };
         }
-        for b in &self.notes.blocks {
-            if let Block::Text(state) = b {
-                cx.observe(state, |this, _, cx| this.on_text_changed(cx))
-                    .detach();
-            }
+        for state in text_states(&self.notes.blocks) {
+            cx.observe(&state, |this, _, cx| this.on_text_changed(cx))
+                .detach();
         }
     }
 
     /// 덩어리가 알렸다 — 글이 새로 그려졌을 때만 자리를 다시 찾는다(칠하기도 알림을 내므로 그땐 넘긴다)
     fn on_text_changed(&mut self, cx: &mut Context<Self>) {
-        let texts: Vec<Option<RenderedText>> = self
-            .notes
-            .blocks
+        let texts: Vec<RenderedText> = text_states(&self.notes.blocks)
             .iter()
-            .map(|b| match b {
-                Block::Text(state) => Some(state.read(cx).rendered_text()),
-                _ => None,
-            })
+            .map(|s| s.read(cx).rendered_text())
             .collect();
         if texts == self.notes.cmts.seen {
             return;
@@ -161,15 +154,15 @@ impl Spike {
         cx.notify();
     }
 
-    /// 본문 전체 글자 = 덩어리 글자를 이은 것, 그리고 (덩어리 번호, 시작 위치)
-    fn doc_text(&self, cx: &App) -> (String, Vec<(usize, usize)>) {
+    /// 본문 전체 글자 = 글 덩어리(토글 안까지)를 이은 것, 그리고 덩어리마다 시작 위치.
+    /// 지금 앱은 본문 상자의 textContent 에서 센다 — 코드 창, 알림 제목, 그림 글자는 여기 없어서
+    /// 그 안에도 같은 문장이 있으면 n번째가 다른 자리를 가리킬 수 있다(알려진 차이)
+    fn doc_text(&self, cx: &App) -> (String, Vec<usize>) {
         let mut doc = String::new();
         let mut starts = Vec::new();
-        for (bi, b) in self.notes.blocks.iter().enumerate() {
-            if let Block::Text(state) = b {
-                starts.push((bi, doc.len()));
-                doc.push_str(state.read(cx).rendered_text().as_str());
-            }
+        for state in text_states(&self.notes.blocks) {
+            starts.push(doc.len());
+            doc.push_str(state.read(cx).rendered_text().as_str());
         }
         (doc, starts)
     }
@@ -177,18 +170,21 @@ impl Spike {
     /// 앵커의 자리 — n번째 출현이 사라졌으면 첫 출현으로. 덩어리를 넘는 앵커는 첫 덩어리 안만
     fn find_anchor(
         &self,
-        doc: &(String, Vec<(usize, usize)>),
+        doc: &(String, Vec<usize>),
         anchor: &str,
         occ: usize,
         cx: &App,
     ) -> Option<(usize, Range<usize>, usize)> {
         let (text, starts) = doc;
         let pos = nth_byte(text, anchor, occ).or_else(|| nth_byte(text, anchor, 0))?;
-        let &(bi, start) = starts.iter().rev().find(|(_, st)| *st <= pos)?;
-        let Block::Text(state) = &self.notes.blocks[bi] else {
-            return None;
-        };
-        let len = state.read(cx).rendered_text().as_str().len();
+        let bi = starts.iter().rposition(|st| *st <= pos)?;
+        let start = starts[bi];
+        let len = text_states(&self.notes.blocks)
+            .get(bi)?
+            .read(cx)
+            .rendered_text()
+            .as_str()
+            .len();
         let end = (pos - start + anchor.len()).min(len);
         Some((bi, (pos - start)..end, pos))
     }
@@ -219,10 +215,7 @@ impl Spike {
         self.notes.cmts.mouse = at;
         let (doc, starts) = self.doc_text(cx);
         let mut found = None;
-        for &(bi, start) in &starts {
-            let Block::Text(state) = &self.notes.blocks[bi] else {
-                continue;
-            };
+        for (state, &start) in text_states(&self.notes.blocks).iter().zip(&starts) {
             let st = state.read(cx);
             let Some(src) = st.selected_source_range().filter(|r| !r.is_empty()) else {
                 continue;
@@ -289,13 +282,11 @@ impl Spike {
                 .or_default()
                 .push(RangeHighlight::new(r, color));
         }
-        for (bi, b) in self.notes.blocks.iter().enumerate() {
-            if let Block::Text(state) = b {
-                let marks = per.remove(&bi).unwrap_or_default();
-                state.update(cx, |s, cx| {
-                    let _ = s.set_range_highlights(marks, cx);
-                });
-            }
+        for (bi, state) in text_states(&self.notes.blocks).iter().enumerate() {
+            let marks = per.remove(&bi).unwrap_or_default();
+            state.update(cx, |s, cx| {
+                let _ = s.set_range_highlights(marks, cx);
+            });
         }
     }
 
@@ -306,10 +297,8 @@ impl Spike {
         c.list_open = false;
         c.pop = Some(pop);
         c.rebuild = Some(String::new());
-        for b in &self.notes.blocks {
-            if let Block::Text(state) = b {
-                state.update(cx, |s, cx| s.clear_selection(cx));
-            }
+        for state in text_states(&self.notes.blocks) {
+            state.update(cx, |s, cx| s.clear_selection(cx));
         }
         self.repaint_marks(cx);
     }
@@ -529,7 +518,7 @@ impl Spike {
     /// 목록에서 연 스레드 — 본문의 그 문장으로 굴린다
     pub(crate) fn open_thread(&mut self, id: String, from_list: bool, cx: &mut Context<Self>) {
         if let Some((bi, r, _)) = self.notes.cmts.at.get(&id).cloned()
-            && let Some(Block::Text(state)) = self.notes.blocks.get(bi)
+            && let Some(state) = text_states(&self.notes.blocks).get(bi)
         {
             state.update(cx, |s, cx| {
                 let _ = s.reveal_range(r, cx);

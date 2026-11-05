@@ -1175,9 +1175,7 @@ fn note_questions_list_in_text_order_and_open_threads(cx: &mut TestAppContext) {
         // 형광펜 범위가 그 덩어리의 그려진 글자에서 'beta again' 의 beta 를 가리킨다
         let s = spike().read(cx);
         let (bi, r, _) = s.notes.cmts.at["c1"].clone();
-        let crate::notes_view::Block::Text(state) = &s.notes.blocks[bi] else {
-            panic!("글 덩어리")
-        };
+        let state = crate::notes_view::text_states(&s.notes.blocks)[bi].clone();
         let text = state.read(cx).rendered_text();
         assert_eq!(&text.as_str()[r.clone()], "beta");
         assert!(text.as_str()[r.start..].starts_with("beta again"));
@@ -1325,4 +1323,51 @@ fn dragging_over_text_asks_ai_and_keeps_the_thread(cx: &mut TestAppContext) {
         let c = &spike().read(cx).notes.cmts;
         assert_eq!(c.list[0]["followUps"][0]["question"], "and lazy?");
     });
+}
+
+#[gpui_kit::test]
+fn questions_and_find_reach_inside_toggles(cx: &mut TestAppContext) {
+    let db = seeded("cmt-toggle", &[]);
+    vault_note(
+        &db,
+        "T.md",
+        "# T\n\nouter line\n\n<details>\n<summary>More</summary>\n\ninner secret line\n\n</details>\n",
+    );
+    vault_sidecar(
+        &db,
+        "T.md",
+        r#"{"version":1,"comments":[
+  {"id":"t1","anchor":"inner secret","occurrence":0,"question":"q?","answer":"a","createdAt":1}
+]}"#,
+    );
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-T.md");
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        let (bi, r, _) = s
+            .notes
+            .cmts
+            .at
+            .get("t1")
+            .cloned()
+            .expect("닫힌 토글 안도 찾는다");
+        let state = crate::notes_view::text_states(&s.notes.blocks)[bi].clone();
+        assert_eq!(&state.read(cx).rendered_text().as_str()[r], "inner secret");
+    });
+    click(&mut ui, "note-scroll");
+    ui.simulate_keystrokes("cmd-f");
+    ui.simulate_input("line");
+    ui.run_until_parked();
+    let n = ui.update(|_, cx| {
+        spike()
+            .read(cx)
+            .notes
+            .page_find
+            .as_ref()
+            .unwrap()
+            .hits
+            .len()
+    });
+    assert_eq!(n, 2, "토글 안 글도 찾는다");
 }

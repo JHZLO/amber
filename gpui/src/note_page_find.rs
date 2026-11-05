@@ -13,7 +13,7 @@ use gpui_kit::*;
 use crate::Spike;
 use crate::assets::icon;
 use crate::day_card::Tag;
-use crate::notes_view::Block;
+use crate::notes_view::text_states;
 use crate::theme::Tokens;
 
 /// 한 번에 칠할 상한 — 넘는 만큼은 개수에 '+'로만 알린다
@@ -23,7 +23,7 @@ pub struct PageFindState {
     pub input: Entity<InputState>,
     pub query: String,
     pub idx: usize,
-    /// (본문 덩어리 번호, 그려진 글자의 바이트 범위)
+    /// (글 덩어리 번호 — text_states 순서, 토글 안까지, 그려진 글자의 바이트 범위)
     pub hits: Vec<(usize, Range<usize>)>,
 }
 
@@ -120,7 +120,7 @@ impl Spike {
             return;
         };
         if let Some((bi, r)) = f.hits.get(f.idx).cloned()
-            && let Some(Block::Text(state)) = self.notes.blocks.get(bi)
+            && let Some(state) = text_states(&self.notes.blocks).get(bi)
         {
             state.update(cx, |s, cx| {
                 let _ = s.reveal_range(r, cx);
@@ -149,10 +149,7 @@ impl Spike {
             )
         };
         let mut hits = Vec::new();
-        for (bi, b) in self.notes.blocks.iter().enumerate() {
-            let Block::Text(state) = b else {
-                continue;
-            };
+        for (bi, state) in text_states(&self.notes.blocks).iter().enumerate() {
             let text = state.read(cx).rendered_text();
             let left = FIND_LIMIT - hits.len().min(FIND_LIMIT);
             hits.extend(

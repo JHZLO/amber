@@ -80,6 +80,20 @@ fn toggle_meta(body: &str) -> String {
         .join(", ")
 }
 
+/// 글 덩어리 전부 — 토글 안까지 문서 순서로. 질문 형광펜과 노트 안 찾기가 이 순서의 번호를 쓴다
+/// (닫힌 토글 안도 센다 — 지금 앱의 textContent 가 닫힌 details 의 글도 품는 것처럼)
+pub(crate) fn text_states(blocks: &[Block]) -> Vec<Entity<gpui_kit::base::text::TextViewState>> {
+    let mut out = Vec::new();
+    for b in blocks {
+        match b {
+            Block::Text(s) => out.push(s.clone()),
+            Block::Toggle { blocks, .. } => out.extend(text_states(blocks)),
+            _ => {}
+        }
+    }
+    out
+}
+
 fn blocks_of(src: &str, text_hex: &str, prefix: &str, cx: &mut App) -> Vec<Block> {
     note::split(src)
         .into_iter()
