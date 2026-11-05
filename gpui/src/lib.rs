@@ -7,6 +7,7 @@ pub mod migrate;
 pub mod report;
 pub mod todos;
 pub mod vacations;
+pub mod vault;
 
 use serde_json::{Value as Json, json};
 
@@ -75,6 +76,33 @@ pub const OPS: &[&str] = &[
     "dbconn.updateConnection",
     "dbconn.markSync",
     "dbconn.setSchemaStarred",
+    "notes.listNoteTree",
+    "notes.readNoteFile",
+    "notes.writeNoteFile",
+    "notes.createFolder",
+    "notes.createNote",
+    "notes.renameEntry",
+    "notes.moveEntry",
+    "notes.deleteEntry",
+    "diagrams.listDiagramTree",
+    "diagrams.readDiagramFile",
+    "diagrams.writeDiagramFile",
+    "diagrams.createFolder",
+    "diagrams.createDiagram",
+    "diagrams.renameEntry",
+    "diagrams.moveEntry",
+    "diagrams.deleteEntry",
+    "vault.writeNote",
+    "vault.readNote",
+    "vault.noteExists",
+    "vault.deleteConceptDir",
+    "erdStore.readErdFileIfExists",
+    "erdStore.writeErdFile",
+    "erdStore.ensureErdDir",
+    "erdStore.erdFileExists",
+    "erdStore.deleteErdEntry",
+    "vaultTree.writeAtomic",
+    "vaultTree.searchFiles",
 ];
 
 pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
@@ -207,6 +235,56 @@ pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
             a.s(1)?,
             a.0.get(2).and_then(Json::as_bool).unwrap_or(false),
         )),
+        _ => call_files(db, op, &a),
+    }
+}
+
+/// vault 파일 op — DB 쪽과 결과 모양이 같다(경로는 문자열, 없음은 null)
+fn call_files(db: &Db, op: &str, a: &Args) -> Result<Json, String> {
+    use vault::{DIAGRAMS, ERD, Tree};
+    fn json<T: serde::Serialize>(v: Result<T, String>) -> Result<Json, String> {
+        v.and_then(|v| serde_json::to_value(v).map_err(|e| e.to_string()))
+    }
+    let flag = |i: usize| a.0.get(i).and_then(Json::as_bool).unwrap_or(false);
+    let notes = vault::notes(db);
+    let diagrams = Tree { db, cfg: &DIAGRAMS };
+    let erd = Tree { db, cfg: &ERD };
+    match op {
+        "notes.listNoteTree" => json(notes.list_tree()),
+        "notes.readNoteFile" => json(notes.read_file(a.s(0)?)),
+        "notes.writeNoteFile" => json(notes.write_file(a.s(0)?, a.s(1)?)),
+        "notes.createFolder" => json(notes.create_folder(a.s(0)?, a.s(1)?)),
+        "notes.createNote" => json(notes.create_file(a.s(0)?, a.s(1)?)),
+        "notes.renameEntry" => json(vault::rename_note_entry(db, a.s(0)?, a.s(1)?, flag(2))),
+        "notes.moveEntry" => json(vault::move_note_entry(db, a.s(0)?, a.s(1)?)),
+        "notes.deleteEntry" => json(vault::delete_note_entry(db, a.s(0)?)),
+        "diagrams.listDiagramTree" => json(diagrams.list_tree()),
+        "diagrams.readDiagramFile" => json(diagrams.read_file(a.s(0)?)),
+        "diagrams.writeDiagramFile" => json(diagrams.write_file(a.s(0)?, a.s(1)?)),
+        "diagrams.createFolder" => json(diagrams.create_folder(a.s(0)?, a.s(1)?)),
+        "diagrams.createDiagram" => json(diagrams.create_file(a.s(0)?, a.s(1)?)),
+        "diagrams.renameEntry" => json(diagrams.rename_entry(a.s(0)?, a.s(1)?, flag(2))),
+        "diagrams.moveEntry" => json(diagrams.move_entry(a.s(0)?, a.s(1)?)),
+        "diagrams.deleteEntry" => json(diagrams.delete_entry(a.s(0)?)),
+        "vault.writeNote" => json(vault::write_concept_note(db, a.s(0)?, a.s(1)?)),
+        "vault.readNote" => json(vault::read_concept_note(db, a.s(0)?)),
+        "vault.noteExists" => Ok(Json::from(vault::concept_note_exists(db, a.s(0)?))),
+        "vault.deleteConceptDir" => json(vault::delete_concept_dir(db, a.s(0)?)),
+        "erdStore.readErdFileIfExists" => json(erd.read_file_if_exists(a.s(0)?)),
+        "erdStore.writeErdFile" => json(erd.write_file(a.s(0)?, a.s(1)?)),
+        "erdStore.ensureErdDir" => json(erd.ensure_dir(a.s(0)?)),
+        "erdStore.erdFileExists" => Ok(Json::from(erd.file_exists(a.s(0)?))),
+        "erdStore.deleteErdEntry" => json(erd.delete_entry(a.s(0)?)),
+        "vaultTree.writeAtomic" => json(vault::write_atomic(db, a.s(0)?, a.s(1)?)),
+        "vaultTree.searchFiles" => {
+            let tree = if a.s(0)? == "diagrams" {
+                &diagrams
+            } else {
+                &notes
+            };
+            let limit = a.0.get(2).and_then(Json::as_u64).unwrap_or(20) as usize;
+            json(tree.search(a.s(1)?, limit))
+        }
         _ => Err(format!("모르는 op: {op}")),
     }
 }

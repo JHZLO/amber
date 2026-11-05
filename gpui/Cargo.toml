@@ -13,6 +13,12 @@ serde_json = { version = "1", features = ["preserve_order"] }
 chrono = "0.4"
 ulid = "1.2"
 sha2 = "0.10"
+# 노트 트리 정렬 — 지금 앱의 localeCompare(…, "ko") 와 같은 ICU 한국어 규칙(한글, 한자가 라틴보다 앞)
+icu_collator = "2"
+icu_locale_core = "2"
+regex = "1"
+# 휴지통, 백업, AI 실행 등 지금 앱과 같이 쓰는 Rust
+amber-core = { path = "../core" }
 pulldown-cmark = { version = "0.13", default-features = false }
 resvg = "0.45.1"
 merman = { version = "=0.10.0-alpha.1", features = ["math"] }
