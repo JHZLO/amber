@@ -6,6 +6,8 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface, type Interface } from "node:readline";
 import { vi } from "vitest";
 import { callOp } from "./ops";
+import { dirname } from "node:path";
+import { fsRoot } from "./fs";
 import { clock, openSqlite, pluginSql, ulids } from "./sqlite";
 
 export type Outcome = { ok: true; result: unknown } | { ok: false; error: string };
@@ -32,6 +34,8 @@ export class TsEngine implements Engine {
     process.env.TZ = tz;
     pluginSql.conn = openSqlite(dbPath);
     ulids.k = 0;
+    fsRoot.dir = dirname(dbPath);
+    fsRoot.trashed = 0;
   }
 
   async run(op: string, args: unknown[], now: number): Promise<Outcome> {
@@ -40,7 +44,8 @@ export class TsEngine implements Engine {
     try {
       return { ok: true, result: jsonOnly(await callOp(op, structuredClone(args))) };
     } catch (e) {
-      return { ok: false, error: String((e as Error)?.message ?? e) };
+      // 임시 폴더 경로는 녹화마다 다르다 — 문구를 같게 남긴다(재생 때 문구는 비교하지 않는다)
+      return { ok: false, error: String((e as Error)?.message ?? e).replaceAll(fsRoot.dir, "<appdata>") };
     }
   }
 
@@ -67,6 +72,7 @@ export class TsEngine implements Engine {
  *   - op 마다 커밋하고 답한다. 하네스가 다른 연결로 바로 상태를 뜬다
  *   - now 는 앱의 시계이자 SQLite 의 unixepoch('subsec') 이다. 앱 정의 함수로 내장 함수를 덮는다
  *   - ULID 는 open 마다 처음부터 parityUlid(1), parityUlid(2)… 순서로 낸다(sqlite.ts)
+ *   - 파일은 DB 파일이 있는 폴더를 앱 데이터 폴더로 쓴다. 휴지통은 `.trash/<n>/<이름>`, n 은 open 마다 1 부터(fs.ts)
  *   - 결과 JSON 은 지금 TS 함수가 돌려주는 모양 그대로다(필드 이름, null, 배열 순서까지) */
 export class ExternalEngine implements Engine {
   readonly name: string;

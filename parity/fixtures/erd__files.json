@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "name": "erd/files",
+  "tz": "Asia/Seoul",
+  "start": 1793836800000,
+  "seed": [],
+  "final": "83cc992fa1f8b3c2b15bd102d889590cc2e130ccf171dae58e799daf99fb71a6",
+  "steps": [
+    {"op":"erdStore.ensureErdDir","args":[""],"at":1793836800000,"ok":true,"result":null,"changes":{}},
+    {"op":"erdStore.ensureErdDir","args":[" conn / svc_a "],"at":1793836801000,"ok":true,"result":null,"changes":{"__files":{"added":[{"path":"vault","kind":"dir"},{"path":"vault/erd","kind":"dir"},{"path":"vault/erd/conn","kind":"dir"},{"path":"vault/erd/conn/svc_a","kind":"dir"}],"removed":[],"changed":[]}}},
+    {"op":"erdStore.ensureErdDir","args":["conn/svc_a"],"at":1793836802000,"ok":true,"result":null,"changes":{}},
+    {"op":"erdStore.writeErdFile","args":["conn/svc_a/schema.json","{\"tables\":[]}\n"],"at":1793836803000,"ok":true,"result":null,"changes":{"__files":{"added":[{"path":"vault/erd/conn/svc_a/schema.json","kind":"file","text":"{\"tables\":[]}\n"}],"removed":[],"changed":[]}}},
+    {"op":"erdStore.erdFileExists","args":["conn/svc_a/schema.json"],"at":1793836804000,"ok":true,"result":true,"changes":{}},
+    {"op":"erdStore.erdFileExists","args":["conn/svc_b/schema.json"],"at":1793836805000,"ok":true,"result":false,"changes":{}},
+    {"op":"erdStore.readErdFileIfExists","args":["conn/svc_a/schema.json"],"at":1793836806000,"ok":true,"result":"{\"tables\":[]}\n","changes":{}},
+    {"op":"erdStore.readErdFileIfExists","args":["conn/svc_b/schema.json"],"at":1793836807000,"ok":true,"result":null,"changes":{}},
+    {"op":"erdStore.deleteErdEntry","args":["conn"],"at":1793836808000,"ok":true,"result":null,"changes":{"__files":{"added":[{"path":".trash","kind":"dir"},{"path":".trash/1","kind":"dir"},{"path":".trash/1/conn","kind":"dir"},{"path":".trash/1/conn/svc_a","kind":"dir"},{"path":".trash/1/conn/svc_a/schema.json","kind":"file","text":"{\"tables\":[]}\n"}],"removed":[{"path":"vault/erd/conn","kind":"dir"},{"path":"vault/erd/conn/svc_a","kind":"dir"},{"path":"vault/erd/conn/svc_a/schema.json","kind":"file","text":"{\"tables\":[]}\n"}],"changed":[]}}},
+    {"op":"erdStore.deleteErdEntry","args":["conn"],"at":1793836809000,"ok":true,"result":null,"changes":{}}
+  ]
+}

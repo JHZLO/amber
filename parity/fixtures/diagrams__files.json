@@ -1,0 +1,34 @@
+{
+  "format": 1,
+  "name": "diagrams/files",
+  "tz": "Asia/Seoul",
+  "start": 1793836800000,
+  "seed": [
+    {
+      "path": "vault/diagrams/주문.mmd",
+      "text": "erDiagram\n    USER ||--o{ ORDER : places\n"
+    },
+    {
+      "path": "vault/diagrams/flow.mermaid",
+      "text": "flowchart LR\n  a --> b\n"
+    },
+    {
+      "path": "vault/diagrams/note.md",
+      "text": "트리에 안 보인다"
+    }
+  ],
+  "final": "27eb95795a0ffcb13d8031a9aa0bbc40f8f45fd754c6d6e0d649dd0c2db8239b",
+  "steps": [
+    {"op":"diagrams.listDiagramTree","args":[],"at":1793836800000,"ok":true,"result":[{"name":"주문","path":"주문.mmd","isDir":false},{"name":"flow","path":"flow.mermaid","isDir":false}],"changes":{}},
+    {"op":"diagrams.createDiagram","args":["","결제"],"at":1793836801000,"ok":true,"result":"결제.mmd","changes":{"__files":{"added":[{"path":"vault/diagrams/결제.mmd","kind":"file","text":"erDiagram\n    USER ||--o{ ORDER : places\n    ORDER ||--|{ ORDER_ITEM : contains\n\n    USER {\n        bigint id PK\n        varchar email\n    }\n    ORDER {\n        bigint id PK\n        bigint user_id FK\n    }\n"}],"removed":[],"changed":[]}}},
+    {"op":"diagrams.createFolder","args":["","도메인"],"at":1793836802000,"ok":true,"result":"도메인","changes":{"__files":{"added":[{"path":"vault/diagrams/도메인","kind":"dir"}],"removed":[],"changed":[]}}},
+    {"op":"diagrams.renameEntry","args":["flow.mermaid","Flow",false],"at":1793836803000,"ok":true,"result":"Flow.mmd","changes":{"__files":{"added":[{"path":"vault/diagrams/Flow.mmd","kind":"file","text":"flowchart LR\n  a --> b\n"}],"removed":[{"path":"vault/diagrams/flow.mermaid","kind":"file","text":"flowchart LR\n  a --> b\n"}],"changed":[]}}},
+    {"op":"diagrams.moveEntry","args":["Flow.mmd","도메인"],"at":1793836804000,"ok":true,"result":"도메인/Flow.mmd","changes":{"__files":{"added":[{"path":"vault/diagrams/도메인/Flow.mmd","kind":"file","text":"flowchart LR\n  a --> b\n"}],"removed":[{"path":"vault/diagrams/Flow.mmd","kind":"file","text":"flowchart LR\n  a --> b\n"}],"changed":[]}}},
+    {"op":"diagrams.moveEntry","args":["flow.mermaid","도메인"],"at":1793836805000,"ok":false,"error":"ENOENT: no such file or directory, rename '<appdata>/vault/diagrams/flow.mermaid' -> '<appdata>/vault/diagrams/도메인/flow.mermaid'","changes":{}},
+    {"op":"diagrams.writeDiagramFile","args":["결제.mmd","erDiagram\n    PAY {\n        bigint id PK\n    }\n"],"at":1793836806000,"ok":true,"result":null,"changes":{"__files":{"added":[],"removed":[],"changed":[{"before":{"path":"vault/diagrams/결제.mmd","kind":"file","text":"erDiagram\n    USER ||--o{ ORDER : places\n    ORDER ||--|{ ORDER_ITEM : contains\n\n    USER {\n        bigint id PK\n        varchar email\n    }\n    ORDER {\n        bigint id PK\n        bigint user_id FK\n    }\n"},"after":{"path":"vault/diagrams/결제.mmd","kind":"file","text":"erDiagram\n    PAY {\n        bigint id PK\n    }\n"}}]}}},
+    {"op":"diagrams.readDiagramFile","args":["결제.mmd"],"at":1793836807000,"ok":true,"result":"erDiagram\n    PAY {\n        bigint id PK\n    }\n","changes":{}},
+    {"op":"diagrams.deleteEntry","args":["주문.mmd"],"at":1793836808000,"ok":true,"result":null,"changes":{"__files":{"added":[{"path":".trash","kind":"dir"},{"path":".trash/1","kind":"dir"},{"path":".trash/1/주문.mmd","kind":"file","text":"erDiagram\n    USER ||--o{ ORDER : places\n"}],"removed":[{"path":"vault/diagrams/주문.mmd","kind":"file","text":"erDiagram\n    USER ||--o{ ORDER : places\n"}],"changed":[]}}},
+    {"op":"vaultTree.searchFiles","args":["diagrams","pay",20],"at":1793836809000,"ok":true,"result":[{"name":"결제","path":"결제.mmd","snippet":"PAY {"}],"changes":{}},
+    {"op":"diagrams.listDiagramTree","args":[],"at":1793836810000,"ok":true,"result":[{"name":"도메인","path":"도메인","isDir":true,"children":[{"name":"Flow","path":"도메인/Flow.mmd","isDir":false}]},{"name":"결제","path":"결제.mmd","isDir":false}],"changes":{}}
+  ]
+}

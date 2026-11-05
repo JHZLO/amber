@@ -7,6 +7,7 @@
 
 import { createHash } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
+import { listFiles } from "./fs";
 
 export type Row = Record<string, unknown>;
 export type Dump = Record<string, Record<string, Row>>;
@@ -22,8 +23,12 @@ const SKIP = new Set(["_sqlx_migrations"]);
 
 const quote = (id: string) => `"${id.replace(/"/g, '""')}"`;
 
-export function dump(db: DatabaseSync): Dump {
+/** dir 를 주면 그 폴더(앱 데이터 폴더)의 파일도 `__files` 표로 뜬다. 파일이 하나도 없으면 표를 넣지 않는다 —
+ *  DB 만 쓰는 픽스처의 해시가 그대로 남는다 */
+export function dump(db: DatabaseSync, dir?: string): Dump {
   const out: Dump = {};
+  const files = dir ? listFiles(dir) : [];
+  if (files.length) out.__files = Object.fromEntries(files.map((f) => [canonical([f.path]), f]));
   const tables = db
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
     .all()

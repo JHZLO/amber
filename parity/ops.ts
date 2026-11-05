@@ -1,17 +1,23 @@
-// 재는 대상: SQLite 를 만지는 도메인 함수 전부. 이름은 "파일.함수" — Rust 엔진도 같은 이름으로 받는다.
+// 재는 대상: SQLite 를 만지는 도메인 함수와 vault 파일을 만지는 함수 전부. 이름은 "파일.함수" — Rust 엔진도
+// 같은 이름으로 받는다. 파일은 앱 데이터 폴더(= DB 파일이 있는 폴더) 아래에서 다룬다(fs.ts).
 //
-// 이 여섯 파일의 export 는 셋 중 하나에 꼭 들어간다(parity.test.ts 가 막는다). 새 DB 함수를 만들고
+// MODULES 파일의 export 는 셋 중 하나에 꼭 들어간다(parity.test.ts 가 막는다). 새 함수를 만들고
 // 여기 안 넣으면 테스트가 멈춘다 — 재지 않는 함수가 조용히 생기지 않게.
 //  - OPS: 시나리오로 잰다
-//  - NOT_COVERED: DB 밖(파일, 키체인, Rust 명령)을 함께 건드려 이 단에서 재지 않는다. 이유를 남긴다
-//  - PURE: DB 를 안 쓰는 계산 — 동기 함수여야 한다
+//  - NOT_COVERED: 이 단에서 재지 않는다(키체인, 외부 DB, AI 실행 등). 이유를 남긴다
+//  - PURE: DB 와 파일을 안 쓰는 계산 — 동기 함수여야 한다
 
 import * as db from "../src/lib/db";
 import * as dbconn from "../src/lib/dbconn";
+import * as diagrams from "../src/lib/diagrams";
+import * as erdStore from "../src/lib/erdStore";
+import * as notes from "../src/lib/notes";
 import * as report from "../src/lib/report";
 import * as timeBlocks from "../src/lib/timeBlocks";
 import * as todos from "../src/lib/todos";
 import * as vacations from "../src/lib/vacations";
+import * as vault from "../src/lib/vault";
+import * as vaultTree from "../src/lib/vaultTree";
 
 type Op = (...args: never[]) => Promise<unknown>;
 
@@ -19,7 +25,19 @@ type Op = (...args: never[]) => Promise<unknown>;
 export const callOp = (name: string, args: unknown[]) =>
   (OPS[name] as unknown as (...a: unknown[]) => Promise<unknown>)(...args);
 
-export const MODULES = ["todos", "db", "report", "dbconn", "timeBlocks", "vacations"] as const;
+export const MODULES = [
+  "todos",
+  "db",
+  "report",
+  "dbconn",
+  "timeBlocks",
+  "vacations",
+  "notes",
+  "diagrams",
+  "vault",
+  "erdStore",
+  "vaultTree",
+] as const;
 
 export const OPS: Record<string, Op> = {
   "todos.listTodos": todos.listTodos,
@@ -88,6 +106,46 @@ export const OPS: Record<string, Op> = {
   "vacations.getVacation": vacations.getVacation,
   "vacations.setVacation": vacations.setVacation,
   "vacations.removeVacation": vacations.removeVacation,
+
+  "notes.listNoteTree": notes.listNoteTree,
+  "notes.readNoteFile": notes.readNoteFile,
+  "notes.writeNoteFile": notes.writeNoteFile,
+  "notes.createFolder": notes.createFolder,
+  "notes.createNote": notes.createNote,
+  "notes.renameEntry": notes.renameEntry,
+  "notes.moveEntry": notes.moveEntry,
+  "notes.deleteEntry": notes.deleteEntry,
+
+  "diagrams.listDiagramTree": diagrams.listDiagramTree,
+  "diagrams.readDiagramFile": diagrams.readDiagramFile,
+  "diagrams.writeDiagramFile": diagrams.writeDiagramFile,
+  "diagrams.createFolder": diagrams.createFolder,
+  "diagrams.createDiagram": diagrams.createDiagram,
+  "diagrams.renameEntry": diagrams.renameEntry,
+  "diagrams.moveEntry": diagrams.moveEntry,
+  "diagrams.deleteEntry": diagrams.deleteEntry,
+
+  "vault.writeNote": vault.writeNote,
+  "vault.readNote": vault.readNote,
+  "vault.noteExists": vault.noteExists,
+  "vault.deleteConceptDir": vault.deleteConceptDir,
+
+  "erdStore.readErdFileIfExists": erdStore.readErdFileIfExists,
+  "erdStore.writeErdFile": erdStore.writeErdFile,
+  "erdStore.ensureErdDir": erdStore.ensureErdDir,
+  "erdStore.erdFileExists": erdStore.erdFileExists,
+  "erdStore.deleteErdEntry": erdStore.deleteErdEntry,
+
+  "vaultTree.writeAtomic": vaultTree.writeAtomic,
+  // 검색 화면(SearchModal)이 부르는 그대로 — 트리와 읽기를 노트 또는 다이어그램 쪽으로 묶는다
+  "vaultTree.searchFiles": (section: "notes" | "diagrams", query: string, limit?: number) =>
+    vaultTree.searchFiles(
+      section === "diagrams"
+        ? { listTree: diagrams.listDiagramTree, readFile: diagrams.readDiagramFile }
+        : { listTree: notes.listNoteTree, readFile: notes.readNoteFile },
+      query,
+      limit,
+    ),
 };
 
 const FILES_AND_RUST = "파일이나 Rust 명령을 함께 건드린다";
@@ -117,6 +175,9 @@ export const NOT_COVERED: Record<string, string> = {
   "dbconn.writeSnapshot": "ERD 파일 쓰기",
   "dbconn.syncSchema": "외부 DB 접속 + ERD 파일 + markSync",
   "dbconn.notifyConnectionsChanged": "창 이벤트",
+  "notes.noteMtime": "파일 수정 시각은 녹화할 때마다 다르다",
+  "diagrams.diagramMtime": "파일 수정 시각은 녹화할 때마다 다르다",
+  "vaultTree.createVaultTree": "트리를 만드는 함수 — notes, diagrams, erdStore 의 op 로 잰다",
 };
 
 export const PURE = new Set([
@@ -140,4 +201,14 @@ export const PURE = new Set([
   "timeBlocks.findFreeSlot",
   "vacations.isVacationKind",
   "vacations.vacationLabel",
+  "notes.noteDirPath",
+  "vault.detailPathFor",
+  "vaultTree.parentOf",
+  "vaultTree.invalidNameReason",
+  "vaultTree.invalidPathReason",
+  "vaultTree.normalizePath",
+  "vaultTree.flattenDirs",
+  "vaultTree.ancestorPaths",
+  "vaultTree.remapPath",
+  "vaultTree.remapPaths",
 ]);

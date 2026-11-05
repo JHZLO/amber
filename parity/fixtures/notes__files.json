@@ -1,0 +1,133 @@
+{
+  "format": 1,
+  "name": "notes/files",
+  "tz": "Asia/Seoul",
+  "start": 1793836800000,
+  "seed": [
+    {
+      "path": "vault/notes/CS/네트워크/TCP.md",
+      "text": "# TCP\n\n악수는 세 번 한다.\n\n![그림](_assets/a.png)\n![없는 그림](./_assets/none.png)\n![밖](../x.png)\n"
+    },
+    {
+      "path": "vault/notes/CS/네트워크/_assets/a.png",
+      "text": "PNG-a"
+    },
+    {
+      "path": "vault/notes/CS/네트워크/TCP.comments.json",
+      "text": "{\"version\":1,\"threads\":[]}"
+    },
+    {
+      "path": "vault/notes/CS/네트워크/TCP.concepts.json",
+      "text": "{\"links\":[]}"
+    },
+    {
+      "path": "vault/notes/CS수업.md",
+      "text": "# CS수업\n"
+    },
+    {
+      "path": "vault/notes/apple.md",
+      "text": "사과. TCP 를 언급한다\n"
+    },
+    {
+      "path": "vault/notes/Banana.md",
+      "text": ""
+    },
+    {
+      "path": "vault/notes/10.md",
+      "text": ""
+    },
+    {
+      "path": "vault/notes/2.md",
+      "text": ""
+    },
+    {
+      "path": "vault/notes/한글.md",
+      "text": ""
+    },
+    {
+      "path": "vault/notes/漢字.md",
+      "text": ""
+    },
+    {
+      "path": "vault/notes/éclair.md",
+      "text": ""
+    },
+    {
+      "path": "vault/notes/eclair2.md",
+      "text": ""
+    },
+    {
+      "path": "vault/notes/_x.md",
+      "text": ""
+    },
+    {
+      "path": "vault/notes/😀.md",
+      "text": ""
+    },
+    {
+      "path": "vault/notes/a b.md",
+      "text": ""
+    },
+    {
+      "path": "vault/notes/Upper.MD",
+      "text": "대문자 확장자"
+    },
+    {
+      "path": "vault/notes/긴줄.md",
+      "text": "앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 needle 이 가운데 있다 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 \n"
+    },
+    {
+      "path": "vault/notes/x.txt",
+      "text": "트리에 안 보이는 파일"
+    },
+    {
+      "path": "vault/notes/.DS_Store",
+      "text": ""
+    },
+    {
+      "path": "vault/notes/.숨김/안.md",
+      "text": ""
+    },
+    {
+      "path": "vault/notes/빈 폴더/"
+    },
+    {
+      "sql": "INSERT INTO concepts (ulid, title, summary, detail_path, source, source_kind) VALUES\n            ('01SEEDNOTECONCEPT00000000A', 'TCP', 's', 'concepts/a/index.md', '{\"noteRel\":\"CS/네트워크/TCP.md\"}', 'file'),\n            ('01SEEDNOTECONCEPT00000000B', '다른', 's', 'concepts/b/index.md', '{\"noteRel\":\"CS/네트워크/다른.md\"}', 'file'),\n            ('01SEEDNOTECONCEPT00000000C', '깨짐', 's', 'concepts/c/index.md', 'not json', 'file')"
+    }
+  ],
+  "final": "05d54e035f52e053cbca0c4317f2ab7f11ea1e72d767f1ff40ec150cff704c43",
+  "steps": [
+    {"op":"notes.listNoteTree","args":[],"at":1793836800000,"ok":true,"result":[{"name":"빈 폴더","path":"빈 폴더","isDir":true,"children":[]},{"name":"CS","path":"CS","isDir":true,"children":[{"name":"네트워크","path":"CS/네트워크","isDir":true,"children":[{"name":"TCP","path":"CS/네트워크/TCP.md","isDir":false}]}]},{"name":"_x","path":"_x.md","isDir":false},{"name":"😀","path":"😀.md","isDir":false},{"name":"10","path":"10.md","isDir":false},{"name":"2","path":"2.md","isDir":false},{"name":"긴줄","path":"긴줄.md","isDir":false},{"name":"한글","path":"한글.md","isDir":false},{"name":"漢字","path":"漢字.md","isDir":false},{"name":"a b","path":"a b.md","isDir":false},{"name":"apple","path":"apple.md","isDir":false},{"name":"Banana","path":"Banana.md","isDir":false},{"name":"CS수업","path":"CS수업.md","isDir":false},{"name":"éclair","path":"éclair.md","isDir":false},{"name":"eclair2","path":"eclair2.md","isDir":false},{"name":"Upper","path":"Upper.MD","isDir":false}],"changes":{}},
+    {"op":"notes.createNote","args":["","새 노트"],"at":1793836801000,"ok":true,"result":"새 노트.md","changes":{"__files":{"added":[{"path":"vault/notes/새 노트.md","kind":"file","text":"# 새 노트\n\n"}],"removed":[],"changed":[]}}},
+    {"op":"notes.createNote","args":["","새 노트"],"at":1793836802000,"ok":false,"error":"같은 이름의 파일이 이미 있어요.","changes":{}},
+    {"op":"notes.createNote","args":["CS"," 깊은 / 경로 / 노트 "],"at":1793836803000,"ok":true,"result":"CS/깊은/경로/노트.md","changes":{"__files":{"added":[{"path":"vault/notes/CS/깊은","kind":"dir"},{"path":"vault/notes/CS/깊은/경로","kind":"dir"},{"path":"vault/notes/CS/깊은/경로/노트.md","kind":"file","text":"# 노트\n\n"}],"removed":[],"changed":[]}}},
+    {"op":"notes.createNote","args":["없는폴더","안"],"at":1793836804000,"ok":true,"result":"없는폴더/안.md","changes":{"__files":{"added":[{"path":"vault/notes/없는폴더","kind":"dir"},{"path":"vault/notes/없는폴더/안.md","kind":"file","text":"# 안\n\n"}],"removed":[],"changed":[]}}},
+    {"op":"notes.createFolder","args":["","Ops/k8s"],"at":1793836805000,"ok":true,"result":"Ops/k8s","changes":{"__files":{"added":[{"path":"vault/notes/Ops","kind":"dir"},{"path":"vault/notes/Ops/k8s","kind":"dir"}],"removed":[],"changed":[]}}},
+    {"op":"notes.createFolder","args":["","Ops"],"at":1793836806000,"ok":false,"error":"같은 이름이 이미 있어요.","changes":{}},
+    {"op":"notes.writeNoteFile","args":["새 노트.md","본문 한 줄\n"],"at":1793836807000,"ok":true,"result":null,"changes":{"__files":{"added":[],"removed":[],"changed":[{"before":{"path":"vault/notes/새 노트.md","kind":"file","text":"# 새 노트\n\n"},"after":{"path":"vault/notes/새 노트.md","kind":"file","text":"본문 한 줄\n"}}]}}},
+    {"op":"notes.readNoteFile","args":["새 노트.md"],"at":1793836808000,"ok":true,"result":"본문 한 줄\n","changes":{}},
+    {"op":"notes.readNoteFile","args":["없는.md"],"at":1793836809000,"ok":false,"error":"ENOENT: no such file or directory, open '<appdata>/vault/notes/없는.md'","changes":{}},
+    {"op":"notes.renameEntry","args":["CS/네트워크/TCP.md","tcp",false],"at":1793836810000,"ok":true,"result":"CS/네트워크/tcp.md","changes":{"__files":{"added":[{"path":"vault/notes/CS/네트워크/tcp.comments.json","kind":"file","text":"{\"version\":1,\"threads\":[]}"},{"path":"vault/notes/CS/네트워크/tcp.concepts.json","kind":"file","text":"{\"links\":[]}"},{"path":"vault/notes/CS/네트워크/tcp.md","kind":"file","text":"# TCP\n\n악수는 세 번 한다.\n\n![그림](_assets/a.png)\n![없는 그림](./_assets/none.png)\n![밖](../x.png)\n"}],"removed":[{"path":"vault/notes/CS/네트워크/TCP.comments.json","kind":"file","text":"{\"version\":1,\"threads\":[]}"},{"path":"vault/notes/CS/네트워크/TCP.concepts.json","kind":"file","text":"{\"links\":[]}"},{"path":"vault/notes/CS/네트워크/TCP.md","kind":"file","text":"# TCP\n\n악수는 세 번 한다.\n\n![그림](_assets/a.png)\n![없는 그림](./_assets/none.png)\n![밖](../x.png)\n"}],"changed":[]},"concepts":{"added":[],"removed":[],"changed":[{"before":{"id":1,"ulid":"01SEEDNOTECONCEPT00000000A","title":"TCP","summary":"s","detail_path":"concepts/a/index.md","status":"learning","confidence":1,"source":"{\"noteRel\":\"CS/네트워크/TCP.md\"}","source_kind":"file","seen_count":0,"last_seen_at":null,"created_at":1793836800000,"updated_at":1793836800000,"learned_at":null},"after":{"id":1,"ulid":"01SEEDNOTECONCEPT00000000A","title":"TCP","summary":"s","detail_path":"concepts/a/index.md","status":"learning","confidence":1,"source":"{\"noteRel\":\"CS/네트워크/tcp.md\"}","source_kind":"file","seen_count":0,"last_seen_at":null,"created_at":1793836800000,"updated_at":1793836800000,"learned_at":null}}]}}},
+    {"op":"notes.renameEntry","args":["apple.md","Banana",false],"at":1793836811000,"ok":false,"error":"같은 이름이 이미 있어요.","changes":{}},
+    {"op":"notes.renameEntry","args":["apple.md","apple",false],"at":1793836812000,"ok":true,"result":"apple.md","changes":{}},
+    {"op":"notes.moveEntry","args":["CS/네트워크/tcp.md","Ops"],"at":1793836813000,"ok":true,"result":"Ops/tcp.md","changes":{"__files":{"added":[{"path":"vault/notes/Ops/_assets","kind":"dir"},{"path":"vault/notes/Ops/_assets/a.png","kind":"file","text":"PNG-a"},{"path":"vault/notes/Ops/tcp.comments.json","kind":"file","text":"{\"version\":1,\"threads\":[]}"},{"path":"vault/notes/Ops/tcp.concepts.json","kind":"file","text":"{\"links\":[]}"},{"path":"vault/notes/Ops/tcp.md","kind":"file","text":"# TCP\n\n악수는 세 번 한다.\n\n![그림](_assets/a.png)\n![없는 그림](./_assets/none.png)\n![밖](../x.png)\n"}],"removed":[{"path":"vault/notes/CS/네트워크/tcp.comments.json","kind":"file","text":"{\"version\":1,\"threads\":[]}"},{"path":"vault/notes/CS/네트워크/tcp.concepts.json","kind":"file","text":"{\"links\":[]}"},{"path":"vault/notes/CS/네트워크/tcp.md","kind":"file","text":"# TCP\n\n악수는 세 번 한다.\n\n![그림](_assets/a.png)\n![없는 그림](./_assets/none.png)\n![밖](../x.png)\n"}],"changed":[]},"concepts":{"added":[],"removed":[],"changed":[{"before":{"id":1,"ulid":"01SEEDNOTECONCEPT00000000A","title":"TCP","summary":"s","detail_path":"concepts/a/index.md","status":"learning","confidence":1,"source":"{\"noteRel\":\"CS/네트워크/tcp.md\"}","source_kind":"file","seen_count":0,"last_seen_at":null,"created_at":1793836800000,"updated_at":1793836800000,"learned_at":null},"after":{"id":1,"ulid":"01SEEDNOTECONCEPT00000000A","title":"TCP","summary":"s","detail_path":"concepts/a/index.md","status":"learning","confidence":1,"source":"{\"noteRel\":\"Ops/tcp.md\"}","source_kind":"file","seen_count":0,"last_seen_at":null,"created_at":1793836800000,"updated_at":1793836800000,"learned_at":null}}]}}},
+    {"op":"notes.moveEntry","args":["CS","CS/네트워크"],"at":1793836814000,"ok":false,"error":"폴더를 자기 자신 안으로 옮길 수 없어요.","changes":{}},
+    {"op":"notes.moveEntry","args":["Ops",""],"at":1793836815000,"ok":true,"result":"Ops","changes":{}},
+    {"op":"notes.moveEntry","args":["Banana.md"," Ops / k8s / "],"at":1793836816000,"ok":true,"result":"Ops/k8s/Banana.md","changes":{"__files":{"added":[{"path":"vault/notes/Ops/k8s/Banana.md","kind":"file","text":""}],"removed":[{"path":"vault/notes/Banana.md","kind":"file","text":""}],"changed":[]}}},
+    {"op":"notes.moveEntry","args":["Banana.md","Ops"],"at":1793836817000,"ok":false,"error":"ENOENT: no such file or directory, rename '<appdata>/vault/notes/Banana.md' -> '<appdata>/vault/notes/Ops/Banana.md'","changes":{}},
+    {"op":"notes.renameEntry","args":["Ops","Infra",true],"at":1793836818000,"ok":true,"result":"Infra","changes":{"__files":{"added":[{"path":"vault/notes/Infra","kind":"dir"},{"path":"vault/notes/Infra/_assets","kind":"dir"},{"path":"vault/notes/Infra/_assets/a.png","kind":"file","text":"PNG-a"},{"path":"vault/notes/Infra/k8s","kind":"dir"},{"path":"vault/notes/Infra/k8s/Banana.md","kind":"file","text":""},{"path":"vault/notes/Infra/tcp.comments.json","kind":"file","text":"{\"version\":1,\"threads\":[]}"},{"path":"vault/notes/Infra/tcp.concepts.json","kind":"file","text":"{\"links\":[]}"},{"path":"vault/notes/Infra/tcp.md","kind":"file","text":"# TCP\n\n악수는 세 번 한다.\n\n![그림](_assets/a.png)\n![없는 그림](./_assets/none.png)\n![밖](../x.png)\n"}],"removed":[{"path":"vault/notes/Ops","kind":"dir"},{"path":"vault/notes/Ops/_assets","kind":"dir"},{"path":"vault/notes/Ops/_assets/a.png","kind":"file","text":"PNG-a"},{"path":"vault/notes/Ops/k8s","kind":"dir"},{"path":"vault/notes/Ops/k8s/Banana.md","kind":"file","text":""},{"path":"vault/notes/Ops/tcp.comments.json","kind":"file","text":"{\"version\":1,\"threads\":[]}"},{"path":"vault/notes/Ops/tcp.concepts.json","kind":"file","text":"{\"links\":[]}"},{"path":"vault/notes/Ops/tcp.md","kind":"file","text":"# TCP\n\n악수는 세 번 한다.\n\n![그림](_assets/a.png)\n![없는 그림](./_assets/none.png)\n![밖](../x.png)\n"}],"changed":[]},"concepts":{"added":[],"removed":[],"changed":[{"before":{"id":1,"ulid":"01SEEDNOTECONCEPT00000000A","title":"TCP","summary":"s","detail_path":"concepts/a/index.md","status":"learning","confidence":1,"source":"{\"noteRel\":\"Ops/tcp.md\"}","source_kind":"file","seen_count":0,"last_seen_at":null,"created_at":1793836800000,"updated_at":1793836800000,"learned_at":null},"after":{"id":1,"ulid":"01SEEDNOTECONCEPT00000000A","title":"TCP","summary":"s","detail_path":"concepts/a/index.md","status":"learning","confidence":1,"source":"{\"noteRel\":\"Infra/tcp.md\"}","source_kind":"file","seen_count":0,"last_seen_at":null,"created_at":1793836800000,"updated_at":1793836800000,"learned_at":null}}]}}},
+    {"op":"notes.renameEntry","args":["CS","CS수업",true],"at":1793836819000,"ok":true,"result":"CS수업","changes":{"__files":{"added":[{"path":"vault/notes/CS수업","kind":"dir"},{"path":"vault/notes/CS수업/깊은","kind":"dir"},{"path":"vault/notes/CS수업/깊은/경로","kind":"dir"},{"path":"vault/notes/CS수업/깊은/경로/노트.md","kind":"file","text":"# 노트\n\n"},{"path":"vault/notes/CS수업/네트워크","kind":"dir"},{"path":"vault/notes/CS수업/네트워크/_assets","kind":"dir"},{"path":"vault/notes/CS수업/네트워크/_assets/a.png","kind":"file","text":"PNG-a"}],"removed":[{"path":"vault/notes/CS","kind":"dir"},{"path":"vault/notes/CS/깊은","kind":"dir"},{"path":"vault/notes/CS/깊은/경로","kind":"dir"},{"path":"vault/notes/CS/깊은/경로/노트.md","kind":"file","text":"# 노트\n\n"},{"path":"vault/notes/CS/네트워크","kind":"dir"},{"path":"vault/notes/CS/네트워크/_assets","kind":"dir"},{"path":"vault/notes/CS/네트워크/_assets/a.png","kind":"file","text":"PNG-a"}],"changed":[]},"concepts":{"added":[],"removed":[],"changed":[{"before":{"id":2,"ulid":"01SEEDNOTECONCEPT00000000B","title":"다른","summary":"s","detail_path":"concepts/b/index.md","status":"learning","confidence":1,"source":"{\"noteRel\":\"CS/네트워크/다른.md\"}","source_kind":"file","seen_count":0,"last_seen_at":null,"created_at":1793836800000,"updated_at":1793836800000,"learned_at":null},"after":{"id":2,"ulid":"01SEEDNOTECONCEPT00000000B","title":"다른","summary":"s","detail_path":"concepts/b/index.md","status":"learning","confidence":1,"source":"{\"noteRel\":\"CS수업/네트워크/다른.md\"}","source_kind":"file","seen_count":0,"last_seen_at":null,"created_at":1793836800000,"updated_at":1793836800000,"learned_at":null}}]}}},
+    {"op":"notes.deleteEntry","args":["Infra/tcp.md"],"at":1793836820000,"ok":true,"result":null,"changes":{"__files":{"added":[{"path":".trash","kind":"dir"},{"path":".trash/1","kind":"dir"},{"path":".trash/1/tcp.md","kind":"file","text":"# TCP\n\n악수는 세 번 한다.\n\n![그림](_assets/a.png)\n![없는 그림](./_assets/none.png)\n![밖](../x.png)\n"},{"path":".trash/2","kind":"dir"},{"path":".trash/2/tcp.comments.json","kind":"file","text":"{\"version\":1,\"threads\":[]}"},{"path":".trash/3","kind":"dir"},{"path":".trash/3/tcp.concepts.json","kind":"file","text":"{\"links\":[]}"}],"removed":[{"path":"vault/notes/Infra/tcp.comments.json","kind":"file","text":"{\"version\":1,\"threads\":[]}"},{"path":"vault/notes/Infra/tcp.concepts.json","kind":"file","text":"{\"links\":[]}"},{"path":"vault/notes/Infra/tcp.md","kind":"file","text":"# TCP\n\n악수는 세 번 한다.\n\n![그림](_assets/a.png)\n![없는 그림](./_assets/none.png)\n![밖](../x.png)\n"}],"changed":[]}}},
+    {"op":"notes.deleteEntry","args":["  "],"at":1793836821000,"ok":false,"error":"삭제할 대상이 올바르지 않아요.","changes":{}},
+    {"op":"notes.deleteEntry","args":["없는.md"],"at":1793836822000,"ok":true,"result":null,"changes":{}},
+    {"op":"notes.deleteEntry","args":["빈 폴더"],"at":1793836823000,"ok":true,"result":null,"changes":{"__files":{"added":[{"path":".trash/4","kind":"dir"},{"path":".trash/4/빈 폴더","kind":"dir"}],"removed":[{"path":"vault/notes/빈 폴더","kind":"dir"}],"changed":[]}}},
+    {"op":"notes.listNoteTree","args":[],"at":1793836824000,"ok":true,"result":[{"name":"없는폴더","path":"없는폴더","isDir":true,"children":[{"name":"안","path":"없는폴더/안.md","isDir":false}]},{"name":"CS수업","path":"CS수업","isDir":true,"children":[{"name":"깊은","path":"CS수업/깊은","isDir":true,"children":[{"name":"경로","path":"CS수업/깊은/경로","isDir":true,"children":[{"name":"노트","path":"CS수업/깊은/경로/노트.md","isDir":false}]}]},{"name":"네트워크","path":"CS수업/네트워크","isDir":true,"children":[]}]},{"name":"Infra","path":"Infra","isDir":true,"children":[{"name":"k8s","path":"Infra/k8s","isDir":true,"children":[{"name":"Banana","path":"Infra/k8s/Banana.md","isDir":false}]}]},{"name":"_x","path":"_x.md","isDir":false},{"name":"😀","path":"😀.md","isDir":false},{"name":"10","path":"10.md","isDir":false},{"name":"2","path":"2.md","isDir":false},{"name":"긴줄","path":"긴줄.md","isDir":false},{"name":"새 노트","path":"새 노트.md","isDir":false},{"name":"한글","path":"한글.md","isDir":false},{"name":"漢字","path":"漢字.md","isDir":false},{"name":"a b","path":"a b.md","isDir":false},{"name":"apple","path":"apple.md","isDir":false},{"name":"CS수업","path":"CS수업.md","isDir":false},{"name":"éclair","path":"éclair.md","isDir":false},{"name":"eclair2","path":"eclair2.md","isDir":false},{"name":"Upper","path":"Upper.MD","isDir":false}],"changes":{}},
+    {"op":"vaultTree.searchFiles","args":["notes","tcp",20],"at":1793836825000,"ok":true,"result":[{"name":"apple","path":"apple.md","snippet":"사과. TCP 를 언급한다"}],"changes":{}},
+    {"op":"vaultTree.searchFiles","args":["notes","NEEDLE",20],"at":1793836826000,"ok":true,"result":[{"name":"긴줄","path":"긴줄.md","snippet":"…분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 앞부분 needle 이 가운데 있다 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부분 뒷부…"}],"changes":{}},
+    {"op":"vaultTree.searchFiles","args":["notes","노트",1],"at":1793836827000,"ok":true,"result":[{"name":"노트","path":"CS수업/깊은/경로/노트.md","snippet":"# 노트"}],"changes":{}},
+    {"op":"vaultTree.searchFiles","args":["notes","  ",20],"at":1793836828000,"ok":true,"result":[],"changes":{}},
+    {"op":"vaultTree.writeAtomic","args":["vault/notes/직접.md","원자적으로 쓴다"],"at":1793836829000,"ok":true,"result":null,"changes":{"__files":{"added":[{"path":"vault/notes/직접.md","kind":"file","text":"원자적으로 쓴다"}],"removed":[],"changed":[]}}},
+    {"op":"vaultTree.writeAtomic","args":["vault/notes/없는폴더2/x.md","부모가 없다"],"at":1793836830000,"ok":false,"error":"ENOENT: no such file or directory, open '<appdata>/vault/notes/없는폴더2/x.md.amber-tmp'","changes":{}},
+    {"op":"notes.listNoteTree","args":[],"at":1793836831000,"ok":true,"result":[{"name":"없는폴더","path":"없는폴더","isDir":true,"children":[{"name":"안","path":"없는폴더/안.md","isDir":false}]},{"name":"CS수업","path":"CS수업","isDir":true,"children":[{"name":"깊은","path":"CS수업/깊은","isDir":true,"children":[{"name":"경로","path":"CS수업/깊은/경로","isDir":true,"children":[{"name":"노트","path":"CS수업/깊은/경로/노트.md","isDir":false}]}]},{"name":"네트워크","path":"CS수업/네트워크","isDir":true,"children":[]}]},{"name":"Infra","path":"Infra","isDir":true,"children":[{"name":"k8s","path":"Infra/k8s","isDir":true,"children":[{"name":"Banana","path":"Infra/k8s/Banana.md","isDir":false}]}]},{"name":"_x","path":"_x.md","isDir":false},{"name":"😀","path":"😀.md","isDir":false},{"name":"10","path":"10.md","isDir":false},{"name":"2","path":"2.md","isDir":false},{"name":"긴줄","path":"긴줄.md","isDir":false},{"name":"새 노트","path":"새 노트.md","isDir":false},{"name":"직접","path":"직접.md","isDir":false},{"name":"한글","path":"한글.md","isDir":false},{"name":"漢字","path":"漢字.md","isDir":false},{"name":"a b","path":"a b.md","isDir":false},{"name":"apple","path":"apple.md","isDir":false},{"name":"CS수업","path":"CS수업.md","isDir":false},{"name":"éclair","path":"éclair.md","isDir":false},{"name":"eclair2","path":"eclair2.md","isDir":false},{"name":"Upper","path":"Upper.MD","isDir":false}],"changes":{}}
+  ]
+}

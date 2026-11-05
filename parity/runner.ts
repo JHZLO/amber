@@ -3,9 +3,9 @@
 // 그 뒤 단계는 이미 다른 상태 위에서 돌아 의미가 없다.
 
 import { createHash } from "node:crypto";
-import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { Engine, Outcome } from "./engine";
 import { canonical, diff, dump, firstDiff, hashDump, type Changes } from "./state";
@@ -16,8 +16,16 @@ export interface SeedSql {
   params?: (string | number | null)[];
 }
 
+/** 앱 데이터 폴더에 깔 파일. path 가 '/' 로 끝나면 빈 폴더 */
+export interface SeedFile {
+  path: string;
+  text?: string;
+}
+
+export type SeedItem = SeedSql | SeedFile;
+
 /** 시드 파일은 저장소 기준 상대경로 — 실데이터 사본은 .claude/ 아래(로컬 전용)에 둔다 */
-export type Seed = SeedSql[] | { file: string };
+export type Seed = SeedItem[] | { file: string };
 
 export interface StepCtx {
   /** 하네스 연결로 현재 상태를 읽는다 — 다음 단계의 인자를 고를 때만 쓴다 */
@@ -61,7 +69,7 @@ export interface Fixture {
   name: string;
   tz: string;
   start: number;
-  seed: SeedSql[] | { file: string; sha256: string };
+  seed: SeedItem[] | { file: string; sha256: string };
   steps: RecordedStep[];
   /** 마지막 전체 상태의 해시 — 단계별 변경이 다 맞았는데 시작 상태가 달랐던 경우까지 잡는다 */
   final: string;
@@ -84,7 +92,14 @@ function prepare(seed: Seed | Fixture["seed"], start: number): { path: string; c
     clock.now = start;
     const db = openSqlite(path);
     migrate(db);
-    for (const s of seed) db.prepare(s.sql).run(...(s.params ?? []));
+    for (const s of seed) {
+      if ("sql" in s) db.prepare(s.sql).run(...(s.params ?? []));
+      else if (s.path.endsWith("/")) mkdirSync(join(dir, s.path), { recursive: true });
+      else {
+        mkdirSync(dirname(join(dir, s.path)), { recursive: true });
+        writeFileSync(join(dir, s.path), s.text ?? "");
+      }
+    }
     db.close();
   } else {
     copyFileSync(join(REPO, seed.file), path);
@@ -116,7 +131,7 @@ export async function record(s: Scenario, engine: Engine): Promise<Fixture> {
   try {
     await engine.open(path, tz);
     opened = true;
-    let before = dump(observer);
+    let before = dump(observer, dirname(path));
     let at = start - 1000;
     let last: StepCtx["last"] = null;
     const ctx = (): StepCtx => ({
@@ -132,7 +147,7 @@ export async function record(s: Scenario, engine: Engine): Promise<Fixture> {
       at = step.at ?? at + 1000;
       const args = typeof step.args === "function" ? step.args(ctx()) : step.args;
       const outcome = await engine.run(step.op, args, at);
-      const after = dump(observer);
+      const after = dump(observer, dirname(path));
       steps.push({
         op: step.op,
         args,
@@ -151,7 +166,7 @@ export async function record(s: Scenario, engine: Engine): Promise<Fixture> {
       start,
       seed: Array.isArray(seed) ? seed : { file: seed.file, sha256: sha256File(join(REPO, seed.file)) },
       steps,
-      final: hashDump(dump(observer)),
+      final: hashDump(dump(observer, dirname(path))),
     };
   } finally {
     if (opened) await engine.close();
@@ -173,10 +188,10 @@ export async function replay(f: Fixture, engine: Engine): Promise<string | null>
     await engine.open(path, f.tz);
     // 어긋나서 중간에 나가도 닫는다 — 외부 엔진은 다음 픽스처에서 같은 프로세스를 다시 연다
     opened = true;
-    let before = dump(observer);
+    let before = dump(observer, dirname(path));
     for (const [i, s] of f.steps.entries()) {
       const outcome = await engine.run(s.op, s.args, s.at);
-      const after = dump(observer);
+      const after = dump(observer, dirname(path));
       const where = `${i + 1}번째 단계 ${s.op}(${short(s.args)})`;
       if (outcome.ok !== s.ok) {
         return `${where}: 기대 ${s.ok ? "성공" : `실패(${s.error})`}, 실제 ${outcome.ok ? "성공" : `실패(${outcome.error})`}`;
@@ -189,7 +204,7 @@ export async function replay(f: Fixture, engine: Engine): Promise<string | null>
       if (d) return `${where}: DB 변경이 다르다 — ${d}`;
       before = after;
     }
-    const final = hashDump(dump(observer));
+    const final = hashDump(dump(observer, dirname(path)));
     return final === f.final ? null : `마지막 상태 해시가 다르다 (${f.final.slice(0, 12)} ≠ ${final.slice(0, 12)})`;
   } finally {
     if (opened) await engine.close();

@@ -679,6 +679,168 @@ export function conceptWalk(seed: number, length: number): Scenario["walk"] {
 /** 2026-11-05 00:00 KST */
 const DEFAULT_DAY_START = Date.UTC(2026, 10, 4, 15, 0, 0);
 
+// ---- vault 파일 ----
+// 정렬(ICU 한국어: 한글, 한자가 라틴보다 앞), 대소문자만 바꾸는 이름 변경(macOS 는 대소문자를 안 가린다),
+// 이동할 때 따라가는 사이드카(질문, 개념 링크)와 그림, 휴지통에 들어간 내용까지 상태로 잰다.
+
+const LONG_LINE = `${"앞부분 ".repeat(25)}needle 이 가운데 있다 ${"뒷부분 ".repeat(25)}`;
+
+const notesFiles: Scenario = {
+  name: "notes/files",
+  seed: [
+    { path: "vault/notes/CS/네트워크/TCP.md", text: "# TCP\n\n악수는 세 번 한다.\n\n![그림](_assets/a.png)\n![없는 그림](./_assets/none.png)\n![밖](../x.png)\n" },
+    { path: "vault/notes/CS/네트워크/_assets/a.png", text: "PNG-a" },
+    { path: "vault/notes/CS/네트워크/TCP.comments.json", text: '{"version":1,"threads":[]}' },
+    { path: "vault/notes/CS/네트워크/TCP.concepts.json", text: '{"links":[]}' },
+    { path: "vault/notes/CS수업.md", text: "# CS수업\n" },
+    { path: "vault/notes/apple.md", text: "사과. TCP 를 언급한다\n" },
+    { path: "vault/notes/Banana.md", text: "" },
+    { path: "vault/notes/10.md", text: "" },
+    { path: "vault/notes/2.md", text: "" },
+    { path: "vault/notes/한글.md", text: "" },
+    { path: "vault/notes/漢字.md", text: "" },
+    { path: "vault/notes/éclair.md", text: "" },
+    { path: "vault/notes/eclair2.md", text: "" },
+    { path: "vault/notes/_x.md", text: "" },
+    { path: "vault/notes/😀.md", text: "" },
+    { path: "vault/notes/a b.md", text: "" },
+    { path: "vault/notes/Upper.MD", text: "대문자 확장자" },
+    { path: "vault/notes/긴줄.md", text: `${LONG_LINE}\n` },
+    { path: "vault/notes/x.txt", text: "트리에 안 보이는 파일" },
+    { path: "vault/notes/.DS_Store", text: "" },
+    { path: "vault/notes/.숨김/안.md", text: "" },
+    { path: "vault/notes/빈 폴더/" },
+    {
+      sql: `INSERT INTO concepts (ulid, title, summary, detail_path, source, source_kind) VALUES
+            ('01SEEDNOTECONCEPT00000000A', 'TCP', 's', 'concepts/a/index.md', '{"noteRel":"CS/네트워크/TCP.md"}', 'file'),
+            ('01SEEDNOTECONCEPT00000000B', '다른', 's', 'concepts/b/index.md', '{"noteRel":"CS/네트워크/다른.md"}', 'file'),
+            ('01SEEDNOTECONCEPT00000000C', '깨짐', 's', 'concepts/c/index.md', 'not json', 'file')`,
+    },
+  ],
+  steps: [
+    s("notes.listNoteTree"),
+    s("notes.createNote", "", "새 노트"),
+    s("notes.createNote", "", "새 노트"),
+    s("notes.createNote", "CS", " 깊은 / 경로 / 노트 "),
+    s("notes.createNote", "없는폴더", "안"),
+    s("notes.createFolder", "", "Ops/k8s"),
+    s("notes.createFolder", "", "Ops"),
+    s("notes.writeNoteFile", "새 노트.md", "본문 한 줄\n"),
+    s("notes.readNoteFile", "새 노트.md"),
+    s("notes.readNoteFile", "없는.md"),
+    s("notes.renameEntry", "CS/네트워크/TCP.md", "tcp", false),
+    s("notes.renameEntry", "apple.md", "Banana", false),
+    s("notes.renameEntry", "apple.md", "apple", false),
+    s("notes.moveEntry", "CS/네트워크/tcp.md", "Ops"),
+    s("notes.moveEntry", "CS", "CS/네트워크"),
+    s("notes.moveEntry", "Ops", ""),
+    s("notes.moveEntry", "Banana.md", " Ops / k8s / "),
+    s("notes.moveEntry", "Banana.md", "Ops"),
+    s("notes.renameEntry", "Ops", "Infra", true),
+    s("notes.renameEntry", "CS", "CS수업", true),
+    s("notes.deleteEntry", "Infra/tcp.md"),
+    s("notes.deleteEntry", "  "),
+    s("notes.deleteEntry", "없는.md"),
+    s("notes.deleteEntry", "빈 폴더"),
+    s("notes.listNoteTree"),
+    s("vaultTree.searchFiles", "notes", "tcp", 20),
+    s("vaultTree.searchFiles", "notes", "NEEDLE", 20),
+    s("vaultTree.searchFiles", "notes", "노트", 1),
+    s("vaultTree.searchFiles", "notes", "  ", 20),
+    s("vaultTree.writeAtomic", "vault/notes/직접.md", "원자적으로 쓴다"),
+    s("vaultTree.writeAtomic", "vault/notes/없는폴더2/x.md", "부모가 없다"),
+    s("notes.listNoteTree"),
+  ],
+};
+
+const diagramsFiles: Scenario = {
+  name: "diagrams/files",
+  seed: [
+    { path: "vault/diagrams/주문.mmd", text: "erDiagram\n    USER ||--o{ ORDER : places\n" },
+    { path: "vault/diagrams/flow.mermaid", text: "flowchart LR\n  a --> b\n" },
+    { path: "vault/diagrams/note.md", text: "트리에 안 보인다" },
+  ],
+  steps: [
+    s("diagrams.listDiagramTree"),
+    s("diagrams.createDiagram", "", "결제"),
+    s("diagrams.createFolder", "", "도메인"),
+    s("diagrams.renameEntry", "flow.mermaid", "Flow", false),
+    s("diagrams.moveEntry", "Flow.mmd", "도메인"),
+    s("diagrams.moveEntry", "flow.mermaid", "도메인"),
+    s("diagrams.writeDiagramFile", "결제.mmd", "erDiagram\n    PAY {\n        bigint id PK\n    }\n"),
+    s("diagrams.readDiagramFile", "결제.mmd"),
+    s("diagrams.deleteEntry", "주문.mmd"),
+    s("vaultTree.searchFiles", "diagrams", "pay", 20),
+    s("diagrams.listDiagramTree"),
+  ],
+};
+
+const conceptNotes: Scenario = {
+  name: "vault/concept-notes",
+  seed: [
+    { path: "vault/concepts/OLD/index.md", text: "---\nid: OLD\n---\n\n\n본문만\n" },
+    { path: "vault/concepts/RAW/index.md", text: "frontmatter 없음" },
+    { path: "vault/concepts/OPEN/index.md", text: "---\nid: OPEN\n끝이 없다" },
+    { path: "vault/concepts/ENDONLY/index.md", text: "---\nid: E\n---" },
+  ],
+  steps: [
+    s("vault.writeNote", "01NEW", "  \n\n새 개념 본문\n"),
+    s("vault.readNote", "concepts/01NEW/index.md"),
+    s("vault.readNote", "concepts/OLD/index.md"),
+    s("vault.readNote", "concepts/RAW/index.md"),
+    s("vault.readNote", "concepts/OPEN/index.md"),
+    s("vault.readNote", "concepts/ENDONLY/index.md"),
+    s("vault.readNote", "concepts/NONE/index.md"),
+    s("vault.noteExists", "concepts/01NEW/index.md"),
+    s("vault.noteExists", "concepts/NONE/index.md"),
+    s("vault.writeNote", "01NEW", "덮어쓴다"),
+    s("vault.deleteConceptDir", "01NEW"),
+    s("vault.deleteConceptDir", "NONE"),
+  ],
+};
+
+const erdFiles: Scenario = {
+  name: "erd/files",
+  steps: [
+    s("erdStore.ensureErdDir", ""),
+    s("erdStore.ensureErdDir", " conn / svc_a "),
+    s("erdStore.ensureErdDir", "conn/svc_a"),
+    s("erdStore.writeErdFile", "conn/svc_a/schema.json", '{"tables":[]}\n'),
+    s("erdStore.erdFileExists", "conn/svc_a/schema.json"),
+    s("erdStore.erdFileExists", "conn/svc_b/schema.json"),
+    s("erdStore.readErdFileIfExists", "conn/svc_a/schema.json"),
+    s("erdStore.readErdFileIfExists", "conn/svc_b/schema.json"),
+    s("erdStore.deleteErdEntry", "conn"),
+    s("erdStore.deleteErdEntry", "conn"),
+  ],
+};
+
+/** 노트 트리에서 아무 일이나 한다 — 없는 경로, 겹치는 이름, 대소문자만 다른 이름이 섞인다 */
+function notesWalk(seed: number, length: number): Scenario["walk"] {
+  const NAMES = ["노트", "Note", "note", "가/나", "CS", "테스트 노트", "a b"];
+  const DIRS = ["", "CS", "가", "Ops", "CS/깊이"];
+  const FILES = ["노트.md", "Note.md", "note.md", "가/나.md", "CS/노트.md", "CS/깊이/x.md", "Ops/note.md", "테스트 노트.md"];
+  return {
+    seed,
+    length,
+    next: () => (ctx) => {
+      const r = ctx.rng();
+      const name = pick(ctx.rng, NAMES);
+      const dir = pick(ctx.rng, DIRS);
+      const file = pick(ctx.rng, FILES);
+      if (r < 0.2) return [s("notes.createNote", dir, name)];
+      if (r < 0.3) return [s("notes.createFolder", dir, name)];
+      if (r < 0.42) return [s("notes.writeNoteFile", file, `${name} @ ${ctx.index}\n![](_assets/p.png)\n`)];
+      if (r < 0.52) return [s("notes.renameEntry", pick(ctx.rng, [file, dir || "CS"]), name, ctx.rng() < 0.3)];
+      if (r < 0.64) return [s("notes.moveEntry", pick(ctx.rng, [file, dir || "CS"]), pick(ctx.rng, DIRS))];
+      if (r < 0.72) return [s("notes.deleteEntry", pick(ctx.rng, [file, dir || "Ops"]))];
+      if (r < 0.8) return [s("notes.readNoteFile", file)];
+      if (r < 0.9) return [s("vaultTree.searchFiles", "notes", name.slice(0, 2), 5)];
+      return [s("notes.listNoteTree")];
+    },
+  };
+}
+
 export const SCENARIOS: Scenario[] = [
   todosTreeBasics,
   todosDoneChain,
@@ -697,6 +859,19 @@ export const SCENARIOS: Scenario[] = [
   ...Array.from({ length: 6 }, (_, i) => ({
     name: `walk/concepts-${String(i + 1).padStart(2, "0")}`,
     walk: conceptWalk(i + 1, 50),
+  })),
+  notesFiles,
+  diagramsFiles,
+  conceptNotes,
+  erdFiles,
+  ...Array.from({ length: 4 }, (_, i) => ({
+    name: `walk/notes-${String(i + 1).padStart(2, "0")}`,
+    seed: [
+      { path: "vault/notes/CS/노트.md", text: "# 노트\n![](_assets/p.png)\n" },
+      { path: "vault/notes/CS/_assets/p.png", text: "PNG" },
+      { path: "vault/notes/CS/노트.comments.json", text: "{}" },
+    ],
+    walk: notesWalk(i + 1, 60),
   })),
 ];
 

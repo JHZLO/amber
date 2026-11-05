@@ -10,10 +10,11 @@
 //   sqlite3 ~/Library/Application\ Support/dev.jhzlo.amber/amber.db ".backup '.claude/parity/real/amber.db'"
 //   sqlite3 .claude/parity/real/amber.db "PRAGMA journal_mode=DELETE"
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ExternalEngine, TsEngine, type Engine, type Outcome } from "./engine";
+import { fsRoot } from "./fs";
 import { MODULES, NOT_COVERED, OPS, PURE } from "./ops";
 import {
   FIXTURES,
@@ -39,6 +40,19 @@ vi.mock("@tauri-apps/plugin-sql", async () => {
 vi.mock("ulid", async () => {
   const { nextUlid } = await import("./sqlite");
   return { ulid: () => nextUlid() };
+});
+vi.mock("@tauri-apps/plugin-fs", async () => (await import("./fs")).pluginFs);
+vi.mock("@tauri-apps/api/core", async (original) => ({
+  ...(await original<object>()),
+  invoke: async (cmd: string, args: { relPath: string }) => {
+    if (cmd !== "move_to_trash") throw new Error(`parity: ${cmd} 명령은 대역이 없다`);
+    (await import("./fs")).moveToTrash(args.relPath);
+  },
+}));
+// 작업 폴더는 기본 보관함(앱 데이터 폴더의 vault/…) — 사용자가 연 폴더는 localStorage 에 있다
+vi.mock("../src/lib/workspace", async (original) => {
+  const w = await original<typeof import("../src/lib/workspace")>();
+  return { ...w, getRoot: (s: keyof typeof w.DEFAULT_ROOTS) => w.DEFAULT_ROOTS[s] };
 });
 
 const RECORD = process.env.PARITY_RECORD === "1";
@@ -127,12 +141,14 @@ describe.skipIf(RECORD)("마이그레이션", () => {
 describe.skipIf(RECORD)("하네스 자체", () => {
   const synthetic = readFixtures(FIXTURES);
 
-  it("DB 파일의 export 는 OPS, NOT_COVERED, PURE 중 꼭 한 곳에 있다", () => {
+  it("도메인 파일의 export 는 OPS, NOT_COVERED, PURE 중 꼭 한 곳에 있다", () => {
     const seen = new Set<string>();
     for (const m of MODULES) {
       const src = readFileSync(join(REPO, `src/lib/${m}.ts`), "utf8");
-      for (const x of src.matchAll(/^export (async )?function (\w+)|^export const (\w+) = (async )?\(/gm)) {
-        const key = `${m}.${x[2] ?? x[3]}`;
+      // 마지막 꼴은 만든 트리의 메서드를 내보내는 별칭(`export const listNoteTree = tree.listTree;`)
+      const decl = /^export (async )?function (\w+)|^export const (\w+) = (async )?\(|^export const (\w+) = \w+\.\w+;/gm;
+      for (const x of src.matchAll(decl)) {
+        const key = `${m}.${x[2] ?? x[3] ?? x[5]}`;
         const homes = [key in OPS, key in NOT_COVERED, PURE.has(key)].filter(Boolean).length;
         expect(homes, `${key}: 재는지(OPS), 왜 안 재는지(NOT_COVERED), 순수한지(PURE) 정한다`).toBe(1);
         if (PURE.has(key)) expect(!!(x[1] ?? x[4]), `${key}: PURE 인데 async 다`).toBe(false);
@@ -173,6 +189,31 @@ describe.skipIf(RECORD)("하네스 자체", () => {
       }),
     );
     expect(miss).toMatch(/DB 변경이 다르다/);
+  });
+
+  it("이동하며 사이드카를 두고 가면 잡는다 (파일 상태)", async () => {
+    const miss = await replay(
+      fixture("notes/files"),
+      new Sabotaged("notes.moveEntry", (o) => {
+        if (o.ok && o.result === "Ops/tcp.md") {
+          const dir = join(fsRoot.dir, "vault/notes");
+          renameSync(join(dir, "Ops/tcp.comments.json"), join(dir, "CS/네트워크/tcp.comments.json"));
+        }
+        return o;
+      }),
+    );
+    expect(miss).toMatch(/DB 변경이 다르다 — \$\.__files/);
+  });
+
+  it("휴지통 대신 지워 버리면 잡는다", async () => {
+    const miss = await replay(
+      fixture("vault/concept-notes"),
+      new Sabotaged("vault.deleteConceptDir", (o) => {
+        rmSync(join(fsRoot.dir, ".trash"), { recursive: true, force: true });
+        return o;
+      }),
+    );
+    expect(miss).toMatch(/__files/);
   });
 
   it("숫자 1 과 문자열 '1' 을 가른다", async () => {

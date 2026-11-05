@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "name": "vault/concept-notes",
+  "tz": "Asia/Seoul",
+  "start": 1793836800000,
+  "seed": [
+    {
+      "path": "vault/concepts/OLD/index.md",
+      "text": "---\nid: OLD\n---\n\n\n본문만\n"
+    },
+    {
+      "path": "vault/concepts/RAW/index.md",
+      "text": "frontmatter 없음"
+    },
+    {
+      "path": "vault/concepts/OPEN/index.md",
+      "text": "---\nid: OPEN\n끝이 없다"
+    },
+    {
+      "path": "vault/concepts/ENDONLY/index.md",
+      "text": "---\nid: E\n---"
+    }
+  ],
+  "final": "4c7e985afa7c4f1bf2f34b395607e82df5176848396f7967526b6e7cae1236d4",
+  "steps": [
+    {"op":"vault.writeNote","args":["01NEW","  \n\n새 개념 본문\n"],"at":1793836800000,"ok":true,"result":"concepts/01NEW/index.md","changes":{"__files":{"added":[{"path":"vault/concepts/01NEW","kind":"dir"},{"path":"vault/concepts/01NEW/index.md","kind":"file","text":"---\nid: 01NEW\n---\n\n새 개념 본문\n"}],"removed":[],"changed":[]}}},
+    {"op":"vault.readNote","args":["concepts/01NEW/index.md"],"at":1793836801000,"ok":true,"result":"새 개념 본문\n","changes":{}},
+    {"op":"vault.readNote","args":["concepts/OLD/index.md"],"at":1793836802000,"ok":true,"result":"본문만\n","changes":{}},
+    {"op":"vault.readNote","args":["concepts/RAW/index.md"],"at":1793836803000,"ok":true,"result":"frontmatter 없음","changes":{}},
+    {"op":"vault.readNote","args":["concepts/OPEN/index.md"],"at":1793836804000,"ok":true,"result":"---\nid: OPEN\n끝이 없다","changes":{}},
+    {"op":"vault.readNote","args":["concepts/ENDONLY/index.md"],"at":1793836805000,"ok":true,"result":"","changes":{}},
+    {"op":"vault.readNote","args":["concepts/NONE/index.md"],"at":1793836806000,"ok":false,"error":"ENOENT: no such file or directory, open '<appdata>/vault/concepts/NONE/index.md'","changes":{}},
+    {"op":"vault.noteExists","args":["concepts/01NEW/index.md"],"at":1793836807000,"ok":true,"result":true,"changes":{}},
+    {"op":"vault.noteExists","args":["concepts/NONE/index.md"],"at":1793836808000,"ok":true,"result":false,"changes":{}},
+    {"op":"vault.writeNote","args":["01NEW","덮어쓴다"],"at":1793836809000,"ok":true,"result":"concepts/01NEW/index.md","changes":{"__files":{"added":[],"removed":[],"changed":[{"before":{"path":"vault/concepts/01NEW/index.md","kind":"file","text":"---\nid: 01NEW\n---\n\n새 개념 본문\n"},"after":{"path":"vault/concepts/01NEW/index.md","kind":"file","text":"---\nid: 01NEW\n---\n\n덮어쓴다"}}]}}},
+    {"op":"vault.deleteConceptDir","args":["01NEW"],"at":1793836810000,"ok":true,"result":null,"changes":{"__files":{"added":[{"path":".trash","kind":"dir"},{"path":".trash/1","kind":"dir"},{"path":".trash/1/01NEW","kind":"dir"},{"path":".trash/1/01NEW/index.md","kind":"file","text":"---\nid: 01NEW\n---\n\n덮어쓴다"}],"removed":[{"path":"vault/concepts/01NEW","kind":"dir"},{"path":"vault/concepts/01NEW/index.md","kind":"file","text":"---\nid: 01NEW\n---\n\n덮어쓴다"}],"changed":[]}}},
+    {"op":"vault.deleteConceptDir","args":["NONE"],"at":1793836811000,"ok":true,"result":null,"changes":{}}
+  ]
+}
