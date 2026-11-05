@@ -1,6 +1,7 @@
 pub mod blocks;
 pub mod concepts;
 pub mod db;
+pub mod dbconn;
 pub mod mermaid;
 pub mod report;
 pub mod todos;
@@ -67,6 +68,12 @@ pub const OPS: &[&str] = &[
     "report.buildTodosDigest",
     "report.getWeeklyReport",
     "report.upsertWeeklyReport",
+    "dbconn.listConnections",
+    "dbconn.getConnection",
+    "dbconn.createConnection",
+    "dbconn.updateConnection",
+    "dbconn.markSync",
+    "dbconn.setSchemaStarred",
 ];
 
 pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
@@ -182,6 +189,23 @@ pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
             .map(|r| r.map_or(Json::Null, Json::Object))
             .map_err(err),
         "report.upsertWeeklyReport" => unit(report::upsert_weekly_report(db, &a.de(0)?)),
+        "dbconn.listConnections" => dbconn::list_connections(db).map(Json::from).map_err(err),
+        "dbconn.getConnection" => dbconn::get_connection(db, a.i(0)?)
+            .map(|c| c.unwrap_or(Json::Null))
+            .map_err(err),
+        "dbconn.createConnection" => dbconn::create_connection(db, &a.de(0)?).map_err(err),
+        "dbconn.updateConnection" => unit(dbconn::update_connection(db, a.i(0)?, &a.de(1)?)),
+        "dbconn.markSync" => unit(dbconn::mark_sync(
+            db,
+            a.i(0)?,
+            a.0.get(1).and_then(Json::as_str),
+        )),
+        "dbconn.setSchemaStarred" => unit(dbconn::set_schema_starred(
+            db,
+            &a.de(0)?,
+            a.s(1)?,
+            a.0.get(2).and_then(Json::as_bool).unwrap_or(false),
+        )),
         _ => Err(format!("모르는 op: {op}")),
     }
 }

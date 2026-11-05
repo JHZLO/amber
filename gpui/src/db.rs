@@ -3,7 +3,7 @@
 // 정답(parity/fixtures)과 한 글자도 다르지 않게 비교된다.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 
 use rusqlite::functions::FunctionFlags;
 use rusqlite::types::{Value, ValueRef};
@@ -23,6 +23,8 @@ pub enum Clock {
 pub struct Db {
     pub conn: Connection,
     clock: Clock,
+    /// 하네스에서 이 연결이 낸 ULID 수
+    ulids: AtomicU64,
 }
 
 impl Db {
@@ -42,7 +44,11 @@ impl Db {
                 }
             })?;
         }
-        Ok(Db { conn, clock })
+        Ok(Db {
+            conn,
+            clock,
+            ulids: AtomicU64::new(0),
+        })
     }
 
     pub fn now(&self) -> i64 {
@@ -52,6 +58,23 @@ impl Db {
                 .map(|d| d.as_millis() as i64)
                 .unwrap_or(0),
             Clock::Fixed(now) => now.load(Ordering::SeqCst),
+        }
+    }
+
+    /// 앱은 진짜 ULID, 하네스는 연결을 열 때마다 parityUlid(1), (2)… 순서(parity/sqlite.ts 의 엔진 계약)
+    pub fn new_ulid(&self) -> String {
+        match &self.clock {
+            Clock::System => ulid::Ulid::new().to_string(),
+            Clock::Fixed(_) => {
+                const ALPHA: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+                let mut n = self.ulids.fetch_add(1, Ordering::SeqCst) + 1;
+                let mut digits = [b'0'; 24];
+                for d in digits.iter_mut().rev() {
+                    *d = ALPHA[(n % 32) as usize];
+                    n /= 32;
+                }
+                format!("01{}", String::from_utf8_lossy(&digits))
+            }
         }
     }
 
