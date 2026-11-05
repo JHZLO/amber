@@ -7,12 +7,14 @@
 //  - NOT_COVERED: 이 단에서 재지 않는다(키체인, 외부 DB, AI 실행 등). 이유를 남긴다
 //  - PURE: DB 와 파일을 안 쓰는 계산 — 동기 함수여야 한다
 
+import * as comments from "../src/lib/comments";
 import * as date from "../src/lib/date";
 import * as db from "../src/lib/db";
 import * as dbconn from "../src/lib/dbconn";
 import * as diagrams from "../src/lib/diagrams";
 import * as erdStore from "../src/lib/erdStore";
 import * as holidays from "../src/lib/holidays";
+import * as noteAnchor from "../src/lib/noteAnchor";
 import * as notes from "../src/lib/notes";
 import * as report from "../src/lib/report";
 import * as timeBlocks from "../src/lib/timeBlocks";
@@ -47,6 +49,8 @@ export const MODULES = [
   "todoTree",
   "ttLayout",
   "treeFind",
+  "comments",
+  "noteAnchor",
 ] as const;
 
 export const OPS: Record<string, Op> = {
@@ -160,6 +164,16 @@ export const OPS: Record<string, Op> = {
     ...vaultTree.remapPaths(paths, oldPrefix, newPrefix),
   ],
 
+  // 노트 인라인 질문의 사이드카 — 못 읽은 파일을 빈 목록으로 뭉개지 않는다(덮으면 문답이 사라진다)
+  "comments.commentsPathFor": comments.commentsPathFor,
+  "comments.readComments": comments.readComments,
+  "comments.loadComments": comments.loadComments,
+  // 고치는 함수는 JSON 으로 못 넘긴다 — 새 목록으로 바꾸는 편집 하나로 잰다(읽고 검사한 뒤 쓰는 순서가 요점)
+  "comments.mutateComments": (noteRel: string, next: comments.NoteComment[]) =>
+    comments.mutateComments(noteRel, () => next),
+  "comments.saveComments": comments.saveComments,
+  "noteAnchor.nthIndex": noteAnchor.nthIndex,
+
   // 트리에서 찾기(⌘F) — 접힌 폴더 안까지 거르고 조상을 펼친다
   "treeFind.hits": treeFind.hits,
   "treeFind.splitHit": treeFind.splitHit,
@@ -253,6 +267,9 @@ export const NOT_COVERED: Record<string, string> = {
   "dbconn.syncSchema": "외부 DB 접속 + ERD 파일 + markSync",
   "dbconn.notifyConnectionsChanged": "창 이벤트",
   "notes.noteMtime": "파일 수정 시각은 녹화할 때마다 다르다",
+  "comments.newCommentId": "crypto.randomUUID — 매번 다르다",
+  "noteAnchor.rangeAt": "DOM Range 를 만든다 — GPUI 는 그려진 글자 범위(RangeHighlight)로 칠한다",
+  "noteAnchor.mergeLineRects": "DOM 사각형 합치기 — GPUI 는 RangeHighlight 가 줄마다 칠한다",
   "diagrams.diagramMtime": "파일 수정 시각은 녹화할 때마다 다르다",
   "vaultTree.createVaultTree": "트리를 만드는 함수 — notes, diagrams, erdStore 의 op 로 잰다",
   "date.localDateStr": "Date 객체를 받는다 — 다른 date op 가 모두 거친다",

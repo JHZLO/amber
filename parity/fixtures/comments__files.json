@@ -1,0 +1,63 @@
+{
+  "format": 1,
+  "name": "comments/files",
+  "tz": "Asia/Seoul",
+  "start": 1793836800000,
+  "seed": [
+    {
+      "path": "vault/notes/A.md",
+      "text": "# A\n"
+    },
+    {
+      "path": "vault/notes/A.comments.json",
+      "text": "{\"version\":1,\"comments\":[{\"id\":\"1\",\"anchor\":\"문장\",\"occurrence\":0,\"question\":\"왜?\",\"answer\":\"그래서\",\"createdAt\":1,\"model\":\"m\",\"followUps\":[{\"question\":\"또\",\"answer\":\"응\",\"createdAt\":2},{\"question\":3},\"x\"]},{\"id\":\"2\",\"anchor\":\"b\",\"occurrence\":1,\"question\":\"q\",\"answer\":\"a\",\"createdAt\":3,\"followUps\":\"bad\"},{\"id\":\"3\",\"anchor\":5,\"question\":\"q\"},\"junk\",{\"id\":\"4\",\"anchor\":\"c\",\"occurrence\":0,\"question\":\"q2\",\"answer\":\"\",\"createdAt\":4,\"extra\":{\"keep\":true}}]}"
+    },
+    {
+      "path": "vault/notes/B.md",
+      "text": "# B\n"
+    },
+    {
+      "path": "vault/notes/B.comments.json",
+      "text": "{ broken"
+    },
+    {
+      "path": "vault/notes/C.md",
+      "text": "# C\n"
+    },
+    {
+      "path": "vault/notes/C.comments.json",
+      "text": "{\"comments\": {}}"
+    },
+    {
+      "path": "vault/notes/D/E.md",
+      "text": "# E\n"
+    }
+  ],
+  "final": "d1f85d455117c2d4e661723609cef1f2b534633894a837e28b8f61de234baeb7",
+  "steps": [
+    {"op":"comments.commentsPathFor","args":["a.md"],"at":1793836800000,"ok":true,"result":"a.comments.json","changes":{}},
+    {"op":"comments.commentsPathFor","args":["a.MD"],"at":1793836801000,"ok":true,"result":"a.comments.json","changes":{}},
+    {"op":"comments.commentsPathFor","args":["x/y.md"],"at":1793836802000,"ok":true,"result":"x/y.comments.json","changes":{}},
+    {"op":"comments.commentsPathFor","args":["noext"],"at":1793836803000,"ok":true,"result":"noext.comments.json","changes":{}},
+    {"op":"comments.readComments","args":["A.md"],"at":1793836804000,"ok":true,"result":{"ok":true,"comments":[{"id":"1","anchor":"문장","occurrence":0,"question":"왜?","answer":"그래서","createdAt":1,"model":"m","followUps":[{"question":"또","answer":"응","createdAt":2}]},{"id":"2","anchor":"b","occurrence":1,"question":"q","answer":"a","createdAt":3},{"id":"4","anchor":"c","occurrence":0,"question":"q2","answer":"","createdAt":4,"extra":{"keep":true}}]},"changes":{}},
+    {"op":"comments.readComments","args":["B.md"],"at":1793836805000,"ok":true,"result":{"ok":false},"changes":{}},
+    {"op":"comments.readComments","args":["C.md"],"at":1793836806000,"ok":true,"result":{"ok":false},"changes":{}},
+    {"op":"comments.readComments","args":["D/E.md"],"at":1793836807000,"ok":true,"result":{"ok":true,"comments":[]},"changes":{}},
+    {"op":"comments.loadComments","args":["B.md"],"at":1793836808000,"ok":true,"result":[],"changes":{}},
+    {"op":"comments.loadComments","args":["A.md"],"at":1793836809000,"ok":true,"result":[{"id":"1","anchor":"문장","occurrence":0,"question":"왜?","answer":"그래서","createdAt":1,"model":"m","followUps":[{"question":"또","answer":"응","createdAt":2}]},{"id":"2","anchor":"b","occurrence":1,"question":"q","answer":"a","createdAt":3},{"id":"4","anchor":"c","occurrence":0,"question":"q2","answer":"","createdAt":4,"extra":{"keep":true}}],"changes":{}},
+    {"op":"comments.mutateComments","args":["B.md",[{"id":"n","anchor":"새","occurrence":0,"question":"질문","answer":"답","createdAt":9}]],"at":1793836810000,"ok":false,"error":"이 노트의 질문 파일을 읽을 수 없어 저장을 멈췄습니다. 덮어쓰면 기존 문답이 사라집니다.","changes":{}},
+    {"op":"comments.mutateComments","args":["C.md",[{"id":"n","anchor":"새","occurrence":0,"question":"질문","answer":"답","createdAt":9}]],"at":1793836811000,"ok":false,"error":"이 노트의 질문 파일을 읽을 수 없어 저장을 멈췄습니다. 덮어쓰면 기존 문답이 사라집니다.","changes":{}},
+    {"op":"comments.mutateComments","args":["D/E.md",[{"id":"n","anchor":"새","occurrence":0,"question":"질문","answer":"답","createdAt":9}]],"at":1793836812000,"ok":true,"result":[{"id":"n","anchor":"새","occurrence":0,"question":"질문","answer":"답","createdAt":9}],"changes":{"__files":{"added":[{"path":"vault/notes/D/E.comments.json","kind":"file","text":"{\n \"version\": 1,\n \"comments\": [\n  {\n   \"id\": \"n\",\n   \"anchor\": \"새\",\n   \"occurrence\": 0,\n   \"question\": \"질문\",\n   \"answer\": \"답\",\n   \"createdAt\": 9\n  }\n ]\n}"}],"removed":[],"changed":[]}}},
+    {"op":"comments.mutateComments","args":["A.md",[{"id":"n","anchor":"새","occurrence":0,"question":"질문","answer":"답","createdAt":9}]],"at":1793836813000,"ok":true,"result":[{"id":"n","anchor":"새","occurrence":0,"question":"질문","answer":"답","createdAt":9}],"changes":{"__files":{"added":[],"removed":[],"changed":[{"before":{"path":"vault/notes/A.comments.json","kind":"file","text":"{\"version\":1,\"comments\":[{\"id\":\"1\",\"anchor\":\"문장\",\"occurrence\":0,\"question\":\"왜?\",\"answer\":\"그래서\",\"createdAt\":1,\"model\":\"m\",\"followUps\":[{\"question\":\"또\",\"answer\":\"응\",\"createdAt\":2},{\"question\":3},\"x\"]},{\"id\":\"2\",\"anchor\":\"b\",\"occurrence\":1,\"question\":\"q\",\"answer\":\"a\",\"createdAt\":3,\"followUps\":\"bad\"},{\"id\":\"3\",\"anchor\":5,\"question\":\"q\"},\"junk\",{\"id\":\"4\",\"anchor\":\"c\",\"occurrence\":0,\"question\":\"q2\",\"answer\":\"\",\"createdAt\":4,\"extra\":{\"keep\":true}}]}"},"after":{"path":"vault/notes/A.comments.json","kind":"file","text":"{\n \"version\": 1,\n \"comments\": [\n  {\n   \"id\": \"n\",\n   \"anchor\": \"새\",\n   \"occurrence\": 0,\n   \"question\": \"질문\",\n   \"answer\": \"답\",\n   \"createdAt\": 9\n  }\n ]\n}"}}]}}},
+    {"op":"comments.readComments","args":["A.md"],"at":1793836814000,"ok":true,"result":{"ok":true,"comments":[{"id":"n","anchor":"새","occurrence":0,"question":"질문","answer":"답","createdAt":9}]},"changes":{}},
+    {"op":"comments.saveComments","args":["A.md",[]],"at":1793836815000,"ok":true,"result":null,"changes":{"__files":{"added":[],"removed":[{"path":"vault/notes/A.comments.json","kind":"file","text":"{\n \"version\": 1,\n \"comments\": [\n  {\n   \"id\": \"n\",\n   \"anchor\": \"새\",\n   \"occurrence\": 0,\n   \"question\": \"질문\",\n   \"answer\": \"답\",\n   \"createdAt\": 9\n  }\n ]\n}"}],"changed":[]}}},
+    {"op":"comments.readComments","args":["A.md"],"at":1793836816000,"ok":true,"result":{"ok":true,"comments":[]},"changes":{}},
+    {"op":"comments.saveComments","args":["Z.md",[]],"at":1793836817000,"ok":true,"result":null,"changes":{}},
+    {"op":"noteAnchor.nthIndex","args":["ab ab ab","ab",0],"at":1793836818000,"ok":true,"result":0,"changes":{}},
+    {"op":"noteAnchor.nthIndex","args":["ab ab ab","ab",2],"at":1793836819000,"ok":true,"result":6,"changes":{}},
+    {"op":"noteAnchor.nthIndex","args":["ab ab ab","ab",3],"at":1793836820000,"ok":true,"result":-1,"changes":{}},
+    {"op":"noteAnchor.nthIndex","args":["aaa","aa",1],"at":1793836821000,"ok":true,"result":1,"changes":{}},
+    {"op":"noteAnchor.nthIndex","args":["😀 ab 😀 ab","ab",1],"at":1793836822000,"ok":true,"result":9,"changes":{}},
+    {"op":"noteAnchor.nthIndex","args":["x","",0],"at":1793836823000,"ok":true,"result":-1,"changes":{}}
+  ]
+}

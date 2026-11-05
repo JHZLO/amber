@@ -1044,6 +1044,62 @@ const treeFindSweep: Scenario = {
   },
 };
 
+/** 노트 질문 사이드카 — 정상, 깨진 JSON, comments 가 배열이 아님, 후속 문답 형태 검사, 비우면 파일을 지운다 */
+const commentFiles: Scenario = {
+  name: "comments/files",
+  seed: [
+    { path: "vault/notes/A.md", text: "# A\n" },
+    {
+      path: "vault/notes/A.comments.json",
+      text: JSON.stringify({
+        version: 1,
+        comments: [
+          { id: "1", anchor: "문장", occurrence: 0, question: "왜?", answer: "그래서", createdAt: 1, model: "m",
+            followUps: [{ question: "또", answer: "응", createdAt: 2 }, { question: 3 }, "x"] },
+          { id: "2", anchor: "b", occurrence: 1, question: "q", answer: "a", createdAt: 3, followUps: "bad" },
+          { id: "3", anchor: 5, question: "q" },
+          "junk",
+          { id: "4", anchor: "c", occurrence: 0, question: "q2", answer: "", createdAt: 4, extra: { keep: true } },
+        ],
+      }),
+    },
+    { path: "vault/notes/B.md", text: "# B\n" },
+    { path: "vault/notes/B.comments.json", text: "{ broken" },
+    { path: "vault/notes/C.md", text: "# C\n" },
+    { path: "vault/notes/C.comments.json", text: '{"comments": {}}' },
+    { path: "vault/notes/D/E.md", text: "# E\n" },
+  ],
+  plan() {
+    const one = [{ id: "n", anchor: "새", occurrence: 0, question: "질문", answer: "답", createdAt: 9 }];
+    return [
+      s("comments.commentsPathFor", "a.md"),
+      s("comments.commentsPathFor", "a.MD"),
+      s("comments.commentsPathFor", "x/y.md"),
+      s("comments.commentsPathFor", "noext"),
+      s("comments.readComments", "A.md"),
+      s("comments.readComments", "B.md"),
+      s("comments.readComments", "C.md"),
+      s("comments.readComments", "D/E.md"),
+      s("comments.loadComments", "B.md"),
+      s("comments.loadComments", "A.md"),
+      s("comments.mutateComments", "B.md", one),
+      s("comments.mutateComments", "C.md", one),
+      s("comments.mutateComments", "D/E.md", one),
+      s("comments.mutateComments", "A.md", one),
+      s("comments.readComments", "A.md"),
+      s("comments.saveComments", "A.md", []),
+      s("comments.readComments", "A.md"),
+      s("comments.saveComments", "Z.md", []),
+      s("noteAnchor.nthIndex", "ab ab ab", "ab", 0),
+      s("noteAnchor.nthIndex", "ab ab ab", "ab", 2),
+      s("noteAnchor.nthIndex", "ab ab ab", "ab", 3),
+      s("noteAnchor.nthIndex", "aaa", "aa", 1),
+      s("noteAnchor.nthIndex", "😀 ab 😀 ab", "ab", 1),
+      s("noteAnchor.nthIndex", "x", "", 0),
+    ];
+  },
+};
+
 export const SCENARIOS: Scenario[] = [
   todosTreeBasics,
   todosDoneChain,
@@ -1070,6 +1126,7 @@ export const SCENARIOS: Scenario[] = [
   timetable,
   vaultTreePure,
   treeFindSweep,
+  commentFiles,
   conceptNotes,
   erdFiles,
   ...Array.from({ length: 4 }, (_, i) => ({
