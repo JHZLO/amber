@@ -132,6 +132,8 @@ pub struct NotesState {
     pub asset_base: Option<SharedString>,
     pub width: f32,
     pub copied: bool,
+    /// 경로 줄을 눌러 복사한 직후(1.5초 동안 체크 표식)
+    pub crumb_copied: bool,
     /// 기본(open 속성)에서 뒤집힌 토글 — 노트를 바꾸면 비운다
     pub toggled: HashSet<String>,
     /// 그린 뒤 잰 자리 — 덩어리마다(창 좌표), 머리(경로 줄 ~ 동작 줄) 높이
@@ -315,6 +317,29 @@ impl Spike {
         if let Some(&ix) = self.notes.sections.get(sec) {
             self.scroll_to_block(ix);
         }
+    }
+
+    /// 노트의 실제 경로를 클립보드로 — 경로 줄 클릭과 ⌥⌘C
+    pub(crate) fn copy_note_path(&mut self, cx: &mut Context<Self>) {
+        let Some(rel) = self.notes.selected.clone() else {
+            return;
+        };
+        let abs = vault::notes(&self.db).abs(&rel);
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            abs.to_string_lossy().into_owned(),
+        ));
+        self.notes.crumb_copied = true;
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(1500))
+                .await;
+            let _ = this.update(cx, |s, cx| {
+                s.notes.crumb_copied = false;
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     /// 그 덩어리가 판 맨 위에서 18px 아래 오게(scroll-margin-top 18px)
@@ -731,18 +756,47 @@ impl Spike {
             .flex()
             .flex_col()
             .flex_shrink_0()
-            // .note-crumb — 경로 줄(복사는 D2 경로 복사에서)
-            .child(
+            // .note-crumb — 경로 줄이 곧 경로 복사 버튼이다(⌥⌘C 도 같다). 손이 닿으면 면과 끝의 복사 표식
+            .child(div().flex().mb(px(4.)).child({
+                let copied = self.notes.crumb_copied;
+                let (bg, hover_fg) = (k.surface_2, k.text_2);
                 div()
+                    .id("note-crumb")
+                    .tag("note-crumb")
+                    .group("note-crumb")
                     .flex()
                     .items_center()
                     .gap(px(5.))
-                    .mb(px(4.))
+                    .ml(px(-6.))
+                    .px(px(6.))
+                    .py(px(3.))
+                    .rounded(px(5.))
+                    .cursor_pointer()
                     .text_size(px(12.))
                     .text_color(k.text_3)
-                    .child(icon("folder", 12.).text_color(k.text_3))
-                    .child(crumb),
-            )
+                    .hover(move |s| s.bg(bg).text_color(hover_fg))
+                    .child(
+                        icon("folder", 12.)
+                            .text_color(k.text_3)
+                            .group_hover("note-crumb", move |s| s.text_color(hover_fg)),
+                    )
+                    .child(crumb)
+                    .child(
+                        div()
+                            .flex()
+                            .when(!copied, |d| {
+                                d.opacity(0.).group_hover("note-crumb", |s| s.opacity(1.))
+                            })
+                            .child(
+                                icon(if copied { "check" } else { "copy" }, 11.)
+                                    .text_color(k.text_3)
+                                    .group_hover("note-crumb", move |s| s.text_color(hover_fg)),
+                            ),
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.copy_note_path(cx);
+                    }))
+            }))
             // .detail-title
             .child(
                 div()

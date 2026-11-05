@@ -115,6 +115,8 @@ struct Spike {
     row_drag: Option<row_drag::RowDrag>,
     row_bounds: row_drag::RowBounds,
     list_bounds: row_drag::ListBounds,
+    /// 창 단축키(⌥⌘C 등)를 받는 뿌리 포커스 — 아무것도 포커스가 없으면 키가 창 뿌리에서 멈춘다
+    focus: FocusHandle,
     started: Instant,
     first_frame: bool,
 }
@@ -229,9 +231,11 @@ impl Spike {
             row_drag: None,
             row_bounds: Default::default(),
             list_bounds: Default::default(),
+            focus: cx.focus_handle(),
             started,
             first_frame: false,
         };
+        this.focus.focus(window, cx);
         this.reload();
         this.reload_calendar();
         this.reload_blocks();
@@ -517,6 +521,29 @@ impl Render for Spike {
             .flex()
             .bg(k.surface)
             .text_color(fg)
+            .track_focus(&self.focus)
+            // 포커스가 이 화면 밖으로 빠져 있으면(입력칸이 닫혀 사라진 뒤 등) 누를 때 되찾는다
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, window, cx| {
+                    if !this.focus.contains_focused(window, cx) {
+                        this.focus.focus(window, cx);
+                    }
+                }),
+            )
+            // ⌥⌘C — 노트 탭에서 지금 노트의 경로 복사(NoteCrumb)
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+                let m = &e.keystroke.modifiers;
+                if this.section == Section::Notes
+                    && m.platform
+                    && m.alt
+                    && !m.control
+                    && !m.shift
+                    && e.keystroke.key == "c"
+                {
+                    this.copy_note_path(cx);
+                }
+            }))
             .on_drop(cx.listener(|this, _: &row_drag::DragRow, _, cx| {
                 this.drop_row();
                 cx.notify();

@@ -676,3 +676,27 @@ fn a_details_toggle_opens_and_closes(cx: &mut TestAppContext) {
     click(&mut ui, "toggle-1");
     assert!(ui.debug_bounds("toggle-1/0").is_none());
 }
+
+#[gpui_kit::test]
+fn the_path_line_copies_the_note_path(cx: &mut TestAppContext) {
+    let db = seeded("notes-crumb", &[]);
+    vault_note(&db, "Eng/P.md", "# P\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-Eng");
+    click(&mut ui, "tree-Eng/P.md");
+    click(&mut ui, "note-crumb");
+    // 데이터 폴더는 실제 경로로 풀린다(/var → /private/var)
+    let want = std::fs::canonicalize(db.parent().unwrap().join("vault/notes/Eng/P.md")).unwrap();
+    assert_eq!(
+        ui.read_from_clipboard().and_then(|c| c.text()).as_deref(),
+        want.to_str()
+    );
+    ui.write_to_clipboard(gpui_kit::ClipboardItem::new_string("x".into()));
+    ui.simulate_keystrokes("cmd-alt-c");
+    assert_eq!(
+        ui.read_from_clipboard().and_then(|c| c.text()).as_deref(),
+        want.to_str(),
+        "⌥⌘C 도 같다"
+    );
+}
