@@ -9,6 +9,7 @@ pub mod migrate;
 pub mod prefs;
 pub mod report;
 pub mod todos;
+pub mod tree;
 pub mod vacations;
 pub mod vault;
 
@@ -124,6 +125,16 @@ pub const OPS: &[&str] = &[
     "holidays.holidaysOfYear",
     "holidays.holidayOf",
     "holidays.hasLunarData",
+    "todoTree.childrenOf",
+    "todoTree.ancestorPath",
+    "todoTree.flattenTree",
+    "todoTree.visibleRoots",
+    "todoTree.flattenSubset",
+    "todoTree.subtreeIds",
+    "todoTree.descendantCount",
+    "todoTree.clampDropDepth",
+    "todoTree.resolveDrop",
+    "todoTree.dayProgress",
 ];
 
 pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
@@ -306,7 +317,9 @@ fn call_files(db: &Db, op: &str, a: &Args) -> Result<Json, String> {
             let limit = a.0.get(2).and_then(Json::as_u64).unwrap_or(20) as usize;
             json(tree.search(a.s(1)?, limit))
         }
-        _ => dates::call(op, a.0, db.now()).unwrap_or_else(|| Err(format!("모르는 op: {op}"))),
+        _ => dates::call(op, a.0, db.now())
+            .or_else(|| tree::call(op, a.0))
+            .unwrap_or_else(|| Err(format!("모르는 op: {op}"))),
     }
 }
 
