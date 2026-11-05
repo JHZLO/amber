@@ -1014,6 +1014,80 @@ const vaultTreePure: Scenario = {
 };
 
 /** 트리에서 찾기 — 대소문자, 한글, 이모지(UTF-16 짝), 폴더가 맞으면 아래 통째, 조상 펼침 순서 */
+const noteAiPure: Scenario = {
+  name: "noteAi/pure",
+  plan() {
+    const steps: Step[] = [];
+    const docs = [
+      "",
+      "서문만 있다\n",
+      "intro\n# 1. A\nbody\n## 1-2. B\n### x\n#### 넷째는 아니다\n",
+      "# 1. 설치\n```bash\n# 주석은 제목이 아니다\n```\n## 2. 사용\n",
+      "# A\n````md\n```\n# 안\n```\n````\n# B\n",
+      "# A\n```bash\n# 안\n```bash\n# 아직 안\n```\n# B\n",
+      "# A\r\n텍스트\r\n# B\rC\n## 😀 이모지 절\n",
+      "#제목 아님\n#  두 칸\n ## 앞 공백은 제목 아님\n# \u00a0nbsp\n",
+      "~~~\n# 물결 안\n~~~\n# 1-2-. 꼬리\n# 3 . 공백\n",
+    ];
+    for (const d of docs) steps.push(s("mdSections.splitSections", d));
+    steps.push(
+      s("mdSections.mergeRuns", []),
+      s("mdSections.mergeRuns", [
+        { start: 30, end: 40, k: "c" },
+        { start: 0, end: 10, k: "a" },
+        { start: 10, end: 20, k: "b" },
+        { start: 50, end: 60, k: "d" },
+        { start: 55, end: 70, k: "e" },
+        { start: 0, end: 5, k: "f" },
+      ]),
+    );
+    const md = "앞\n\n## 1. 가\n옛 글 😀\n\n## 2. 나\n둘\n";
+    for (const [st, en, rep] of [
+      [3, 15, "## 1. 가\n새 글"],
+      [3, 15, "  \n\n  "],
+      [0, 0, "x"],
+      [1, 3, "   "],
+      [md.length - 3, md.length, "\u00a0끝\ufeff"],
+    ] as const)
+      steps.push(s("mdSections.spliceSpan", md, st, en, rep));
+    steps.push(
+      s("noteAiRun.spliceSpans", md, [{ kind: "section", start: 3, end: 15, label: "1" }, { kind: "section", start: 15, end: md.length, label: "2" }], ["## 1. 가\nA", "## 2. 나\nB"]),
+      s("noteAiRun.spliceSpans", md, [{ kind: "selection", start: 3, end: 8, label: "s" }], []),
+    );
+    steps.push(
+      s("aiInstruction.composeInstruction", "", []),
+      s("aiInstruction.composeInstruction", "  내가 친 말 ", ["", "  저장 프롬프트\n여러 줄 ", "빠른 지시"]),
+      s("aiInstruction.tailSpan", "짧다"),
+      s("aiInstruction.tailSpan", "a".repeat(800) + "\n마지막 줄", 20),
+      s("aiInstruction.tailSpan", "\n" + "b".repeat(30), 30),
+      s("aiInstruction.tailSpan", "c".repeat(40), 10),
+      s("aiInstruction.tailSpan", "😀".repeat(400) + "\n끝", 700),
+    );
+    for (const [t, k] of [
+      ["", 2], ["index.ts", 2], ["x".repeat(70), 2], ["/Users/me/src/lib/index.ts", 2],
+      ["src/lib/", 2], ["/a", 2], ["a/b/c", 1], ["  /tmp//x/y/  ", 2], ["가".repeat(61), 2],
+    ] as const)
+      steps.push(s("aiActivity.shortTarget", t, k));
+    for (const a of [
+      { tool: "Read" }, { tool: "Read", target: "/Users/me/notes/CS/네트워크.md" }, { tool: "Glob", target: "**/*.md" },
+      { tool: "Grep", target: "TODO" }, { tool: "search", target: "rust gpui" }, { tool: "LS", target: "/a/b/c" },
+      { tool: "Write", target: "/tmp/draft/01.md" }, { tool: "Edit" }, { tool: "command", target: "ls -la" },
+      { tool: "Bash", target: "rg x" }, { tool: "mcp__notion", target: "page" }, { tool: "mcp__notion" },
+    ])
+      steps.push(s("aiActivity.describeActivity", a));
+    const t0 = 1_700_000_000_000;
+    for (const [act, at, now, ref] of [
+      [null, 0, t0, false], [null, 0, t0 + 4_000, false], [null, 0, t0 + 9_000, false],
+      [{ tool: "thinking" }, t0 + 1_000, t0 + 13_500, false], [{ tool: "thought" }, t0 + 1_000, t0 + 2_000, false],
+      [{ tool: "writing" }, t0, t0 + 30_000, false], [{ tool: "Read", target: "/a/b/c.md" }, t0, t0 + 61_000, false],
+      [{ tool: "thinking" }, t0, t0 + 180_000, true], [{ tool: "thinking" }, t0, t0 + 180_000, false],
+      [{ tool: "unknown-phase" }, t0, t0 + 5_000, false], [null, 0, t0 - 5_000, false],
+    ] as const)
+      steps.push(s("aiWait.waitLine", { startedAt: t0, activity: act, activityAt: at, hasRefDirs: ref }, now));
+    return steps;
+  },
+};
+
 const treeFindSweep: Scenario = {
   name: "treeFind/sweep",
   plan() {
@@ -1156,6 +1230,7 @@ export const SCENARIOS: Scenario[] = [
   timetable,
   vaultTreePure,
   treeFindSweep,
+  noteAiPure,
   commentFiles,
   aiConfig,
   aiConfigGemini,

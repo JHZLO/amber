@@ -7,6 +7,9 @@
 //  - NOT_COVERED: 이 단에서 재지 않는다(키체인, 외부 DB, AI 실행 등). 이유를 남긴다
 //  - PURE: DB 와 파일을 안 쓰는 계산 — 동기 함수여야 한다
 
+import * as aiActivity from "../src/lib/aiActivity";
+import * as aiInstruction from "../src/lib/aiInstruction";
+import * as aiWait from "../src/lib/aiWait";
 import * as comments from "../src/lib/comments";
 import * as config from "../src/lib/config";
 import * as date from "../src/lib/date";
@@ -15,6 +18,8 @@ import * as dbconn from "../src/lib/dbconn";
 import * as diagrams from "../src/lib/diagrams";
 import * as erdStore from "../src/lib/erdStore";
 import * as holidays from "../src/lib/holidays";
+import * as mdSections from "../src/lib/mdSections";
+import * as noteAiRun from "../src/lib/noteAiRun";
 import * as noteAnchor from "../src/lib/noteAnchor";
 import * as notes from "../src/lib/notes";
 import * as report from "../src/lib/report";
@@ -53,6 +58,11 @@ export const MODULES = [
   "comments",
   "config",
   "noteAnchor",
+  "mdSections",
+  "aiInstruction",
+  "aiActivity",
+  "aiWait",
+  "noteAiRun",
 ] as const;
 
 export const OPS: Record<string, Op> = {
@@ -182,6 +192,17 @@ export const OPS: Record<string, Op> = {
   "comments.saveComments": comments.saveComments,
   "noteAnchor.nthIndex": noteAnchor.nthIndex,
 
+  // 노트 AI 의 순수 계산 — 소스 좌표(절 나누기, 되끼우기), 지시 합치기, 진행 한 줄
+  "mdSections.splitSections": mdSections.splitSections,
+  "mdSections.mergeRuns": mdSections.mergeRuns,
+  "mdSections.spliceSpan": mdSections.spliceSpan,
+  "noteAiRun.spliceSpans": noteAiRun.spliceSpans,
+  "aiInstruction.composeInstruction": aiInstruction.composeInstruction,
+  "aiInstruction.tailSpan": aiInstruction.tailSpan,
+  "aiActivity.shortTarget": aiActivity.shortTarget,
+  "aiActivity.describeActivity": aiActivity.describeActivity,
+  "aiWait.waitLine": aiWait.waitLine,
+
   // 트리에서 찾기(⌘F) — 접힌 폴더 안까지 거르고 조상을 펼친다
   "treeFind.hits": treeFind.hits,
   "treeFind.splitHit": treeFind.splitHit,
@@ -276,6 +297,24 @@ export const NOT_COVERED: Record<string, string> = {
   "dbconn.notifyConnectionsChanged": "창 이벤트",
   "notes.noteMtime": "파일 수정 시각은 녹화할 때마다 다르다",
   "comments.newCommentId": "crypto.randomUUID — 매번 다르다",
+  "aiWait.useAiWaitLine": "React 훅(1초마다 다시 그린다) — 계산은 aiWait.waitLine 으로 잰다",
+  "noteAiRun.getNoteAiRun": "실행 스토어(메모리) — GPUI 는 note_ai.rs 가 같은 상태 기계를 갖고 ui_tests 가 가짜 CLI 로 잰다",
+  "noteAiRun.isNoteAiRunning": "실행 스토어(메모리) — note_ai.rs, ui_tests",
+  "noteAiRun.getNoteAiPhases": "실행 스토어(메모리) — note_ai.rs, ui_tests",
+  "noteAiRun.useNoteAiRun": "React 훅 — 실행 스토어 구독",
+  "noteAiRun.useNoteAiPhases": "React 훅 — 실행 스토어 구독",
+  "noteAiRun.useAnyNoteAiRunning": "React 훅 — 실행 스토어 구독",
+  "noteAiRun.startNoteAi": "AI CLI 실행 — note_ai.rs, ui_tests(가짜 CLI)",
+  "noteAiRun.startNoteSpanAi": "AI CLI 실행 — note_ai.rs, ui_tests(가짜 CLI)",
+  "noteAiRun.continueNoteAi": "AI CLI 실행 — note_ai.rs, ui_tests(가짜 CLI)",
+  "noteAiRun.stopNoteAi": "AI CLI 취소 — note_ai.rs, ui_tests",
+  "noteAiRun.dismissNoteAi": "실행 스토어(메모리) — note_ai.rs, ui_tests",
+  "noteAiRun.dismissNoteAiError": "실행 스토어(메모리) — note_ai.rs, ui_tests",
+  "noteAiRun.setNoteSpanResult": "실행 스토어(메모리) — 되끼우기는 noteAiRun.spliceSpans 로 잰다",
+  "noteAiRun.setNoteAiResult": "실행 스토어(메모리) — note_ai.rs, ui_tests",
+  "noteAiRun.remapNoteAiPaths": "실행 스토어(메모리) — note_ai.rs 단위 시험",
+  "noteAiRun.dropNoteAiUnder": "실행 스토어(메모리) — note_ai.rs 단위 시험",
+  "noteAiRun.resetNoteAiRunsForTest": "시험 전용",
   "noteAnchor.rangeAt": "DOM Range 를 만든다 — GPUI 는 그려진 글자 범위(RangeHighlight)로 칠한다",
   "noteAnchor.mergeLineRects": "DOM 사각형 합치기 — GPUI 는 RangeHighlight 가 줄마다 칠한다",
   "diagrams.diagramMtime": "파일 수정 시각은 녹화할 때마다 다르다",
