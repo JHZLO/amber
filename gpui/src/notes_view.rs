@@ -130,6 +130,9 @@ pub struct NotesState {
     pub mtime: Option<i64>,
     /// 고른 노트 폴더의 실제 자리 — 본문 그림(`_assets/…`)을 푸는 기준
     pub asset_base: Option<SharedString>,
+    /// 편집 중이면 초안과 미리보기, 그리고 떠 있는 확인 창(저장 안 한 변경, 디스크 충돌)
+    pub edit: Option<crate::note_edit::NoteEdit>,
+    pub prompt: Option<crate::note_edit::NotePrompt>,
     pub width: f32,
     pub copied: bool,
     /// 경로 줄을 눌러 복사한 직후(1.5초 동안 체크 표식)
@@ -147,7 +150,7 @@ const DETAIL_PAD_T: f32 = 32.;
 const TOC_MIN_WINDOW: f32 = 1140.;
 
 /// 지금 앱 timeAgo — 30일 넘으면 날짜
-fn time_ago(ms: i64, now: i64) -> String {
+pub(crate) fn time_ago(ms: i64, now: i64) -> String {
     use amber_gpui::i18n::t_with;
     let m = (now - ms).div_euclid(60_000);
     if m < 1 {
@@ -661,7 +664,7 @@ impl Spike {
                 if is_dir {
                     this.toggle_dir(&path);
                 } else if this.notes.selected.as_deref() != Some(path.as_str()) {
-                    this.open_note(&path, cx);
+                    this.request_open_note(&path, cx);
                 }
                 cx.notify();
             }))
@@ -691,6 +694,7 @@ impl Spike {
             .join(" › ");
         let ok = self.notes.read_error.is_none();
         let copied = self.notes.copied;
+        let editing = self.notes.edit.is_some();
         let labeled = |id: &'static str, icon_name: &'static str, label: String, enabled: bool| {
             button(id, k, false, !enabled)
                 .child(icon(icon_name, 14.).text_color(if enabled { k.text_2 } else { k.text_3 }))
@@ -707,13 +711,22 @@ impl Spike {
             .border_t_1()
             .border_b_1()
             .border_color(k.border)
-            .child(
+            .child(if editing {
+                self.note_edit_actions(k, cx)
+            } else {
                 div()
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    // 편집, AI 작성, 절 수정은 다음 단계에서(D2c, D2f)
-                    .child(labeled("note-edit", "pencil", t("notes.edit"), false))
+                    .child(
+                        labeled("note-edit", "pencil", t("notes.edit"), ok).when(ok, |d| {
+                            d.on_click(cx.listener(|this, _, window, cx| {
+                                this.start_note_edit(window, cx);
+                                cx.notify();
+                            }))
+                        }),
+                    )
+                    // AI 작성, 절 수정은 노트 AI 를 붙일 때(D2g)
                     .child(labeled("note-ai", "sparkles", t("notes.aiWrite"), false))
                     .child(
                         labeled(
@@ -723,9 +736,11 @@ impl Spike {
                             ok && !self.notes.body.is_empty(),
                         )
                         .on_click(cx.listener(|this, _, _, cx| {
-                            cx.write_to_clipboard(ClipboardItem::new_string(
-                                this.notes.body.clone(),
-                            ));
+                            // 정본은 마크다운 원문 — 편집 중이면 초안
+                            let text = this
+                                .note_draft(cx)
+                                .unwrap_or_else(|| this.notes.body.clone());
+                            cx.write_to_clipboard(ClipboardItem::new_string(text));
                             this.notes.copied = true;
                             cx.notify();
                         })),
@@ -735,8 +750,8 @@ impl Spike {
                         "scissors",
                         t("notes.spanAi.secBtn"),
                         false,
-                    )),
-            )
+                    ))
+            })
             .child({
                 let (rel, name) = (rel.clone(), name.clone());
                 danger_button("note-delete", k)
@@ -866,6 +881,21 @@ impl Spike {
                 .text_color(k.text_3)
                 .child(line)
         };
+        // 편집 중엔 판이 화면 높이에 고정되고 원문과 미리보기가 각자 굴린다(.notes-detail.editing)
+        if editing {
+            return div()
+                .id("note")
+                .tag("note-scroll")
+                .size_full()
+                .pt(px(DETAIL_PAD_T))
+                .pb(px(32.))
+                .px(px(40.))
+                .flex()
+                .flex_col()
+                .child(head)
+                .child(self.note_edit_split(k, cx))
+                .child(meta.mt(px(14.)));
+        }
         scroll
             .child(head)
             .when_some(self.notes.read_error.clone(), |d, e| {
@@ -884,7 +914,7 @@ impl Spike {
     }
 
     /// 본문 덩어리 하나 — 글(TextView), 그림, 깨진 그림, 토글(안쪽은 같은 규칙으로 다시)
-    fn note_block(
+    pub(crate) fn note_block(
         &self,
         b: &Block,
         id: u64,

@@ -120,6 +120,40 @@ pub fn button(
         })
 }
 
+/// .btn-primary — 주 동작(저장 등). 채움 대신 유리를 두껍게 한다(강조 유리 + 강조 테), 글자는 굵게
+pub fn primary_button(id: impl Into<SharedString>, k: &Tokens, disabled: bool) -> Stateful<Div> {
+    let id: SharedString = id.into();
+    let fill = |pair: (Hsla, Hsla)| {
+        linear_gradient(
+            150.,
+            linear_color_stop(pair.0, 0.),
+            linear_color_stop(pair.1, 1.),
+        )
+    };
+    let hover = fill(k.glass_fill_accent_hover);
+    div()
+        .id(id.clone())
+        .tag(id)
+        .h(px(28.))
+        .px(px(10.))
+        .flex()
+        .items_center()
+        .gap(px(6.))
+        .rounded(px(6.))
+        .border_1()
+        .border_color(k.glass_edge_accent)
+        .bg(fill(k.glass_fill_accent))
+        .shadow(k.glass_shadow_hover())
+        .text_size(px(12.))
+        .font_weight(FontWeight::BOLD)
+        .whitespace_nowrap()
+        .text_color(k.text)
+        .when(disabled, |d| d.opacity(0.6))
+        .when(!disabled, |d| {
+            d.cursor_pointer().hover(move |s| s.bg(hover))
+        })
+}
+
 /// .btn-danger — 지우기 확인의 '삭제'. 평소엔 빨간 글자, 손이 닿으면 빨간 테와 옅은 바탕
 pub fn danger_button(id: impl Into<SharedString>, k: &Tokens) -> Stateful<Div> {
     let id: SharedString = id.into();

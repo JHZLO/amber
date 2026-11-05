@@ -13,6 +13,7 @@ mod highlight;
 mod markdown;
 mod menu;
 mod note;
+mod note_edit;
 mod notes_view;
 mod pane;
 mod row_drag;
@@ -543,6 +544,16 @@ impl Render for Spike {
                 {
                     this.copy_note_path(cx);
                 }
+                // ⌘S — 노트를 고치는 중일 때 저장
+                if this.section == Section::Notes
+                    && this.notes.edit.is_some()
+                    && m.platform
+                    && !m.alt
+                    && e.keystroke.key == "s"
+                {
+                    this.save_note(false, cx);
+                    cx.notify();
+                }
             }))
             .on_drop(cx.listener(|this, _: &row_drag::DragRow, _, cx| {
                 this.drop_row();
@@ -591,6 +602,7 @@ impl Render for Spike {
                     .child(div().flex_1().min_h_0().child(body)),
             )
             .children(self.drop_line(&k))
+            .children(self.note_prompt(&k, cx))
             .children(confirm)
     }
 }

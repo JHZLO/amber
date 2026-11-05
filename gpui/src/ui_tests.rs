@@ -700,3 +700,80 @@ fn the_path_line_copies_the_note_path(cx: &mut TestAppContext) {
         "⌥⌘C 도 같다"
     );
 }
+
+fn read_note(db: &PathBuf, rel: &str) -> String {
+    std::fs::read_to_string(db.parent().unwrap().join("vault/notes").join(rel)).unwrap()
+}
+
+/// 노트 탭에서 그 노트를 열고 편집을 시작해 본문을 통째로 바꾼다
+fn edit_note(ui: &mut VisualTestContext, rel: &'static str, text: &str) {
+    click(ui, "app.rail.notes");
+    click(ui, rel);
+    click(ui, "note-edit");
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_input(text);
+    ui.run_until_parked();
+}
+
+#[gpui_kit::test]
+fn editing_and_saving_writes_the_file(cx: &mut TestAppContext) {
+    let db = seeded("notes-edit", &[]);
+    vault_note(&db, "A.md", "# A\n\nold\n");
+    let mut ui = open(cx, &db);
+    edit_note(&mut ui, "tree-A.md", "# A\n\nnew body\n");
+    assert!(ui.debug_bounds("note-preview").is_some(), "원문 | 미리보기");
+    click(&mut ui, "note-save");
+    assert_eq!(read_note(&db, "A.md"), "# A\n\nnew body\n");
+    assert!(
+        ui.debug_bounds("note-save").is_none(),
+        "저장하면 읽기로 돌아간다"
+    );
+    // ⌘S 도 같다
+    click(&mut ui, "note-edit");
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_input("# A\n\nby shortcut\n");
+    ui.simulate_keystrokes("cmd-s");
+    ui.run_until_parked();
+    assert_eq!(read_note(&db, "A.md"), "# A\n\nby shortcut\n");
+}
+
+#[gpui_kit::test]
+fn switching_notes_with_unsaved_changes_asks_first(cx: &mut TestAppContext) {
+    let db = seeded("notes-unsaved", &[]);
+    vault_note(&db, "A.md", "# A\n");
+    vault_note(&db, "B.md", "# B\n");
+    let mut ui = open(cx, &db);
+    edit_note(&mut ui, "tree-A.md", "# A changed\n");
+    click(&mut ui, "tree-B.md");
+    click(&mut ui, "unsaved-keep");
+    assert!(ui.debug_bounds("note-save").is_some(), "계속 편집");
+    click(&mut ui, "tree-B.md");
+    click(&mut ui, "unsaved-discard");
+    assert!(ui.debug_bounds("note-save").is_none());
+    assert_eq!(read_note(&db, "A.md"), "# A\n", "버린 초안은 쓰지 않는다");
+    click(&mut ui, "note-copy");
+    assert_eq!(
+        ui.read_from_clipboard().and_then(|c| c.text()).as_deref(),
+        Some("# B\n"),
+        "B 가 열렸다"
+    );
+}
+
+#[gpui_kit::test]
+fn saving_over_a_newer_disk_file_asks_first(cx: &mut TestAppContext) {
+    let db = seeded("notes-conflict", &[]);
+    vault_note(&db, "A.md", "# A\n");
+    let mut ui = open(cx, &db);
+    edit_note(&mut ui, "tree-A.md", "# mine\n");
+    // 밖(다른 편집기)에서 먼저 고쳤다
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    vault_note(&db, "A.md", "# theirs\n");
+    click(&mut ui, "note-save");
+    assert!(
+        ui.debug_bounds("conflict-overwrite").is_some(),
+        "조용히 덮지 않는다"
+    );
+    assert_eq!(read_note(&db, "A.md"), "# theirs\n");
+    click(&mut ui, "conflict-overwrite");
+    assert_eq!(read_note(&db, "A.md"), "# mine\n");
+}

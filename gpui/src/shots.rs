@@ -236,6 +236,20 @@ fn notes(s: &mut Shots) {
     s.cx.run_until_parked();
     s.shot("notes-reading-end");
     s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.open_note("Engineering/Parity harness.md", cx);
+            sp.start_note_edit(window, cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.shot("notes-edit");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.notes.edit = None;
+            cx.notify();
+        })
+        .unwrap();
+    s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.notes.selected = None;
             cx.notify();
