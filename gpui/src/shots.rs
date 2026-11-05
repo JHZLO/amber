@@ -240,6 +240,24 @@ fn notes(s: &mut Shots) {
         .unwrap();
     s.shot("root-menu");
     s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.notes.root_menu = false;
+            sp.start_tree_find(window, cx);
+            if let Some(f) = sp.notes.find.as_mut() {
+                f.query = "re".into();
+                f.idx = 1;
+            }
+            cx.notify();
+        })
+        .unwrap();
+    s.shot("tree-find");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.notes.find = None;
+            cx.notify();
+        })
+        .unwrap();
+    s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.notes.root_menu = false;
             cx.notify();

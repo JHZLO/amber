@@ -950,3 +950,53 @@ fn the_root_picker_switches_workspace_folders(cx: &mut TestAppContext) {
         Some("")
     );
 }
+
+#[gpui_kit::test]
+fn tree_find_reaches_into_collapsed_folders(cx: &mut TestAppContext) {
+    let db = seeded("tree-find", &[]);
+    vault_note(&db, "CS/Network/TCP 혼잡 제어.md", "# TCP\n\nbody\n");
+    vault_note(&db, "CS/tcp-handshake.md", "# hs\n");
+    vault_note(&db, "Inbox.md", "# Inbox\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    // 트리 판을 누르면 그 뒤의 ⌘F 가 트리 찾기로 온다
+    click(&mut ui, "tree-Inbox.md");
+    ui.simulate_keystrokes("cmd-f");
+    ui.simulate_input("tcp");
+    ui.run_until_parked();
+    assert!(
+        ui.debug_bounds("tree-CS/Network/TCP 혼잡 제어.md")
+            .is_some(),
+        "접힌 폴더 안까지 찾아 조상을 펼친다"
+    );
+    assert!(
+        ui.debug_bounds("tree-Inbox.md").is_none(),
+        "안 맞는 것은 숨긴다"
+    );
+    // 전위 순서: CS/Network/TCP… 다음 CS/tcp-handshake
+    ui.simulate_keystrokes("down");
+    ui.simulate_keystrokes("enter");
+    ui.run_until_parked();
+    click(&mut ui, "note-copy");
+    assert_eq!(
+        ui.read_from_clipboard().and_then(|c| c.text()).as_deref(),
+        Some("# hs\n"),
+        "두 번째 결과를 열었다"
+    );
+    assert!(
+        ui.debug_bounds("tree-find-count").is_none(),
+        "파일을 열면 찾기를 닫는다"
+    );
+    assert!(ui.debug_bounds("tree-Inbox.md").is_some());
+    // 맞는 게 없으면 안내
+    click(&mut ui, "notes-find");
+    ui.simulate_input("zzz");
+    ui.run_until_parked();
+    assert!(ui.debug_bounds("tree-Inbox.md").is_none());
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert!(
+        ui.debug_bounds("tree-Inbox.md").is_some(),
+        "Esc 로 닫으면 원래 트리"
+    );
+}

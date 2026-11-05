@@ -1,0 +1,227 @@
+// 노트 트리에서 찾기(⌘F) — 지금 앱 TreeFind.tsx. 트리 판에 포커스가 있을 때만 ⌘F 를 받는다(본문의 ⌘F 와 겹치지 않게).
+// 찾기 줄은 트리 머리 아래 한 줄로 눕고, 맞은 것과 조상만 남긴 트리를 그린다(조상 폴더는 임시로 펼친다).
+// Enter = 지금 것 열기(파일이면 열고 닫는다, 폴더면 펼치기만), ↑↓ = 다음/이전, Esc = 닫기.
+
+use amber_gpui::i18n::t;
+use amber_gpui::tree_find;
+use gpui_kit::component::input::{Input, InputEvent, InputState};
+use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::*;
+
+use crate::Spike;
+use crate::assets::icon;
+use crate::day_card::Tag;
+use crate::theme::Tokens;
+
+pub struct TreeFindState {
+    pub input: Entity<InputState>,
+    pub query: String,
+    pub idx: usize,
+}
+
+impl Spike {
+    pub(crate) fn start_tree_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(f) = self.notes.find.as_ref() {
+            // 이미 열려 있으면 글자를 고른 채 다시 잡는다
+            f.input.update(cx, |s, cx| s.focus(window, cx));
+            return;
+        }
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(t("common.find.treePh")));
+        cx.subscribe_in(
+            &input,
+            window,
+            |this, input, ev: &InputEvent, _, cx| match ev {
+                InputEvent::Change => {
+                    if let Some(f) = this.notes.find.as_mut() {
+                        f.query = input.read(cx).value().to_string();
+                        f.idx = 0;
+                    }
+                    cx.notify();
+                }
+                InputEvent::PressEnter { .. } => {
+                    this.tree_find_open(cx);
+                    cx.notify();
+                }
+                _ => {}
+            },
+        )
+        .detach();
+        input.update(cx, |s, cx| s.focus(window, cx));
+        self.notes.find = Some(TreeFindState {
+            input,
+            query: String::new(),
+            idx: 0,
+        });
+    }
+
+    fn tree_find_matches(&self) -> Vec<tree_find::Match> {
+        match (self.notes.find.as_ref(), self.notes.tree.as_ref()) {
+            (Some(f), Some(tree)) => tree_find::filter_tree(tree, &f.query).matches,
+            _ => Vec::new(),
+        }
+    }
+
+    fn tree_find_step(&mut self, delta: i64) {
+        let n = self.tree_find_matches().len() as i64;
+        if let Some(f) = self.notes.find.as_mut()
+            && n > 0
+        {
+            f.idx = (f.idx as i64 + delta).rem_euclid(n) as usize;
+        }
+    }
+
+    /// Enter — 폴더면 펼치기만(찾기는 그대로), 파일이면 열고 찾기를 닫는다
+    fn tree_find_open(&mut self, cx: &mut Context<Self>) {
+        let idx = self.notes.find.as_ref().map_or(0, |f| f.idx);
+        let Some((path, is_dir)) = self.tree_find_matches().get(idx).cloned() else {
+            return;
+        };
+        if is_dir {
+            let n = &mut self.notes;
+            n.expanded.extend(amber_gpui::vault::ancestor_paths(&path));
+            n.active_dir = path;
+            return;
+        }
+        self.request_open_note(&path, cx);
+        self.notes.find = None;
+    }
+
+    /// 찾기 줄(.page-find.tree-find) — 돋보기, 입력, 몇 번째/몇 개, 이전, 다음, 닫기
+    pub(crate) fn tree_find_bar(
+        &self,
+        count: usize,
+        k: &Tokens,
+        cx: &mut Context<Self>,
+    ) -> Option<Div> {
+        let f = self.notes.find.as_ref()?;
+        let nav = |id: &'static str, name: &'static str, enabled: bool| {
+            let (bg, fg) = (k.surface_2, k.text_2);
+            div()
+                .id(id)
+                .tag(id)
+                .group(id)
+                .flex()
+                .p(px(3.))
+                .rounded(px(5.))
+                .when(!enabled, |d| d.opacity(0.5))
+                .when(enabled, |d| d.cursor_pointer().hover(move |s| s.bg(bg)))
+                .child(
+                    icon(name, 14.)
+                        .text_color(k.text_3)
+                        .group_hover(id, move |s| s.text_color(fg)),
+                )
+        };
+        let label = if count > 0 {
+            format!("{}/{count}", f.idx + 1)
+        } else if !f.query.trim().is_empty() {
+            "0".into()
+        } else {
+            String::new()
+        };
+        Some(
+            div()
+                .flex()
+                .flex_shrink_0()
+                .items_center()
+                .gap(px(6.))
+                .px(px(8.))
+                .py(px(5.))
+                .border_b_1()
+                .border_color(k.glass_edge)
+                .bg(linear_gradient(
+                    150.,
+                    linear_color_stop(k.glass_fill_hover.0, 0.),
+                    linear_color_stop(k.glass_fill_hover.1, 1.),
+                ))
+                .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+                    match e.keystroke.key.as_str() {
+                        "escape" => this.notes.find = None,
+                        "down" => this.tree_find_step(1),
+                        "up" => this.tree_find_step(-1),
+                        _ => return,
+                    }
+                    cx.stop_propagation();
+                    cx.notify();
+                }))
+                .child(icon("search", 14.).flex_shrink_0().text_color(k.text_3))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .text_size(px(13.))
+                        .child(Input::new(&f.input).appearance(false).px_0()),
+                )
+                .child(
+                    div()
+                        .id("tree-find-count")
+                        .tag("tree-find-count")
+                        .min_w(px(34.))
+                        .flex()
+                        .justify_end()
+                        .text_size(px(11.5))
+                        .text_color(k.text_3)
+                        .child(label),
+                )
+                .child(
+                    nav("tree-find-prev", "chevron-up", count > 0).on_click(cx.listener(
+                        |this, _, _, cx| {
+                            this.tree_find_step(-1);
+                            cx.notify();
+                        },
+                    )),
+                )
+                .child(
+                    nav("tree-find-next", "chevron-down", count > 0).on_click(cx.listener(
+                        |this, _, _, cx| {
+                            this.tree_find_step(1);
+                            cx.notify();
+                        },
+                    )),
+                )
+                .child(nav("tree-find-close", "x", true).on_click(cx.listener(
+                    |this, _, _, cx| {
+                        this.notes.find = None;
+                        cx.notify();
+                    },
+                ))),
+        )
+    }
+}
+
+/// 라벨 — 찾는 중이면 맞은 글자만 칠한다(회색, 지금 것은 노랑)
+pub fn label(name: &str, query: Option<&str>, current: bool, k: &Tokens) -> StyledText {
+    let Some(q) = query.filter(|q| !q.trim().is_empty()) else {
+        return StyledText::new(name.to_string());
+    };
+    let mut hl = Vec::new();
+    let mut at = 0;
+    for (text, hit) in tree_find::split_hit(name, q) {
+        let end = at + text.len();
+        if hit {
+            let bg = match (current, k.dark) {
+                (true, true) => hsla(43. / 360., 0.96, 0.40, 0.62),
+                (true, false) => hsla(50. / 360., 0.95, 0.53, 0.55),
+                (false, true) => hsla(240. / 360., 0.09, 0.66, 0.3),
+                (false, false) => hsla(240. / 360., 0.04, 0.49, 0.3),
+            };
+            hl.push((
+                at..end,
+                HighlightStyle {
+                    background_color: Some(bg),
+                    color: current.then_some(k.text),
+                    ..Default::default()
+                },
+            ));
+        }
+        at = end;
+    }
+    // 소문자로 바꾸며 길이가 변하는 글자(İ 등)는 조각이 원문과 어긋날 수 있다 — 그땐 칠하지 않는다
+    if at != name.len()
+        || hl
+            .iter()
+            .any(|(r, _)| !name.is_char_boundary(r.start) || !name.is_char_boundary(r.end))
+    {
+        return StyledText::new(name.to_string());
+    }
+    StyledText::new(name.to_string()).with_highlights(hl)
+}

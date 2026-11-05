@@ -14,6 +14,7 @@ mod markdown;
 mod menu;
 mod note;
 mod note_edit;
+mod note_find;
 mod note_names;
 mod notes_view;
 mod pane;
@@ -121,6 +122,8 @@ struct Spike {
     list_bounds: row_drag::ListBounds,
     /// 창 단축키(⌥⌘C 등)를 받는 뿌리 포커스 — 아무것도 포커스가 없으면 키가 창 뿌리에서 멈춘다
     focus: FocusHandle,
+    /// 노트 트리 판의 포커스 — 여기 있을 때의 ⌘F 는 트리 찾기
+    tree_focus: FocusHandle,
     started: Instant,
     first_frame: bool,
 }
@@ -236,6 +239,7 @@ impl Spike {
             row_bounds: Default::default(),
             list_bounds: Default::default(),
             focus: cx.focus_handle(),
+            tree_focus: cx.focus_handle(),
             started,
             first_frame: false,
         };

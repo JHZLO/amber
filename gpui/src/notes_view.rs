@@ -140,6 +140,8 @@ pub struct NotesState {
     pub tree_rows: crate::tree_drag::RowBounds,
     pub tree_area: crate::tree_drag::ListBounds,
     pub tree_press: Option<Point<Pixels>>,
+    /// 트리에서 찾기(⌘F)
+    pub find: Option<crate::note_find::TreeFindState>,
     /// 작업 폴더 고르기 판이 열렸는가, 트리거 자리
     pub root_menu: bool,
     pub root_anchor: Rc<Cell<Bounds<Pixels>>>,
@@ -407,12 +409,45 @@ impl Spike {
                     .pb(px(8.))
                     .pl(px(8.))
                     .pr(px(4.))
-                    .child(
-                        card(div().size_full().flex().flex_col().overflow_hidden()).children([
-                            self.tree_head(k, cx).into_any_element(),
-                            self.tree_list(k, cx).into_any_element(),
-                        ]),
-                    )
+                    .child({
+                        // 찾기 줄의 몇 개는 트리를 거른 결과로 센다
+                        let count = match (self.notes.find.as_ref(), self.notes.tree.as_ref()) {
+                            (Some(f), Some(tree)) => {
+                                amber_gpui::tree_find::filter_tree(tree, &f.query)
+                                    .matches
+                                    .len()
+                            }
+                            _ => 0,
+                        };
+                        // 트리 판 — 누르면 포커스를 가져가 그 뒤의 ⌘F 가 트리 찾기로 온다(본문의 ⌘F 와 안 겹치게)
+                        card(
+                            div()
+                                .track_focus(&self.tree_focus)
+                                .size_full()
+                                .flex()
+                                .flex_col()
+                                .overflow_hidden()
+                                .on_mouse_down(
+                                    MouseButton::Left,
+                                    cx.listener(|this, _, window, cx| {
+                                        if !this.tree_focus.contains_focused(window, cx) {
+                                            this.tree_focus.focus(window, cx);
+                                        }
+                                    }),
+                                )
+                                .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
+                                    let m = &e.keystroke.modifiers;
+                                    if m.platform && !m.alt && e.keystroke.key == "f" {
+                                        this.start_tree_find(window, cx);
+                                        cx.stop_propagation();
+                                        cx.notify();
+                                    }
+                                })),
+                        )
+                        .children([self.tree_head(k, cx).into_any_element()])
+                        .children(self.tree_find_bar(count, k, cx))
+                        .child(self.tree_list(k, cx))
+                    })
                     .child(self.pane_resizer(LIST_PANE, width, body_w, k, cx)),
             )
             .child(
@@ -534,7 +569,12 @@ impl Spike {
                     },
                 )),
             )
-            .child(icon_btn("notes-find", "search", 14.))
+            .child(icon_btn("notes-find", "search", 14.).on_click(cx.listener(
+                |this, _, window, cx| {
+                    this.start_tree_find(window, cx);
+                    cx.notify();
+                },
+            )))
             .child(
                 icon_btn("notes-refresh", "refresh", 14.).on_click(cx.listener(
                     |this, _, _, cx| {
@@ -607,27 +647,56 @@ impl Spike {
                     .child(t("notes.tree.empty.sub")),
             ),
             Some(tree) => {
+                // 찾는 중이면 맞은 것과 그 조상만, 조상은 임시로 펼친다
+                let found = self
+                    .notes
+                    .find
+                    .as_ref()
+                    .map(|f| amber_gpui::tree_find::filter_tree(tree, &f.query));
+                let hit = self.notes.find.as_ref().and_then(|f| {
+                    let cur = found.as_ref()?.matches.get(f.idx)?.0.clone();
+                    Some((f.query.clone(), cur))
+                });
+                let nodes = found
+                    .as_ref()
+                    .map_or(tree.as_slice(), |f| f.nodes.as_slice());
+                let auto: Vec<String> =
+                    found.as_ref().map(|f| f.expand.clone()).unwrap_or_default();
+                if found.is_some() && nodes.is_empty() {
+                    return list.child(
+                        div()
+                            .px(px(10.))
+                            .py(px(14.))
+                            .text_size(px(12.5))
+                            .text_color(k.text_3)
+                            .child(t("common.find.treeEmpty")),
+                    );
+                }
                 let mut rows = Vec::new();
-                self.tree_rows(tree, 0, &mut rows, k, cx);
+                self.tree_rows(nodes, 0, &auto, hit.as_ref(), &mut rows, k, cx);
                 list.children(rows)
             }
         }
     }
 
     /// 펼친 폴더만 자식을 그린다(1,000개 규모에서 접힌 것까지 그리면 수천 개가 살아 있다)
+    #[allow(clippy::too_many_arguments)]
     fn tree_rows(
         &self,
         nodes: &[Node],
         depth: usize,
+        auto: &[String],
+        hit: Option<&(String, String)>,
         out: &mut Vec<AnyElement>,
         k: &Tokens,
         cx: &mut Context<Self>,
     ) {
         for n in nodes {
-            let open = n.is_dir && self.notes.expanded.contains(&n.path);
-            out.push(self.tree_row(n, depth, open, k, cx).into_any_element());
+            let open =
+                n.is_dir && (self.notes.expanded.contains(&n.path) || auto.contains(&n.path));
+            out.push(self.tree_row(n, depth, open, hit, k, cx).into_any_element());
             if open && let Some(kids) = &n.children {
-                self.tree_rows(kids, depth + 1, out, k, cx);
+                self.tree_rows(kids, depth + 1, auto, hit, out, k, cx);
             }
         }
     }
@@ -637,9 +706,13 @@ impl Spike {
         n: &Node,
         depth: usize,
         open: bool,
+        hit: Option<&(String, String)>,
         k: &Tokens,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
+        // 찾기의 지금 결과 — 행 배경은 그대로 두고(연 것과 헷갈리지 않게) 가는 테와 노란 글자만
+        let find_current = hit.is_some_and(|(_, cur)| *cur == n.path);
+        let label = crate::note_find::label(&n.name, hit.map(|(q, _)| q.as_str()), find_current, k);
         let selected = !n.is_dir && self.notes.selected.as_deref() == Some(n.path.as_str());
         let active = n.is_dir && self.notes.active_dir == n.path;
         let fill = |pair: (Hsla, Hsla)| {
@@ -755,8 +828,11 @@ impl Spike {
                     .overflow_hidden()
                     .whitespace_nowrap()
                     .text_ellipsis()
-                    .child(n.name.clone()),
+                    .child(label),
             )
+            .when(find_current && !selected, |d| {
+                d.shadow(vec![Tokens::ring(k.border_strong, 1.)])
+            })
             .child(actions)
             .child(
                 canvas(
