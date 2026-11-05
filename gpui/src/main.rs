@@ -1,7 +1,7 @@
 // GPUI 시험판: 지금 앱의 셸(왼쪽 레일 + 작업 영역) 위에 할 일 하루치(DB 사본)와 노트 하나(글, svg, mermaid).
 // 확인하려는 것 — 한글 입력(IME), 그림이 지금 앱과 같게 나오는지, 시작 시간과 메모리. 탭 내용은 하나씩 옮긴다.
 //
-//   cargo run --release -- --db <amber.db 사본> --note <노트.md> [--date YYYY-MM-DD] [--jump 2-3]
+//   cargo run --release -- --db <amber.db 사본> [--note <보관함 기준 노트 경로>] [--date YYYY-MM-DD] [--jump 2-3]
 
 mod assets;
 mod calendar;
@@ -12,6 +12,7 @@ mod figure;
 mod markdown;
 mod menu;
 mod note;
+mod notes_view;
 mod pane;
 mod row_drag;
 #[cfg(feature = "shots")]
@@ -35,10 +36,9 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
 use crate::assets::icon;
+use crate::day_card::Tag;
 use crate::theme::Tokens;
 use amber_gpui::i18n::{self, t};
-
-const FIGURE_MAX: f32 = 688.0;
 
 /// 왼쪽 레일의 작업공간(App.tsx 의 RAIL) — 이름은 상단바 제목에도 쓴다
 /// 마지막으로 연 탭은 지금 앱처럼 til.section 에 남는다
@@ -64,16 +64,6 @@ const RAIL: [(Section, &str, &str, &str); 5] = [
     ),
 ];
 
-enum Block {
-    Text(SharedString),
-    /// light = 흰 판(mermaid). 지금 앱도 mermaid 는 밝은 판, svg 는 어두운 판에 놓는다
-    Figure {
-        fig: figure::Figure,
-        light: bool,
-    },
-    Broken(SharedString),
-}
-
 struct Spike {
     db: Db,
     date: String,
@@ -94,10 +84,8 @@ struct Spike {
     adding_child: Option<(i64, Entity<InputState>)>,
     confirm: Option<day_card::Confirm>,
     input: Entity<InputState>,
-    note_title: SharedString,
-    blocks: Vec<Block>,
-    /// 절 번호 → 노트 판의 자식 번호(제목으로 시작하는 글 덩어리)
-    sections: HashMap<String, usize>,
+    /// 노트 탭: 트리, 펼친 폴더, 고른 노트와 그 본문 덩어리, 판 폭
+    notes: notes_view::NotesState,
     scroll: ScrollHandle,
     section: Section,
     /// 앱 표식(책상 스탠드). 스탠드 색이 테마를 따르므로 테마별로 굽는다
@@ -134,8 +122,7 @@ impl Spike {
     fn new(
         db: Db,
         date: String,
-        note_path: &str,
-        skip: usize,
+        open: Option<String>,
         jump: Option<String>,
         started: Instant,
         window: &mut Window,
@@ -172,41 +159,6 @@ impl Spike {
         )
         .detach();
 
-        let source =
-            std::fs::read_to_string(note_path).unwrap_or_else(|e| format!("노트를 못 읽었다: {e}"));
-        // 노트 svg 의 currentColor = 본문 글자색(--text)
-        let text = hex(Tokens::get(cx).text);
-        // --skip: 앞 덩어리를 건너뛴다. 스크롤 입력을 못 보내는 환경에서 뒤쪽 그림을 찍으려고 둔다
-        let segments: Vec<_> = note::split(&source).into_iter().skip(skip).collect();
-        let mut sections = HashMap::new();
-        for (i, s) in segments.iter().enumerate() {
-            if let note::Segment::Markdown(md) = s
-                && let Some(sec) = note::section_of(md)
-            {
-                // 판의 첫 자식은 노트 제목이라 +1. 같은 번호가 또 나오면 앞의 것(querySelector 와 같다)
-                sections.entry(sec.to_string()).or_insert(i + 1);
-            }
-        }
-        let blocks = segments
-            .into_iter()
-            .map(|s| match s {
-                note::Segment::Markdown(md) => Block::Text(md.into()),
-                note::Segment::Svg(src) => figure::svg(&src, &text).map_or_else(
-                    |e| Block::Broken(format!("svg: {e}").into()),
-                    |fig| Block::Figure { fig, light: false },
-                ),
-                note::Segment::Mermaid(src) => figure::mermaid(&src).map_or_else(
-                    |e| Block::Broken(format!("mermaid: {e}").into()),
-                    |fig| Block::Figure { fig, light: true },
-                ),
-            })
-            .collect();
-        let note_title = std::path::Path::new(note_path)
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_default()
-            .into();
-
         let section = amber_gpui::prefs::get(&db, "til.section")
             .and_then(|id| RAIL.iter().find(|r| r.1 == id))
             .map_or(Section::Todo, |r| r.0);
@@ -230,6 +182,11 @@ impl Spike {
         let tt_view = tt_card::View::from_id(
             &amber_gpui::prefs::get(&db, "amber.todo.tt-view").unwrap_or_default(),
         );
+        // 지금 앱 usePaneResize: 범위 밖 값은 기본값으로
+        let notes_w = amber_gpui::prefs::get(&db, notes_view::LIST_PANE.key)
+            .and_then(|w| w.parse::<f32>().ok())
+            .filter(|w| (notes_view::LIST_PANE.min..=notes_view::LIST_PANE.max).contains(w))
+            .unwrap_or(notes_view::LIST_DEFAULT);
         let mut this = Spike {
             db,
             date,
@@ -246,9 +203,10 @@ impl Spike {
             adding_child: None,
             confirm: None,
             input,
-            note_title,
-            blocks,
-            sections,
+            notes: notes_view::NotesState {
+                width: notes_w,
+                ..Default::default()
+            },
             scroll: ScrollHandle::new(),
             section,
             mark: None,
@@ -276,6 +234,12 @@ impl Spike {
         this.reload();
         this.reload_calendar();
         this.reload_blocks();
+        if this.section == Section::Notes || open.is_some() {
+            this.reload_notes();
+        }
+        if let Some(rel) = open {
+            this.open_note(&rel, cx);
+        }
         if this.cal.unit == calendar::Unit::Week {
             this.input.update(cx, |s, cx| {
                 s.set_placeholder(t("todos.week.add"), window, cx)
@@ -294,13 +258,6 @@ impl Spike {
             .detach();
         }
         this
-    }
-
-    /// 절 링크 → 그 번호를 단 제목이 판 맨 위에 오게 (NotesView 의 data-sec 탐색)
-    fn jump(&self, sec: &str) {
-        if let Some(&ix) = self.sections.get(sec) {
-            self.scroll.scroll_to_top_of_item(ix);
-        }
     }
 
     /// listTodos 의 평평한 줄을 화면 순서(부모 아래 자식)로 편다. 부모가 이 날짜에 없는 자식은 맨 위로 — todoTree.visibleRoots
@@ -433,7 +390,7 @@ impl Render for Spike {
             });
         }
         let k = Tokens::get(cx);
-        let (fg, border) = (k.text, k.border);
+        let fg = k.text;
         // 창 밖에서 놓으면 GPUI 는 놓기(on_drop)를 건너뛰고 끌기를 취소한다. 지금 앱은 어디서 놓든
         // 놓은 것이다(window 의 mouseup) — 끌기가 끝났는데 상태가 남아 있으면 여기서 마저 놓는다
         if !cx.has_active_drag() {
@@ -447,69 +404,6 @@ impl Render for Spike {
                 self.pane_drop();
             }
         }
-        let this = cx.entity().downgrade();
-        let on_link: markdown::OnLink = {
-            let this = this.clone();
-            Arc::new(move |url, _, _, cx| match url.strip_prefix('#') {
-                Some(sec) => {
-                    let _ = this.update(cx, |s, cx| {
-                        s.jump(sec);
-                        cx.notify();
-                    });
-                }
-                None => cx.open_url(url),
-            })
-        };
-
-        let note = div()
-            .id("note")
-            .flex_1()
-            // 없으면 긴 줄이 판 너비를 밀어내 접히지 않는다
-            .min_w_0()
-            .h_full()
-            .overflow_y_scroll()
-            .track_scroll(&self.scroll)
-            .p_6()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(
-                div()
-                    .text_xl()
-                    .text_color(fg)
-                    .child(self.note_title.clone()),
-            )
-            .children(self.blocks.iter().enumerate().map(|(i, b)| {
-                match b {
-                    Block::Text(md) => markdown::text(
-                        ElementId::NamedInteger("md".into(), i as u64),
-                        md.clone(),
-                        on_link.clone(),
-                    )
-                    .into_any_element(),
-                    Block::Figure { fig, light } => div()
-                        .p_4()
-                        .border_1()
-                        .border_color(border)
-                        .rounded_md()
-                        .when(*light, |d| d.bg(gpui_kit::white()))
-                        .flex()
-                        .justify_center()
-                        .child({
-                            // 지금 앱의 .md-svg 처럼 본문 폭(720 - 안쪽 여백)을 넘지 않게 줄인다
-                            let w = fig.width.min(FIGURE_MAX);
-                            img(fig.image.clone())
-                                .w(px(w))
-                                .h(px(fig.height * w / fig.width))
-                        })
-                        .into_any_element(),
-                    Block::Broken(msg) => div()
-                        .text_color(gpui_kit::red())
-                        .child(msg.clone())
-                        .into_any_element(),
-                }
-            }));
-
         // 판 폭은 희망 폭 — 창이 좁으면 오른쪽 몫(340px)을 남기고 줄인다. 몸통은 레일을 뺀 전부다
         // (지금 앱의 .todo-body 처럼 서랍 칸도 몸통 안이다)
         let parked = self.parked_open && self.cal.unit == calendar::Unit::Day;
@@ -552,7 +446,7 @@ impl Render for Spike {
                 )
                 .when(parked, |d| d.child(self.drawer(&k, cx)))
                 .into_any_element(),
-            Section::Notes => note.into_any_element(),
+            Section::Notes => self.notes_body(body_w, &k, cx).into_any_element(),
             // 아직 옮기지 않은 탭 — 체크리스트(D)에서 하나씩
             _ => div().into_any_element(),
         };
@@ -579,6 +473,19 @@ impl Render for Spike {
                 day_card::Confirm::Parked { name, .. } => (
                     t("todos.parked.deleteTitle"),
                     i18n::t_with("todos.parked.deleteConfirm", &[("name", "{name}")]),
+                    name.clone(),
+                ),
+                day_card::Confirm::Note { name, is_dir, .. } => (
+                    t(if *is_dir {
+                        "notes.delete.folderTitle"
+                    } else {
+                        "notes.delete.noteTitle"
+                    }),
+                    t(if *is_dir {
+                        "notes.delete.confirmFolder"
+                    } else {
+                        "notes.delete.confirmNote"
+                    }),
                     name.clone(),
                 ),
                 day_card::Confirm::Block { name, .. } => (
@@ -661,6 +568,20 @@ impl Render for Spike {
 }
 
 impl Spike {
+    /// 본문 링크 — `#2-3` 은 이 노트의 절로, 나머지는 브라우저로
+    pub(crate) fn on_link(&self, cx: &mut Context<Self>) -> markdown::OnLink {
+        let this = cx.entity().downgrade();
+        Arc::new(move |url, _, _, cx| match url.strip_prefix('#') {
+            Some(sec) => {
+                let _ = this.update(cx, |s, cx| {
+                    s.jump(sec);
+                    cx.notify();
+                });
+            }
+            None => cx.open_url(url),
+        })
+    }
+
     /// .rail — 68px, 표식 + 작업공간 탭 + (아래로 밀린) 설정. 선을 긋지 않는다: 판과 같은 바닥이다
     fn rail(&mut self, k: &Tokens, cx: &mut Context<Self>) -> Div {
         if self.mark.as_ref().is_none_or(|(dark, _)| *dark != k.dark) {
@@ -680,6 +601,7 @@ impl Spike {
             );
             div()
                 .id(id)
+                .tag(id)
                 .w(px(54.))
                 .pt(px(9.))
                 .pb(px(7.))
@@ -728,6 +650,10 @@ impl Spike {
                     move |this, _, _, cx| {
                         this.section = section;
                         amber_gpui::prefs::set(&this.db, "til.section", id);
+                        // 탭에 들어올 때마다 트리를 다시 읽는다(Finder, git, 다른 편집기가 바꾼 것)
+                        if section == Section::Notes {
+                            this.reload_notes();
+                        }
                         cx.notify();
                     },
                 ))
@@ -743,7 +669,7 @@ impl Spike {
 }
 
 /// 토큰 색을 SVG 글자색("#rrggbb")으로
-fn hex(c: Hsla) -> String {
+pub(crate) fn hex(c: Hsla) -> String {
     let c = Rgba::from(c);
     let b = |v: f32| (v * 255.).round() as u8;
     format!("#{:02x}{:02x}{:02x}", b(c.r), b(c.g), b(c.b))
@@ -770,9 +696,8 @@ fn main() {
     }
     let started = Instant::now();
     let db_path = arg("--db").expect("--db <amber.db 사본>");
-    let note_path = arg("--note").expect("--note <노트.md>");
+    let note = arg("--note");
     let date = arg("--date").unwrap_or_else(|| chrono::Local::now().format("%Y-%m-%d").to_string());
-    let skip = arg("--skip").and_then(|s| s.parse().ok()).unwrap_or(0);
     let jump = arg("--jump");
 
     gpui_kit::application()
@@ -796,7 +721,7 @@ fn main() {
                 i18n::init(amber_gpui::prefs::get(&db, "amber.lang").as_deref());
                 let pref = amber_gpui::prefs::get(&db, "til.theme");
                 theme::apply(pref.as_deref(), window.appearance(), cx);
-                cx.new(|cx| Spike::new(db, date, &note_path, skip, jump, started, window, cx))
+                cx.new(|cx| Spike::new(db, date, note, jump, started, window, cx))
             })
             .expect("창을 못 열었다");
             cx.activate(true);

@@ -14,12 +14,27 @@ use crate::{Spike, assets, theme};
 
 const DATE: &str = "2026-11-05";
 
-fn seed(dir: &Path) -> (String, String) {
+fn seed(dir: &Path) -> String {
     let _ = std::fs::remove_dir_all(dir);
     std::fs::create_dir_all(dir).unwrap();
     let db_path = dir.join("amber.db");
-    let note = dir.join("note.md");
-    std::fs::write(&note, "# note\n").unwrap();
+    // 보관함 — 폴더 둘, 노트 셋
+    let notes = dir.join("vault/notes");
+    std::fs::create_dir_all(notes.join("Engineering/Runbooks")).unwrap();
+    std::fs::write(notes.join("Inbox.md"), "# Inbox\n\n- Read the GPUI docs\n").unwrap();
+    std::fs::write(
+        notes.join("Engineering/Runbooks/Release.md"),
+        "# Release\n\n1. Tag\n2. Push\n",
+    )
+    .unwrap();
+    std::fs::write(
+        notes.join("Engineering/Parity harness.md"),
+        "## 1. Why\n\nThe harness records every step of the **TypeScript** engine and replays it \
+against the Rust one. See [the steps](#2).\n\n> [!NOTE]\n> Fixtures live in `parity/fixtures`.\n\n\
+## 2. Steps\n\n- Record with `pnpm parity:record`\n- Replay with `pnpm parity`\n\n\
+```mermaid\nflowchart LR\n  TS[TS engine] --> F[(fixtures)]\n  F --> RS[Rust engine]\n```\n",
+    )
+    .unwrap();
     let db = Db::open(db_path.to_str().unwrap(), Clock::System).unwrap();
     amber_gpui::migrate::run(&db).unwrap();
     // 묶음 하나(하위 셋) + 낱개 셋
@@ -41,10 +56,7 @@ fn seed(dir: &Path) -> (String, String) {
     ] {
         amber_gpui::blocks::create_block(&db, DATE, s, e, title, None).unwrap();
     }
-    (
-        db_path.to_str().unwrap().to_string(),
-        note.to_str().unwrap().to_string(),
-    )
+    db_path.to_str().unwrap().to_string()
 }
 
 struct Shots {
@@ -98,8 +110,7 @@ impl Shots {
 }
 
 pub fn run(dir: &str) {
-    let (db, note) =
-        seed(&std::env::temp_dir().join(format!("amber-shots-{}", std::process::id())));
+    let db = seed(&std::env::temp_dir().join(format!("amber-shots-{}", std::process::id())));
     let mut cx = VisualTestAppContext::with_asset_source(
         gpui_kit::platform::current_platform(false),
         Arc::new(assets::Assets),
@@ -110,7 +121,7 @@ pub fn run(dir: &str) {
             amber_gpui::i18n::init(Some("en"));
             theme::apply(Some("dark"), WindowAppearance::Dark, cx);
             let db = Db::open(&db, Clock::System).unwrap();
-            cx.new(|cx| Spike::new(db, DATE.into(), &note, 0, None, Instant::now(), window, cx))
+            cx.new(|cx| Spike::new(db, DATE.into(), None, None, Instant::now(), window, cx))
         })
         .unwrap();
     std::fs::create_dir_all(dir).unwrap();
@@ -164,6 +175,7 @@ pub fn run(dir: &str) {
         MouseButton::Left,
         Modifiers::none(),
     );
+    notes(&mut s);
     for (name, level) in [
         ("cal-month", crate::calendar::Level::Month),
         ("cal-year", crate::calendar::Level::Year),
@@ -177,6 +189,28 @@ pub fn run(dir: &str) {
             .unwrap();
         s.shot(name);
     }
+}
+
+/// 노트 탭 — 폴더를 펼치고 노트 하나를 연다, 트리 행에 손을 올린 채
+fn notes(s: &mut Shots) {
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.section = crate::Section::Notes;
+            sp.reload_notes();
+            sp.notes.expanded.insert("Engineering".into());
+            sp.open_note("Engineering/Parity harness.md", cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.mouse(point(px(160.), px(150.)), false);
+    s.shot("notes-open");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.notes.selected = None;
+            cx.notify();
+        })
+        .unwrap();
+    s.shot("notes-empty");
 }
 
 /// 휴가 고르기 판 — 트리거 아래 유리 판, 첫 항목에 손을 올린 채

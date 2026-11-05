@@ -46,6 +46,12 @@ pub(crate) enum Confirm {
         id: i64,
         name: String,
     },
+    /// 노트 탭의 노트 또는 폴더 — 휴지통으로 간다(곁딸린 댓글, 그림도 함께)
+    Note {
+        rel: String,
+        name: String,
+        is_dir: bool,
+    },
     /// 타임테이블 블록
     Block {
         id: i64,
@@ -125,6 +131,7 @@ pub fn danger_button(id: impl Into<SharedString>, k: &Tokens) -> Stateful<Div> {
         .px(px(10.))
         .flex()
         .items_center()
+        .gap(px(6.))
         .rounded(px(6.))
         .border_1()
         .border_color(k.glass_edge)
@@ -1054,6 +1061,10 @@ impl Spike {
                 amber_gpui::todos::remove_carry(&self.db, id, &self.date)
             }
             Some(Confirm::Parked { id, .. }) => amber_gpui::todos::delete_todo(&self.db, id),
+            Some(Confirm::Note { rel, .. }) => self.delete_note(&rel).map_err(|e| {
+                eprintln!("deleteNote: {e}");
+                rusqlite::Error::InvalidQuery
+            }),
             Some(Confirm::Block { id, .. }) => {
                 let r = amber_gpui::blocks::delete_block(&self.db, id);
                 self.reload_blocks();

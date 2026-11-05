@@ -16,8 +16,8 @@ use crate::{Spike, theme};
 
 const DATE: &str = "2026-11-05";
 
-/// 임시 폴더에 마이그레이션을 깐 DB 와 빈 노트를 만들고, 할 일을 (내용, 부모 번호) 로 깐다
-fn seeded(name: &str, items: &[(&str, Option<usize>)]) -> (PathBuf, PathBuf) {
+/// 임시 폴더에 마이그레이션을 깐 DB 를 만들고, 할 일을 (내용, 부모 번호) 로 깐다
+fn seeded(name: &str, items: &[(&str, Option<usize>)]) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("amber-ui-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -29,16 +29,21 @@ fn seeded(name: &str, items: &[(&str, Option<usize>)]) -> (PathBuf, PathBuf) {
         let parent = parent.map(|i| ids[i]);
         ids.push(todos::create_todo(&db, content, DATE, parent, "day").unwrap());
     }
-    let note = dir.join("note.md");
-    std::fs::write(&note, "# note\n").unwrap();
-    (path, note)
+    path
 }
 
-fn open(cx: &mut TestAppContext, db: &PathBuf, note: &PathBuf) -> VisualTestContext {
-    let (db, note) = (
-        db.to_str().unwrap().to_string(),
-        note.to_str().unwrap().to_string(),
-    );
+fn open(cx: &mut TestAppContext, db: &PathBuf) -> VisualTestContext {
+    open_with(cx, db, Clock::System)
+}
+
+/// 고정 시계 — 지우기가 진짜 휴지통 대신 데이터 폴더의 .trash/<n> 으로 간다
+fn open_fixed(cx: &mut TestAppContext, db: &PathBuf) -> VisualTestContext {
+    let at = std::sync::Arc::new(std::sync::atomic::AtomicI64::new(1_700_000_000_000));
+    open_with(cx, db, Clock::Fixed(at))
+}
+
+fn open_with(cx: &mut TestAppContext, db: &PathBuf, clock: Clock) -> VisualTestContext {
+    let db = db.to_str().unwrap().to_string();
     let window = cx.update(|cx| {
         gpui_kit::init(cx);
         amber_gpui::i18n::init(Some("en"));
@@ -52,19 +57,8 @@ fn open(cx: &mut TestAppContext, db: &PathBuf, note: &PathBuf) -> VisualTestCont
             ..Default::default()
         };
         let (window, _) = gpui_kit::open_window(options, cx, move |window, cx| {
-            let db = Db::open(&db, Clock::System).unwrap();
-            cx.new(|cx| {
-                Spike::new(
-                    db,
-                    DATE.to_string(),
-                    &note,
-                    0,
-                    None,
-                    Instant::now(),
-                    window,
-                    cx,
-                )
-            })
+            let db = Db::open(&db, clock).unwrap();
+            cx.new(|cx| Spike::new(db, DATE.to_string(), None, None, Instant::now(), window, cx))
         })
         .unwrap();
         window
@@ -148,12 +142,12 @@ fn blocks_of(db: &PathBuf) -> Vec<(String, i64, i64, String)> {
 
 /// 블록 하나(10:00 - 11:00)를 깔고 연다
 fn with_block(cx: &mut TestAppContext, name: &str) -> (PathBuf, VisualTestContext) {
-    let (db, note) = seeded(name, &[]);
+    let db = seeded(name, &[]);
     {
         let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
         amber_gpui::blocks::create_block(&d, DATE, 600, 660, "Meeting", None).unwrap();
     }
-    let mut ui = open(cx, &db, &note);
+    let mut ui = open(cx, &db);
     scroll_tt_to(&mut ui, 570.);
     (db, ui)
 }
@@ -205,8 +199,8 @@ fn done_of(db: &PathBuf, id: i64) -> Option<i64> {
 
 #[gpui_kit::test]
 fn checking_a_row_marks_it_done(cx: &mut TestAppContext) {
-    let (db, note) = seeded("check", &[("first", None), ("second", None)]);
-    let mut ui = open(cx, &db, &note);
+    let db = seeded("check", &[("first", None), ("second", None)]);
+    let mut ui = open(cx, &db);
     click(&mut ui, "chk-2-false");
     assert_eq!(done_of(&db, 2), Some(1));
     assert_eq!(done_of(&db, 1), Some(0));
@@ -214,8 +208,8 @@ fn checking_a_row_marks_it_done(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn clicking_the_text_edits_it_and_enter_saves(cx: &mut TestAppContext) {
-    let (db, note) = seeded("edit", &[("old name", None)]);
-    let mut ui = open(cx, &db, &note);
+    let db = seeded("edit", &[("old name", None)]);
+    let mut ui = open(cx, &db);
     click(&mut ui, "txt-1-false");
     ui.simulate_keystrokes("cmd-a");
     ui.simulate_input("new name");
@@ -226,11 +220,11 @@ fn clicking_the_text_edits_it_and_enter_saves(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn deleting_asks_first_and_cancel_keeps_the_row(cx: &mut TestAppContext) {
-    let (db, note) = seeded(
+    let db = seeded(
         "delete",
         &[("group", None), ("child", Some(0)), ("other", None)],
     );
-    let mut ui = open(cx, &db, &note);
+    let mut ui = open(cx, &db);
     click(&mut ui, "del-1");
     click(&mut ui, "confirm-cancel");
     assert!(row(&db, 1).is_some());
@@ -243,8 +237,8 @@ fn deleting_asks_first_and_cancel_keeps_the_row(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn adding_a_sub_item_puts_it_under_its_parent(cx: &mut TestAppContext) {
-    let (db, note) = seeded("child", &[("parent", None)]);
-    let mut ui = open(cx, &db, &note);
+    let db = seeded("child", &[("parent", None)]);
+    let mut ui = open(cx, &db);
     click(&mut ui, "add-1");
     ui.simulate_input("kid");
     ui.simulate_keystrokes("enter");
@@ -257,32 +251,32 @@ fn adding_a_sub_item_puts_it_under_its_parent(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn parking_takes_the_date_off(cx: &mut TestAppContext) {
-    let (db, note) = seeded("park", &[("someday", None)]);
-    let mut ui = open(cx, &db, &note);
+    let db = seeded("park", &[("someday", None)]);
+    let mut ui = open(cx, &db);
     click(&mut ui, "park-1");
     assert!(get_i64(&row(&db, 1).unwrap(), "parked_at").is_some());
 }
 
 #[gpui_kit::test]
 fn bringing_overdue_items_moves_them_to_the_day(cx: &mut TestAppContext) {
-    let (db, note) = seeded("overdue", &[]);
+    let db = seeded("overdue", &[]);
     {
         let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
         todos::create_todo(&d, "late", "2026-11-01", None, "day").unwrap();
     }
-    let mut ui = open(cx, &db, &note);
+    let mut ui = open(cx, &db);
     click(&mut ui, "bring-all");
     assert_eq!(text(&row(&db, 1).unwrap(), "due_date"), DATE);
 }
 
 #[gpui_kit::test]
 fn the_calendar_and_week_unit_change_what_is_shown(cx: &mut TestAppContext) {
-    let (db, note) = seeded("calendar", &[("today item", None)]);
+    let db = seeded("calendar", &[("today item", None)]);
     {
         let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
         todos::create_todo(&d, "next day item", "2026-11-06", None, "day").unwrap();
     }
-    let mut ui = open(cx, &db, &note);
+    let mut ui = open(cx, &db);
     assert!(ui.debug_bounds("txt-1-false").is_some());
     click(&mut ui, "cal-2026-11-06");
     assert!(ui.debug_bounds("txt-2-false").is_some(), "고른 날의 목록");
@@ -301,12 +295,12 @@ fn the_calendar_and_week_unit_change_what_is_shown(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn pulling_from_the_drawer_brings_it_to_today(cx: &mut TestAppContext) {
-    let (db, note) = seeded("drawer", &[("someday", None)]);
+    let db = seeded("drawer", &[("someday", None)]);
     {
         let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
         todos::park_subtree(&d, 1).unwrap();
     }
-    let mut ui = open(cx, &db, &note);
+    let mut ui = open(cx, &db);
     click(&mut ui, "drawer");
     click(&mut ui, "tab-parked");
     click(&mut ui, "parked-1");
@@ -322,8 +316,8 @@ fn pulling_from_the_drawer_brings_it_to_today(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn dragging_a_row_up_puts_it_first(cx: &mut TestAppContext) {
-    let (db, note) = seeded("drag-order", &[("a", None), ("b", None), ("c", None)]);
-    let mut ui = open(cx, &db, &note);
+    let db = seeded("drag-order", &[("a", None), ("b", None), ("c", None)]);
+    let mut ui = open(cx, &db);
     let grip = bounds(&mut ui, "grip-3").center();
     let first = bounds(&mut ui, "txt-1-false");
     // 첫 줄의 가운데보다 위 = 맨 앞 자리. 가로로는 움직이지 않는다(깊이 그대로)
@@ -333,8 +327,8 @@ fn dragging_a_row_up_puts_it_first(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn dragging_right_makes_it_a_sub_item(cx: &mut TestAppContext) {
-    let (db, note) = seeded("drag-indent", &[("a", None), ("b", None)]);
-    let mut ui = open(cx, &db, &note);
+    let db = seeded("drag-indent", &[("a", None), ("b", None)]);
+    let mut ui = open(cx, &db);
     let grip = bounds(&mut ui, "grip-2").center();
     // 한 단(24px) 남짓 오른쪽 = 바로 위 줄의 하위
     drag(&mut ui, "grip-2", point(grip.x + px(30.), grip.y));
@@ -344,11 +338,11 @@ fn dragging_right_makes_it_a_sub_item(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn a_group_moves_with_its_children(cx: &mut TestAppContext) {
-    let (db, note) = seeded(
+    let db = seeded(
         "drag-group",
         &[("g", None), ("k1", Some(0)), ("k2", Some(0)), ("x", None)],
     );
-    let mut ui = open(cx, &db, &note);
+    let mut ui = open(cx, &db);
     let grip = bounds(&mut ui, "grip-1").center();
     let last = bounds(&mut ui, "txt-4-false");
     drag(&mut ui, "grip-1", point(grip.x, last.bottom() + px(12.)));
@@ -358,8 +352,8 @@ fn a_group_moves_with_its_children(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn dropping_in_place_changes_nothing(cx: &mut TestAppContext) {
-    let (db, note) = seeded("drag-noop", &[("a", None), ("b", None)]);
-    let mut ui = open(cx, &db, &note);
+    let db = seeded("drag-noop", &[("a", None), ("b", None)]);
+    let mut ui = open(cx, &db);
     let grip = bounds(&mut ui, "grip-1").center();
     // 집은 줄이 빠지면 아래 줄이 그 자리로 올라온다 — 원래 가운데보다 위에서 놓아야 제자리다(지금 앱과 같다)
     drag(&mut ui, "grip-1", point(grip.x, grip.y - px(4.)));
@@ -369,8 +363,8 @@ fn dropping_in_place_changes_nothing(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn dragging_on_the_grid_makes_a_block_and_asks_for_its_title(cx: &mut TestAppContext) {
-    let (db, note) = seeded("tt-create", &[]);
-    let mut ui = open(cx, &db, &note);
+    let db = seeded("tt-create", &[]);
+    let mut ui = open(cx, &db);
     scroll_tt_to(&mut ui, 570.);
     let grid = bounds(&mut ui, "tt-grid");
     let x = grid.center().x;
@@ -453,8 +447,8 @@ fn option_drag_on_a_block_makes_a_new_one_over_it(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn a_click_outside_saves_a_todo_edit(cx: &mut TestAppContext) {
-    let (db, note) = seeded("edit-out", &[("old name", None)]);
-    let mut ui = open(cx, &db, &note);
+    let db = seeded("edit-out", &[("old name", None)]);
+    let mut ui = open(cx, &db);
     click(&mut ui, "txt-1-false");
     ui.simulate_keystrokes("cmd-a");
     ui.simulate_input("new name");
@@ -464,8 +458,8 @@ fn a_click_outside_saves_a_todo_edit(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn a_click_outside_keeps_a_half_typed_sub_item(cx: &mut TestAppContext) {
-    let (db, note) = seeded("child-out", &[("parent", None)]);
-    let mut ui = open(cx, &db, &note);
+    let db = seeded("child-out", &[("parent", None)]);
+    let mut ui = open(cx, &db);
     click(&mut ui, "add-1");
     ui.simulate_input("kid");
     click(&mut ui, "cal-2026-11-05");
@@ -480,8 +474,8 @@ fn vacation_of(db: &PathBuf) -> Option<String> {
 
 #[gpui_kit::test]
 fn the_vacation_picker_sets_and_clears_the_day(cx: &mut TestAppContext) {
-    let (db, note) = seeded("vacation", &[]);
-    let mut ui = open(cx, &db, &note);
+    let db = seeded("vacation", &[]);
+    let mut ui = open(cx, &db);
     click(&mut ui, "vac");
     click(&mut ui, "vac-menu-1");
     assert_eq!(vacation_of(&db).as_deref(), Some("half"));
@@ -499,8 +493,8 @@ fn the_vacation_picker_sets_and_clears_the_day(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn the_calendar_title_drills_up_to_months_and_years(cx: &mut TestAppContext) {
-    let (db, note) = seeded("cal-pick", &[]);
-    let mut ui = open(cx, &db, &note);
+    let db = seeded("cal-pick", &[]);
+    let mut ui = open(cx, &db);
     click(&mut ui, "cal-title");
     assert!(ui.debug_bounds("pick-m-3").is_some(), "월 판");
     assert!(
@@ -521,8 +515,8 @@ fn the_calendar_title_drills_up_to_months_and_years(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn dragging_the_pane_edge_resizes_the_calendar_and_remembers_it(cx: &mut TestAppContext) {
-    let (db, note) = seeded("pane", &[]);
-    let mut ui = open(cx, &db, &note);
+    let db = seeded("pane", &[]);
+    let mut ui = open(cx, &db);
     let edge = bounds(&mut ui, "resizer-amber.todo.cal-width").center();
     drag(
         &mut ui,
@@ -550,8 +544,8 @@ fn dragging_the_pane_edge_resizes_the_calendar_and_remembers_it(cx: &mut TestApp
 
 #[gpui_kit::test]
 fn releasing_outside_the_window_still_drops(cx: &mut TestAppContext) {
-    let (db, note) = seeded("drag-outside", &[("a", None), ("b", None)]);
-    let mut ui = open(cx, &db, &note);
+    let db = seeded("drag-outside", &[("a", None), ("b", None)]);
+    let mut ui = open(cx, &db);
     let grip = bounds(&mut ui, "grip-2").center();
     let first = bounds(&mut ui, "txt-1-false");
     // 맨 앞 자리까지 끈 뒤 창 밖(왼쪽)에서 놓는다 — 슬롯은 마지막으로 고른 자리
@@ -570,4 +564,61 @@ fn releasing_outside_the_window_still_drops(cx: &mut TestAppContext) {
     ui.simulate_mouse_up(point(px(-50.), mid.y), MouseButton::Left, Modifiers::none());
     ui.run_until_parked();
     assert_eq!(order(&db, None), vec![2, 1]);
+}
+
+/// 보관함(데이터 폴더의 vault/notes)에 노트를 깐다
+fn vault_note(db: &PathBuf, rel: &str, body: &str) {
+    let path = db.parent().unwrap().join("vault/notes").join(rel);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, body).unwrap();
+}
+
+#[gpui_kit::test]
+fn the_tree_opens_folders_and_notes(cx: &mut TestAppContext) {
+    let db = seeded("notes-open", &[]);
+    vault_note(&db, "Eng/Parity.md", "# Parity\n\nbody\n");
+    vault_note(&db, "Inbox.md", "# Inbox\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    assert!(ui.debug_bounds("tree-Inbox.md").is_some());
+    assert!(
+        ui.debug_bounds("tree-Eng/Parity.md").is_none(),
+        "접힌 폴더의 노트는 안 보인다"
+    );
+    click(&mut ui, "tree-Eng");
+    click(&mut ui, "tree-Eng/Parity.md");
+    click(&mut ui, "note-copy");
+    assert_eq!(
+        ui.read_from_clipboard().and_then(|c| c.text()).as_deref(),
+        Some("# Parity\n\nbody\n"),
+        "복사는 노트 전문"
+    );
+    // 폴더를 다시 누르면 접힌다
+    click(&mut ui, "tree-Eng");
+    assert!(ui.debug_bounds("tree-Eng/Parity.md").is_none());
+}
+
+#[gpui_kit::test]
+fn deleting_a_note_asks_then_moves_it_to_the_trash(cx: &mut TestAppContext) {
+    let db = seeded("notes-delete", &[]);
+    vault_note(&db, "Inbox.md", "# Inbox\n");
+    let mut ui = open_fixed(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-Inbox.md");
+    click(&mut ui, "note-delete");
+    click(&mut ui, "confirm-cancel");
+    let dir = db.parent().unwrap();
+    assert!(dir.join("vault/notes/Inbox.md").exists());
+    click(&mut ui, "note-delete");
+    click(&mut ui, "confirm-delete");
+    assert!(!dir.join("vault/notes/Inbox.md").exists());
+    assert!(
+        dir.join(".trash/1/Inbox.md").exists(),
+        "지우지 않고 휴지통으로"
+    );
+    assert!(
+        ui.debug_bounds("note-copy").is_none(),
+        "열려 있던 노트는 닫힌다"
+    );
+    assert!(ui.debug_bounds("tree-Inbox.md").is_none());
 }

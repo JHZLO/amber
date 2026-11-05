@@ -102,15 +102,26 @@ impl Spike {
         let w = (d.start_w + f32::from(x - d.start_x))
             .min(hi)
             .max(d.grab.min);
-        let changed = (w - self.cal_w).abs() > 0.1;
-        self.cal_w = w;
+        let slot = self.pane_width(d.grab.key);
+        let changed = (w - *slot).abs() > 0.1;
+        *slot = w;
         changed
+    }
+
+    /// 판 키 → 그 판의 희망 폭
+    fn pane_width(&mut self, key: &str) -> &mut f32 {
+        if key == crate::notes_view::LIST_PANE.key {
+            &mut self.notes.width
+        } else {
+            &mut self.cal_w
+        }
     }
 
     /// 놓았다 — 이 판의 폭을 기억한다(판마다 따로)
     pub(crate) fn pane_drop(&mut self) {
         if let Some(d) = self.pane_drag.take() {
-            amber_gpui::prefs::set(&self.db, d.grab.key, &self.cal_w.round().to_string());
+            let w = *self.pane_width(d.grab.key);
+            amber_gpui::prefs::set(&self.db, d.grab.key, &w.round().to_string());
         }
     }
 }
