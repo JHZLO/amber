@@ -116,6 +116,56 @@ fn ko_compare(a: &str, b: &str) -> Ordering {
 
 // ---- 순수 계산(vaultTree.ts) ----
 
+/// 이미지 src 를 노트 폴더 기준 경로로 푼다(noteAssets.ts 의 resolveLocalSrc). 원격 URL, 스킴, 절대경로,
+/// 루트 밖으로 나가는 경로, 이미지가 아닌 확장자는 None — 그런 건 로컬에서 읽지 않는다
+pub fn resolve_local_src(base_dir: &str, src: &str) -> Option<String> {
+    let raw = js_trim(src);
+    let scheme = raw.split_once(':').is_some_and(|(s, _)| {
+        s.starts_with(|c: char| c.is_ascii_alphabetic())
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || "+.-".contains(c))
+    });
+    if raw.is_empty() || scheme || raw.starts_with('/') {
+        return None;
+    }
+    let rel = raw.split(['?', '#']).next().unwrap_or("");
+    let rel = percent_decode(rel)?;
+    let ext = rel.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase())?;
+    if !["png", "jpg", "jpeg", "gif", "webp"].contains(&ext.as_str()) {
+        return None;
+    }
+    let mut stack: Vec<&str> = base_dir.split('/').filter(|s| !s.is_empty()).collect();
+    for s in rel.split('/') {
+        match s {
+            "" | "." => {}
+            ".." => {
+                stack.pop()?;
+            }
+            _ => stack.push(s),
+        }
+    }
+    let lead = if base_dir.starts_with('/') { "/" } else { "" };
+    Some(format!("{lead}{}", stack.join("/")))
+}
+
+/// decodeURIComponent — 깨진 %XX 나 UTF-8 이 아니면 None
+fn percent_decode(s: &str) -> Option<String> {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' {
+            let hex = s.get(i + 1..i + 3)?;
+            out.push(u8::from_str_radix(hex, 16).ok()?);
+            i += 3;
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
 /// 상위 폴더의 상대경로 ('' = 루트)
 pub fn parent_of(rel: &str) -> &str {
     rel.rfind('/').map_or("", |i| &rel[..i])
@@ -251,6 +301,11 @@ impl<'a> Tree<'a> {
                 .then_with(|| ko_compare(&a.name, &b.name))
         });
         Ok(nodes)
+    }
+
+    /// 디스크의 실제 자리 — 노트 그림을 풀 기준 폴더 등
+    pub fn abs(&self, rel: &str) -> PathBuf {
+        self.path(rel)
     }
 
     /// 고친 시각(ms) — 읽기 화면 아래 '수정 N분 전'
@@ -652,6 +707,25 @@ pub fn delete_concept_dir(db: &Db, ulid: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn local_image_src_stays_inside_and_decodes() {
+        use super::resolve_local_src as r;
+        assert_eq!(
+            r("/v/notes/TIL", "_assets/a%20b.png").as_deref(),
+            Some("/v/notes/TIL/_assets/a b.png")
+        );
+        assert_eq!(
+            r("/v/notes/TIL", "../x.JPG?raw=1").as_deref(),
+            Some("/v/notes/x.JPG")
+        );
+        assert_eq!(r("a", "../../x.png"), None, "루트 밖");
+        assert_eq!(r("/v", "https://x/y.png"), None);
+        assert_eq!(r("/v", "/abs.png"), None);
+        assert_eq!(r("/v", "x.txt"), None);
+        assert_eq!(r("/v", "%E0%A4%A.png"), None, "깨진 % 코드");
+    }
+
     use super::*;
 
     #[test]

@@ -121,22 +121,37 @@ fn note_style(k: &Tokens) -> TextViewStyle {
         .with_dark(k.dark)
 }
 
+/// base = 노트 폴더의 실제 자리. `![](_assets/…)` 처럼 그 폴더 기준 상대경로 그림을 거기서 읽는다
 pub fn text(
     id: impl Into<ElementId>,
     md: impl Into<SharedString>,
     on_link: OnLink,
     k: &Tokens,
+    base: Option<SharedString>,
 ) -> TextView {
     let click = on_link.clone();
+    let img_base = base.clone();
     TextView::markdown(id, md)
         .style(note_style(k))
+        // 원격 URL 이나 기준 폴더가 없는 곳은 주소 그대로
+        .image_source(move |uri| {
+            match img_base
+                .as_deref()
+                .and_then(|b| amber_gpui::vault::resolve_local_src(b, uri.as_ref()))
+            {
+                Some(p) => ImageSource::from(std::sync::Arc::<std::path::Path>::from(
+                    std::path::PathBuf::from(p),
+                )),
+                None => ImageSource::from(uri.clone()),
+            }
+        })
         .text_size(px(14.))
         .line_height(relative(1.7))
         .selectable(true)
         .on_link_click(move |url, ev, window, cx| click(url, ev, window, cx))
         .markdown_block_parser(parse_alert)
         .markdown_block_renderer("alert", move |node, _, cx| {
-            render_alert(node, &Tokens::get(cx), on_link.clone())
+            render_alert(node, &Tokens::get(cx), on_link.clone(), base.clone())
         })
         .markdown_block_parser(parse_code)
         .markdown_block_renderer("code", |node, _, cx| render_code(node, &Tokens::get(cx)))
@@ -310,7 +325,12 @@ fn parse_alert(node: &markdown_ast::Node, cx: &MarkdownParseContext) -> Option<M
     ))
 }
 
-fn render_alert(node: &MarkdownNode, k: &Tokens, on_link: OnLink) -> AnyElement {
+fn render_alert(
+    node: &MarkdownNode,
+    k: &Tokens,
+    on_link: OnLink,
+    base: Option<SharedString>,
+) -> AnyElement {
     let dark = k.dark;
     let Some(alert) = node.data::<Alert>() else {
         return div().into_any_element();
@@ -348,7 +368,7 @@ fn render_alert(node: &MarkdownNode, k: &Tokens, on_link: OnLink) -> AnyElement 
                 .child(t(label)),
         )
         .when(!alert.body.trim().is_empty(), |d| {
-            d.child(text(id, alert.body.clone(), on_link, k))
+            d.child(text(id, alert.body.clone(), on_link, k, base))
         })
         .into_any_element()
 }

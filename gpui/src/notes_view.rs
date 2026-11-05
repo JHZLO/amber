@@ -128,6 +128,8 @@ pub struct NotesState {
     /// 목차 — (덩어리 번호, 단계 1~3, 글자). 두 개 이상일 때만 보인다
     pub toc: Vec<(usize, u8, String)>,
     pub mtime: Option<i64>,
+    /// 고른 노트 폴더의 실제 자리 — 본문 그림(`_assets/…`)을 푸는 기준
+    pub asset_base: Option<SharedString>,
     pub width: f32,
     pub copied: bool,
     /// 기본(open 속성)에서 뒤집힌 토글 — 노트를 바꾸면 비운다
@@ -238,6 +240,13 @@ impl Spike {
         n.copied = false;
         let dir = vault::parent_of(rel).to_string();
         n.expanded.extend(ancestors(&dir));
+        n.asset_base = Some(
+            vault::notes(&self.db)
+                .abs(&dir)
+                .to_string_lossy()
+                .into_owned()
+                .into(),
+        );
         n.active_dir = dir;
         match vault::notes(&self.db).read_file(rel) {
             Ok(body) => {
@@ -835,6 +844,7 @@ impl Spike {
                 md.clone(),
                 on_link.clone(),
                 k,
+                self.notes.asset_base.clone(),
             )
             .into_any_element(),
             Block::Figure { fig, light } => div()

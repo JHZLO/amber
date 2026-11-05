@@ -3,6 +3,8 @@
 A paragraph with **bold**, *italic*, `inline code`, a [link](https://example.com) and a section link [[2|the steps]].
 It wraps onto a second line so the line height shows.
 
+![logo](_assets/logo.png)
+
 ## 1. Lists
 
 - First item

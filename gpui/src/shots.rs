@@ -22,6 +22,12 @@ fn seed(dir: &Path) -> String {
     let notes = dir.join("vault/notes");
     std::fs::create_dir_all(notes.join("Engineering/Runbooks")).unwrap();
     std::fs::write(notes.join("Inbox.md"), "# Inbox\n\n- Read the GPUI docs\n").unwrap();
+    std::fs::create_dir_all(notes.join("_assets")).unwrap();
+    std::fs::write(
+        notes.join("_assets/logo.png"),
+        include_bytes!("../../src-tauri/icons/128x128.png"),
+    )
+    .unwrap();
     // 읽기 충실도 견본 — 지금 앱(웹)과 나란히 찍어 맞춘다
     std::fs::write(
         notes.join("Reading.md"),
