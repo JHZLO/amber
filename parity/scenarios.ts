@@ -978,6 +978,41 @@ function notesWalk(seed: number, length: number): Scenario["walk"] {
   };
 }
 
+/** 트리 화면의 순수 계산 — 이름 규칙(빈 이름, 금지 글자, 점, 80자 UTF-16), 경로 정리, 접두사 다시 잇기 */
+const vaultTreePure: Scenario = {
+  name: "vaultTree/pure",
+  plan() {
+    const names = [
+      "", "  ", "ok", " ok ", "\u00a0ok\u00a0", "\ufeffbom", "a/b", "a\\b", "a:b", ".hidden", " .x",
+      "x".repeat(80), "x".repeat(81), "한".repeat(80), "한".repeat(81), "😀".repeat(40), "😀".repeat(41), "노트 1",
+    ];
+    const paths = ["", "/", "CS/네트워크", "a//b", "a/.b", "a/b:c", " a / b ", "a/" + "x".repeat(81), "///"];
+    const steps: Step[] = [];
+    for (const n of names) steps.push(s("vaultTree.invalidNameReason", n));
+    for (const p of paths) steps.push(s("vaultTree.invalidPathReason", p), s("vaultTree.normalizePath", p));
+    for (const p of ["", "a", "a/b", "a/b/c.md", "/a//b/"]) steps.push(s("vaultTree.parentOf", p), s("vaultTree.ancestorPaths", p));
+    for (const [p, o, n] of [
+      ["CS", "CS", "X"], ["CS/a.md", "CS", "X"], ["CS수업.md", "CS", "X"], ["a", "CS", "X"],
+      ["CS/깊이/x.md", "CS/깊이", "CS/얕게"], ["CS/", "CS", "X/Y"], ["", "", "X"],
+    ])
+      steps.push(s("vaultTree.remapPath", p, o, n));
+    steps.push(
+      s("vaultTree.remapPaths", ["CS", "CS/a", "CS수업", "X"], "CS", "X"),
+      s("vaultTree.remapPaths", [], "CS", "X"),
+      s("vaultTree.flattenDirs", []),
+      s("vaultTree.flattenDirs", [
+        { name: "CS", path: "CS", isDir: true, children: [
+          { name: "깊이", path: "CS/깊이", isDir: true, children: [{ name: "x", path: "CS/깊이/x.md", isDir: false }] },
+          { name: "노트", path: "CS/노트.md", isDir: false },
+        ] },
+        { name: "빈", path: "빈", isDir: true },
+        { name: "a", path: "a.md", isDir: false },
+      ]),
+    );
+    return steps;
+  },
+};
+
 export const SCENARIOS: Scenario[] = [
   todosTreeBasics,
   todosDoneChain,
@@ -1002,6 +1037,7 @@ export const SCENARIOS: Scenario[] = [
   dates,
   todoTrees,
   timetable,
+  vaultTreePure,
   conceptNotes,
   erdFiles,
   ...Array.from({ length: 4 }, (_, i) => ({

@@ -145,6 +145,18 @@ export const OPS: Record<string, Op> = {
   "erdStore.deleteErdEntry": erdStore.deleteErdEntry,
 
   "vaultTree.writeAtomic": vaultTree.writeAtomic,
+  // 트리 화면이 쓰는 순수 계산 — 이름 검증, 만들 자리 목록, 이름이 바뀐 폴더 아래 경로 다시 잇기
+  "vaultTree.parentOf": vaultTree.parentOf,
+  "vaultTree.invalidNameReason": vaultTree.invalidNameReason,
+  "vaultTree.invalidPathReason": vaultTree.invalidPathReason,
+  "vaultTree.normalizePath": vaultTree.normalizePath,
+  "vaultTree.flattenDirs": vaultTree.flattenDirs,
+  "vaultTree.ancestorPaths": vaultTree.ancestorPaths,
+  "vaultTree.remapPath": vaultTree.remapPath,
+  // Set 은 배열로 오간다
+  "vaultTree.remapPaths": (paths: string[], oldPrefix: string, newPrefix: string) => [
+    ...vaultTree.remapPaths(paths, oldPrefix, newPrefix),
+  ],
   // 검색 화면(SearchModal)이 부르는 그대로 — 트리와 읽기를 노트 또는 다이어그램 쪽으로 묶는다
   "vaultTree.searchFiles": (section: "notes" | "diagrams", query: string, limit?: number) =>
     vaultTree.searchFiles(
@@ -258,12 +270,4 @@ export const PURE = new Set([
   "vacations.vacationLabel",
   "notes.noteDirPath",
   "vault.detailPathFor",
-  "vaultTree.parentOf",
-  "vaultTree.invalidNameReason",
-  "vaultTree.invalidPathReason",
-  "vaultTree.normalizePath",
-  "vaultTree.flattenDirs",
-  "vaultTree.ancestorPaths",
-  "vaultTree.remapPath",
-  "vaultTree.remapPaths",
 ]);
