@@ -1,4 +1,5 @@
 pub mod blocks;
+pub mod comments;
 pub mod concepts;
 pub mod dates;
 pub mod db;
@@ -120,6 +121,12 @@ pub const OPS: &[&str] = &[
     "treeFind.hits",
     "treeFind.filterTree",
     "treeFind.splitHit",
+    "comments.commentsPathFor",
+    "comments.readComments",
+    "comments.loadComments",
+    "comments.mutateComments",
+    "comments.saveComments",
+    "noteAnchor.nthIndex",
     "date.todayStr",
     "date.shiftDay",
     "date.addMonths",
@@ -292,6 +299,9 @@ pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
 
 /// vault 파일 op — DB 쪽과 결과 모양이 같다(경로는 문자열, 없음은 null)
 fn call_files(db: &Db, op: &str, a: &Args) -> Result<Json, String> {
+    if let Some(r) = comments::call(db, op, a.0) {
+        return r;
+    }
     use vault::{DIAGRAMS, ERD, Tree};
     fn json<T: serde::Serialize>(v: Result<T, String>) -> Result<Json, String> {
         v.and_then(|v| serde_json::to_value(v).map_err(|e| e.to_string()))

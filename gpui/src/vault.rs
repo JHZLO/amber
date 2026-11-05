@@ -341,7 +341,7 @@ impl<'a> Tree<'a> {
         Tree { db, cfg, root }
     }
 
-    fn full(&self, rel: &str) -> String {
+    pub fn full(&self, rel: &str) -> String {
         if rel.is_empty() {
             self.root.clone()
         } else {
