@@ -8,6 +8,7 @@
 //  - PURE: DB 와 파일을 안 쓰는 계산 — 동기 함수여야 한다
 
 import * as comments from "../src/lib/comments";
+import * as config from "../src/lib/config";
 import * as date from "../src/lib/date";
 import * as db from "../src/lib/db";
 import * as dbconn from "../src/lib/dbconn";
@@ -50,6 +51,7 @@ export const MODULES = [
   "ttLayout",
   "treeFind",
   "comments",
+  "config",
   "noteAnchor",
 ] as const;
 
@@ -163,6 +165,12 @@ export const OPS: Record<string, Op> = {
   "vaultTree.remapPaths": (paths: string[], oldPrefix: string, newPrefix: string) => [
     ...vaultTree.remapPaths(paths, oldPrefix, newPrefix),
   ],
+
+  // AI 연결 설정 — 옛 키(claude_path) 이전, 걸러지는 제공자(gemini), 제공자별 경로와 모델
+  "config.loadConfig": config.loadConfig,
+  "config.connectProvider": config.connectProvider,
+  "config.skipAiOnboarding": config.skipAiOnboarding,
+  "config.saveConfig": config.saveConfig,
 
   // 노트 인라인 질문의 사이드카 — 못 읽은 파일을 빈 목록으로 뭉개지 않는다(덮으면 문답이 사라진다)
   "comments.commentsPathFor": comments.commentsPathFor,

@@ -1,0 +1,17 @@
+{
+  "format": 1,
+  "name": "config/gemini",
+  "tz": "Asia/Seoul",
+  "start": 1793836800000,
+  "seed": [
+    {
+      "sql": "INSERT INTO settings (key, value) VALUES ('ai_provider', 'gemini'), ('ai_onboarded', '1'), ('ai_lang', 'xx')"
+    }
+  ],
+  "final": "e395c1195eb598b3ef92b9179ddafe58aa6d76f058b15aba1e93176eea6db4f3",
+  "steps": [
+    {"op":"config.loadConfig","args":[],"at":1793836800000,"ok":true,"result":{"provider":null,"onboarded":true,"cliPath":"","model":"","aiLang":"auto"},"changes":{}},
+    {"op":"config.skipAiOnboarding","args":[],"at":1793836801000,"ok":true,"result":{"provider":null,"onboarded":true,"cliPath":"","model":"","aiLang":"auto"},"changes":{}},
+    {"op":"config.connectProvider","args":["codex",""],"at":1793836802000,"ok":true,"result":{"provider":"codex","onboarded":true,"cliPath":"","model":"","aiLang":"auto"},"changes":{"settings":{"added":[{"key":"ai_path_codex","value":""}],"removed":[],"changed":[{"before":{"key":"ai_provider","value":"gemini"},"after":{"key":"ai_provider","value":"codex"}}]}}}
+  ]
+}

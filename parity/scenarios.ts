@@ -1100,6 +1100,36 @@ const commentFiles: Scenario = {
   },
 };
 
+/** AI 연결 설정 — 빈 판, 옛 claude_path 이전, gemini 는 미연결, 연결/건너뛰기/저장 */
+const aiConfig: Scenario = {
+  name: "config/ai",
+  seed: [
+    { sql: "INSERT INTO settings (key, value) VALUES ('claude_path', '/usr/local/bin/claude'), ('claude_model', 'claude-opus-5')" },
+  ],
+  plan() {
+    return [
+      s("config.loadConfig"),
+      s("config.loadConfig"),
+      s("config.saveConfig", { provider: "claude", onboarded: true, cliPath: "  /opt/claude  ", model: "", aiLang: "en" }),
+      s("config.loadConfig"),
+      s("config.connectProvider", "codex", " /usr/bin/codex ", "gpt-5.5"),
+      s("config.connectProvider", "claude", "/x/claude"),
+      s("config.saveConfig", { provider: null, onboarded: true, cliPath: "", model: "", aiLang: "ko" }),
+      s("config.skipAiOnboarding"),
+    ];
+  },
+};
+
+const aiConfigGemini: Scenario = {
+  name: "config/gemini",
+  seed: [
+    { sql: "INSERT INTO settings (key, value) VALUES ('ai_provider', 'gemini'), ('ai_onboarded', '1'), ('ai_lang', 'xx')" },
+  ],
+  plan() {
+    return [s("config.loadConfig"), s("config.skipAiOnboarding"), s("config.connectProvider", "codex", "")];
+  },
+};
+
 export const SCENARIOS: Scenario[] = [
   todosTreeBasics,
   todosDoneChain,
@@ -1127,6 +1157,8 @@ export const SCENARIOS: Scenario[] = [
   vaultTreePure,
   treeFindSweep,
   commentFiles,
+  aiConfig,
+  aiConfigGemini,
   conceptNotes,
   erdFiles,
   ...Array.from({ length: 4 }, (_, i) => ({

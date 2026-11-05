@@ -1,0 +1,22 @@
+{
+  "format": 1,
+  "name": "config/ai",
+  "tz": "Asia/Seoul",
+  "start": 1793836800000,
+  "seed": [
+    {
+      "sql": "INSERT INTO settings (key, value) VALUES ('claude_path', '/usr/local/bin/claude'), ('claude_model', 'claude-opus-5')"
+    }
+  ],
+  "final": "7012cb951698572df73b5ebcfc85aca7c5adbf956d8ede177ba34fc470dd9488",
+  "steps": [
+    {"op":"config.loadConfig","args":[],"at":1793836800000,"ok":true,"result":{"provider":"claude","onboarded":true,"cliPath":"/usr/local/bin/claude","model":"claude-opus-5","aiLang":"auto"},"changes":{"settings":{"added":[{"key":"ai_model_claude","value":"claude-opus-5"},{"key":"ai_onboarded","value":"1"},{"key":"ai_path_claude","value":"/usr/local/bin/claude"},{"key":"ai_provider","value":"claude"}],"removed":[],"changed":[]}}},
+    {"op":"config.loadConfig","args":[],"at":1793836801000,"ok":true,"result":{"provider":"claude","onboarded":true,"cliPath":"/usr/local/bin/claude","model":"claude-opus-5","aiLang":"auto"},"changes":{}},
+    {"op":"config.saveConfig","args":[{"provider":"claude","onboarded":true,"cliPath":"  /opt/claude  ","model":"","aiLang":"en"}],"at":1793836802000,"ok":true,"result":null,"changes":{"settings":{"added":[{"key":"ai_lang","value":"en"}],"removed":[],"changed":[{"before":{"key":"ai_model_claude","value":"claude-opus-5"},"after":{"key":"ai_model_claude","value":""}},{"before":{"key":"ai_path_claude","value":"/usr/local/bin/claude"},"after":{"key":"ai_path_claude","value":"/opt/claude"}}]}}},
+    {"op":"config.loadConfig","args":[],"at":1793836803000,"ok":true,"result":{"provider":"claude","onboarded":true,"cliPath":"/opt/claude","model":"","aiLang":"en"},"changes":{}},
+    {"op":"config.connectProvider","args":["codex"," /usr/bin/codex ","gpt-5.5"],"at":1793836804000,"ok":true,"result":{"provider":"codex","onboarded":true,"cliPath":"/usr/bin/codex","model":"gpt-5.5","aiLang":"en"},"changes":{"settings":{"added":[{"key":"ai_model_codex","value":"gpt-5.5"},{"key":"ai_path_codex","value":"/usr/bin/codex"}],"removed":[],"changed":[{"before":{"key":"ai_provider","value":"claude"},"after":{"key":"ai_provider","value":"codex"}}]}}},
+    {"op":"config.connectProvider","args":["claude","/x/claude"],"at":1793836805000,"ok":true,"result":{"provider":"claude","onboarded":true,"cliPath":"/x/claude","model":"","aiLang":"en"},"changes":{"settings":{"added":[],"removed":[],"changed":[{"before":{"key":"ai_path_claude","value":"/opt/claude"},"after":{"key":"ai_path_claude","value":"/x/claude"}},{"before":{"key":"ai_provider","value":"codex"},"after":{"key":"ai_provider","value":"claude"}}]}}},
+    {"op":"config.saveConfig","args":[{"provider":null,"onboarded":true,"cliPath":"","model":"","aiLang":"ko"}],"at":1793836806000,"ok":true,"result":null,"changes":{"settings":{"added":[],"removed":[],"changed":[{"before":{"key":"ai_lang","value":"en"},"after":{"key":"ai_lang","value":"ko"}}]}}},
+    {"op":"config.skipAiOnboarding","args":[],"at":1793836807000,"ok":true,"result":{"provider":"claude","onboarded":true,"cliPath":"/x/claude","model":"","aiLang":"ko"},"changes":{}}
+  ]
+}
