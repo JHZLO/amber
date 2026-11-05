@@ -21,6 +21,8 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
+# Tauri 에 묶이지 않은 Rust(AI, 리포트 수집, 외부 DB, 키체인 등) — GPUI 앱과 같이 쓴다
+amber-core = { path = "../core", features = ["tauri"] }
 serde_json = "1"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-fs = { version = "2", features = ["watch"] }
@@ -28,15 +30,6 @@ tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tokio = { version = "1", features = ["process", "io-util", "time", "rt", "macros", "sync"] }
 trash = "5"
-# AI CLI 자식 프로세스 취소·종료 정리용 kill(2). tokio 의 kill_on_drop 은 트레이 "종료"(process::exit)에서
-# Drop 이 안 돌아 발화하지 않는다.
-libc = "0.2"
-# DB 스키마 연동(dbconn.rs) — MySQL information_schema 를 읽기 전용으로 introspect 한다.
-# tauri-plugin-sql 이 이미 끌어온 sqlx 0.8 과 같은 계열이라 한 번만 컴파일된다
-# (다른 메이저를 고르면 sqlx 가 통째로 두 번 빌드된다). TLS 는 rustls — 시스템 OpenSSL 의존 없음.
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "mysql"] }
-# 접속 비밀번호는 macOS 키체인에만(/usr/bin/security 로 읽고 쓴다 — dbconn.rs "키체인" 절) — amber.db·파일·로그
-# 어디에도 쓰지 않는다. keyring 크레이트를 쓰지 않는 이유도 거기에 적혀 있다(빌드마다 뜨는 접근 확인창).
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-window-state = "2"

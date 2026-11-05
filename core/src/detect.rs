@@ -54,7 +54,7 @@ async fn probe_version(path: &str) -> Option<String> {
 }
 
 /// 설치된 AI CLI 목록 감지 (후보 동시 조회 — 로그인 셸 기동 지연이 곱해지지 않게)
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn detect_ai_clis() -> Vec<DetectedCli> {
     let handles: Vec<_> = CANDIDATES
         .iter()
@@ -93,7 +93,7 @@ pub struct ModelInfo {
 
 /// Codex 가 서버에서 받아 둔 모델 카탈로그(`$CODEX_HOME|~/.codex/models_cache.json`). codex TUI 의 /model 목록이
 /// 쓰는 파일이라 CLI 가 아는 모델과 같다. 없거나 깨졌으면 빈 벡터 — 프론트가 큐레이션 목록으로 돌아간다.
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn codex_models() -> Vec<ModelInfo> {
     let dir = std::env::var("CODEX_HOME")
         .ok()

@@ -18,13 +18,6 @@ const SHELL_TIMEOUT_SECS: u64 = 6;
 
 static PATH: OnceCell<String> = OnceCell::const_new();
 
-/// 앱 시작 직후 미리 읽어 둔다 — 첫 CLI 호출이 셸 기동을 기다리지 않게
-pub fn prewarm() {
-    tauri::async_runtime::spawn(async {
-        path().await;
-    });
-}
-
 /// 자식 프로세스에 줄 PATH (셸 PATH + 지금 PATH + 흔한 설치 위치)
 pub async fn path() -> &'static str {
     PATH.get_or_init(load).await

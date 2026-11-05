@@ -336,7 +336,7 @@ async fn password_for(ulid: &str) -> Result<String, AiError> {
 
 /// 비밀번호를 키체인에 저장한다. IPC 를 지나는 유일한 순간 — 이후 프론트는 비밀번호를 모른다.
 /// 프로필이 바뀌었을 수 있으니 이 연결의 풀도 버린다(다음 접속이 새 비밀번호로 열리게).
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn db_secret_set(ulid: String, password: String) -> Result<(), AiError> {
     if password.is_empty() {
         return Err(AiError::new(
@@ -353,7 +353,7 @@ pub async fn db_secret_set(ulid: String, password: String) -> Result<(), AiError
 }
 
 /// 키체인 항목 삭제 (연결 삭제 시). 항목이 없으면 멱등 성공.
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn db_secret_delete(ulid: String) -> Result<(), AiError> {
     drop_pool(&ulid);
     forget_secret(&ulid);
@@ -658,7 +658,7 @@ fn now_ms() -> i64 {
 
 /// 저장 전 연결 확인. 비밀번호를 안 주면 키체인에서 읽는다(편집 모달·설정의 재검사).
 /// 계정 명령 연결은 계정마다 자기 스키마만 보이므로 `schemas` 로 받은 스키마마다 따로 붙어 본다.
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn db_test(
     profile: DbProfile,
     password: Option<String>,
@@ -816,7 +816,7 @@ async fn probe(
 
 /// 스키마 하나의 구조 스냅샷. 여러 스키마는 프론트가 순차 호출한다(진행 표시가 트리 행 단위라 자연스럽다).
 /// 취소 커맨드는 두지 않는다 — 다섯 쿼리 각각 20초 상한이고 실제로는 터널 너머에서도 1초 안에 끝난다.
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn db_introspect(profile: DbProfile, schema: String) -> Result<RawSnapshot, AiError> {
     let schema = schema.trim().to_string();
     if schema.is_empty() {

@@ -1,11 +1,5 @@
-mod ai;
-mod auth;
-mod dbconn;
-mod detect;
-mod report;
-mod shellenv;
-
-use ai::AiError;
+use amber_core::ai::AiError;
+use amber_core::{ai, auth, dbconn, detect, report, shellenv};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tauri::{
@@ -399,8 +393,11 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            // 사용자 셸 PATH 를 미리 읽어 둔다 — Dock 으로 뜬 앱도 터미널과 같은 곳에서 CLI 를 찾게(shellenv.rs)
-            shellenv::prewarm();
+            // 사용자 셸 PATH 를 미리 읽어 둔다 — Dock 으로 뜬 앱도 터미널과 같은 곳에서 CLI 를 찾게(shellenv.rs).
+            // 첫 CLI 호출이 셸 기동을 기다리지 않는다
+            tauri::async_runtime::spawn(async {
+                shellenv::path().await;
+            });
             // 위젯은 모든 스페이스에 표시 — 데스크탑을 전환하거나 다른 앱이 전체화면이어도 사라지지 않는다
             // (PRD §8.1: JSON 키가 아니라 런타임 API). 메인 창에는 걸지 않는다.
             if let Some(w) = app.get_webview_window("widget") {

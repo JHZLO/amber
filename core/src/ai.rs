@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
-use tauri::ipc::Channel;
+use crate::Channel;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::time::timeout;
 
@@ -102,7 +102,7 @@ const HEALTH_TIMEOUT_SECS: u64 = 8;
 // 출력은 이미 다 받은 뒤라 더 기다릴 이유가 없다.
 const POST_STREAM_WAIT_SECS: u64 = 10;
 
-// 시스템 프롬프트는 src-tauri/context/*.md 에 영어로 두고 컴파일 시 그대로 임베드한다
+// 시스템 프롬프트는 core/context/*.md 에 영어로 두고 컴파일 시 그대로 임베드한다
 // (include_str!). 파일 = 모델에 전달되는 프롬프트 본문 그 자체이며, 고치면 재빌드가 필요하다.
 // 상세는 context/README.md 참고. 결과물 언어는 프롬프트에 박지 않고 lang_directive 로 주입한다.
 
@@ -453,7 +453,7 @@ pub struct AiError {
 }
 
 impl AiError {
-    pub(crate) fn new(code: &str, message: impl Into<String>) -> Self {
+    pub fn new(code: &str, message: impl Into<String>) -> Self {
         Self {
             code: code.into(),
             message: message.into(),
@@ -462,7 +462,7 @@ impl AiError {
     }
 
     /// 번역 문구에 끼울 가변부를 함께 담는다 (`{detail}` 자리표시자로 들어간다)
-    pub(crate) fn detailed(
+    pub fn detailed(
         code: &str,
         message: impl Into<String>,
         detail: impl Into<String>,
@@ -529,7 +529,7 @@ pub(crate) fn strip_outer_fence(s: &str) -> &str {
     t
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn ai_generate(
     transcript: String,
     instruction: Option<String>,
@@ -563,7 +563,7 @@ pub async fn ai_generate(
 
 /// 이미 정리된 노트 + 사용자 프롬프트 → 보강된 노트(JSON).
 /// 원문 요약(ai_generate)과 파이프라인은 같지만, 입력 구성과 시스템 프롬프트만 다르다.
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn ai_augment(
     title: String,
     summary: String,
@@ -607,7 +607,7 @@ pub async fn ai_augment(
 /// 필기노트 작성/보강: 자유 형식 마크다운 + 지시 → 완성본(raw 마크다운).
 /// 개념 정리(ai_generate)와 달리 JSON 계약을 파싱하지 않는다 — 봉투 .result 를 그대로 본문으로.
 /// 빈 본문 허용(그 경우 요청 주제로 처음부터 작성).
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn ai_note_compose(
     title: String,
     markdown: String,
@@ -653,7 +653,7 @@ pub async fn ai_note_compose(
 
 /// 필기노트 작성/보강 (스트리밍). 생성 텍스트 델타를 on_delta 채널로 실시간 전송하고,
 /// 최종 결과는 stream-json 의 마지막 `result` 봉투(.result)에서 확정한다(신뢰 소스).
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn ai_note_compose_stream(
     title: String,
     markdown: String,
@@ -760,7 +760,7 @@ pub async fn ai_note_compose_stream(
 /// 전문 재작성(`ai_note_compose_stream`)과 나뉘어 있는 이유는 비용이다: 출력은 순차 생성이라
 /// 길이가 곧 대기 시간인데, 오타 하나를 고칠 때도 41KB 노트를 다시 타이핑하면 수 분이 걸린다.
 /// 조각만 받으면 같은 수정이 초 단위로 끝난다.
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 #[allow(clippy::too_many_arguments)]
 pub async fn ai_note_edit_span(
     title: String,
@@ -842,7 +842,7 @@ pub struct AskExchange {
 }
 
 /// 필기노트 인라인 질문: 선택 문장 + 질문 (+ 이전 문답) + 노트 문맥 → 짧은 답변(raw 텍스트).
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn ai_note_ask(
     selection: String,
     question: String,
@@ -928,7 +928,7 @@ pub struct TodoSuggestResult {
 /// 재료는 리포트가 쓰는 수집기와 같다(report_collect): 저장소 이벤트와 AI 세션.
 /// 둘 다 `gh` CLI 와 로컬 세션 파일을 읽는 Rust 쪽이라 MCP 커넥터 없이 동작한다.
 /// 여기서 도구는 열지 않는다 — 재료는 이미 앱이 모아서 넘긴다.
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn ai_todo_suggest(
     // 오늘 날짜('YYYY-MM-DD') — MCP 수집 지시가 '어느 날의 활동'인지 말하는 데 쓴다
     date: String,
@@ -1023,7 +1023,7 @@ pub async fn ai_todo_suggest(
 /// 다이어그램 탭: 스키마 DDL → ERD mermaid 소스 (스트리밍).
 /// 노트 작성과 같은 raw 텍스트 경로 — 큰 mermaid 소스를 JSON 문자열에 담는 이중 파싱을 피한다.
 /// current(에디터에 열려 있는 기존 소스)를 주면 그 문법·구성을 이어받아 확장한다.
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn ai_erd_generate_stream(
     ddl: String,
     instruction: Option<String>,
@@ -2001,7 +2001,7 @@ async fn run_concept_note(
 }
 
 /// claude CLI 사전 헬스체크: 경로/설치 확인 (버전 문자열 반환)
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn ai_health(cli_path: Option<String>) -> Result<String, AiError> {
     let program = cli_path.unwrap_or_else(|| "claude".to_string());
     let res = timeout(
@@ -2307,7 +2307,7 @@ mod tests {
 
 /// 진행 중인 AI 실행을 중단한다. 프론트가 실행 시작 때 만든 cancel_key 를 그대로 넘긴다.
 /// 이미 끝난 키는 조용히 무시된다 — 중단 버튼과 완료가 겹쳐도 에러를 띄우지 않게.
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub fn ai_cancel(cancel_key: String) {
     cancel(&cancel_key);
 }
