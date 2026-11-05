@@ -92,6 +92,8 @@ for await (const line of createInterface({ input: process.stdin })) {
     } else if (m.cmd === "migrate") {
       migrate(m.db);
       reply({ ok: true });
+    } else if (m.cmd === "ops") {
+      reply({ ok: true, ops: Object.keys(OPS), migrate: true });
     } else {
       throw new Error(`모르는 cmd: ${m.cmd}`);
     }

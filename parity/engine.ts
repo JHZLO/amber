@@ -57,6 +57,10 @@ export class TsEngine implements Engine {
  *                                                                           ← {"ok":false,"error":"…"}
  *    → {"cmd":"close"}                                                      ← {"ok":true}
  *    → {"cmd":"migrate","db":"/tmp/…/fresh.db"}                             ← {"ok":true}
+ *    → {"cmd":"ops"}                                ← {"ok":true,"ops":["todos.listTodos",…],"migrate":false}
+ *
+ *  옮기는 중인 엔진은 ops 로 아는 함수만 밝힌다. 하네스는 모르는 함수가 든 픽스처를 건너뛰고(실패 아님)
+ *  건너뛴 이유를 남긴다 — 다 옮기면 건너뛰는 픽스처가 없어야 끝이다.
  *
  *  지킬 것:
  *   - open 에서 마이그레이션을 돌리지 않는다. 하네스가 이미 깔아 뒀다
@@ -117,6 +121,18 @@ export class ExternalEngine implements Engine {
 
   migrate(dbPath: string) {
     return this.must({ cmd: "migrate", db: dbPath });
+  }
+
+  private caps: Promise<{ ops: Set<string> | null; migrate: boolean }> | null = null;
+
+  /** 아는 op 와 migrate 지원. ops 를 모르는 엔진은 전부 안다고 본다 */
+  capabilities() {
+    this.caps ??= this.send({ cmd: "ops" }).then((r) =>
+      r.ok === true && Array.isArray(r.ops)
+        ? { ops: new Set(r.ops as string[]), migrate: r.migrate !== false }
+        : { ops: null, migrate: true },
+    );
+    return this.caps;
   }
 
   /** 픽스처를 다 돌고 프로세스를 내린다 */

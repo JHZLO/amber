@@ -90,7 +90,10 @@ describe.skipIf(RECORD)("재생", () => {
   for (const engine of [new TsEngine(), ...(external ? [external] : [])] as Engine[]) {
     describe(engine.name, () => {
       for (const f of [...synthetic, ...real]) {
-        it(f.name, async () => {
+        it(f.name, async (ctx) => {
+          const known = engine instanceof ExternalEngine ? (await engine.capabilities()).ops : null;
+          const missing = known ? [...new Set(f.steps.map((s) => s.op))].filter((op) => !known.has(op)) : [];
+          if (missing.length) ctx.skip(`아직 옮기지 않은 op: ${missing.join(", ")}`);
           const miss = await replay(f, engine);
           expect(miss, `[${f.name}] ${miss}`).toBeNull();
         }, 120_000);
@@ -106,9 +109,10 @@ describe.skipIf(RECORD)("마이그레이션", () => {
     expect(firstDiff(golden(), migrationGolden()), "마이그레이션을 더했으면 pnpm parity:record").toBeNull();
   });
 
-  it.runIf(!!EXTERNAL)("옮긴 엔진이 같은 장부와 스키마를 남긴다", async () => {
+  it.runIf(!!EXTERNAL)("옮긴 엔진이 같은 장부와 스키마를 남긴다", async (ctx) => {
     const engine = new ExternalEngine(EXTERNAL!);
     try {
+      if (!(await engine.capabilities()).migrate) ctx.skip("엔진이 아직 migrate 를 모른다");
       expect(firstDiff(golden(), await migrationsBy(engine))).toBeNull();
     } finally {
       engine.dispose();
