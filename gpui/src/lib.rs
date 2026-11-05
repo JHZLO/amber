@@ -6,6 +6,7 @@ pub mod dates;
 pub mod db;
 pub mod dbconn;
 pub mod i18n;
+pub mod line_diff;
 pub mod mermaid;
 pub mod migrate;
 pub mod note_ai_text;

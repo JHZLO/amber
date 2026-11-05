@@ -119,6 +119,7 @@ impl Spike {
                 if let Some(sel) = n.selected.as_mut() {
                     *sel = vault::remap_path(sel, &from, &new);
                 }
+                n.ai.remap(&from, &new, d.grab.is_dir);
                 n.expanded
                     .extend(vault::ancestor_paths(vault::parent_of(&new)));
             }

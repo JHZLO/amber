@@ -184,6 +184,12 @@ pub struct NotesState {
     pub head_h: Rc<Cell<Pixels>>,
     /// 인라인 질문(사이드카) — note_comments.rs
     pub cmts: crate::note_comments::Cmts,
+    /// AI 전문 작성/부분 수정 실행 — note_ai.rs. 노트를 옮겨 다녀도 남는다
+    pub ai: crate::note_ai::Runs,
+    /// 부분 수정의 구간 사이에서 멈추라는 깃발(취소 키 → 깃발)
+    pub ai_stops: HashMap<String, std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// 레일 완료 점 — 다른 탭에 있을 때 작성이 끝났다. 노트 탭에 들어가면 꺼진다
+    pub rail_done: bool,
 }
 
 /// 본문 판의 위 여백(.detail padding-top)
@@ -353,6 +359,10 @@ impl Spike {
     /// 지우기 확인을 지난 뒤 — 고른 노트가 그 안에 있었으면 닫는다
     pub(crate) fn delete_note(&mut self, rel: &str) -> Result<(), String> {
         let r = vault::delete_note_entry(&self.db, rel);
+        if r.is_ok() {
+            // 그 아래에서 쓰던 AI 는 끊는다
+            self.drop_note_ai_under(rel);
+        }
         let n = &mut self.notes;
         if n.selected
             .as_deref()

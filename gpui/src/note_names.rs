@@ -160,6 +160,8 @@ impl Spike {
         if let Some(sel) = n.selected.as_mut() {
             *sel = vault::remap_path(sel, old, new);
         }
+        // AI 실행은 경로가 키다 — 안 옮기면 결과가 고아가 된다
+        n.ai.remap(old, new, is_dir);
     }
 
     /// 이름 모달 — 만들기는 자리(드롭다운) + 이름 + 경로 안내, 바꾸기는 이름만

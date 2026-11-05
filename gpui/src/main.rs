@@ -14,6 +14,7 @@ mod highlight;
 mod markdown;
 mod menu;
 mod note;
+mod note_ai;
 mod note_comments;
 mod note_edit;
 mod note_find;
