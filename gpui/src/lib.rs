@@ -2,6 +2,7 @@ pub mod blocks;
 pub mod concepts;
 pub mod db;
 pub mod mermaid;
+pub mod report;
 pub mod todos;
 pub mod vacations;
 
@@ -56,6 +57,16 @@ pub const OPS: &[&str] = &[
     "db.getSetting",
     "db.setSetting",
     "db.logInvocation",
+    "report.loadMcpCache",
+    "report.saveMcpCache",
+    "report.loadReportConfig",
+    "report.saveReportConfig",
+    "report.getReport",
+    "report.upsertReport",
+    "report.recentReportDates",
+    "report.buildTodosDigest",
+    "report.getWeeklyReport",
+    "report.upsertWeeklyReport",
 ];
 
 pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
@@ -155,6 +166,22 @@ pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
             .map_err(err),
         "db.setSetting" => unit(concepts::set_setting(db, a.s(0)?, a.s(1)?)),
         "db.logInvocation" => unit(concepts::log_invocation(db, &a.de(0)?)),
+        "report.loadMcpCache" => report::load_mcp_cache(db).map_err(err),
+        "report.saveMcpCache" => unit(report::save_mcp_cache(db, &a.de::<Vec<Json>>(0)?)),
+        "report.loadReportConfig" => report::load_report_config(db).map_err(err),
+        "report.saveReportConfig" => unit(report::save_report_config(db, &a.de(0)?)),
+        "report.getReport" => report::get_report(db, a.s(0)?)
+            .map(|r| r.map_or(Json::Null, Json::Object))
+            .map_err(err),
+        "report.upsertReport" => unit(report::upsert_report(db, &a.de(0)?)),
+        "report.recentReportDates" => report::recent_report_dates(db, a.s(0)?, a.f(1)?)
+            .map(Json::from)
+            .map_err(err),
+        "report.buildTodosDigest" => report::build_todos_digest(db, a.s(0)?).map_err(err),
+        "report.getWeeklyReport" => report::get_weekly_report(db, a.s(0)?)
+            .map(|r| r.map_or(Json::Null, Json::Object))
+            .map_err(err),
+        "report.upsertWeeklyReport" => unit(report::upsert_weekly_report(db, &a.de(0)?)),
         _ => Err(format!("모르는 op: {op}")),
     }
 }

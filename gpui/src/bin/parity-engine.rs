@@ -23,10 +23,16 @@ fn main() {
         };
         let out = match msg["cmd"].as_str().unwrap_or_default() {
             "ops" => json!({"ok": true, "ops": amber_gpui::OPS, "migrate": false}),
-            "open" => match Db::open(
-                msg["db"].as_str().unwrap_or_default(),
-                Clock::Fixed(now.clone()),
-            ) {
+            "open" => match {
+                // "오늘"(리포트 digest 등)은 하네스가 정한 시간대로 센다. 엔진은 한 줄씩 도는 단일 스레드다
+                if let Some(tz) = msg["tz"].as_str() {
+                    unsafe { std::env::set_var("TZ", tz) };
+                }
+                Db::open(
+                    msg["db"].as_str().unwrap_or_default(),
+                    Clock::Fixed(now.clone()),
+                )
+            } {
                 Ok(d) => {
                     db = Some(d);
                     json!({"ok": true})
