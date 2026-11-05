@@ -212,6 +212,7 @@ impl Spike {
                 Some("week") => calendar::Unit::Week,
                 _ => calendar::Unit::Day,
             },
+            level: calendar::Level::Day,
             counts: HashMap::new(),
             week_counts: HashMap::new(),
             vacations: HashMap::new(),
@@ -348,6 +349,8 @@ impl Spike {
         if let Some(m) = amber_gpui::dates::month_of(&date) {
             self.cal.cursor = m;
         }
+        // 날짜가 바뀌면 일 판으로 — 월/연 판을 띄운 채 뒤에서 날짜만 바뀌면 뭘 보는지 어긋난다
+        self.cal.level = calendar::Level::Day;
         self.date = date;
         self.reload();
         self.reload_calendar();

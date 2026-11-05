@@ -149,6 +149,19 @@ pub fn run(dir: &str) {
 
     timetable(&mut s);
     vacation(&mut s);
+    for (name, level) in [
+        ("cal-month", crate::calendar::Level::Month),
+        ("cal-year", crate::calendar::Level::Year),
+    ] {
+        s.window
+            .update(&mut s.cx, |sp, _, cx| {
+                sp.vac_open = false;
+                sp.cal.level = level;
+                cx.notify();
+            })
+            .unwrap();
+        s.shot(name);
+    }
 }
 
 /// 휴가 고르기 판 — 트리거 아래 유리 판, 첫 항목에 손을 올린 채

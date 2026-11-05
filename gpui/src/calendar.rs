@@ -29,9 +29,25 @@ impl Unit {
     }
 }
 
+/// 제목을 눌러 오르내리는 단계 — 일 격자 → 월 고르기 → 연 고르기(천장)
+#[derive(Clone, Copy, PartialEq)]
+pub enum Level {
+    Day,
+    Month,
+    Year,
+}
+
+/// 연 판은 10년 한 판 + 앞뒤 한 칸(흐리게) = 12칸 3×4 — 월 판과 같은 판형
+const DECADE: i32 = 10;
+
+fn decade_start(y: i32) -> i32 {
+    y.div_euclid(DECADE) * DECADE
+}
+
 /// 달력이 그리는 데 쓰는 것 — 보고 있는 달, 날짜별 (끝낸 수, 전체), 휴가
 pub struct CalendarData {
     pub cursor: YearMonth,
+    pub level: Level,
     pub unit: Unit,
     pub counts: HashMap<String, (usize, usize)>,
     /// 주 시작일 → 그 주의 '주 할 일' (끝낸 수, 전체). 주 단위에서 그 주 첫 칸에 표식으로만 쓴다
@@ -114,11 +130,30 @@ impl Spike {
                 .cursor_pointer()
                 .hover(|s| s.bg(k.surface_2).text_color(k.text))
                 .child(icon(name, 15.).text_color(k.text_2))
+                // 화살표 한 번 = 지금 보고 있는 판 하나(달, 해, 10년)
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.cal.cursor = dates::add_months(this.cal.cursor, delta);
+                    let c = this.cal.cursor;
+                    this.cal.cursor = match this.cal.level {
+                        Level::Day => dates::add_months(c, delta),
+                        Level::Month => YearMonth {
+                            year: c.year + delta,
+                            ..c
+                        },
+                        Level::Year => YearMonth {
+                            year: c.year + delta * DECADE,
+                            ..c
+                        },
+                    };
                     this.reload_calendar();
                     cx.notify();
                 }))
+        };
+        let level = cal.level;
+        let start = decade_start(year);
+        let title = match level {
+            Level::Day => dates::format_month_title(year, month),
+            Level::Month => dates::format_year_title(year),
+            Level::Year => format!("{start} – {}", start + DECADE - 1),
         };
 
         let head = div()
@@ -131,16 +166,36 @@ impl Spike {
             .py(px(6.))
             .border_b_1()
             .border_color(k.glass_edge)
-            // .segmented 는 inline-flex — 내용 폭만 차지한다
-            .child(div().flex_1().flex().child(segmented))
+            // .segmented 는 inline-flex — 내용 폭만 차지한다. 월/연 판에선 고를 날이 없어 숨기되 자리는 둔다
             .child(
                 div()
+                    .flex_1()
+                    .flex()
+                    .when(level == Level::Day, |d| d.child(segmented)),
+            )
+            .child(
+                // 연 단계가 천장이라 더 올라갈 곳이 없다 — 누를 수 없게 둔다(흐려지진 않는다)
+                div()
+                    .id("cal-title")
+                    .tag("cal-title")
                     .px(px(8.))
                     .py(px(5.))
+                    .rounded(px(6.))
                     .text_size(px(14.))
                     .font_weight(FontWeight::BOLD)
                     .text_color(k.text)
-                    .child(dates::format_month_title(year, month)),
+                    .child(title)
+                    .when(level != Level::Year, |d| {
+                        d.cursor_pointer()
+                            .hover(|s| s.bg(k.surface_2))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.cal.level = match this.cal.level {
+                                    Level::Day => Level::Month,
+                                    _ => Level::Year,
+                                };
+                                cx.notify();
+                            }))
+                    }),
             )
             .child(
                 div()
@@ -351,7 +406,7 @@ impl Spike {
             }))
         });
 
-        div()
+        let card = div()
             .flex()
             .flex_col()
             .gap(px(2.))
@@ -362,8 +417,111 @@ impl Spike {
             .rounded(px(12.))
             .bg(glass_fill(k, false))
             .shadow(k.glass_shadow(false))
-            .child(head)
-            .child(dow)
-            .child(div().flex().flex_col().gap(px(gap)).children(weeks))
+            .child(head);
+        if level == Level::Day {
+            return card
+                .child(dow)
+                .child(div().flex().flex_col().gap(px(gap)).children(weeks));
+        }
+
+        // 월/연 고르기 — 알약 12칸(3×4). 판을 오갈 때 아래 시간표가 밀리지 않게 일 판과 같은 높이
+        let (ty, tm) = dates::month_of(&today).map_or((0, 0), |m| (m.year, m.month));
+        let cells: Vec<(String, String, bool, bool, bool, YearMonth, Level)> = match level {
+            Level::Month => dates::months_short()
+                .into_iter()
+                .enumerate()
+                .map(|(i, label)| {
+                    let m = i as u32 + 1;
+                    let at = YearMonth { year, month: m };
+                    (
+                        format!("pick-m-{m}"),
+                        label,
+                        year == ty && m == tm,
+                        m == month,
+                        false,
+                        at,
+                        Level::Day,
+                    )
+                })
+                .collect(),
+            _ => (start - 1..start + DECADE + 1)
+                .map(|y| {
+                    let outside = y < start || y >= start + DECADE;
+                    let at = YearMonth { year: y, month };
+                    (
+                        format!("pick-y-{y}"),
+                        y.to_string(),
+                        y == ty,
+                        y == year,
+                        outside,
+                        at,
+                        Level::Month,
+                    )
+                })
+                .collect(),
+        };
+        let pick = |(tag, label, is_today, selected, adjacent, at, next): (
+            String,
+            String,
+            bool,
+            bool,
+            bool,
+            YearMonth,
+            Level,
+        )| {
+            // 지금 앱처럼 배타 — today ? today : selected ? selected : adjacent
+            let selected = selected && !is_today;
+            let adjacent = adjacent && !is_today && !selected;
+            let sheen = k.glass_shadow(true)[0].clone();
+            let seat = k.glass_shadow(false)[1..].to_vec();
+            let mut shadow = Vec::new();
+            if is_today {
+                shadow.push(Tokens::ring(k.glass_edge_accent, 1.5));
+                shadow.push(sheen.clone());
+            }
+            if selected {
+                shadow.push(sheen);
+                shadow.extend(seat);
+                shadow.push(Tokens::ring(k.glass_edge_accent, 1.));
+            }
+            div()
+                .id(SharedString::from(tag.clone()))
+                .tag(tag)
+                .flex_1()
+                .h(px(44.))
+                .m(px(3.))
+                .rounded(px(8.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_size(px(13.))
+                .cursor_pointer()
+                .font_weight(if is_today {
+                    FontWeight::BOLD
+                } else if selected {
+                    FontWeight::SEMIBOLD
+                } else {
+                    FontWeight::MEDIUM
+                })
+                .text_color(if adjacent { k.text_3 } else { k.text })
+                .when(selected, |d| d.bg(glass_fill(k, true)))
+                .when(!selected, |d| d.hover(|s| s.bg(glass_fill(k, false))))
+                .shadow(shadow)
+                .child(label)
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.cal.cursor = at;
+                    this.cal.level = next;
+                    this.reload_calendar();
+                    cx.notify();
+                }))
+        };
+        let min_h = 26. + 6. * tile_h + 5. * gap;
+        let rows: Vec<_> = cells.into_iter().map(pick).collect::<Vec<_>>();
+        let mut grid = div().min_h(px(min_h)).flex().flex_col().justify_center();
+        let mut it = rows.into_iter().peekable();
+        while it.peek().is_some() {
+            grid = grid.child(div().flex().children(it.by_ref().take(3)));
+        }
+        card.child(grid)
     }
 }

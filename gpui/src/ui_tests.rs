@@ -496,3 +496,25 @@ fn the_vacation_picker_sets_and_clears_the_day(cx: &mut TestAppContext) {
     click(&mut ui, "vac-menu-5");
     assert_eq!(vacation_of(&db), None);
 }
+
+#[gpui_kit::test]
+fn the_calendar_title_drills_up_to_months_and_years(cx: &mut TestAppContext) {
+    let (db, note) = seeded("cal-pick", &[]);
+    let mut ui = open(cx, &db, &note);
+    click(&mut ui, "cal-title");
+    assert!(ui.debug_bounds("pick-m-3").is_some(), "월 판");
+    assert!(
+        ui.debug_bounds("unit-day").is_none(),
+        "월 판엔 일/주 단위가 없다"
+    );
+    click(&mut ui, "cal-title");
+    // 2020 – 2029 판, 앞뒤 한 칸(2019, 2030)
+    assert!(ui.debug_bounds("pick-y-2019").is_some());
+    assert!(ui.debug_bounds("pick-y-2030").is_some());
+    click(&mut ui, "cal-next");
+    click(&mut ui, "pick-y-2031");
+    click(&mut ui, "pick-m-3");
+    // 2031년 3월의 일 판 — 3/1 칸이 있다
+    assert!(ui.debug_bounds("cal-2031-03-01").is_some());
+    assert!(ui.debug_bounds("unit-day").is_some());
+}
