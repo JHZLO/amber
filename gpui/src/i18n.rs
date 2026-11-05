@@ -34,3 +34,12 @@ fn dict() -> &'static HashMap<&'static str, &'static str> {
 pub fn t(key: &str) -> String {
     dict().get(key).copied().unwrap_or(key).to_string()
 }
+
+/// "{name}" 자리를 채운다
+pub fn t_with(key: &str, vars: &[(&str, &str)]) -> String {
+    let mut s = t(key);
+    for (k, v) in vars {
+        s = s.replace(&format!("{{{k}}}"), v);
+    }
+    s
+}

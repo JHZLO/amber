@@ -5,20 +5,19 @@
 
 mod assets;
 mod calendar;
+mod day_card;
 mod figure;
 mod markdown;
 mod note;
 mod theme;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use amber_gpui::db::{Clock, Db, Row, get_i64};
+use amber_gpui::db::{Clock, Db, Row};
 use amber_gpui::todos;
-use gpui_kit::component::Disableable;
-use gpui_kit::component::checkbox::Checkbox;
-use gpui_kit::component::input::{Input, InputEvent, InputState};
+use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
@@ -52,17 +51,6 @@ const RAIL: [(Section, &str, &str, &str); 5] = [
     ),
 ];
 
-struct Line {
-    id: i64,
-    parent_id: Option<i64>,
-    content: SharedString,
-    done: bool,
-    depth: usize,
-    /// 이 날짜에서 다른 날로 옮겨 간 기록(고스트) — 지금 앱처럼 흐리게
-    carried: bool,
-    gone: bool,
-}
-
 enum Block {
     Text(SharedString),
     /// light = 흰 판(mermaid). 지금 앱도 mermaid 는 밝은 판, svg 는 어두운 판에 놓는다
@@ -76,7 +64,11 @@ enum Block {
 struct Spike {
     db: Db,
     date: String,
-    lines: Vec<Line>,
+    /// 고른 날의 목록(listTodos)과 그 날 이전의 밀린 항목(listOverdueOpen), 서랍(언젠가)에 든 수
+    todos: Vec<Row>,
+    overdue: Vec<Row>,
+    overdue_open: bool,
+    parked_n: usize,
     input: Entity<InputState>,
     note_title: SharedString,
     blocks: Vec<Block>,
@@ -104,9 +96,8 @@ impl Spike {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let input = cx.new(|cx| {
-            InputState::new(window, cx).placeholder("할 일 추가 — 한글로 입력하고 Enter")
-        });
+        let input =
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("todos.quick.placeholder")));
         // 지금 앱의 기본값(system)처럼 macOS 화면 모드를 따라간다
         cx.observe_window_appearance(window, |this: &mut Spike, window, cx| {
             let pref = amber_gpui::prefs::get(&this.db, "til.theme");
@@ -189,7 +180,10 @@ impl Spike {
         let mut this = Spike {
             db,
             date,
-            lines: Vec::new(),
+            todos: Vec::new(),
+            overdue: Vec::new(),
+            overdue_open: false,
+            parked_n: 0,
             input,
             note_title,
             blocks,
@@ -227,50 +221,32 @@ impl Spike {
     }
 
     /// listTodos 의 평평한 줄을 화면 순서(부모 아래 자식)로 편다. 부모가 이 날짜에 없는 자식은 맨 위로 — todoTree.visibleRoots
+    /// 고른 날의 목록, 밀린 항목(그 날이 오늘 이전일 때만 — 앞날은 아직 밀린 게 아니다), 서랍 수
     fn reload(&mut self) {
-        let rows = todos::list_todos(&self.db, &self.date).unwrap_or_else(|e| {
-            eprintln!("listTodos: {e}");
+        let log = |what: &str, e: rusqlite::Error| eprintln!("{what}: {e}");
+        self.todos = todos::list_todos(&self.db, &self.date).unwrap_or_else(|e| {
+            log("listTodos", e);
             Vec::new()
         });
-        let ids: HashSet<i64> = rows.iter().filter_map(|r| get_i64(r, "id")).collect();
-        let mut kids: HashMap<Option<i64>, Vec<&Row>> = HashMap::new();
-        for r in &rows {
-            let parent = get_i64(r, "parent_id").filter(|p| ids.contains(p));
-            kids.entry(parent).or_default().push(r);
+        let today = amber_gpui::dates::today_str(chrono::Local::now().timestamp_millis());
+        self.overdue = if self.date <= today {
+            todos::list_overdue_open(&self.db, &self.date).unwrap_or_else(|e| {
+                log("listOverdueOpen", e);
+                Vec::new()
+            })
+        } else {
+            Vec::new()
+        };
+        self.parked_n = todos::list_parked(&self.db).map_or(0, |r| r.len());
+    }
+
+    /// 밀린 항목을 고른 날로 가져온다. 끝내는 게 아니라 옮기는 것이라 완료 재계산을 하지 않는다
+    fn move_here(&mut self, ids: &[i64]) {
+        if let Err(e) = todos::move_todos(&self.db, ids, &self.date) {
+            eprintln!("moveTodos: {e}");
         }
-        let mut out = Vec::new();
-        let mut seen = HashSet::new();
-        fn walk(
-            parent: Option<i64>,
-            depth: usize,
-            kids: &HashMap<Option<i64>, Vec<&Row>>,
-            seen: &mut HashSet<i64>,
-            out: &mut Vec<Line>,
-        ) {
-            for r in kids.get(&parent).map(Vec::as_slice).unwrap_or_default() {
-                let Some(id) = get_i64(r, "id") else { continue };
-                if !seen.insert(id) {
-                    continue;
-                }
-                out.push(Line {
-                    id,
-                    parent_id: get_i64(r, "parent_id"),
-                    content: r
-                        .get("content")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string()
-                        .into(),
-                    done: get_i64(r, "done") == Some(1),
-                    depth,
-                    carried: get_i64(r, "carried") == Some(1),
-                    gone: get_i64(r, "gone") == Some(1),
-                });
-                walk(Some(id), depth + 1, kids, seen, out);
-            }
-        }
-        walk(None, 0, &kids, &mut seen, &mut out);
-        self.lines = out;
+        self.reload();
+        self.reload_calendar();
     }
 
     fn toggle(&mut self, id: i64, parent_id: Option<i64>, done: bool) {
@@ -341,7 +317,7 @@ impl Render for Spike {
             });
         }
         let k = Tokens::get(cx);
-        let (fg, muted, border) = (k.text, k.text_3, k.border);
+        let (fg, border) = (k.text, k.border);
         let this = cx.entity().downgrade();
         let on_link: markdown::OnLink = {
             let this = this.clone();
@@ -355,47 +331,6 @@ impl Render for Spike {
                 None => cx.open_url(url),
             })
         };
-
-        let list = div()
-            .id("todos")
-            .flex()
-            .flex_col()
-            .gap_1()
-            .overflow_y_scroll()
-            .children(self.lines.iter().map(|l| {
-                let (id, parent, done) = (l.id, l.parent_id, l.done);
-                let this = this.clone();
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .pl(px(l.depth as f32 * 20.0))
-                    .child(
-                        Checkbox::new(ElementId::NamedInteger("todo".into(), id as u64))
-                            .checked(done)
-                            .disabled(l.gone)
-                            .on_click(move |checked, _, cx| {
-                                let checked = *checked;
-                                let _ = this.update(cx, |s, cx| {
-                                    s.toggle(id, parent, checked);
-                                    cx.notify();
-                                });
-                            }),
-                    )
-                    .child(
-                        div()
-                            .text_color(if l.carried || done { muted } else { fg })
-                            .when(done, |d| d.line_through())
-                            .child(l.content.clone()),
-                    )
-                    .when(l.carried, |d| {
-                        d.child(div().text_xs().text_color(muted).child(if l.gone {
-                            "지워짐"
-                        } else {
-                            "옮김"
-                        }))
-                    })
-            }));
 
         let note = div()
             .id("note")
@@ -463,17 +398,18 @@ impl Render for Spike {
                         .child(self.calendar(&k, self.cal_w - 8. - 4. - 2. - 24., cx)),
                 )
                 .child(
+                    // .detail: 바깥 여백 8 8 8 4(판의 반 칸)
                     div()
                         .flex_1()
                         .min_w_0()
                         .h_full()
-                        .p_5()
+                        .pt(px(8.))
+                        .pr(px(8.))
+                        .pb(px(8.))
+                        .pl(px(4.))
                         .flex()
                         .flex_col()
-                        .gap_3()
-                        .child(div().text_color(muted).child(self.date.clone()))
-                        .child(Input::new(&self.input))
-                        .child(list),
+                        .child(self.day_card(&k, cx)),
                 )
                 .into_any_element(),
             Section::Notes => note.into_any_element(),
