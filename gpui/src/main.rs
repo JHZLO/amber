@@ -12,6 +12,7 @@ mod figure;
 mod markdown;
 mod note;
 mod theme;
+mod tt_card;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -94,6 +95,11 @@ struct Spike {
     /// 할 일 탭의 달력(보고 있는 달, 단위, 날짜별 진행, 휴가)과 달력 판 폭(amber.todo.cal-width)
     cal: calendar::CalendarData,
     cal_w: f32,
+    /// 타임테이블: 뷰(amber.todo.tt-view), 그 범위의 블록, 스크롤, 스크롤을 맞춘 범위
+    tt_view: tt_card::View,
+    tt_blocks: Vec<Row>,
+    tt_scroll: ScrollHandle,
+    tt_scrolled: Option<String>,
     started: Instant,
     first_frame: bool,
 }
@@ -194,6 +200,9 @@ impl Spike {
             .map_or(460., |w| w.clamp(260., 780.));
         let parked_open =
             amber_gpui::prefs::get(&db, "amber.todo.parked-open").as_deref() == Some("1");
+        let tt_view = tt_card::View::from_id(
+            &amber_gpui::prefs::get(&db, "amber.todo.tt-view").unwrap_or_default(),
+        );
         let mut this = Spike {
             db,
             date,
@@ -218,11 +227,16 @@ impl Spike {
             mark: None,
             cal,
             cal_w,
+            tt_view,
+            tt_blocks: Vec::new(),
+            tt_scroll: ScrollHandle::new(),
+            tt_scrolled: None,
             started,
             first_frame: false,
         };
         this.reload();
         this.reload_calendar();
+        this.reload_blocks();
         if this.cal.unit == calendar::Unit::Week {
             this.input.update(cx, |s, cx| {
                 s.set_placeholder(t("todos.week.add"), window, cx)
@@ -305,6 +319,7 @@ impl Spike {
         self.date = date;
         self.reload();
         self.reload_calendar();
+        self.reload_blocks();
     }
 
     fn set_unit(&mut self, unit: calendar::Unit, window: &mut Window, cx: &mut Context<Self>) {
@@ -455,7 +470,10 @@ impl Render for Spike {
                         .pr(px(4.))
                         .pb(px(8.))
                         .pt(px(8.))
-                        .child(self.calendar(&k, self.cal_w - 8. - 4. - 2. - 24., cx)),
+                        .flex()
+                        .flex_col()
+                        .child(self.calendar(&k, self.cal_w - 8. - 4. - 2. - 24., cx))
+                        .child(self.tt_card(&k, self.cal_w - 8. - 4. - 2., cx)),
                 )
                 .child(
                     // .detail: 바깥 여백 8 8 8 4(판의 반 칸)

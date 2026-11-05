@@ -10,6 +10,7 @@ pub struct Tokens {
     pub dark: bool,
     pub surface: Hsla,
     pub surface_2: Hsla,
+    pub surface_3: Hsla,
     pub text: Hsla,
     pub text_2: Hsla,
     pub text_3: Hsla,
@@ -63,6 +64,7 @@ const LIGHT: fn() -> Tokens = || Tokens {
     dark: false,
     surface: c(0xffffff),
     surface_2: c(0xf4f4f5),
+    surface_3: c(0xe9e9ec),
     text: c(0x18181b),
     text_2: c(0x52525b),
     text_3: c(0x71717a),
@@ -94,6 +96,7 @@ const DARK: fn() -> Tokens = || Tokens {
     dark: true,
     surface: c(0x161618),
     surface_2: c(0x1f1f23),
+    surface_3: c(0x2a2a2f),
     text: c(0xf4f4f5),
     text_2: c(0xa1a1aa),
     text_3: c(0x8b8b95),
@@ -129,6 +132,17 @@ impl Tokens {
     /// 글자색을 alpha 만큼 — CSS 의 color-mix(in srgb, var(--text) N%, transparent)
     pub fn text_mix(&self, alpha: f32) -> Hsla {
         self.text.opacity(alpha)
+    }
+
+    /// 바깥 테 — CSS 의 0 0 0 Npx color
+    pub fn outer_ring(color: Hsla, width: f32) -> BoxShadow {
+        BoxShadow {
+            color,
+            offset: point(px(0.), px(0.)),
+            blur_radius: px(0.),
+            spread_radius: px(width),
+            inset: false,
+        }
     }
 
     /// 안쪽 테 — CSS 의 inset 0 0 0 Npx color
