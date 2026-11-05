@@ -17,6 +17,21 @@ pub fn shell(
     buttons: Vec<Stateful<Div>>,
     on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Div {
+    shell_split(k, max_w, title, body, Vec::new(), buttons, on_close)
+}
+
+/// 바닥 줄이 왼쪽 묶음 | 빈칸 | 오른쪽 묶음(.modal-foot 의 spacer). 본문은 넘치면 스크롤(.modal-body), 판은 창의 86% 까지
+pub fn shell_split(
+    k: &Tokens,
+    max_w: f32,
+    title: String,
+    body: AnyElement,
+    left: Vec<Stateful<Div>>,
+    buttons: Vec<Stateful<Div>>,
+    on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> Div {
+    // 한 줄에 선 버튼은 키가 같다 — 줄이 이긴다(.modal-foot .btn: 32px, 옆 14px, 12.5px)
+    let foot = |b: Stateful<Div>| b.h(px(32.)).px(px(14.)).text_size(px(12.5));
     let panel = linear_gradient(
         150.,
         linear_color_stop(k.glass_fill.0, 0.),
@@ -36,6 +51,7 @@ pub fn shell(
                 .relative()
                 .w_full()
                 .max_w(px(max_w))
+                .max_h(relative(0.86))
                 .flex()
                 .flex_col()
                 .rounded(px(12.))
@@ -84,6 +100,10 @@ pub fn shell(
                 )
                 .child(
                     div()
+                        .id("modal-body")
+                        .flex_1()
+                        .min_h_0()
+                        .overflow_y_scroll()
                         .p(px(20.))
                         .text_size(px(14.))
                         .line_height(relative(1.6))
@@ -92,18 +112,15 @@ pub fn shell(
                 .child(
                     div()
                         .flex()
-                        .justify_end()
+                        .items_center()
                         .gap(px(8.))
                         .px(px(20.))
                         .py(px(14.))
                         .border_t_1()
                         .border_color(k.border)
-                        // 한 줄에 선 버튼은 키가 같다 — 줄이 이긴다(.modal-foot .btn: 32px, 옆 14px, 12.5px)
-                        .children(
-                            buttons
-                                .into_iter()
-                                .map(|b| b.h(px(32.)).px(px(14.)).text_size(px(12.5))),
-                        ),
+                        .children(left.into_iter().map(foot))
+                        .child(div().flex_1())
+                        .children(buttons.into_iter().map(foot)),
                 ),
         )
 }

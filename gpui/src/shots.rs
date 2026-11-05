@@ -69,6 +69,18 @@ against the Rust one. See [the steps](#2).\n\n> [!NOTE]\n> Fixtures live in `par
     .unwrap();
     let db = Db::open(db_path.to_str().unwrap(), Clock::System).unwrap();
     amber_gpui::migrate::run(&db).unwrap();
+    // AI 연결(실행은 안 한다 — 찍기는 스토어 상태를 직접 놓는다), 저장 프롬프트 하나, 최근 참고 폴더 둘
+    amber_gpui::ai_config::connect_provider(&db, "claude", "/usr/bin/false", None).unwrap();
+    amber_gpui::prefs::set(
+        &db,
+        "note_ai_prompts",
+        r#"[{"id":"p1","label":"Team style","text":"Short sentences, no brand names."}]"#,
+    );
+    amber_gpui::prefs::set(
+        &db,
+        "amber.ai.refDirs",
+        r#"["/Users/me/src/amber","/Users/me/src/resin"]"#,
+    );
     // 묶음 하나(하위 셋) + 낱개 셋
     let g = todos::create_todo(&db, "Release v0.24", DATE, None, "day").unwrap();
     for c in ["Write the changelog", "Tag and push", "Rebuild the app"] {
@@ -212,6 +224,7 @@ pub fn run(dir: &str) {
     );
     notes(&mut s);
     comments(&mut s);
+    note_ai(&mut s);
     for (name, level) in [
         ("cal-month", crate::calendar::Level::Month),
         ("cal-year", crate::calendar::Level::Year),
@@ -461,6 +474,115 @@ fn comments(s: &mut Shots) {
     s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.close_pop(cx);
+            cx.notify();
+        })
+        .unwrap();
+}
+
+/// 노트 AI — 지시 화면(칩, 참고 폴더), 쓰는 중(실시간 글), 검토(변경점), 배너와 트리 점
+fn note_ai(s: &mut Shots) {
+    use crate::note_ai::{Live, Outcome, StartCompose};
+    let path = "Engineering/Parity harness.md";
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.open_note(path, cx);
+            sp.open_ai_modal(cx);
+            if let Some(m) = sp.notes.ai_modal.as_mut() {
+                m.seed = Some("Add a section on how the Rust engine plugs in.".into());
+                m.chosen = vec!["s:p1".into(), "p:1".into()];
+                m.ref_on = vec!["/Users/me/src/amber".into()];
+            }
+            cx.notify();
+        })
+        .unwrap();
+    s.mouse(point(px(1300.), px(880.)), false);
+    s.shot("ai-prompt");
+    let body = s
+        .window
+        .update(&mut s.cx, |sp, _, _| sp.notes.body.clone())
+        .unwrap();
+    let start = StartCompose {
+        path: path.into(),
+        title: "Parity harness".into(),
+        markdown: body.clone(),
+        typed: "Add a section on how the Rust engine plugs in.".into(),
+        chosen: vec![],
+        ref_dirs: vec!["/Users/me/src/amber".into()],
+        instruction: "x".into(),
+    };
+    let now = chrono::Local::now().timestamp_millis();
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            let seq = sp.notes.ai.begin_compose(&start, "k", now - 8_000).unwrap();
+            let live = Live {
+                stream: "## 1. Why\n\nThe harness records every step of the TypeScript engine"
+                    .into(),
+                activity: Some((
+                    (
+                        "Read".into(),
+                        Some("/Users/me/src/amber/parity/engine.ts".into()),
+                    ),
+                    now,
+                )),
+                changed: true,
+                ..Default::default()
+            };
+            sp.notes.ai.pump(path, seq, &live);
+            cx.notify();
+        })
+        .unwrap();
+    s.cx.run_until_parked();
+    s.shot("ai-loading");
+    let result = body.replacen(
+        "## 2. Steps",
+        "## 2. Rust engine\n\nSet `AMBER_PARITY_ENGINE` to the built binary.\n\n## 3. Steps",
+        1,
+    );
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            let seq = sp.notes.ai.begin_continue(path, "k2", now).map(|x| x.0);
+            let _ = seq;
+            // 진행 중을 끝내고 결과를 놓는다
+            sp.notes.ai.stop(path);
+            let seq = sp
+                .notes
+                .ai
+                .begin_compose(&start, "k3", now - 60_000)
+                .unwrap();
+            sp.notes.ai.finish_ok(
+                path,
+                seq,
+                Outcome::Compose {
+                    markdown: result.clone(),
+                    truncated: false,
+                    continued: false,
+                    model: "sonnet".into(),
+                },
+                now - 30_000,
+            );
+            cx.notify();
+        })
+        .unwrap();
+    s.cx.run_until_parked();
+    s.shot("ai-diff");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.notes.ai_modal = None;
+            cx.notify();
+        })
+        .unwrap();
+    s.shot("ai-banner");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.dismiss_note_ai(path);
+            sp.notes.ai.begin_compose(&start, "k4", now - 70_000);
+            cx.notify();
+        })
+        .unwrap();
+    s.shot("ai-banner-running");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.dismiss_note_ai(path);
             cx.notify();
         })
         .unwrap();

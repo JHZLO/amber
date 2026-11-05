@@ -1427,3 +1427,192 @@ fn revising_an_answer_replaces_it_in_place(cx: &mut TestAppContext) {
     });
     assert_eq!(sidecar_ids(&db, "R.md"), vec!["r1"]);
 }
+
+/// 가짜 claude(stream-json) — 받은 입력을 남기고, 입력의 [초안 폴더] 에 절 파일을 써서 실제 파일 모드처럼 끝낸다.
+/// files 가 비면 초안 없이 reply 를 본문으로 낸다. delay 초만큼 기다렸다 끝낸다(진행 중을 보려고)
+fn fake_claude_stream(
+    dir: &std::path::Path,
+    files: &[(&str, &str)],
+    reply: &str,
+    delay: u32,
+) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let bin = dir.join("fake-claude-stream");
+    let log = dir.join("fake-claude.in");
+    let mut writes = String::new();
+    for (name, body) in files {
+        let quoted = body.replace('\'', "'\\''");
+        writes.push_str(&format!("  printf '%s' '{quoted}' > \"$d/{name}\"\n"));
+    }
+    let json = |s: &str| serde_json::to_string(s).unwrap().replace('\'', "'\\''");
+    std::fs::write(
+        &bin,
+        format!(
+            "#!/bin/sh\ninput=$(cat)\nprintf '%s\\n----\\n' \"$input\" >> '{log}'\n\
+d=$(printf '%s\\n' \"$input\" | awk 'f {{ print; exit }} /^\\[초안 폴더\\]$/ {{ f = 1 }}')\n\
+if [ -n \"$d\" ] && [ -d \"$d\" ]; then\n  :\n{writes}fi\n\
+printf '%s\\n' '{{\"type\":\"stream_event\",\"event\":{{\"type\":\"content_block_start\",\"content_block\":{{\"type\":\"text\"}}}}}}'\n\
+printf '%s\\n' '{{\"type\":\"stream_event\",\"event\":{{\"type\":\"content_block_delta\",\"delta\":{{\"type\":\"text_delta\",\"text\":{r}}}}}}}'\n\
+sleep {delay}\n\
+printf '%s\\n' '{{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":{r},\"session_id\":\"s\"}}'\n",
+            log = log.display(),
+            r = json(reply),
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+    bin
+}
+
+fn connect_fake(db: &PathBuf, bin: &std::path::Path) {
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    amber_gpui::ai_config::connect_provider(&d, "claude", bin.to_str().unwrap(), None).unwrap();
+}
+
+/// 그 노트의 AI 실행이 끝날 때까지(실제 시간)
+fn wait_note_ai(ui: &mut VisualTestContext, path: &str) {
+    for _ in 0..80 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        ui.executor()
+            .advance_clock(std::time::Duration::from_millis(150));
+        ui.run_until_parked();
+        if !ui.update(|_, cx| spike().read(cx).notes.ai.running(path)) {
+            return;
+        }
+    }
+    panic!("AI 가 끝나지 않았다");
+}
+
+#[gpui_kit::test]
+fn writing_a_note_with_ai_reviews_the_diff_then_applies_a_draft(cx: &mut TestAppContext) {
+    let db = seeded("ai-compose", &[]);
+    vault_note(&db, "C.md", "# C\n\nold body\n");
+    let dir = db.parent().unwrap().to_path_buf();
+    let bin = fake_claude_stream(
+        &dir,
+        &[
+            ("01.md", "# C\n\nnew body"),
+            ("02.md", "## 2. More\n\nextra"),
+        ],
+        "DONE 2",
+        0,
+    );
+    connect_fake(&db, &bin);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-C.md");
+    click(&mut ui, "note-ai");
+    assert!(ui.debug_bounds("ai-run").is_some(), "지시 화면");
+    ui.simulate_input("rewrite it");
+    click(&mut ui, "ai-chip-p:0");
+    click(&mut ui, "ai-run");
+    wait_note_ai(&mut ui, "C.md");
+    let sent = std::fs::read_to_string(dir.join("fake-claude.in")).unwrap();
+    let preset = amber_gpui::i18n::t("notes.ai.preset1");
+    assert!(
+        sent.contains(&format!("[작성 요청]\nrewrite it\n\n{preset}")),
+        "내가 친 말 → 빠른 지시: {sent}"
+    );
+    assert!(
+        sent.contains("[현재 본문 (Markdown)]\n# C\n\nold body"),
+        "{sent}"
+    );
+    ui.update(|_, cx| {
+        let r = spike().read(cx).notes.ai.get("C.md").cloned().unwrap();
+        assert_eq!(r.phase, crate::note_ai::Phase::Done);
+        assert_eq!(
+            r.result.as_deref(),
+            Some("# C\n\nnew body\n\n## 2. More\n\nextra"),
+            "초안 파일을 이름순으로 잇는다"
+        );
+        assert!(!r.truncated, "DONE 이 왔다");
+    });
+    // 기존 노트라 변경점부터
+    assert!(ui.debug_bounds("ai-diff").is_some());
+    click(&mut ui, "ai-tab-source");
+    assert!(ui.debug_bounds("ai-diff").is_none());
+    click(&mut ui, "ai-apply");
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        assert!(s.notes.ai_modal.is_none(), "적용하면 닫힌다");
+        assert!(s.notes.ai.get("C.md").is_none(), "기다리던 결과는 끝");
+        assert_eq!(
+            s.note_draft(cx).as_deref(),
+            Some("# C\n\nnew body\n\n## 2. More\n\nextra"),
+            "편집 초안으로"
+        );
+        assert!(s.notes.edit.as_ref().unwrap().dirty, "저장은 사용자가 한다");
+    });
+    assert_eq!(read_note(&db, "C.md"), "# C\n\nold body\n", "파일은 그대로");
+}
+
+#[gpui_kit::test]
+fn closing_keeps_the_ai_running_with_a_banner_and_stop_ends_it(cx: &mut TestAppContext) {
+    let db = seeded("ai-bg", &[]);
+    vault_note(&db, "B.md", "# B\n");
+    vault_note(&db, "Other.md", "# O\n");
+    let dir = db.parent().unwrap().to_path_buf();
+    let bin = fake_claude_stream(&dir, &[], "# B\n\nslow", 30);
+    connect_fake(&db, &bin);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-B.md");
+    click(&mut ui, "note-ai");
+    ui.simulate_input("write");
+    click(&mut ui, "ai-run");
+    assert!(ui.debug_bounds("ai-stop").is_some(), "쓰는 중");
+    click(&mut ui, "ai-keep");
+    assert!(ui.debug_bounds("ai-stop").is_none(), "닫기는 숨기기");
+    assert!(ui.debug_bounds("ai-banner").is_some(), "노트 위 배너");
+    // 다른 노트로 가도 계속 돈다 — 배너는 그 노트에만
+    click(&mut ui, "tree-Other.md");
+    assert!(ui.debug_bounds("ai-banner").is_none());
+    assert!(ui.update(|_, cx| spike().read(cx).notes.ai.running("B.md")));
+    click(&mut ui, "tree-B.md");
+    click(&mut ui, "ai-bg-stop");
+    ui.update(|_, cx| {
+        assert!(
+            spike().read(cx).notes.ai.get("B.md").is_none(),
+            "받은 결과가 없으니 실행이 사라진다"
+        );
+    });
+    assert!(ui.debug_bounds("ai-banner").is_none());
+}
+
+#[gpui_kit::test]
+fn a_run_finished_on_another_tab_lights_the_rail(cx: &mut TestAppContext) {
+    let db = seeded("ai-rail", &[]);
+    vault_note(&db, "R.md", "");
+    let dir = db.parent().unwrap().to_path_buf();
+    let bin = fake_claude_stream(&dir, &[], "# R\n\nwritten", 1);
+    connect_fake(&db, &bin);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-R.md");
+    click(&mut ui, "note-ai");
+    ui.simulate_input("write");
+    click(&mut ui, "ai-run");
+    click(&mut ui, "ai-keep");
+    click(&mut ui, "app.rail.todo");
+    wait_note_ai(&mut ui, "R.md");
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        let r = s.notes.ai.get("R.md").cloned().unwrap();
+        assert_eq!(
+            (r.phase, r.error.clone()),
+            (crate::note_ai::Phase::Done, None)
+        );
+        assert!(s.notes.rail_done, "완료 점이 켜졌다");
+    });
+    assert!(ui.debug_bounds("rail-done").is_some(), "다른 탭에서 끝났다");
+    click(&mut ui, "app.rail.notes");
+    assert!(
+        ui.debug_bounds("rail-done").is_none(),
+        "그 탭에 들어가면 꺼진다"
+    );
+    // 빈 노트라 변경점 없이 미리보기, 배너는 '초안 준비됨'
+    assert!(ui.debug_bounds("ai-banner").is_some());
+    click(&mut ui, "ai-bg-review");
+    assert!(ui.debug_bounds("ai-diff").is_none());
+    assert!(ui.debug_bounds("ai-preview").is_some());
+}

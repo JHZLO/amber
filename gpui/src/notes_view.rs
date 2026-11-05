@@ -190,6 +190,10 @@ pub struct NotesState {
     pub ai_stops: HashMap<String, std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// 레일 완료 점 — 다른 탭에 있을 때 작성이 끝났다. 노트 탭에 들어가면 꺼진다
     pub rail_done: bool,
+    /// AI 작성 모달 — note_ai_view.rs. 닫기는 숨기기(실행은 스토어에서 계속)
+    pub ai_modal: Option<crate::note_ai_view::AiModal>,
+    /// 적용한 AI 결과 — render 가 편집 초안으로 넣는다(입력칸은 창이 있어야 바뀐다)
+    pub pending_apply: Option<String>,
 }
 
 /// 본문 판의 위 여백(.detail padding-top)
@@ -247,7 +251,7 @@ pub fn build_blocks(
 }
 
 /// 'TIL/이름.md' → '이름'
-fn file_name(rel: &str) -> &str {
+pub(crate) fn file_name(rel: &str) -> &str {
     let name = rel.rsplit('/').next().unwrap_or(rel);
     name.strip_suffix(".md").unwrap_or(name)
 }
@@ -788,6 +792,8 @@ impl Spike {
         let is_dir = n.is_dir;
         let tag = format!("tree-{}", n.path);
         let actions = self.tree_row_actions(n, k, cx);
+        // AI 실행 점 — 쓰는 중 / 준비됨 / 실패(정확한 말은 배너가 갖는다)
+        let ai_dot = self.ai_tree_dot(&n.path, k, cx.reduce_motion());
         let drag = self.notes.tree_drag.as_ref();
         let lifted = drag.is_some_and(|d| d.grab.path == n.path);
         let target = is_dir && drag.is_some_and(|d| d.target.as_deref() == Some(n.path.as_str()));
@@ -887,6 +893,7 @@ impl Spike {
             .when(find_current && !selected, |d| {
                 d.shadow(vec![Tokens::ring(k.border_strong, 1.)])
             })
+            .children(ai_dot)
             .child(actions)
             .child(
                 canvas(
@@ -983,8 +990,12 @@ impl Spike {
                             }))
                         }),
                     )
-                    // AI 작성, 절 수정은 노트 AI 를 붙일 때(D2g)
-                    .child(labeled("note-ai", "sparkles", t("notes.aiWrite"), false))
+                    .child({
+                        let on = ok && self.ai_connected();
+                        labeled("note-ai", "sparkles", t("notes.aiWrite"), on).when(on, |d| {
+                            d.on_click(cx.listener(|this, _, _, cx| this.open_ai_modal(cx)))
+                        })
+                    })
                     .child(
                         labeled(
                             "note-copy",
@@ -1109,6 +1120,8 @@ impl Spike {
                 ),
             )
             .child(actions)
+            // 백그라운드 AI — 모달을 닫아도 여기서 진행, 결과, 실패를 보고 되돌아간다
+            .children(self.ai_banner(k, cx))
             .children(self.disk_banner(k, cx))
             .child(
                 canvas(move |b, _, _| head_h.set(b.size.height), |_, _, _, _| {})

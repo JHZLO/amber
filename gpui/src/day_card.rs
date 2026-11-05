@@ -29,6 +29,13 @@ impl Tag for Stateful<Div> {
     }
 }
 
+impl Tag for Div {
+    fn tag(self, name: impl Into<SharedString>) -> Self {
+        let name: SharedString = name.into();
+        self.debug_selector(move || name.to_string())
+    }
+}
+
 /// 지우기 전에 묻는 것 — 라이브 항목(하위 수를 말한다) 또는 이 날짜에 남은 이월 기록 한 줄
 pub(crate) enum Confirm {
     Delete {

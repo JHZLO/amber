@@ -15,6 +15,7 @@ mod markdown;
 mod menu;
 mod note;
 mod note_ai;
+mod note_ai_view;
 mod note_comments;
 mod note_edit;
 mod note_find;
@@ -438,8 +439,13 @@ impl Render for Spike {
                 e.dirty = false;
             }
         }
-        // 질문/후속 입력칸 — 창이 있어야 만들어진다
+        // 질문/후속 입력칸, AI 작성 입력칸과 적용한 초안 — 창이 있어야 만들어진다
         self.apply_cmt_rebuild(window, cx);
+        self.apply_ai_pending(window, cx);
+        // 노트 탭을 보고 있으면 완료 점은 꺼진다(본 알림을 남겨 둘 이유가 없다)
+        if self.section == Section::Notes {
+            self.notes.rail_done = false;
+        }
         if !cx.has_active_drag() {
             if self.row_drag.is_some() {
                 self.drop_row();
@@ -501,6 +507,12 @@ impl Render for Spike {
             _ => div().into_any_element(),
         };
 
+        // AI 작성 모달(실행 상태는 스토어, 이건 보기만)
+        let ai_modal = if self.section == Section::Notes {
+            self.ai_modal_view(&k, cx)
+        } else {
+            None
+        };
         let confirm = self.confirm.as_ref().map(|c| {
             let (title, body, name) = match c {
                 day_card::Confirm::Delete { name, count, .. } => (
@@ -667,6 +679,7 @@ impl Render for Spike {
             .children(self.drop_line(&k))
             .children(self.tree_drag_ghost(&k))
             .children(self.comment_fab(&k, cx))
+            .children(ai_modal)
             .children(self.name_modal_view(&k, window, cx))
             .children(self.note_prompt(&k, cx))
             .children(confirm)
@@ -694,6 +707,53 @@ impl Spike {
             let src = include_str!("../assets/amber-mark.svg");
             self.mark = figure::svg(src, &hex(k.text_2)).ok().map(|f| (k.dark, f));
         }
+        // 백그라운드 작업 점 — 도는 중 = 맥동(무채색), 끝났으니 와서 보라 = 초록 점(움직이지 않는다)
+        let notes_busy = self.notes.ai.any_running();
+        let notes_done = self.notes.rail_done;
+        let reduce = cx.reduce_motion();
+        let rail_dot = move |section: Section, k: &Tokens| -> Option<AnyElement> {
+            if section != Section::Notes {
+                return None;
+            }
+            let dot = div()
+                .absolute()
+                .top(px(7.))
+                .right(px(11.))
+                .size(px(6.))
+                .rounded_full();
+            if notes_busy {
+                Some(if reduce {
+                    dot.bg(k.text).opacity(0.85).into_any_element()
+                } else {
+                    dot.bg(k.text)
+                        .with_animation(
+                            "rail-busy",
+                            Animation::new(std::time::Duration::from_millis(1100)).repeat(),
+                            |d, x| {
+                                d.opacity(
+                                    0.3 + 0.7 * (1. - (std::f32::consts::PI * 2. * x).cos()) / 2.,
+                                )
+                            },
+                        )
+                        .into_any_element()
+                })
+            } else if notes_done {
+                Some(
+                    dot.bg(k.success)
+                        .shadow(vec![BoxShadow {
+                            color: k.success.opacity(0.22),
+                            offset: point(px(0.), px(0.)),
+                            blur_radius: px(0.),
+                            spread_radius: px(2.),
+                            inset: false,
+                        }])
+                        .tag("rail-done")
+                        .into_any_element(),
+                )
+            } else {
+                None
+            }
+        };
         let item = |id: &'static str, label: String, icon_name: &str, active: bool| {
             let (fill, edge) = if active {
                 (k.glass_fill_accent, k.glass_edge_accent)
@@ -708,6 +768,7 @@ impl Spike {
             div()
                 .id(id)
                 .tag(id)
+                .relative()
                 .w(px(54.))
                 .pt(px(9.))
                 .pb(px(7.))
@@ -752,8 +813,9 @@ impl Spike {
                 d.child(div().mb(px(16.)).child(img(m.image.clone()).size(px(40.))))
             })
             .children(RAIL.iter().map(|&(section, id, key, icon_name)| {
-                item(key, t(key), icon_name, self.section == section).on_click(cx.listener(
-                    move |this, _, _, cx| {
+                item(key, t(key), icon_name, self.section == section)
+                    .children(rail_dot(section, k))
+                    .on_click(cx.listener(move |this, _, _, cx| {
                         this.section = section;
                         amber_gpui::prefs::set(&this.db, "til.section", id);
                         // 탭에 들어올 때마다 트리를 다시 읽는다(Finder, git, 다른 편집기가 바꾼 것)
@@ -761,8 +823,7 @@ impl Spike {
                             this.reload_notes();
                         }
                         cx.notify();
-                    },
-                ))
+                    }))
             }))
             .child(div().flex_1())
             .child(item(

@@ -201,8 +201,15 @@ impl Spike {
                         cx.notify();
                     })),
             )
-            // AI 작성, 선택 수정은 노트 AI 를 붙일 때(D2g)
-            .child(off("note-ai", "sparkles", t("notes.aiWrite")))
+            // 초안에서 AI 작성 — 지금 초안이 [현재 본문]이 된다
+            .child(if self.ai_connected() {
+                button("note-ai", k, false, false)
+                    .child(crate::assets::icon("sparkles", 14.).text_color(k.text_2))
+                    .child(t("notes.aiWrite"))
+                    .on_click(cx.listener(|this, _, _, cx| this.open_ai_modal(cx)))
+            } else {
+                off("note-ai", "sparkles", t("notes.aiWrite"))
+            })
             .child(off("note-span-ai", "scissors", t("notes.spanAi.selBtn")))
     }
 

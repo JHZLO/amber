@@ -677,8 +677,10 @@ impl Spike {
         cx.notify();
         cx.spawn(async move |this, cx| {
             let ex = cx.background_executor().clone();
+            let mut tick = 0u32;
             loop {
                 ex.timer(Duration::from_millis(100)).await;
+                tick += 1;
                 let done = match rx.try_recv() {
                     Ok(None) => None,
                     Ok(Some(r)) => Some(Some(r)),
@@ -690,6 +692,10 @@ impl Spike {
                         && s.notes.ai.pump(&path, seq, &l)
                     {
                         l.changed = false;
+                        cx.notify();
+                    }
+                    // 대기 한 줄은 4초마다 바뀌고 1분, 3분에 꼬리가 붙는다 — 1초마다 다시 그린다(useAiWaitLine)
+                    if tick.is_multiple_of(10) {
                         cx.notify();
                     }
                     let Some(done) = done else {
