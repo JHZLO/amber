@@ -1,4 +1,5 @@
 pub mod blocks;
+pub mod concepts;
 pub mod db;
 pub mod mermaid;
 pub mod todos;
@@ -38,6 +39,23 @@ pub const OPS: &[&str] = &[
     "vacations.getVacation",
     "vacations.setVacation",
     "vacations.removeVacation",
+    "db.listConcepts",
+    "db.learningQueue",
+    "db.getConcept",
+    "db.conceptsLearnedOn",
+    "db.repointConceptSource",
+    "db.createConcept",
+    "db.updateConceptContent",
+    "db.setStatus",
+    "db.adjustConfidence",
+    "db.markSeen",
+    "db.deleteConcept",
+    "db.setConceptTags",
+    "db.allTags",
+    "db.statusCounts",
+    "db.getSetting",
+    "db.setSetting",
+    "db.logInvocation",
 ];
 
 pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
@@ -97,6 +115,46 @@ pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
             .map_err(err),
         "vacations.setVacation" => unit(vacations::set_vacation(db, a.s(0)?, a.s(1)?)),
         "vacations.removeVacation" => unit(vacations::remove_vacation(db, a.s(0)?)),
+        "db.listConcepts" => rows(concepts::list_concepts(db, &a.de(0)?)),
+        "db.learningQueue" => rows(concepts::learning_queue(db)),
+        "db.getConcept" => concepts::get_concept(db, a.i(0)?)
+            .map(|r| r.map_or(Json::Null, Json::Object))
+            .map_err(err),
+        "db.conceptsLearnedOn" => rows(concepts::concepts_learned_on(db, a.f(0)?, a.f(1)?)),
+        "db.repointConceptSource" => unit(concepts::repoint_concept_source(
+            db,
+            a.s(0)?,
+            a.s(1)?,
+            a.0.get(2).and_then(Json::as_bool).unwrap_or(false),
+        )),
+        "db.createConcept" => concepts::create_concept(db, &a.de(0)?)
+            .map(Json::from)
+            .map_err(err),
+        "db.updateConceptContent" => {
+            let field = |k| a.0.get(1).and_then(|f| f.get(k)).and_then(Json::as_str);
+            unit(concepts::update_concept_content(
+                db,
+                a.i(0)?,
+                field("title"),
+                field("summary"),
+            ))
+        }
+        "db.setStatus" => unit(concepts::set_status(db, a.i(0)?, a.s(1)?)),
+        "db.adjustConfidence" => concepts::adjust_confidence(db, a.i(0)?, a.f(1)?).map_err(err),
+        "db.markSeen" => unit(concepts::mark_seen(db, a.i(0)?)),
+        "db.deleteConcept" => unit(concepts::delete_concept(db, a.i(0)?)),
+        "db.setConceptTags" => unit(concepts::set_concept_tags(
+            db,
+            a.i(0)?,
+            &a.de::<Vec<String>>(1)?,
+        )),
+        "db.allTags" => rows(concepts::all_tags(db)),
+        "db.statusCounts" => concepts::status_counts(db).map_err(err),
+        "db.getSetting" => concepts::get_setting(db, a.s(0)?)
+            .map(Json::from)
+            .map_err(err),
+        "db.setSetting" => unit(concepts::set_setting(db, a.s(0)?, a.s(1)?)),
+        "db.logInvocation" => unit(concepts::log_invocation(db, &a.de(0)?)),
         _ => Err(format!("모르는 op: {op}")),
     }
 }
@@ -119,6 +177,17 @@ impl Args<'_> {
     /// 없거나 null 이면 None — TS 의 `parentId: number | null = null`
     fn oi(&self, i: usize) -> Option<i64> {
         self.0.get(i).and_then(Json::as_i64)
+    }
+    fn f(&self, i: usize) -> Result<f64, String> {
+        self.0
+            .get(i)
+            .and_then(Json::as_f64)
+            .ok_or(format!("인자 {i}: 숫자가 아니다"))
+    }
+    /// 객체 인자 — TS 의 입력 타입(필터, 생성 입력 등)을 그대로 받는다
+    fn de<T: serde::de::DeserializeOwned>(&self, i: usize) -> Result<T, String> {
+        serde_json::from_value(self.0.get(i).cloned().unwrap_or(Json::Null))
+            .map_err(|e| format!("인자 {i}: {e}"))
     }
     fn ids(&self, i: usize) -> Result<Vec<i64>, String> {
         self.0
