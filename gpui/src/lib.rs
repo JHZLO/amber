@@ -8,6 +8,7 @@ pub mod mermaid;
 pub mod migrate;
 pub mod prefs;
 pub mod report;
+pub mod timetable;
 pub mod todos;
 pub mod tree;
 pub mod vacations;
@@ -135,6 +136,12 @@ pub const OPS: &[&str] = &[
     "todoTree.clampDropDepth",
     "todoTree.resolveDrop",
     "todoTree.dayProgress",
+    "ttLayout.withGhost",
+    "ttLayout.boxLeft",
+    "ttLayout.boxWidth",
+    "ttLayout.layoutColumn",
+    "timeBlocks.nowMinute",
+    "timeBlocks.findFreeSlot",
 ];
 
 pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
@@ -319,6 +326,7 @@ fn call_files(db: &Db, op: &str, a: &Args) -> Result<Json, String> {
         }
         _ => dates::call(op, a.0, db.now())
             .or_else(|| tree::call(op, a.0))
+            .or_else(|| timetable::call(op, a.0, db.now()))
             .unwrap_or_else(|| Err(format!("모르는 op: {op}"))),
     }
 }
