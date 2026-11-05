@@ -34,7 +34,11 @@ pub struct Tokens {
     /// 유리(§2 유리): 손이 닿은 면 / 강조(활성). CSS 는 사선 그라디언트 세 칸인데 여기선 양 끝 두 칸으로 근사한다
     pub glass_fill: (Hsla, Hsla),
     pub glass_edge: Hsla,
+    /// 손이 닿은 유리(--glass-fill-hover, --glass-edge-hover)
+    pub glass_fill_hover: (Hsla, Hsla),
+    pub glass_edge_hover: Hsla,
     pub glass_fill_accent: (Hsla, Hsla),
+    pub glass_fill_accent_hover: (Hsla, Hsla),
     pub glass_edge_accent: Hsla,
     /// --glass-sheen(위쪽 한 줄기 빛, 늘 흰색) / 손이 닿았을 때
     pub sheen: Hsla,
@@ -42,6 +46,8 @@ pub struct Tokens {
     /// --glass-seat: 안쪽 아래 한 줄(유리 두께) + 바깥 그림자 0 1px 2px
     pub seat_in: Hsla,
     pub seat: Hsla,
+    /// --glass-seat-hover 의 바깥 그림자(0 2px 6px) — 손이 닿으면 한 단 들린다
+    pub seat_hover: Hsla,
 }
 
 impl Global for Tokens {}
@@ -84,12 +90,16 @@ const LIGHT: fn() -> Tokens = || Tokens {
     shadow_sm: a(24, 24, 27, 0.06),
     glass_fill: (a(24, 24, 27, 0.05), a(24, 24, 27, 0.04)),
     glass_edge: a(24, 24, 27, 0.12),
+    glass_fill_hover: (a(24, 24, 27, 0.1), a(24, 24, 27, 0.075)),
+    glass_edge_hover: a(24, 24, 27, 0.2),
     glass_fill_accent: (a(24, 24, 27, 0.16), a(24, 24, 27, 0.125)),
+    glass_fill_accent_hover: (a(24, 24, 27, 0.24), a(24, 24, 27, 0.185)),
     glass_edge_accent: a(24, 24, 27, 0.34),
     sheen: a(255, 255, 255, 0.6),
     sheen_hover: a(255, 255, 255, 0.8),
     seat_in: a(24, 24, 27, 0.08),
     seat: a(24, 24, 27, 0.1),
+    seat_hover: a(24, 24, 27, 0.14),
 };
 
 const DARK: fn() -> Tokens = || Tokens {
@@ -116,12 +126,16 @@ const DARK: fn() -> Tokens = || Tokens {
     shadow_sm: a(0, 0, 0, 0.4),
     glass_fill: (a(255, 255, 255, 0.05), a(255, 255, 255, 0.04)),
     glass_edge: a(255, 255, 255, 0.09),
+    glass_fill_hover: (a(255, 255, 255, 0.1), a(255, 255, 255, 0.075)),
+    glass_edge_hover: a(255, 255, 255, 0.18),
     glass_fill_accent: (a(255, 255, 255, 0.18), a(255, 255, 255, 0.14)),
+    glass_fill_accent_hover: (a(255, 255, 255, 0.26), a(255, 255, 255, 0.2)),
     glass_edge_accent: a(255, 255, 255, 0.3),
     sheen: a(255, 255, 255, 0.1),
     sheen_hover: a(255, 255, 255, 0.24),
     seat_in: a(0, 0, 0, 0.35),
     seat: a(0, 0, 0, 0.5),
+    seat_hover: a(0, 0, 0, 0.55),
 };
 
 impl Tokens {
@@ -154,6 +168,19 @@ impl Tokens {
             spread_radius: px(width),
             inset: true,
         }
+    }
+
+    /// 손이 닿은 유리의 겹: 빛줄기(hover) + 두께 + 한 단 들린 그림자(--glass-seat-hover)
+    pub fn glass_shadow_hover(&self) -> Vec<BoxShadow> {
+        let mut v = self.glass_shadow(true);
+        v[2] = BoxShadow {
+            color: self.seat_hover,
+            offset: point(px(0.), px(2.)),
+            blur_radius: px(6.),
+            spread_radius: px(0.),
+            inset: false,
+        };
+        v
     }
 
     /// --shadow: 떠 있는 것(끌고 있는 줄, 메뉴)

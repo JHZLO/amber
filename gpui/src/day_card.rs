@@ -45,6 +45,11 @@ pub(crate) enum Confirm {
         id: i64,
         name: String,
     },
+    /// 타임테이블 블록
+    Block {
+        id: i64,
+        name: String,
+    },
 }
 
 /// 중첩 단계마다 더 들어가는 폭
@@ -453,6 +458,15 @@ impl Spike {
                                     cx.notify();
                                 }
                             }))
+                            // 포커스 없는 곳을 눌러도 닫히며 저장된다(GPUI 는 그때 blur 가 안 난다)
+                            .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                                if let Some((_, input)) = this.adding_child.clone() {
+                                    let text = input.read(cx).value().trim().to_string();
+                                    this.add_child(&text);
+                                }
+                                this.adding_child = None;
+                                cx.notify();
+                            }))
                             .child(Input::new(input).appearance(false)),
                     )
                 },
@@ -585,6 +599,11 @@ impl Spike {
                                         this.editing = None;
                                         cx.notify();
                                     }
+                                }))
+                                // 바깥 클릭 저장 — 포커스 없는 곳을 누르면 GPUI 는 blur 를 내지 않는다
+                                .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                                    this.save_edit(cx);
+                                    cx.notify();
                                 }))
                                 .child(Textarea::new(&state).appearance(false)),
                         )
@@ -787,14 +806,16 @@ impl Spike {
                 .justify_center()
                 .rounded(px(6.))
                 .cursor_pointer()
-                .text_color(k.text_3)
-                .when(danger, |d| {
-                    d.hover(move |s| s.bg(soft).text_color(danger_c))
-                })
-                .when(!danger, |d| {
-                    d.hover(move |s| s.bg(hover_bg).text_color(text))
-                })
-                .child(icon(icon_name, 13.))
+                .group("row-act")
+                .when(danger, |d| d.hover(move |s| s.bg(soft)))
+                .when(!danger, |d| d.hover(move |s| s.bg(hover_bg)))
+                .child(
+                    icon(icon_name, 13.)
+                        .text_color(k.text_3)
+                        .group_hover("row-act", move |s| {
+                            s.text_color(if danger { danger_c } else { text })
+                        }),
+                )
         };
         let row = div()
             .flex()
@@ -968,6 +989,11 @@ impl Spike {
                 amber_gpui::todos::remove_carry(&self.db, id, &self.date)
             }
             Some(Confirm::Parked { id, .. }) => amber_gpui::todos::delete_todo(&self.db, id),
+            Some(Confirm::Block { id, .. }) => {
+                let r = amber_gpui::blocks::delete_block(&self.db, id);
+                self.reload_blocks();
+                r
+            }
             None => Ok(()),
         };
         if let Err(e) = r {

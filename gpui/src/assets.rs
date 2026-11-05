@@ -28,7 +28,9 @@ impl AssetSource for Assets {
     }
 }
 
-/// 지금 앱의 <Icon name=… size=…/> — 획 1.75, currentColor 는 text_color 가 정한다
+/// 지금 앱의 <Icon name=… size=…/> — 획 1.75, currentColor 는 text_color 가 정한다.
+/// svg 는 부모 글자색을 물려받지 않는다 — 색을 주지 않으면 아무것도 그리지 않는다.
+/// 버튼 hover 로 색을 바꿀 땐 버튼에 group 을 걸고 아이콘에 group_hover 를 건다
 pub fn icon(name: &str, size: f32) -> Svg {
     svg()
         .path(format!("amber/{name}.svg"))

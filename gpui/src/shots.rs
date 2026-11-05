@@ -34,6 +34,13 @@ fn seed(dir: &Path) -> (String, String) {
     ] {
         todos::create_todo(&db, c, DATE, None, "day").unwrap();
     }
+    for (s, e, title) in [
+        (540, 570, "Standup"),
+        (600, 720, "Deep work"),
+        (750, 810, "Lunch"),
+    ] {
+        amber_gpui::blocks::create_block(&db, DATE, s, e, title, None).unwrap();
+    }
     (
         db_path.to_str().unwrap().to_string(),
         note.to_str().unwrap().to_string(),
@@ -67,6 +74,19 @@ impl Shots {
             })
             .unwrap()
             .unwrap_or_else(|| panic!("줄 {id} 이 화면에 없다"))
+    }
+
+    /// 타임테이블 그리드에서 그 분의 창 좌표(가로는 칸 가운데)
+    fn tt_at(&mut self, min: f64) -> Point<Pixels> {
+        self.cx.run_until_parked();
+        let g = self
+            .window
+            .update(&mut self.cx, |s, _, _| s.tt_grid.get())
+            .unwrap();
+        point(
+            g.center().x,
+            g.top() + px((min / 60. * crate::tt_card::HOUR_H as f64) as f32),
+        )
     }
 
     fn mouse(&mut self, p: Point<Pixels>, pressed: bool) {
@@ -126,4 +146,44 @@ pub fn run(dir: &str) {
     let at = point(grip.x, r1.top() + px(1.));
     s.cx.simulate_mouse_up(w, at, MouseButton::Left, Modifiers::none());
     s.shot("drag-4-dropped");
+
+    timetable(&mut s);
+}
+
+/// 타임테이블 — 08:30 이 판 위에 오게 굴려 두고 블록을 hover, 만들기, 겹쳐 옮기기, 제목 입력
+fn timetable(s: &mut Shots) {
+    let w = s.any();
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.tt_scroll
+                .set_offset(point(px(0.), px(-(8.5 * crate::tt_card::HOUR_H))));
+            cx.notify();
+        })
+        .unwrap();
+    let deep = s.tt_at(660.);
+    s.mouse(deep, false);
+    s.shot("tt-1-hover");
+
+    // 빈 곳 13:00 → 14:00 끌기(만드는 중)
+    let a = s.tt_at(905.);
+    s.mouse(a, false);
+    s.cx.simulate_mouse_down(w, a, MouseButton::Left, Modifiers::none());
+    s.mouse(point(a.x, a.y + px(4.)), true);
+    let b = s.tt_at(955.);
+    s.mouse(b, true);
+    s.shot("tt-2-creating");
+    s.cx.simulate_mouse_up(w, b, MouseButton::Left, Modifiers::none());
+    s.shot("tt-3-title");
+    s.cx.simulate_keystrokes(w, "escape");
+
+    // 점심을 깊은 작업 위로 — 놓기 전에 둘이 나란히 밀린다
+    let lunch = s.tt_at(770.);
+    s.mouse(lunch, false);
+    s.cx.simulate_mouse_down(w, lunch, MouseButton::Left, Modifiers::none());
+    s.mouse(point(lunch.x, lunch.y - px(4.)), true);
+    let up = s.tt_at(680.);
+    s.mouse(up, true);
+    s.shot("tt-4-moving");
+    s.cx.simulate_mouse_up(w, up, MouseButton::Left, Modifiers::none());
+    s.shot("tt-5-moved");
 }

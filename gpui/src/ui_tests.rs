@@ -7,8 +7,9 @@ use std::time::Instant;
 use amber_gpui::db::{Clock, Db, get_i64};
 use amber_gpui::todos;
 use gpui_kit::{
-    AppContext, Bounds, Modifiers, MouseButton, Pixels, Point, TestAppContext, VisualTestContext,
-    WindowAppearance, WindowBounds, WindowOptions, point, px, size,
+    AppContext, Bounds, Modifiers, MouseButton, Pixels, Point, ScrollDelta, ScrollEvent,
+    TestAppContext, VisualTestContext, WindowAppearance, WindowBounds, WindowOptions, point, px,
+    size,
 };
 
 use crate::{Spike, theme};
@@ -94,15 +95,67 @@ fn bounds(cx: &mut VisualTestContext, name: &'static str) -> Bounds<Pixels> {
 /// 그 이름의 요소를 눌러 to 까지 네 번에 나눠 끌고 놓는다(첫 움직임이 끌기를 시작한다)
 fn drag(cx: &mut VisualTestContext, name: &'static str, to: Point<Pixels>) {
     let from = bounds(cx, name).center();
-    cx.simulate_mouse_down(from, MouseButton::Left, Modifiers::none());
+    drag_points(cx, from, to, Modifiers::none());
+}
+
+fn drag_points(cx: &mut VisualTestContext, from: Point<Pixels>, to: Point<Pixels>, m: Modifiers) {
+    cx.simulate_mouse_move(from, None, m);
+    cx.simulate_mouse_down(from, MouseButton::Left, m);
     for i in 1..=4 {
         let f = i as f32 / 4.;
         let p = point(from.x + (to.x - from.x) * f, from.y + (to.y - from.y) * f);
-        cx.simulate_mouse_move(p, MouseButton::Left, Modifiers::none());
+        cx.simulate_mouse_move(p, MouseButton::Left, m);
         cx.run_until_parked();
     }
-    cx.simulate_mouse_up(to, MouseButton::Left, Modifiers::none());
+    cx.simulate_mouse_up(to, MouseButton::Left, m);
     cx.run_until_parked();
+}
+
+/// 타임테이블 그리드에서 그 분(자정부터)의 창 y
+fn tt_y(cx: &mut VisualTestContext, min: f64) -> Pixels {
+    let grid = bounds(cx, "tt-grid");
+    grid.top() + px((min / 60. * crate::tt_card::HOUR_H as f64) as f32)
+}
+
+/// 처음 스크롤은 시계(지금 - 1시간)를 따른다 — 그 분이 보이는 판 위쪽에 오게 굴린다
+fn scroll_tt_to(cx: &mut VisualTestContext, min: f64) {
+    let view = bounds(cx, "tt-scroll");
+    let dy = view.top() + px(40.) - tt_y(cx, min);
+    cx.simulate_event(ScrollEvent {
+        position: view.center(),
+        delta: ScrollDelta::Pixels(point(px(0.), dy)),
+        ..Default::default()
+    });
+    cx.run_until_parked();
+}
+
+/// (date, start_min, end_min, title) 를 id 순으로
+fn blocks_of(db: &PathBuf) -> Vec<(String, i64, i64, String)> {
+    let db = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    db.select("SELECT * FROM time_blocks ORDER BY id", &[])
+        .unwrap()
+        .iter()
+        .map(|r| {
+            (
+                text(r, "date"),
+                get_i64(r, "start_min").unwrap(),
+                get_i64(r, "end_min").unwrap(),
+                text(r, "title"),
+            )
+        })
+        .collect()
+}
+
+/// 블록 하나(10:00 - 11:00)를 깔고 연다
+fn with_block(cx: &mut TestAppContext, name: &str) -> (PathBuf, VisualTestContext) {
+    let (db, note) = seeded(name, &[]);
+    {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        amber_gpui::blocks::create_block(&d, DATE, 600, 660, "Meeting", None).unwrap();
+    }
+    let mut ui = open(cx, &db, &note);
+    scroll_tt_to(&mut ui, 570.);
+    (db, ui)
 }
 
 /// 같은 부모 아래 형제 순서(sort_order)
@@ -312,4 +365,110 @@ fn dropping_in_place_changes_nothing(cx: &mut TestAppContext) {
     drag(&mut ui, "grip-1", point(grip.x, grip.y - px(4.)));
     assert_eq!(order(&db, None), vec![1, 2]);
     assert!(get_i64(&row(&db, 2).unwrap(), "parent_id").is_none());
+}
+
+#[gpui_kit::test]
+fn dragging_on_the_grid_makes_a_block_and_asks_for_its_title(cx: &mut TestAppContext) {
+    let (db, note) = seeded("tt-create", &[]);
+    let mut ui = open(cx, &db, &note);
+    scroll_tt_to(&mut ui, 570.);
+    let grid = bounds(&mut ui, "tt-grid");
+    let x = grid.center().x;
+    let (y0, y1) = (tt_y(&mut ui, 605.), tt_y(&mut ui, 655.));
+    drag_points(&mut ui, point(x, y0), point(x, y1), Modifiers::none());
+    ui.simulate_input("Focus");
+    ui.simulate_keystrokes("enter");
+    ui.run_until_parked();
+    // 누른 칸의 시작(10:00)부터 놓은 칸의 끝(11:00)까지, 15분 단위
+    assert_eq!(
+        blocks_of(&db),
+        vec![(DATE.into(), 600, 660, "Focus".into())]
+    );
+}
+
+#[gpui_kit::test]
+fn dragging_a_block_moves_it_by_fifteen_minute_steps(cx: &mut TestAppContext) {
+    let (db, mut ui) = with_block(cx, "tt-move");
+    let from = bounds(&mut ui, "tt-block-1").center();
+    let to = point(from.x, from.y + px(44.));
+    drag_points(&mut ui, from, to, Modifiers::none());
+    assert_eq!(
+        blocks_of(&db),
+        vec![(DATE.into(), 660, 720, "Meeting".into())]
+    );
+}
+
+#[gpui_kit::test]
+fn dragging_the_bottom_edge_stretches_it(cx: &mut TestAppContext) {
+    let (db, mut ui) = with_block(cx, "tt-resize");
+    let from = bounds(&mut ui, "tt-resize-1").center();
+    let to = point(from.x, tt_y(&mut ui, 750.));
+    drag_points(&mut ui, from, to, Modifiers::none());
+    assert_eq!(
+        blocks_of(&db),
+        vec![(DATE.into(), 600, 750, "Meeting".into())]
+    );
+}
+
+#[gpui_kit::test]
+fn clicking_a_block_renames_it_and_a_click_outside_saves(cx: &mut TestAppContext) {
+    let (db, mut ui) = with_block(cx, "tt-rename");
+    click(&mut ui, "tt-block-1");
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_input("Standup");
+    // Enter 가 아니라 바깥을 눌러도 저장된다(지금 앱의 blur 저장)
+    click(&mut ui, "today");
+    assert_eq!(blocks_of(&db)[0].3, "Standup");
+}
+
+#[gpui_kit::test]
+fn deleting_a_block_asks_first(cx: &mut TestAppContext) {
+    let (db, mut ui) = with_block(cx, "tt-delete");
+    click(&mut ui, "tt-del-1");
+    click(&mut ui, "confirm-cancel");
+    assert_eq!(blocks_of(&db).len(), 1);
+    click(&mut ui, "tt-del-1");
+    click(&mut ui, "confirm-delete");
+    assert!(blocks_of(&db).is_empty());
+}
+
+#[gpui_kit::test]
+fn option_drag_on_a_block_makes_a_new_one_over_it(cx: &mut TestAppContext) {
+    let (db, mut ui) = with_block(cx, "tt-alt");
+    let from = point(
+        bounds(&mut ui, "tt-block-1").center().x,
+        tt_y(&mut ui, 620.),
+    );
+    let to = point(from.x, tt_y(&mut ui, 640.));
+    drag_points(&mut ui, from, to, Modifiers::alt());
+    ui.simulate_keystrokes("escape");
+    let got = blocks_of(&db);
+    assert_eq!(
+        got[0],
+        (DATE.into(), 600, 660, "Meeting".into()),
+        "아래 블록은 그대로"
+    );
+    assert_eq!((got[1].1, got[1].2), (615, 645));
+}
+
+#[gpui_kit::test]
+fn a_click_outside_saves_a_todo_edit(cx: &mut TestAppContext) {
+    let (db, note) = seeded("edit-out", &[("old name", None)]);
+    let mut ui = open(cx, &db, &note);
+    click(&mut ui, "txt-1-false");
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_input("new name");
+    click(&mut ui, "cal-2026-11-05");
+    assert_eq!(text(&row(&db, 1).unwrap(), "content"), "new name");
+}
+
+#[gpui_kit::test]
+fn a_click_outside_keeps_a_half_typed_sub_item(cx: &mut TestAppContext) {
+    let (db, note) = seeded("child-out", &[("parent", None)]);
+    let mut ui = open(cx, &db, &note);
+    click(&mut ui, "add-1");
+    ui.simulate_input("kid");
+    click(&mut ui, "cal-2026-11-05");
+    let kid = row(&db, 2).expect("바깥을 눌러도 적던 하위 항목은 저장된다");
+    assert_eq!(get_i64(&kid, "parent_id"), Some(1));
 }

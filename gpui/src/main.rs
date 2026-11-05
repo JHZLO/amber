@@ -16,6 +16,7 @@ mod row_drag;
 mod shots;
 mod theme;
 mod tt_card;
+mod tt_drag;
 #[cfg(test)]
 mod ui_tests;
 
@@ -105,6 +106,11 @@ struct Spike {
     tt_blocks: Vec<Row>,
     tt_scroll: ScrollHandle,
     tt_scrolled: Option<String>,
+    /// 블록 조작: 그리드를 누른 자리(⌥ 여부), 끄는 중인 미리보기, 그리드의 자리, 제목을 고치는 블록
+    tt_press: Option<(Point<Pixels>, bool)>,
+    tt_drag: Option<tt_drag::TtDrag>,
+    tt_grid: tt_drag::GridBounds,
+    tt_editing: Option<(i64, Entity<InputState>)>,
     /// 줄 끌기: 손잡이를 누른 자리, 끄는 중인 것, 줄마다 잰 자리와 목록 판의 자리
     grip_down: Option<Point<Pixels>>,
     row_drag: Option<row_drag::RowDrag>,
@@ -241,6 +247,10 @@ impl Spike {
             tt_blocks: Vec::new(),
             tt_scroll: ScrollHandle::new(),
             tt_scrolled: None,
+            tt_press: None,
+            tt_drag: None,
+            tt_grid: Default::default(),
+            tt_editing: None,
             grip_down: None,
             row_drag: None,
             row_bounds: Default::default(),
@@ -408,8 +418,9 @@ impl Render for Spike {
         let k = Tokens::get(cx);
         let (fg, border) = (k.text, k.border);
         // 창 밖에서 놓으면 놓을 자리 없이 끌기가 끝난다 — 남은 상태를 걷는다
-        if self.row_drag.is_some() && !cx.has_active_drag() {
+        if !cx.has_active_drag() {
             self.row_drag = None;
+            self.tt_drag = None;
         }
         let this = cx.entity().downgrade();
         let on_link: markdown::OnLink = {
@@ -541,6 +552,11 @@ impl Render for Spike {
                     i18n::t_with("todos.parked.deleteConfirm", &[("name", "{name}")]),
                     name.clone(),
                 ),
+                day_card::Confirm::Block { name, .. } => (
+                    t("todos.tt.deleteBlockTitle"),
+                    i18n::t_with("todos.tt.deleteBlockConfirm", &[("name", "{name}")]),
+                    name.clone(),
+                ),
             };
             dialog::confirm_delete(
                 &k,
@@ -566,6 +582,10 @@ impl Render for Spike {
             .text_color(fg)
             .on_drop(cx.listener(|this, _: &row_drag::DragRow, _, cx| {
                 this.drop_row();
+                cx.notify();
+            }))
+            .on_drop(cx.listener(|this, _: &tt_drag::TtGrab, window, cx| {
+                this.tt_drop(window, cx);
                 cx.notify();
             }))
             .child(self.rail(&k, cx))

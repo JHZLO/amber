@@ -315,9 +315,13 @@ impl Spike {
                     .rounded(px(6.))
                     .opacity(0.)
                     .group_hover("parked-card", |s| s.opacity(1.))
-                    .text_color(k.text_3)
-                    .hover(move |s| s.bg(soft).text_color(danger))
-                    .child(icon("trash", 13.))
+                    .group("parked-del")
+                    .hover(move |s| s.bg(soft))
+                    .child(
+                        icon("trash", 13.)
+                            .text_color(k.text_3)
+                            .group_hover("parked-del", move |s| s.text_color(danger)),
+                    )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.confirm = Some(Confirm::Parked {
