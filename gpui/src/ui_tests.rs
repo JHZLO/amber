@@ -777,3 +777,98 @@ fn saving_over_a_newer_disk_file_asks_first(cx: &mut TestAppContext) {
     click(&mut ui, "conflict-overwrite");
     assert_eq!(read_note(&db, "A.md"), "# mine\n");
 }
+
+fn vault_has(db: &PathBuf, rel: &str) -> bool {
+    db.parent().unwrap().join("vault/notes").join(rel).exists()
+}
+
+#[gpui_kit::test]
+fn a_new_note_path_creates_folders_and_opens_for_editing(cx: &mut TestAppContext) {
+    let db = seeded("notes-new", &[]);
+    vault_note(&db, "Inbox.md", "# Inbox\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "notes-new-note");
+    ui.simulate_input("CS/네트워크");
+    click(&mut ui, "name-submit");
+    assert_eq!(
+        read_note(&db, "CS/네트워크.md"),
+        "# 네트워크\n\n",
+        "중간 폴더까지, 제목 틀"
+    );
+    assert!(
+        ui.debug_bounds("tree-CS/네트워크.md").is_some(),
+        "만든 자리까지 펼친다"
+    );
+    assert!(ui.debug_bounds("note-save").is_some(), "바로 편집");
+}
+
+#[gpui_kit::test]
+fn bad_names_and_duplicates_stay_in_the_modal(cx: &mut TestAppContext) {
+    let db = seeded("notes-badname", &[]);
+    vault_note(&db, "A.md", "# A\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "notes-new-note");
+    ui.simulate_input("a:b");
+    ui.simulate_keystrokes("enter");
+    ui.run_until_parked();
+    assert!(
+        ui.debug_bounds("name-submit").is_some(),
+        "금지 글자면 닫히지 않는다"
+    );
+    assert!(!vault_has(&db, "a:b.md"));
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_input("A");
+    click(&mut ui, "name-submit");
+    assert!(
+        ui.debug_bounds("name-submit").is_some(),
+        "같은 이름이면 닫히지 않는다"
+    );
+    click(&mut ui, "name-cancel");
+    assert!(ui.debug_bounds("name-submit").is_none());
+}
+
+#[gpui_kit::test]
+fn a_new_folder_goes_where_the_location_says(cx: &mut TestAppContext) {
+    let db = seeded("notes-newfolder", &[]);
+    vault_note(&db, "CS/a.md", "# a\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "notes-new-folder");
+    click(&mut ui, "name-dir");
+    // 0 = 루트, 1 = /CS
+    click(&mut ui, "name-dir-menu-1");
+    ui.simulate_input("Sub");
+    click(&mut ui, "name-submit");
+    assert!(db.parent().unwrap().join("vault/notes/CS/Sub").is_dir());
+    assert!(ui.debug_bounds("tree-CS/Sub").is_some(), "펼쳐서 보여 준다");
+}
+
+#[gpui_kit::test]
+fn renaming_from_the_row_keeps_the_open_note(cx: &mut TestAppContext) {
+    let db = seeded("notes-rename", &[]);
+    vault_note(&db, "A.md", "# A\n\nbody\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-A.md");
+    click(&mut ui, "row-rename-A.md");
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_input("B");
+    ui.simulate_keystrokes("enter");
+    ui.run_until_parked();
+    assert!(!vault_has(&db, "A.md") && vault_has(&db, "B.md"));
+    assert!(ui.debug_bounds("tree-B.md").is_some());
+    // 제목을 눌러도 같은 모달
+    click(&mut ui, "note-title");
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_input("C");
+    click(&mut ui, "name-submit");
+    assert!(vault_has(&db, "C.md"));
+    click(&mut ui, "note-copy");
+    assert_eq!(
+        ui.read_from_clipboard().and_then(|c| c.text()).as_deref(),
+        Some("# A\n\nbody\n"),
+        "열린 노트가 새 이름을 따라간다"
+    );
+}

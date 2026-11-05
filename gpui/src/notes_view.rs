@@ -133,6 +133,8 @@ pub struct NotesState {
     /// 편집 중이면 초안과 미리보기, 그리고 떠 있는 확인 창(저장 안 한 변경, 디스크 충돌)
     pub edit: Option<crate::note_edit::NoteEdit>,
     pub prompt: Option<crate::note_edit::NotePrompt>,
+    /// 새 노트, 새 폴더, 이름 바꾸기 모달
+    pub names: Option<crate::note_names::NameModal>,
     pub width: f32,
     pub copied: bool,
     /// 경로 줄을 눌러 복사한 직후(1.5초 동안 체크 표식)
@@ -485,8 +487,32 @@ impl Spike {
                     .child(icon("chevron-down", 10.).text_color(k.text_3)),
             )
             .child(div().flex_1())
-            .child(icon_btn("notes-new-note", "file-plus", 15.))
-            .child(icon_btn("notes-new-folder", "folder-plus", 15.))
+            .child(
+                icon_btn("notes-new-note", "file-plus", 15.).on_click(cx.listener(
+                    |this, _, window, cx| {
+                        this.open_name_modal(
+                            crate::note_names::NameKind::NewNote,
+                            None,
+                            window,
+                            cx,
+                        );
+                        cx.notify();
+                    },
+                )),
+            )
+            .child(
+                icon_btn("notes-new-folder", "folder-plus", 15.).on_click(cx.listener(
+                    |this, _, window, cx| {
+                        this.open_name_modal(
+                            crate::note_names::NameKind::NewFolder,
+                            None,
+                            window,
+                            cx,
+                        );
+                        cx.notify();
+                    },
+                )),
+            )
             .child(icon_btn("notes-find", "search", 14.))
             .child(
                 icon_btn("notes-refresh", "refresh", 14.).on_click(cx.listener(
@@ -585,9 +611,12 @@ impl Spike {
         let path = n.path.clone();
         let is_dir = n.is_dir;
         let tag = format!("tree-{}", n.path);
+        let actions = self.tree_row_actions(n, k, cx);
         div()
             .id(SharedString::from(tag.clone()))
             .tag(tag)
+            .group("tree-row")
+            .relative()
             .flex()
             .items_center()
             .gap(px(6.))
@@ -660,6 +689,7 @@ impl Spike {
                     .text_ellipsis()
                     .child(n.name.clone()),
             )
+            .child(actions)
             .on_click(cx.listener(move |this, _, _, cx| {
                 if is_dir {
                     this.toggle_dir(&path);
@@ -812,15 +842,44 @@ impl Spike {
                         this.copy_note_path(cx);
                     }))
             }))
-            // .detail-title
+            // .detail-title — 제목 = 파일명. 누르면 트리의 이름 바꾸기와 같은 모달(연필은 hover 때만)
             .child(
-                div()
-                    .mb(px(6.))
-                    .text_size(px(23.))
-                    .line_height(relative(1.3))
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(k.text)
-                    .child(name),
+                div().flex().mb(px(6.)).child(
+                    div()
+                        .id("note-title")
+                        .tag("note-title")
+                        .group("note-title")
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .cursor_pointer()
+                        .text_size(px(23.))
+                        .line_height(relative(1.3))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(k.text)
+                        .child(name)
+                        .child(
+                            icon("pencil", 15.)
+                                .text_color(k.text_3)
+                                .opacity(0.)
+                                .group_hover("note-title", |s| s.opacity(1.)),
+                        )
+                        .on_click({
+                            let rel = rel.clone();
+                            cx.listener(move |this, _, window, cx| {
+                                this.open_name_modal(
+                                    crate::note_names::NameKind::Rename {
+                                        path: rel.clone(),
+                                        is_dir: false,
+                                    },
+                                    None,
+                                    window,
+                                    cx,
+                                );
+                                cx.notify();
+                            })
+                        }),
+                ),
             )
             .child(actions)
             .child(

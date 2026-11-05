@@ -216,6 +216,7 @@ impl Spike {
                 let target = target.clone();
                 dialog::shell(
                     k,
+                    440.,
                     t("common.unsaved.title"),
                     div().child(t("common.unsaved.body")).into_any_element(),
                     vec![
@@ -250,6 +251,7 @@ impl Spike {
                 );
                 dialog::shell(
                     k,
+                    440.,
                     t("notes.conflict.title"),
                     div()
                         .flex()

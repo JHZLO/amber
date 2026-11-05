@@ -14,6 +14,7 @@ mod markdown;
 mod menu;
 mod note;
 mod note_edit;
+mod note_names;
 mod notes_view;
 mod pane;
 mod row_drag;
@@ -602,6 +603,7 @@ impl Render for Spike {
                     .child(div().flex_1().min_h_0().child(body)),
             )
             .children(self.drop_line(&k))
+            .children(self.name_modal_view(&k, window, cx))
             .children(self.note_prompt(&k, cx))
             .children(confirm)
     }

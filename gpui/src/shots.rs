@@ -220,6 +220,19 @@ fn notes(s: &mut Shots) {
     s.mouse(point(px(160.), px(150.)), false);
     s.shot("notes-open");
     s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.open_name_modal(crate::note_names::NameKind::NewNote, None, window, cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.shot("notes-name-modal");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.notes.names = None;
+            cx.notify();
+        })
+        .unwrap();
+    s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.open_note("Reading.md", cx);
             cx.notify();

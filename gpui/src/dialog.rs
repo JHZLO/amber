@@ -11,6 +11,7 @@ use crate::theme::Tokens;
 /// 확인 창 틀(ConfirmShell) — 제목, 본문, 오른쪽 아래 버튼 줄. 바깥을 눌러도 닫히지 않는다(경고 창)
 pub fn shell(
     k: &Tokens,
+    max_w: f32,
     title: String,
     body: AnyElement,
     buttons: Vec<Stateful<Div>>,
@@ -34,7 +35,7 @@ pub fn shell(
             div()
                 .relative()
                 .w_full()
-                .max_w(px(440.))
+                .max_w(px(max_w))
                 .flex()
                 .flex_col()
                 .rounded(px(12.))
@@ -97,7 +98,12 @@ pub fn shell(
                         .py(px(14.))
                         .border_t_1()
                         .border_color(k.border)
-                        .children(buttons),
+                        // 한 줄에 선 버튼은 키가 같다 — 줄이 이긴다(.modal-foot .btn: 32px, 옆 14px, 12.5px)
+                        .children(
+                            buttons
+                                .into_iter()
+                                .map(|b| b.h(px(32.)).px(px(14.)).text_size(px(12.5))),
+                        ),
                 ),
         )
 }
