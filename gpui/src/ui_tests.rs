@@ -1371,3 +1371,59 @@ fn questions_and_find_reach_inside_toggles(cx: &mut TestAppContext) {
     });
     assert_eq!(n, 2, "토글 안 글도 찾는다");
 }
+
+#[gpui_kit::test]
+fn revising_an_answer_replaces_it_in_place(cx: &mut TestAppContext) {
+    let db = seeded("cmt-revise", &[]);
+    vault_note(&db, "R.md", "# R\n\nalpha beta\n");
+    vault_sidecar(
+        &db,
+        "R.md",
+        r#"{"version":1,"comments":[
+  {"id":"r1","anchor":"alpha","occurrence":0,"question":"q0","answer":"first answer","createdAt":1,
+   "followUps":[{"question":"q1","answer":"second answer","createdAt":2}]}
+]}"#,
+    );
+    let dir = db.parent().unwrap().to_path_buf();
+    let bin = fake_claude(&dir, "Shorter.");
+    {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        amber_gpui::ai_config::connect_provider(&d, "claude", bin.to_str().unwrap(), None).unwrap();
+    }
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-R.md");
+    click(&mut ui, "cmt-trigger");
+    click(&mut ui, "cmt-open-r1");
+    // Esc 로 접힌다
+    click(&mut ui, "cmt-revise-0");
+    assert!(ui.debug_bounds("cmt-revise-send").is_some());
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert!(ui.debug_bounds("cmt-revise-send").is_none());
+    // 둘째 답을 고친다 — 덧붙이지 않고 그 자리에서
+    click(&mut ui, "cmt-revise-1");
+    ui.simulate_input("make it shorter");
+    ui.simulate_keystrokes("enter");
+    ui.run_until_parked();
+    wait_answer(&mut ui);
+    let sent = std::fs::read_to_string(dir.join("fake-claude.in")).unwrap();
+    assert!(sent.contains("[고쳐 쓸 답변]\nsecond answer"), "{sent}");
+    assert!(
+        sent.contains("[질문]\nmake it shorter"),
+        "지시가 질문 자리에"
+    );
+    ui.update(|_, cx| {
+        let c = &spike().read(cx).notes.cmts;
+        assert_eq!(c.error, None);
+        assert_eq!(c.list[0]["answer"], "first answer");
+        assert_eq!(c.list[0]["followUps"][0]["answer"], "Shorter.");
+        assert_eq!(
+            c.list[0]["followUps"].as_array().unwrap().len(),
+            1,
+            "덧붙지 않는다"
+        );
+        assert!(c.revise.is_none(), "다 고치면 지시 줄이 닫힌다");
+    });
+    assert_eq!(sidecar_ids(&db, "R.md"), vec!["r1"]);
+}

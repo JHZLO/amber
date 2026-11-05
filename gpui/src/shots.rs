@@ -405,6 +405,14 @@ fn comments(s: &mut Shots) {
     s.shot("cmt-thread");
     s.window
         .update(&mut s.cx, |sp, _, cx| {
+            sp.notes.cmts.revise = Some((0, None));
+            cx.notify();
+        })
+        .unwrap();
+    s.cx.run_until_parked();
+    s.shot("cmt-revise");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
             sp.close_pop(cx);
             cx.notify();
         })
@@ -425,6 +433,7 @@ fn comments(s: &mut Shots) {
                 anchor: "replays it against the Rust one".into(),
                 occurrence: 0,
                 at: point(b.left() + px(560.), b.top() + px(68.)),
+                scroll_y: sp.scroll.offset().y,
             });
             cx.notify();
         })

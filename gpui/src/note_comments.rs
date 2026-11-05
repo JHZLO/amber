@@ -41,7 +41,9 @@ pub enum Pop {
 pub struct Sel {
     pub anchor: String,
     pub occurrence: usize,
+    /// 놓은 자리(창 좌표)와 그때의 본문 스크롤 — 굴리면 버튼이 글을 따라간다
     pub at: Point<Pixels>,
+    pub scroll_y: Pixels,
 }
 
 #[derive(Default)]
@@ -60,11 +62,17 @@ pub struct Cmts {
     pub error: Option<String>,
     /// 답을 기다리는 후속 질문 — 스레드 끝에 먼저 보인다
     pub pending_q: Option<(String, String)>,
+    /// 고쳐 쓰는 답(턴 번호 — 0 = 첫 답)과 지시 입력칸(None = render 에서 만든다)
+    pub revise: Option<(usize, Option<Entity<TextareaState>>)>,
     /// 마지막으로 마우스를 놓은 자리 — [질문] 버튼이 거기 뜬다
     pub mouse: Point<Pixels>,
     /// 덩어리마다 마지막으로 본 글자(파싱이 끝났는지 알려고)
     seen: Vec<RenderedText>,
 }
+
+type AskRx = futures::channel::oneshot::Receiver<
+    Result<amber_core::ai::NoteAskResult, amber_core::ai::AiError>,
+>;
 
 fn s(v: &Json, k: &str) -> String {
     v.get(k)
@@ -235,6 +243,7 @@ impl Spike {
                 occurrence: occurrence_at(&doc, &anchor, a),
                 anchor,
                 at,
+                scroll_y: self.scroll.offset().y,
             });
             break;
         }
@@ -296,6 +305,7 @@ impl Spike {
         c.sel = None;
         c.list_open = false;
         c.pop = Some(pop);
+        c.revise = None;
         c.rebuild = Some(String::new());
         for state in text_states(&self.notes.blocks) {
             state.update(cx, |s, cx| s.clear_selection(cx));
@@ -307,12 +317,30 @@ impl Spike {
         let c = &mut self.notes.cmts;
         c.pop = None;
         c.input = None;
+        c.revise = None;
         c.error = None;
         self.repaint_marks(cx);
     }
 
     /// render 에서 — 질문/후속 입력칸을 지금 패널에 맞게 새로 만든다
     pub(crate) fn apply_cmt_rebuild(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some((turn, None)) = self.notes.cmts.revise {
+            let input = cx.new(|cx| {
+                TextareaState::new(window, cx)
+                    .auto_grow(1, 4)
+                    .submit_on_enter(true)
+                    .placeholder(t("notes.cmt.revisePh"))
+            });
+            cx.subscribe_in(&input, window, |this, _, ev: &InputEvent, _, cx| {
+                if let InputEvent::PressEnter { shift: false, .. } = ev {
+                    this.submit_revise(cx);
+                    cx.notify();
+                }
+            })
+            .detach();
+            input.update(cx, |s, cx| s.focus(window, cx));
+            self.notes.cmts.revise = Some((turn, Some(input)));
+        }
         let Some(value) = self.notes.cmts.rebuild.take() else {
             return;
         };
@@ -349,6 +377,115 @@ impl Spike {
             .unwrap_or_default()
     }
 
+    /// AI 에 묻는다(tokio 위). 연결이 없으면 None — 보내기 단추가 이미 꺼져 있다
+    fn ask_ai(
+        &self,
+        anchor: &str,
+        question: &str,
+        history: Option<Vec<AskExchange>>,
+        revise: Option<String>,
+    ) -> Option<AskRx> {
+        let cfg = amber_gpui::ai_config::load_config(&self.db)
+            .ok()
+            .filter(|c| c.provider.is_some())?;
+        Some(crate::ai::spawn(amber_core::ai::ai_note_ask(
+            anchor.to_string(),
+            question.to_string(),
+            self.notes.body.clone(),
+            history,
+            revise,
+            Some(cfg.model.clone()).filter(|m| !m.is_empty()),
+            Some(cfg.cli_path.clone()).filter(|p| !p.is_empty()),
+            cfg.provider.clone(),
+            None,
+            Some(amber_gpui::ai_config::output_lang(&cfg)),
+        )))
+    }
+
+    /// 답 고쳐 쓰기 — 새 문답으로 덧붙이지 않고 그 답을 제자리에서 바꾼다("더 짧게", "한국어로" 처럼)
+    pub(crate) fn submit_revise(&mut self, cx: &mut Context<Self>) {
+        let c = &self.notes.cmts;
+        let Some((turn, Some(input))) = c.revise.clone() else {
+            return;
+        };
+        let instruction = input.read(cx).value().trim().to_string();
+        if c.asking.is_some() || instruction.chars().count() < 2 {
+            return;
+        }
+        let (Some(rel), Some(pop)) = (self.notes.selected.clone(), c.pop.clone()) else {
+            return;
+        };
+        let Pop::View { id, .. } = &pop else {
+            return;
+        };
+        let id = id.clone();
+        let Some(cm) = c.list.iter().find(|x| s(x, "id") == id) else {
+            return;
+        };
+        let Some((_, prev, _)) = turns_of(cm).into_iter().nth(turn) else {
+            return;
+        };
+        let (anchor, occ) = (
+            s(cm, "anchor"),
+            cm["occurrence"].as_u64().unwrap_or(0) as usize,
+        );
+        let Some(rx) = self.ask_ai(&anchor, &instruction, None, Some(prev)) else {
+            return;
+        };
+        let c = &mut self.notes.cmts;
+        c.asking = Some((anchor, occ, pop));
+        c.error = None;
+        self.repaint_marks(cx);
+        cx.spawn(async move |this, cx| {
+            let r = crate::ai::wait(rx, cx.background_executor().clone()).await;
+            let _ = this.update(cx, |s, cx| {
+                s.notes.cmts.asking = None;
+                match r {
+                    Some(Ok(res)) => s.replace_answer(&rel, &id, turn, res),
+                    Some(Err(e)) => s.notes.cmts.error = Some(crate::ai::err_text(&e)),
+                    None => {}
+                }
+                s.repaint_marks(cx);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// 디스크 기준으로 그 답만 갈아끼운다(요청 중 다른 저장이 있었어도)
+    fn replace_answer(
+        &mut self,
+        rel: &str,
+        id: &str,
+        turn: usize,
+        res: amber_core::ai::NoteAskResult,
+    ) {
+        let r = comments::mutate_comments(&self.db, rel, |mut list| {
+            if let Some(c) = list.iter_mut().find(|c| s(c, "id") == id) {
+                let slot = if turn == 0 {
+                    Some(c)
+                } else {
+                    c.get_mut("followUps")
+                        .and_then(Json::as_array_mut)
+                        .and_then(|a| a.get_mut(turn - 1))
+                };
+                if let Some(t) = slot {
+                    t["answer"] = json!(res.answer);
+                    t["model"] = json!(res.meta.model);
+                }
+            }
+            list
+        });
+        match r {
+            Err(e) => self.notes.cmts.error = Some(t(&e)),
+            Ok(next) if self.notes.selected.as_deref() == Some(rel) => {
+                self.notes.cmts.list = next;
+                self.notes.cmts.revise = None;
+            }
+            Ok(_) => {}
+        }
+    }
+
     /// 질문(새 스레드) 또는 이어 묻기 — 이어 물을 땐 그 스레드의 문답 전부를 문맥으로 싣는다
     pub(crate) fn submit_question(&mut self, cx: &mut Context<Self>) {
         let q = self.input_value(cx);
@@ -357,12 +494,6 @@ impl Spike {
             return;
         }
         let Some(rel) = self.notes.selected.clone() else {
-            return;
-        };
-        let Some(cfg) = amber_gpui::ai_config::load_config(&self.db)
-            .ok()
-            .filter(|c| c.provider.is_some())
-        else {
             return;
         };
         let Some(pop) = c.pop.clone() else {
@@ -382,18 +513,9 @@ impl Spike {
                 (s(cm, "anchor"), occ, Some(id.clone()), Some(history))
             }
         };
-        let rx = crate::ai::spawn(amber_core::ai::ai_note_ask(
-            anchor.clone(),
-            q.clone(),
-            self.notes.body.clone(),
-            history,
-            None,
-            Some(cfg.model.clone()).filter(|m| !m.is_empty()),
-            Some(cfg.cli_path.clone()).filter(|p| !p.is_empty()),
-            cfg.provider.clone(),
-            None,
-            Some(amber_gpui::ai_config::output_lang(&cfg)),
-        ));
+        let Some(rx) = self.ask_ai(&anchor, &q, history, None) else {
+            return;
+        };
         let c = &mut self.notes.cmts;
         c.asking = Some((anchor.clone(), occurrence, pop));
         c.error = None;
@@ -537,8 +659,10 @@ impl Spike {
         Some(
             div()
                 .absolute()
+                // 지금 앱: 선택 끝 +6, 첫 줄 위 38. 우리는 놓은 자리만 안다 — 줄 가운데에서 한 줄 반 위로.
+                // 본문을 굴리면 따라간다
                 .left(sel.at.x + px(6.))
-                .top(sel.at.y + px(10.))
+                .top((sel.at.y + (self.scroll.offset().y - sel.scroll_y) - px(48.)).max(px(8.)))
                 .child(
                     div()
                         .id("cmt-fab")
@@ -955,7 +1079,10 @@ impl Spike {
             .filter(|(pid, _)| pid == id)
             .map(|(_, q)| q);
         let on_link = self.on_link(cx);
-        let can = !asking && self.input_value(cx).chars().count() >= 2;
+        let ai_ok = amber_gpui::ai_config::load_config(&self.db)
+            .ok()
+            .is_some_and(|c| c.provider.is_some());
+        let can = ai_ok && !asking && self.input_value(cx).chars().count() >= 2;
         let del = cm.clone();
         let now = chrono::Local::now().timestamp_millis();
         Some(
@@ -1000,7 +1127,11 @@ impl Spike {
                         .min_h_0()
                         .overflow_y_scroll()
                         .children(turns.into_iter().enumerate().map(|(i, (q, a, _))| {
+                            let group = SharedString::from(format!("cmt-turn-{i}"));
+                            let revising = c.revise.as_ref().filter(|(t, _)| *t == i);
                             div()
+                                .id(group.clone())
+                                .group(group.clone())
                                 .flex()
                                 .flex_col()
                                 .gap(px(11.))
@@ -1016,6 +1147,14 @@ impl Spike {
                                     )),
                                     k,
                                 ))
+                                .child(match revising {
+                                    Some((_, Some(input))) => self.revise_line(input, ai_ok, k, cx),
+                                    Some((_, None)) => div(),
+                                    None => Self::revise_action(i, group, asking || !ai_ok, k, cx),
+                                })
+                                .when(asking && revising.is_some(), |d| {
+                                    d.child(Self::cmt_waiting(t("notes.cmt.revising"), k))
+                                })
                         }))
                         .children(pending.map(|q| {
                             div()
@@ -1143,9 +1282,89 @@ impl Spike {
     }
 
     fn cmt_input_box(&self, k: &Tokens) -> Div {
-        let Some(input) = self.notes.cmts.input.as_ref() else {
-            return div();
-        };
+        match self.notes.cmts.input.as_ref() {
+            Some(input) => Self::input_box(input, k),
+            None => div(),
+        }
+    }
+
+    /// 답마다 붙는 '고쳐 쓰기'(.cmt-turn-act) — 평소엔 숨어 있다가 그 문답에 손이 오면 드러난다. 답 쪽(왼쪽)에 선다
+    fn revise_action(
+        turn: usize,
+        group: SharedString,
+        disabled: bool,
+        k: &Tokens,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let (bg, fg) = (k.surface_2, k.text_2);
+        let id = SharedString::from(format!("cmt-revise-{turn}"));
+        div().flex().mt(px(-4.)).pl(px(36.)).min_h(px(18.)).child(
+            div()
+                .id(id.clone())
+                .tag(id)
+                .flex()
+                .items_center()
+                .gap(px(4.))
+                .px(px(6.))
+                .py(px(2.))
+                .rounded(px(5.))
+                .text_size(px(11.5))
+                .text_color(k.text_3)
+                .opacity(0.)
+                .group_hover(group, |st| st.opacity(1.))
+                .when(!disabled, |d| {
+                    d.cursor_pointer()
+                        .hover(move |st| st.bg(bg).text_color(fg))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.notes.cmts.revise = Some((turn, None));
+                            this.notes.cmts.error = None;
+                            cx.notify();
+                        }))
+                })
+                .child(icon("pencil", 11.).text_color(k.text_3))
+                .child(t("notes.cmt.revise")),
+        )
+    }
+
+    /// 고쳐 쓰기 지시 줄(.cmt-revise) — 후속 질문 줄과 같은 치수. Esc 로 접는다
+    fn revise_line(
+        &self,
+        input: &Entity<TextareaState>,
+        ai_ok: bool,
+        k: &Tokens,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let asking = self.notes.cmts.asking.is_some();
+        let can = ai_ok && !asking && input.read(cx).value().trim().chars().count() >= 2;
+        div()
+            .flex()
+            .items_end()
+            .gap(px(6.))
+            .mt(px(6.))
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+                if e.keystroke.key == "escape" {
+                    this.notes.cmts.revise = None;
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+            }))
+            .child(div().flex_1().min_w_0().child(Self::input_box(input, k)))
+            .child(
+                primary_button("cmt-revise-send", k, !can)
+                    .h(px(34.))
+                    .w(px(34.))
+                    .px_0()
+                    .justify_center()
+                    .flex_shrink_0()
+                    .child(icon("sparkles", 15.).text_color(k.text))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.submit_revise(cx);
+                        cx.notify();
+                    })),
+            )
+    }
+
+    fn input_box(input: &Entity<TextareaState>, k: &Tokens) -> Div {
         // 여러 줄 입력은 제 안쪽 여백(small = 위아래 2, 옆 8)을 가진다 — 바깥 상자는 나머지만(.textarea: 6 11, 34px)
         div()
             .rounded(px(6.))
