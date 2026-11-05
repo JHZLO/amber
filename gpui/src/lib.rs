@@ -1,3 +1,4 @@
+pub mod ai_config;
 pub mod blocks;
 pub mod comments;
 pub mod concepts;
@@ -127,6 +128,10 @@ pub const OPS: &[&str] = &[
     "comments.mutateComments",
     "comments.saveComments",
     "noteAnchor.nthIndex",
+    "config.loadConfig",
+    "config.connectProvider",
+    "config.skipAiOnboarding",
+    "config.saveConfig",
     "date.todayStr",
     "date.shiftDay",
     "date.addMonths",
@@ -300,6 +305,9 @@ pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
 /// vault 파일 op — DB 쪽과 결과 모양이 같다(경로는 문자열, 없음은 null)
 fn call_files(db: &Db, op: &str, a: &Args) -> Result<Json, String> {
     if let Some(r) = comments::call(db, op, a.0) {
+        return r;
+    }
+    if let Some(r) = ai_config::call(db, op, a.0) {
         return r;
     }
     use vault::{DIAGRAMS, ERD, Tree};
