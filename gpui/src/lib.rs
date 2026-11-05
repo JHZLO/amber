@@ -108,6 +108,14 @@ pub const OPS: &[&str] = &[
     "erdStore.deleteErdEntry",
     "vaultTree.writeAtomic",
     "vaultTree.searchFiles",
+    "vaultTree.parentOf",
+    "vaultTree.invalidNameReason",
+    "vaultTree.invalidPathReason",
+    "vaultTree.normalizePath",
+    "vaultTree.flattenDirs",
+    "vaultTree.ancestorPaths",
+    "vaultTree.remapPath",
+    "vaultTree.remapPaths",
     "date.todayStr",
     "date.shiftDay",
     "date.addMonths",
@@ -324,7 +332,8 @@ fn call_files(db: &Db, op: &str, a: &Args) -> Result<Json, String> {
             let limit = a.0.get(2).and_then(Json::as_u64).unwrap_or(20) as usize;
             json(tree.search(a.s(1)?, limit))
         }
-        _ => dates::call(op, a.0, db.now())
+        _ => vault::call_pure(op, a.0)
+            .or_else(|| dates::call(op, a.0, db.now()))
             .or_else(|| tree::call(op, a.0))
             .or_else(|| timetable::call(op, a.0, db.now()))
             .unwrap_or_else(|| Err(format!("모르는 op: {op}"))),

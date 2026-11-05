@@ -116,6 +116,119 @@ fn ko_compare(a: &str, b: &str) -> Ordering {
 
 // ---- 순수 계산(vaultTree.ts) ----
 
+/// 이름 하나의 문제(vaultTree.ts 의 invalidNameReason) — 빈 이름, `/ \ :`, 점으로 시작, 80자(UTF-16) 넘음
+pub fn invalid_name_reason(name: &str) -> Option<String> {
+    let n = js_trim(name);
+    if n.is_empty() {
+        return Some(crate::i18n::t("common.name.empty"));
+    }
+    if n.contains(['/', '\\', ':']) {
+        return Some(crate::i18n::t("common.name.badChars"));
+    }
+    if n.starts_with('.') {
+        return Some(crate::i18n::t("common.name.leadingDot"));
+    }
+    if n.encode_utf16().count() > 80 {
+        return Some(crate::i18n::t("common.name.tooLong"));
+    }
+    None
+}
+
+/// 'CS/네트워크' 같은 여러 단 경로 — 구간마다 이름 규칙
+pub fn invalid_path_reason(path: &str) -> Option<String> {
+    let segs: Vec<&str> = path
+        .split('/')
+        .map(js_trim)
+        .filter(|s| !s.is_empty())
+        .collect();
+    if segs.is_empty() {
+        return Some(crate::i18n::t("common.name.empty"));
+    }
+    segs.into_iter().find_map(invalid_name_reason)
+}
+
+/// 폴더 경로만 펼친다(만들 자리 고르기) — 루트('') 가 맨 앞
+pub fn flatten_dirs(tree: &[Node]) -> Vec<String> {
+    fn walk(nodes: &[Node], out: &mut Vec<String>) {
+        for n in nodes {
+            if n.is_dir {
+                out.push(n.path.clone());
+                if let Some(c) = &n.children {
+                    walk(c, out);
+                }
+            }
+        }
+    }
+    let mut out = vec![String::new()];
+    walk(tree, &mut out);
+    out
+}
+
+/// a/b/c → [a, a/b, a/b/c]
+pub fn ancestor_paths(dir: &str) -> Vec<String> {
+    let parts: Vec<&str> = dir.split('/').filter(|s| !s.is_empty()).collect();
+    (1..=parts.len()).map(|i| parts[..i].join("/")).collect()
+}
+
+/// 폴더 이름이 바뀌면 그 폴더와 하위 경로만 새 접두사로 — 이름이 접두사로만 겹치는 형제('CS' 와 'CS수업.md')는 그대로
+pub fn remap_path(path: &str, old: &str, new: &str) -> String {
+    if path == old {
+        return new.to_string();
+    }
+    match path.strip_prefix(old).filter(|r| r.starts_with('/')) {
+        Some(rest) => format!("{new}{rest}"),
+        None => path.to_string(),
+    }
+}
+
+/// 하네스가 재는 순수 함수(파일을 안 건드리는 것)
+pub fn call_pure(
+    op: &str,
+    args: &[serde_json::Value],
+) -> Option<std::result::Result<serde_json::Value, String>> {
+    use serde_json::{Value as Json, json};
+    let s = |i: usize| args.get(i).and_then(Json::as_str).unwrap_or_default();
+    let out = match op {
+        "vaultTree.parentOf" => json!(parent_of(s(0))),
+        "vaultTree.normalizePath" => json!(normalize_path(s(0))),
+        "vaultTree.invalidNameReason" => json!(invalid_name_reason(s(0))),
+        "vaultTree.invalidPathReason" => json!(invalid_path_reason(s(0))),
+        "vaultTree.ancestorPaths" => json!(ancestor_paths(s(0))),
+        "vaultTree.remapPath" => json!(remap_path(s(0), s(1), s(2))),
+        "vaultTree.remapPaths" => {
+            // Set 은 배열로 오간다 — 순서는 넣은 순서, 겹치면 하나
+            let mut seen = Vec::<String>::new();
+            for p in args.first().and_then(Json::as_array).into_iter().flatten() {
+                let r = remap_path(p.as_str().unwrap_or_default(), s(1), s(2));
+                if !seen.contains(&r) {
+                    seen.push(r);
+                }
+            }
+            json!(seen)
+        }
+        "vaultTree.flattenDirs" => {
+            fn node(v: &Json) -> Node {
+                Node {
+                    name: v["name"].as_str().unwrap_or_default().to_string(),
+                    path: v["path"].as_str().unwrap_or_default().to_string(),
+                    is_dir: v["isDir"].as_bool().unwrap_or(false),
+                    children: v["children"]
+                        .as_array()
+                        .map(|c| c.iter().map(node).collect()),
+                }
+            }
+            let tree: Vec<Node> = args
+                .first()
+                .and_then(Json::as_array)
+                .map(|a| a.iter().map(node).collect())
+                .unwrap_or_default();
+            json!(flatten_dirs(&tree))
+        }
+        _ => return None,
+    };
+    Some(Ok(out))
+}
+
 /// 이미지 src 를 노트 폴더 기준 경로로 푼다(noteAssets.ts 의 resolveLocalSrc). 원격 URL, 스킴, 절대경로,
 /// 루트 밖으로 나가는 경로, 이미지가 아닌 확장자는 None — 그런 건 로컬에서 읽지 않는다
 pub fn resolve_local_src(base_dir: &str, src: &str) -> Option<String> {
