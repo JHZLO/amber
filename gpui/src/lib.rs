@@ -8,6 +8,7 @@ pub mod dbconn;
 pub mod i18n;
 pub mod mermaid;
 pub mod migrate;
+pub mod note_ai_text;
 pub mod prefs;
 pub mod report;
 pub mod timetable;
@@ -166,6 +167,15 @@ pub const OPS: &[&str] = &[
     "ttLayout.layoutColumn",
     "timeBlocks.nowMinute",
     "timeBlocks.findFreeSlot",
+    "mdSections.splitSections",
+    "mdSections.mergeRuns",
+    "mdSections.spliceSpan",
+    "noteAiRun.spliceSpans",
+    "aiInstruction.composeInstruction",
+    "aiInstruction.tailSpan",
+    "aiActivity.shortTarget",
+    "aiActivity.describeActivity",
+    "aiWait.waitLine",
 ];
 
 pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
@@ -356,6 +366,7 @@ fn call_files(db: &Db, op: &str, a: &Args) -> Result<Json, String> {
         }
         _ => vault::call_pure(op, a.0)
             .or_else(|| tree_find::call(op, a.0))
+            .or_else(|| note_ai_text::call(op, a.0))
             .or_else(|| dates::call(op, a.0, db.now()))
             .or_else(|| tree::call(op, a.0))
             .or_else(|| timetable::call(op, a.0, db.now()))
