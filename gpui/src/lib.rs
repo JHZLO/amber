@@ -1,5 +1,6 @@
 pub mod blocks;
 pub mod db;
+pub mod mermaid;
 pub mod todos;
 
 use serde_json::{Value as Json, json};

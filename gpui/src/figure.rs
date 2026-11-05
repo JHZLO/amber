@@ -1,4 +1,4 @@
-// 노트 그림(```svg, ```mermaid)을 웹 엔진 없이 그린다. svg 는 resvg 로, mermaid 는 mermaid-rs-renderer 로
+// 노트 그림(```svg, ```mermaid)을 웹 엔진 없이 그린다. svg 는 resvg 로, mermaid 는 crate::mermaid 로
 // SVG 를 만든 뒤 같은 길로 간다. 레티나에서 흐리지 않게 2배로 굽고 절반 크기로 놓는다.
 
 use std::sync::{Arc, OnceLock};
@@ -55,10 +55,7 @@ pub fn svg(source: &str, text: &str) -> Result<Figure, String> {
     })
 }
 
-/// 지금 앱처럼 mermaid 기본(밝은) 테마로 그린다 — 흰 판 위에 놓인다
+/// 지금 앱처럼 밝은(neutral) 테마로 그린다 — 흰 판 위에 놓인다
 pub fn mermaid(source: &str) -> Result<Figure, String> {
-    let options = mermaid_rs_renderer::RenderOptions::mermaid_default();
-    let svg_source =
-        mermaid_rs_renderer::render_with_options(source, options).map_err(|e| e.to_string())?;
-    svg(&svg_source, "#333333")
+    svg(&amber_gpui::mermaid::to_svg(source)?, "#333333")
 }
