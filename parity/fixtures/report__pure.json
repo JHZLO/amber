@@ -1,0 +1,24 @@
+{
+  "format": 1,
+  "name": "report/pure",
+  "tz": "Asia/Seoul",
+  "start": 1793836800000,
+  "seed": [],
+  "final": "e0e5849900b8bc9e23d07a4f5f4fca3555cd2409f094f7b0e4c130c434304650",
+  "steps": [
+    {"op":"report.rankedSources","args":[{"onboarded":true,"sources":[{"id":"github","enabled":true},{"id":"ai_sessions","enabled":true}],"githubPath":"","githubRepos":[],"githubAccount":"","sessionsClaude":true,"sessionsCodex":true,"mcpPicked":[],"displayName":"","context":""}],"at":1793836800000,"ok":true,"result":[{"id":"github","rank":1},{"id":"ai_sessions","rank":2}],"changes":{}},
+    {"op":"report.mcpSourcesFrom","args":[{"onboarded":true,"sources":[{"id":"github","enabled":true},{"id":"ai_sessions","enabled":true}],"githubPath":"","githubRepos":[],"githubAccount":"","sessionsClaude":true,"sessionsCodex":true,"mcpPicked":[],"displayName":"","context":""}],"at":1793836801000,"ok":true,"result":[],"changes":{}},
+    {"op":"report.rankedSources","args":[{"onboarded":true,"sources":[{"id":"ai_sessions","enabled":true},{"id":"github","enabled":false}],"githubPath":"","githubRepos":[],"githubAccount":"","sessionsClaude":true,"sessionsCodex":true,"mcpPicked":["plugin:Slack:slack","  notion  "],"displayName":"","context":""}],"at":1793836802000,"ok":true,"result":[{"id":"ai_sessions","rank":1}],"changes":{}},
+    {"op":"report.mcpSourcesFrom","args":[{"onboarded":true,"sources":[{"id":"ai_sessions","enabled":true},{"id":"github","enabled":false}],"githubPath":"","githubRepos":[],"githubAccount":"","sessionsClaude":true,"sessionsCodex":true,"mcpPicked":["plugin:Slack:slack","  notion  "],"displayName":"","context":""}],"at":1793836803000,"ok":true,"result":[{"id":"plugin:Slack:slack","rank":2,"server":"plugin:Slack:slack"},{"id":"notion","rank":3,"server":"notion"}],"changes":{}},
+    {"op":"report.rankedSources","args":[{"onboarded":true,"sources":[{"id":"github","enabled":false},{"id":"ai_sessions","enabled":false}],"githubPath":"","githubRepos":[],"githubAccount":"","sessionsClaude":true,"sessionsCodex":true,"mcpPicked":["","  "," x﻿"],"displayName":"","context":""}],"at":1793836804000,"ok":true,"result":[],"changes":{}},
+    {"op":"report.mcpSourcesFrom","args":[{"onboarded":true,"sources":[{"id":"github","enabled":false},{"id":"ai_sessions","enabled":false}],"githubPath":"","githubRepos":[],"githubAccount":"","sessionsClaude":true,"sessionsCodex":true,"mcpPicked":["","  "," x﻿"],"displayName":"","context":""}],"at":1793836805000,"ok":true,"result":[{"id":"x","rank":1,"server":"x"}],"changes":{}},
+    {"op":"report.rankedSources","args":[{"onboarded":true,"sources":[],"githubPath":"","githubRepos":[],"githubAccount":"","sessionsClaude":true,"sessionsCodex":true,"mcpPicked":["a","b","a"],"displayName":"","context":""}],"at":1793836806000,"ok":true,"result":[],"changes":{}},
+    {"op":"report.mcpSourcesFrom","args":[{"onboarded":true,"sources":[],"githubPath":"","githubRepos":[],"githubAccount":"","sessionsClaude":true,"sessionsCodex":true,"mcpPicked":["a","b","a"],"displayName":"","context":""}],"at":1793836807000,"ok":true,"result":[{"id":"a","rank":1,"server":"a"},{"id":"b","rank":2,"server":"b"},{"id":"a","rank":3,"server":"a"}],"changes":{}},
+    {"op":"report.reportPathFor","args":["2026-03-02"],"at":1793836808000,"ok":true,"result":"reports/2026-03-02.md","changes":{}},
+    {"op":"report.weeklyReportPathFor","args":["2026-03-02"],"at":1793836809000,"ok":true,"result":"reports/2026-03-02-week.md","changes":{}},
+    {"op":"report.reportPathFor","args":[""],"at":1793836810000,"ok":true,"result":"reports/.md","changes":{}},
+    {"op":"report.weeklyReportPathFor","args":[""],"at":1793836811000,"ok":true,"result":"reports/-week.md","changes":{}},
+    {"op":"report.reportPathFor","args":["x/y"],"at":1793836812000,"ok":true,"result":"reports/x/y.md","changes":{}},
+    {"op":"report.weeklyReportPathFor","args":["x/y"],"at":1793836813000,"ok":true,"result":"reports/x/y-week.md","changes":{}}
+  ]
+}

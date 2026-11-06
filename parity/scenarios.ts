@@ -905,6 +905,27 @@ const reportFiles: Scenario = {
   },
 };
 
+/** 리포트 소스 순위 — 켠 것만 배열 순서대로, MCP 는 내장 뒤에서 잇고 이름은 다듬어 빈 것을 뺀다 */
+const reportPure: Scenario = {
+  name: "report/pure",
+  plan() {
+    const rc = (sources: [string, boolean][], mcpPicked: string[]) => ({
+      onboarded: true, sources: sources.map(([id, enabled]) => ({ id, enabled })), githubPath: "", githubRepos: [], githubAccount: "",
+      sessionsClaude: true, sessionsCodex: true, mcpPicked, displayName: "", context: "",
+    });
+    const cases = [
+      rc([["github", true], ["ai_sessions", true]], []),
+      rc([["ai_sessions", true], ["github", false]], ["plugin:Slack:slack", "  notion  "]),
+      rc([["github", false], ["ai_sessions", false]], ["", "  ", "\u00a0x\ufeff"]),
+      rc([], ["a", "b", "a"]),
+    ];
+    return [
+      ...cases.flatMap((c) => [s("report.rankedSources", c), s("report.mcpSourcesFrom", c)]),
+      ...["2026-03-02", "", "x/y"].flatMap((d) => [s("report.reportPathFor", d), s("report.weeklyReportPathFor", d)]),
+    ];
+  },
+};
+
 /** 리포트 폴더가 아직 없을 때 — 첫 쓰기가 폴더를 만든다 */
 const reportFilesFresh: Scenario = {
   name: "report/files-fresh",
@@ -1541,6 +1562,7 @@ export const SCENARIOS: Scenario[] = [
   erdMigrateFiles,
   reportFiles,
   reportFilesFresh,
+  reportPure,
   dbconnPure,
   commentFiles,
   aiConfig,

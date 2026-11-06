@@ -129,6 +129,10 @@ export const OPS: Record<string, Op> = {
   "report.readWeeklyReportFile": report.readWeeklyReportFile,
   "report.deleteWeeklyReport": report.deleteWeeklyReport,
   "report.loadWeekSources": report.loadWeekSources,
+  "report.rankedSources": report.rankedSources,
+  "report.mcpSourcesFrom": report.mcpSourcesFrom,
+  "report.reportPathFor": report.reportPathFor,
+  "report.weeklyReportPathFor": report.weeklyReportPathFor,
 
   "dbconn.listConnections": dbconn.listConnections,
   "dbconn.getConnection": dbconn.getConnection,
@@ -369,10 +373,6 @@ export const NOT_COVERED: Record<string, string> = {
 
 export const PURE = new Set([
   "report.parseMcpPicked",
-  "report.rankedSources",
-  "report.mcpSourcesFrom",
-  "report.reportPathFor",
-  "report.weeklyReportPathFor",
   "dbconn.snapshotPath",
   "vacations.isVacationKind",
   "vacations.vacationLabel",
