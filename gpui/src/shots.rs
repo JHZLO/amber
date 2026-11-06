@@ -14,6 +14,22 @@ use crate::{Spike, assets, theme};
 
 const DATE: &str = "2026-11-05";
 
+const DEMO_CONCEPTS: &str = r#"INSERT INTO concepts (ulid, title, summary, detail_path, status, confidence, created_at, updated_at) VALUES
+ ('01JDEMO0000000000000000001', 'Write-ahead log', 'Append each change to a log before applying it, so a crash can replay it.', 'concepts/01JDEMO0000000000000000001/index.md', 'learning', 2, 1762300000000, 1762390000000),
+ ('01JDEMO0000000000000000002', 'Idempotency key', 'Send the same request twice and get one effect.', 'concepts/01JDEMO0000000000000000002/index.md', 'learning', 1, 1762310000000, 1762320000000),
+ ('01JDEMO0000000000000000003', 'Backpressure', 'Slow the producer down when the consumer falls behind.', 'concepts/01JDEMO0000000000000000003/index.md', 'learned', 3, 1762200000000, 1762380000000),
+ ('01JDEMO0000000000000000004', 'Two-phase commit', 'Prepare on every participant, then commit on every participant.', 'concepts/01JDEMO0000000000000000004/index.md', 'learning', 1, 1762330000000, 1762340000000),
+ ('01JDEMO0000000000000000005', 'MVCC', 'Readers see a snapshot while writers create new row versions.', 'concepts/01JDEMO0000000000000000005/index.md', 'learned', 3, 1762100000000, 1762370000000);
+INSERT INTO tags (name) VALUES ('db'), ('storage'), ('api'), ('kafka'), ('distributed');
+INSERT INTO concept_tags (concept_id, tag_id)
+ SELECT c.id, t.id FROM concepts c, tags t WHERE
+  (c.title = 'Write-ahead log' AND t.name IN ('db','storage')) OR
+  (c.title = 'Idempotency key' AND t.name = 'api') OR
+  (c.title = 'Backpressure' AND t.name = 'kafka') OR
+  (c.title = 'Two-phase commit' AND t.name IN ('db','distributed')) OR
+  (c.title = 'MVCC' AND t.name = 'db');
+"#;
+
 fn seed(dir: &Path) -> String {
     let _ = std::fs::remove_dir_all(dir);
     std::fs::create_dir_all(dir).unwrap();
@@ -95,6 +111,17 @@ against the Rust one. See [the steps](#2).\n\n> [!NOTE]\n> Fixtures live in `par
         r#"["/Users/me/src/amber","/Users/me/src/resin"]"#,
     );
     // 묶음 하나(하위 셋) + 낱개 셋
+    // 개념 다섯(브라우저 하네스 사본에도 같은 것을 넣어 지금 앱과 견준다)
+    for stmt in DEMO_CONCEPTS.split(';').filter(|q| !q.trim().is_empty()) {
+        db.execute(stmt, &[]).unwrap();
+    }
+    let wal = dir.join("vault/concepts/01JDEMO0000000000000000001");
+    std::fs::create_dir_all(&wal).unwrap();
+    std::fs::write(
+        wal.join("index.md"),
+        "# Write-ahead log\n\nEvery change is appended to a log on disk **before** the data pages change.\n\n## Why\n\n- Crash recovery replays the log\n- Writes become sequential\n",
+    )
+    .unwrap();
     let g = todos::create_todo(&db, "Release v0.24", DATE, None, "day").unwrap();
     for c in ["Write the changelog", "Tag and push", "Rebuild the app"] {
         todos::create_todo(&db, c, DATE, Some(g), "day").unwrap();
@@ -306,6 +333,7 @@ pub fn run(dir: &str) {
     note_ai(&mut s);
     diagrams(&mut s);
     erd(&mut s);
+    concepts(&mut s);
     settings(&mut s);
     for (name, level) in [
         ("cal-month", crate::calendar::Level::Month),
@@ -1441,4 +1469,28 @@ fn settings(s: &mut Shots) {
     s.window
         .update(&mut s.cx, |sp, _, cx| sp.close_settings(cx))
         .unwrap();
+}
+
+/// 개념 탭 — 학습 중 목록, 그다음 전체 + 태그 'db' 로 거르고 한 줄을 고른 채
+fn concepts(s: &mut Shots) {
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.section = crate::Section::Til;
+            sp.reload_concepts();
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("concepts-0-learning");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.concepts.status = "all";
+            sp.concepts.active_tags = vec!["db".into()];
+            sp.reload_concepts();
+            sp.concepts.selected = sp.concepts.list.first().and_then(|r| r.get("id")?.as_i64());
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("concepts-1-all-db");
 }

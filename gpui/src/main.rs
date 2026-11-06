@@ -6,6 +6,7 @@
 mod ai;
 mod assets;
 mod calendar;
+mod concepts_view;
 mod day_card;
 mod diagram_ai;
 mod diagram_canvas;
@@ -118,6 +119,8 @@ struct Spike {
     input: Entity<InputState>,
     /// 노트 탭: 트리, 펼친 폴더, 고른 노트와 그 본문 덩어리, 판 폭
     notes: notes_view::NotesState,
+    /// 개념 탭: 상태 탭, 정렬, 검색, 태그, 목록, 고른 개념, 판 폭
+    concepts: concepts_view::ConceptsUi,
     /// 리포트 생성 실행(날짜마다, 주간은 w: 접두)과 레일 완료 점
     reports: report_run::Reports,
     /// 설정 모달(열렸나, 칸, 리포트 칸 상태, gh/claude 확인)
@@ -267,6 +270,12 @@ impl Spike {
             .filter(|v| (erd_view::LIST_PANE.min..=erd_view::LIST_PANE.max).contains(v))
             .unwrap_or(notes_view::LIST_DEFAULT);
         let erd_panel = erd_view::panel_width(&db);
+        let concepts_w = amber_gpui::prefs::get(&db, concepts_view::LIST_PANE.key)
+            .and_then(|v| v.parse::<f32>().ok())
+            .filter(|v| (concepts_view::LIST_PANE.min..=concepts_view::LIST_PANE.max).contains(v))
+            .unwrap_or(concepts_view::LIST_DEFAULT);
+        let mut concepts = concepts_view::ConceptsUi::new(concepts_w, window, cx);
+        concepts.width = concepts_w;
         let mut this = Spike {
             db,
             date,
@@ -285,6 +294,7 @@ impl Spike {
             input,
             reports: report_run::Reports::default(),
             settings: settings_view::SettingsUi::default(),
+            concepts,
             notes: notes_view::NotesState {
                 ui: vault_pane::TreeUi {
                     width: notes_w,
@@ -338,6 +348,7 @@ impl Spike {
         };
         this.focus.focus(window, cx);
         this.reload();
+        this.reload_concepts();
         this.reload_calendar();
         this.reload_blocks();
         if this.section == Section::Notes || open.is_some() {
@@ -596,6 +607,7 @@ impl Render for Spike {
                 )
                 .when(parked, |d| d.child(self.drawer(&k, cx)))
                 .into_any_element(),
+            Section::Til => self.concepts_body(body_w, &k, cx).into_any_element(),
             Section::Notes => self.notes_body(body_w, &k, cx).into_any_element(),
             Section::Diagrams => self.diagrams_body(body_w, &k, cx).into_any_element(),
             Section::Erd => self.erd_body(body_w, &k, window, cx).into_any_element(),
@@ -615,6 +627,7 @@ impl Render for Spike {
         };
         let report_modal = self.report_modal(&k, cx);
         let settings_modal = self.settings_modal(&k, cx);
+        let concept_sort = self.concept_sort_menu(&k, cx);
         let (erd_modal, erd_confirm) = if self.section == Section::Erd {
             (
                 self.erd_conn_view(&k, window, cx),
@@ -963,8 +976,12 @@ impl Render for Spike {
                                 div()
                                     .text_size(px(15.))
                                     .font_weight(FontWeight::BOLD)
+                                    .mr(px(6.))
                                     .child(t(RAIL.iter().find(|r| r.0 == self.section).unwrap().2)),
-                            ),
+                            )
+                            .when(self.section == Section::Til, |d| {
+                                d.children(self.concepts_topbar(&k, cx))
+                            }),
                     )
                     .child(div().flex_1().min_h_0().child(body)),
             )
@@ -979,6 +996,7 @@ impl Render for Spike {
             .children(erd_confirm)
             .children(report_modal)
             .children(settings_modal)
+            .children(concept_sort)
             .children(span_modal)
             .children(match self.section {
                 Section::Diagrams => {
@@ -1139,6 +1157,9 @@ impl Spike {
                         }
                         if section == Section::Erd {
                             this.erd_enter(cx);
+                        }
+                        if section == Section::Til {
+                            this.reload_concepts();
                         }
                         cx.notify();
                     }))

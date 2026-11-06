@@ -3847,3 +3847,49 @@ fn generating_without_an_ai_connection_opens_settings(cx: &mut TestAppContext) {
     );
     ui.update(|_, cx| assert!(spike().read(cx).reports.runs.get(DATE).is_none()));
 }
+
+#[gpui_kit::test]
+fn the_concept_tab_filters_by_status_tag_and_search(cx: &mut TestAppContext) {
+    let db = seeded("concepts", &[]);
+    {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        for q in [
+            "INSERT INTO concepts (ulid, title, summary, detail_path, status, confidence) VALUES ('01JA', 'Write-ahead log', 'log first', 'concepts/01JA/index.md', 'learning', 2)",
+            "INSERT INTO concepts (ulid, title, summary, detail_path, status, confidence) VALUES ('01JB', 'MVCC', 'snapshots', 'concepts/01JB/index.md', 'learned', 3)",
+            "INSERT INTO concepts (ulid, title, summary, detail_path, status, confidence) VALUES ('01JC', 'Idempotency key', 'one effect', 'concepts/01JC/index.md', 'learning', 1)",
+        ] {
+            d.execute(q, &[]).unwrap();
+        }
+        amber_gpui::concepts::set_concept_tags(&d, 1, &["db".into()]).unwrap();
+        amber_gpui::concepts::set_concept_tags(&d, 2, &["db".into()]).unwrap();
+    }
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.til");
+    let titles = |ui: &mut VisualTestContext| {
+        ui.update(|_, cx| {
+            spike()
+                .read(cx)
+                .concepts
+                .list
+                .iter()
+                .map(|r| r["title"].as_str().unwrap().to_string())
+                .collect::<Vec<_>>()
+        })
+    };
+    // 학습 중은 낮은 확신부터
+    assert_eq!(titles(&mut ui), ["Idempotency key", "Write-ahead log"]);
+    click(&mut ui, "concept-tab-all");
+    assert_eq!(titles(&mut ui).len(), 3);
+    click(&mut ui, "concept-tag-db");
+    assert_eq!(titles(&mut ui).len(), 2, "태그로 거른다");
+    click(&mut ui, "concept-tags-clear");
+    // 검색은 늦춰서 거른다
+    click(&mut ui, "concept-search");
+    ui.simulate_input("mvcc");
+    ui.executor()
+        .advance_clock(std::time::Duration::from_millis(250));
+    ui.run_until_parked();
+    assert_eq!(titles(&mut ui), ["MVCC"]);
+    click(&mut ui, "concept-row-2");
+    ui.update(|_, cx| assert_eq!(spike().read(cx).concepts.selected, Some(2)));
+}
