@@ -1,5 +1,5 @@
 // src/lib/report.ts 의 DB 함수(리포트 설정, MCP 캐시, 일간/주간 리포트 행, 할 일 digest)를 옮긴 것.
-// SQL 은 그대로다($n → ?n 만). 파일과 AI 실행은 여기 없다.
+// SQL 은 그대로다($n → ?n 만). 본문 파일(vault/reports)도 여기, AI 실행은 없다.
 // 설정값은 JS 의 JSON.stringify 와 글자까지 같아야 해서 serde_json 의 preserve_order 를 쓴다(Cargo.toml).
 
 use std::collections::HashSet;
@@ -236,6 +236,109 @@ pub fn get_weekly_report(db: &Db, week_start: &str) -> Result<Option<Row>> {
 
 pub fn upsert_weekly_report(db: &Db, input: &ReportRow) -> Result<()> {
     upsert(db, "weekly_reports", "week_start", input)
+}
+
+// ---- vault/reports 파일 (본문 정본, frontmatter 없음) ----
+
+const VAULT: &str = "vault";
+
+/// DB 에 저장할 상대경로
+pub fn report_path_for(date: &str) -> String {
+    format!("reports/{date}.md")
+}
+
+/// 일간과 같은 reports/ 폴더 — '-week' 접미어로 구분한다
+pub fn weekly_report_path_for(week_start: &str) -> String {
+    format!("reports/{week_start}-week.md")
+}
+
+fn write_body(db: &Db, rel: String, md: &str) -> std::result::Result<String, String> {
+    std::fs::create_dir_all(db.at(&format!("{VAULT}/reports"))).map_err(|e| e.to_string())?;
+    crate::vault::write_atomic(db, &format!("{VAULT}/{rel}"), md)?;
+    Ok(rel)
+}
+
+fn read_body(db: &Db, rel: &str) -> std::result::Result<Option<String>, String> {
+    let p = db.at(&format!("{VAULT}/{rel}"));
+    if !p.exists() {
+        return Ok(None);
+    }
+    crate::vault::read_text(&p).map(Some)
+}
+
+pub fn write_report_file(db: &Db, date: &str, md: &str) -> std::result::Result<String, String> {
+    write_body(db, report_path_for(date), md)
+}
+
+pub fn read_report_file(db: &Db, date: &str) -> std::result::Result<Option<String>, String> {
+    read_body(db, &report_path_for(date))
+}
+
+/// 행을 지우고 본문 파일은 휴지통으로(없으면 그대로)
+pub fn delete_report(db: &Db, date: &str) -> std::result::Result<(), String> {
+    db.execute(
+        "DELETE FROM daily_reports WHERE report_date = ?1",
+        &[text(date)],
+    )
+    .map_err(|e| e.to_string())?;
+    db.trash(&format!("{VAULT}/{}", report_path_for(date)))
+}
+
+pub fn write_weekly_report_file(
+    db: &Db,
+    week_start: &str,
+    md: &str,
+) -> std::result::Result<String, String> {
+    write_body(db, weekly_report_path_for(week_start), md)
+}
+
+/// 주간 본문. 행에 적힌 경로가 있으면 그걸로 — 주 시작 요일이 바뀌어 키가 옮겨진 행(0013)은 파일명이 옛 키다
+pub fn read_weekly_report_file(
+    db: &Db,
+    week_start: &str,
+    file_path: Option<&str>,
+) -> std::result::Result<Option<String>, String> {
+    match file_path.filter(|p| !p.is_empty()) {
+        Some(p) => read_body(db, p),
+        None => read_body(db, &weekly_report_path_for(week_start)),
+    }
+}
+
+/// 행에 적힌 경로를 먼저 읽고 지운다(파일명이 키와 다를 수 있다)
+pub fn delete_weekly_report(db: &Db, week_start: &str) -> std::result::Result<(), String> {
+    let row = get_weekly_report(db, week_start).map_err(|e| e.to_string())?;
+    db.execute(
+        "DELETE FROM weekly_reports WHERE week_start = ?1",
+        &[text(week_start)],
+    )
+    .map_err(|e| e.to_string())?;
+    let rel = row
+        .as_ref()
+        .and_then(|r| r.get("file_path")?.as_str())
+        .filter(|p| !p.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| weekly_report_path_for(week_start));
+    db.trash(&format!("{VAULT}/{rel}"))
+}
+
+/// 주간 재료 한 날 — 일간 리포트가 없는 날은 body 가 None 이다
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct WeekDaySource {
+    pub date: String,
+    pub weekday: String,
+    pub body: Option<String>,
+}
+
+/// 그 주 7일의 일간 리포트 본문. 못 읽은 날도 None 으로 남긴다 — 패널이 "N일 빠짐"을 말할 수 있게
+pub fn load_week_sources(db: &Db, week_start: &str) -> Vec<WeekDaySource> {
+    crate::dates::week_days(week_start)
+        .into_iter()
+        .map(|date| WeekDaySource {
+            weekday: crate::dates::weekday_short(&date),
+            body: read_report_file(db, &date).ok().flatten(),
+            date,
+        })
+        .collect()
 }
 
 /// 선택 날짜의 할 일 + (오늘이면) 밀린 항목을 마크다운으로. 생성 프롬프트의 '계획' 재료.

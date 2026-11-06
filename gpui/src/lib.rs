@@ -86,6 +86,13 @@ pub const OPS: &[&str] = &[
     "report.buildTodosDigest",
     "report.getWeeklyReport",
     "report.upsertWeeklyReport",
+    "report.writeReportFile",
+    "report.readReportFile",
+    "report.deleteReport",
+    "report.writeWeeklyReportFile",
+    "report.readWeeklyReportFile",
+    "report.deleteWeeklyReport",
+    "report.loadWeekSources",
     "dbconn.listConnections",
     "dbconn.getConnection",
     "dbconn.createConnection",
@@ -325,6 +332,20 @@ pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
             .map(|r| r.map_or(Json::Null, Json::Object))
             .map_err(err),
         "report.upsertWeeklyReport" => unit(report::upsert_weekly_report(db, &a.de(0)?)),
+        "report.writeReportFile" => report::write_report_file(db, a.s(0)?, a.s(1)?).map(Json::from),
+        "report.readReportFile" => report::read_report_file(db, a.s(0)?).map(Json::from),
+        "report.deleteReport" => report::delete_report(db, a.s(0)?).map(|_| Json::Null),
+        "report.writeWeeklyReportFile" => {
+            report::write_weekly_report_file(db, a.s(0)?, a.s(1)?).map(Json::from)
+        }
+        "report.readWeeklyReportFile" => {
+            let path = a.0.get(1).and_then(Json::as_str);
+            report::read_weekly_report_file(db, a.s(0)?, path).map(Json::from)
+        }
+        "report.deleteWeeklyReport" => {
+            report::delete_weekly_report(db, a.s(0)?).map(|_| Json::Null)
+        }
+        "report.loadWeekSources" => Ok(json!(report::load_week_sources(db, a.s(0)?))),
         "dbconn.listConnections" => dbconn::list_connections(db).map(Json::from).map_err(err),
         "dbconn.getConnection" => dbconn::get_connection(db, a.i(0)?)
             .map(|c| c.unwrap_or(Json::Null))

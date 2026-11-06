@@ -320,7 +320,7 @@ pub fn write_atomic(db: &Db, path: &str, content: &str) -> Result<()> {
     Ok(())
 }
 
-fn read_text(path: &Path) -> Result<String> {
+pub(crate) fn read_text(path: &Path) -> Result<String> {
     std::fs::read(path)
         .map(|b| String::from_utf8_lossy(&b).into_owned())
         .map_err(|e| e.to_string())
