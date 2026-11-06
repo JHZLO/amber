@@ -12,6 +12,7 @@ mod diagram_canvas;
 mod diagrams_view;
 mod dialog;
 mod drawer;
+mod erd_details;
 mod erd_view;
 mod figure;
 mod highlight;
@@ -248,6 +249,7 @@ impl Spike {
             .and_then(|v| v.parse::<f32>().ok())
             .filter(|v| (erd_view::LIST_PANE.min..=erd_view::LIST_PANE.max).contains(v))
             .unwrap_or(notes_view::LIST_DEFAULT);
+        let erd_panel = erd_view::panel_width(&db);
         let mut this = Spike {
             db,
             date,
@@ -303,9 +305,13 @@ impl Spike {
                 ..Default::default()
             },
             mmd_zoom: None,
-            erd: erd_view::ErdState {
-                width: erd_w,
-                ..Default::default()
+            erd: {
+                let mut e = erd_view::ErdState {
+                    width: erd_w,
+                    ..Default::default()
+                };
+                e.canvas.panel_w = erd_panel;
+                e
             },
             started,
             first_frame: false,
@@ -497,7 +503,7 @@ impl Render for Spike {
             self.prepare_diagram_canvas(cx);
         }
         if self.section == Section::Erd {
-            self.prepare_erd(cx);
+            self.prepare_erd(window, cx);
         }
         // 질문/후속 입력칸, AI 작성 입력칸과 적용한 초안 — 창이 있어야 만들어진다
         self.apply_cmt_rebuild(window, cx);
@@ -567,7 +573,7 @@ impl Render for Spike {
                 .into_any_element(),
             Section::Notes => self.notes_body(body_w, &k, cx).into_any_element(),
             Section::Diagrams => self.diagrams_body(body_w, &k, cx).into_any_element(),
-            Section::Erd => self.erd_body(body_w, &k, cx).into_any_element(),
+            Section::Erd => self.erd_body(body_w, &k, window, cx).into_any_element(),
             // 아직 옮기지 않은 탭 — 체크리스트(D)에서 하나씩
             _ => div().into_any_element(),
         };
@@ -716,6 +722,15 @@ impl Render for Spike {
                         return;
                     }
                 }
+                // ERD — Esc 는 안쪽부터(정보창, 그다음 패널)
+                if this.section == Section::Erd
+                    && e.keystroke.key == "escape"
+                    && this.erd_escape(cx)
+                {
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
                 if this.section == Section::Notes
                     && m.platform
                     && m.alt
@@ -785,6 +800,17 @@ impl Render for Spike {
             ))
             .on_drop(cx.listener(|this, _: &erd_view::ErdGrab, _, cx| {
                 this.erd_drop();
+                cx.notify();
+            }))
+            .on_drag_move::<erd_view::ErdPanelGrab>(cx.listener(
+                |this, e: &DragMoveEvent<erd_view::ErdPanelGrab>, _, cx| {
+                    if this.erd_panel_to(e.event.position) {
+                        cx.notify();
+                    }
+                },
+            ))
+            .on_drop(cx.listener(|this, _: &erd_view::ErdPanelGrab, _, cx| {
+                this.erd_panel_drop();
                 cx.notify();
             }))
             .on_drag_move::<mermaid_zoom::ZoomGrab>(cx.listener(

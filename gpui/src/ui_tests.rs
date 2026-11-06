@@ -2744,6 +2744,41 @@ fn erd_canvas(ui: &mut VisualTestContext) -> (bool, f32, (f32, f32)) {
     })
 }
 
+/// ERD 그림의 한 자리(표 머리글, 또는 컬럼 행 가운데)가 화면 어디인가
+fn erd_spot(ui: &mut VisualTestContext, table: &str, column: Option<&str>) -> Point<Pixels> {
+    ui.update(|_, cx| {
+        let c = &spike().read(cx).erd.canvas;
+        let card = c.drawn.as_ref().unwrap().card(table).unwrap().clone();
+        let (gx, gy) = match column {
+            None => (card.x + 20., card.y + 10.),
+            Some(col) => {
+                let r = card.rows.iter().find(|r| r.column == col).unwrap();
+                (card.x + card.w / 2., r.y + r.h / 2.)
+            }
+        };
+        let (x, y, s) = c.shown();
+        let o = c.viewport.get().origin;
+        point(o.x + px(x + gx as f32 * s), o.y + px(y + gy as f32 * s))
+    })
+}
+
+/// 패널의 표, 정보창의 컬럼, 칠한 초점
+fn erd_state(ui: &mut VisualTestContext) -> (Option<String>, Option<(String, String)>, bool) {
+    for _ in 0..3 {
+        ui.update(|window, _| window.refresh());
+        ui.run_until_parked();
+    }
+    ui.update(|_, cx| {
+        let c = &spike().read(cx).erd.canvas;
+        let styled = !std::sync::Arc::ptr_eq(c.tree.as_ref().unwrap(), &c_plain(c));
+        (c.inspected.clone(), c.popped.clone(), styled)
+    })
+}
+
+fn c_plain(c: &crate::erd_view::ErdCanvas) -> std::sync::Arc<resvg::usvg::Tree> {
+    c.plain_tree().unwrap()
+}
+
 #[gpui_kit::test]
 fn the_erd_tab_lists_schemas_and_draws_the_snapshot(cx: &mut TestAppContext) {
     let db = seeded("erd-tab", &[]);
@@ -2801,4 +2836,83 @@ fn the_erd_tab_lists_schemas_and_draws_the_snapshot(cx: &mut TestAppContext) {
             .unwrap()
             .contains("\"silk\"")
     );
+}
+
+#[gpui_kit::test]
+fn tapping_the_erd_opens_the_table_panel_and_column_popover(cx: &mut TestAppContext) {
+    let db = seeded("erd-tap", &[]);
+    seed_erd(&db);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.erd");
+    click(&mut ui, "erd-c1");
+    click(&mut ui, "erd-c1/svc_shop");
+    assert!(erd_canvas(&mut ui).0, "그렸다");
+    assert_eq!(erd_state(&mut ui), (None, None, false));
+    // 표 머리글 = 패널 + 그 표에 초점(흐림)
+    let p = erd_spot(&mut ui, "orders", None);
+    ui.simulate_click(p, Modifiers::none());
+    let (open, pop, styled) = erd_state(&mut ui);
+    assert_eq!(open.as_deref(), Some("orders"));
+    assert!(pop.is_none() && styled, "초점을 칠했다");
+    assert!(ui.debug_bounds("erd-panel").is_some());
+    // 컬럼 = 정보창, 같은 컬럼을 다시 누르면 닫히고 초점은 패널의 표로
+    let p = erd_spot(&mut ui, "users", Some("email"));
+    ui.simulate_click(p, Modifiers::none());
+    let (open, pop, _) = erd_state(&mut ui);
+    assert_eq!(open.as_deref(), Some("orders"), "패널은 그대로");
+    assert_eq!(pop, Some(("users".into(), "email".into())));
+    assert!(ui.debug_bounds("erd-pop").is_some());
+    let p = erd_spot(&mut ui, "users", Some("email"));
+    ui.simulate_click(p, Modifiers::none());
+    assert_eq!(erd_state(&mut ui).1, None);
+    ui.update(|_, cx| {
+        assert_eq!(
+            spike().read(cx).erd.canvas.focus_target(),
+            Some(("orders".to_string(), None))
+        )
+    });
+    // 패널의 행 = 그 컬럼의 정보창, 참조 링크 = 그 표의 패널
+    click(&mut ui, "erd-col-orders.user_id");
+    assert_eq!(
+        erd_state(&mut ui).1,
+        Some(("orders".into(), "user_id".into()))
+    );
+    click(&mut ui, "erd-link-users");
+    let (open, pop, _) = erd_state(&mut ui);
+    assert_eq!((open.as_deref(), pop), (Some("users"), None));
+    // Esc 는 안쪽부터 — 정보창, 그다음 패널(초점도 걷는다)
+    let p = erd_spot(&mut ui, "users", Some("id"));
+    ui.simulate_click(p, Modifiers::none());
+    assert!(erd_state(&mut ui).1.is_some());
+    ui.simulate_keystrokes("escape");
+    assert_eq!(erd_state(&mut ui).0.as_deref(), Some("users"));
+    assert_eq!(erd_state(&mut ui).1, None);
+    ui.simulate_keystrokes("escape");
+    assert_eq!(erd_state(&mut ui), (None, None, false));
+    // 빈 곳 = 아무것도 안 연다
+    let stage = bounds(&mut ui, "erd-canvas");
+    ui.simulate_click(stage.origin + point(px(4.), px(4.)), Modifiers::none());
+    assert_eq!(erd_state(&mut ui), (None, None, false));
+    // 트리의 표 = 그 표의 패널, X 로 닫는다
+    click(&mut ui, "erd-c1/svc_shop/users");
+    assert_eq!(erd_state(&mut ui).0.as_deref(), Some("users"));
+    click(&mut ui, "erd-panel-close");
+    assert_eq!(erd_state(&mut ui), (None, None, false));
+    // 패널 폭은 왼쪽 가장자리를 끌어서 — 기억한다
+    click(&mut ui, "erd-c1/svc_shop/orders");
+    let edge = bounds(&mut ui, "erd-panel-resize").center();
+    drag_points(
+        &mut ui,
+        edge,
+        edge - point(px(60.), px(0.)),
+        Modifiers::none(),
+    );
+    let w = ui.update(|_, cx| spike().read(cx).erd.canvas.panel_w);
+    assert!((w - 620.).abs() <= 1., "560 + 60: {w}");
+    let saved = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    let kept: f32 = amber_gpui::prefs::get(&saved, "amber.erd.panel")
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert_eq!(kept, w, "놓을 때 기억한다");
 }

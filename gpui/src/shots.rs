@@ -889,6 +889,19 @@ fn erd(s: &mut Shots) {
     s.settle();
     s.settle();
     s.shot("erd-open");
+    // 표 이름 = 오른쪽 패널(초점), 컬럼 = 정보창
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            use amber_gpui::resin::details::Act;
+            sp.erd_act(&Act::Open("orders".into()), window, cx);
+            sp.erd_act(&Act::Pick("orders".into(), "user_id".into()), window, cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.settle();
+    s.settle();
+    s.shot("erd-panel");
     s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.section = crate::Section::Notes;
