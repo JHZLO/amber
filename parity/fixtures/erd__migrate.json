@@ -1,0 +1,71 @@
+{
+  "format": 1,
+  "name": "erd/migrate",
+  "tz": "Asia/Seoul",
+  "start": 1793836800000,
+  "seed": [
+    {
+      "path": "vault/diagrams/Shop DB/svc_a/schema.json",
+      "text": "{\n  \"amber\": 1,\n  \"connection\": \"c\",\n  \"schema\": \"svc_a\",\n  \"server\": \"MySQL 8\",\n  \"synced_at\": 1,\n  \"fingerprint\": \"f\",\n  \"tables\": []\n}\n"
+    },
+    {
+      "path": "vault/diagrams/Shop DB/svc_a/ERD.mmd",
+      "text": "%% amber:db Shop DB/svc_a 2026-01-01\nerDiagram\n  A ||--o{ B : has\n"
+    },
+    {
+      "path": "vault/diagrams/Shop DB/.DS_Store",
+      "text": "x"
+    },
+    {
+      "path": "vault/diagrams/Shop DB/svc_b/schema.json",
+      "text": "{}"
+    },
+    {
+      "path": "vault/diagrams/Mixed/svc_c/schema.json",
+      "text": "{\n  \"amber\": 1,\n  \"connection\": \"c\",\n  \"schema\": \"svc_c\",\n  \"server\": \"MySQL 8\",\n  \"synced_at\": 1,\n  \"fingerprint\": \"f\",\n  \"tables\": []\n}\n"
+    },
+    {
+      "path": "vault/diagrams/Mixed/svc_c/ERD.MERMAID",
+      "text": "\n\n  %% amber:db Mixed/svc_c x\nerDiagram\n"
+    },
+    {
+      "path": "vault/diagrams/Mixed/svc_c/hand.mmd",
+      "text": "erDiagram\n  A ||--o{ B : x\n"
+    },
+    {
+      "path": "vault/diagrams/Mixed/notes.png",
+      "text": "PNG"
+    },
+    {
+      "path": "vault/diagrams/Clean/svc_d/schema.json",
+      "text": "{\n  \"amber\": 1,\n  \"connection\": \"c\",\n  \"schema\": \"svc_d\",\n  \"server\": \"MySQL 8\",\n  \"synced_at\": 1,\n  \"fingerprint\": \"f\",\n  \"tables\": []\n}\n"
+    },
+    {
+      "path": "vault/diagrams/Clean/svc_d/ERD.mmd",
+      "text": "%% amber:db Clean/svc_d 2026-01-01\nerDiagram\n  A ||--o{ B : has\n"
+    },
+    {
+      "path": "vault/erd/Clean/svc_d/schema.json",
+      "text": "{\n  \"amber\": 1,\n  \"connection\": \"c\",\n  \"schema\": \"already\",\n  \"server\": \"MySQL 8\",\n  \"synced_at\": 1,\n  \"fingerprint\": \"f\",\n  \"tables\": []\n}\n"
+    },
+    {
+      "path": "vault/diagrams/Off/svc_e/schema.json",
+      "text": "{\n  \"amber\": 1,\n  \"connection\": \"c\",\n  \"schema\": \"svc_e\",\n  \"server\": \"MySQL 8\",\n  \"synced_at\": 1,\n  \"fingerprint\": \"f\",\n  \"tables\": []\n}\n"
+    }
+  ],
+  "final": "6ccd6a63c24c2b010ac57b8b957503976c651c5e23aabeb12301f8d95d9ceb27",
+  "steps": [
+    {"op":"erdMigrate.isGeneratedErd","args":["%% amber:db a/b x"],"at":1793836800000,"ok":true,"result":true,"changes":{}},
+    {"op":"erdMigrate.isGeneratedErd","args":["  %% amber:db a b/c x"],"at":1793836801000,"ok":true,"result":true,"changes":{}},
+    {"op":"erdMigrate.isGeneratedErd","args":["%% amber:db a/b"],"at":1793836802000,"ok":true,"result":false,"changes":{}},
+    {"op":"erdMigrate.isGeneratedErd","args":["%% amber:db /b x"],"at":1793836803000,"ok":true,"result":false,"changes":{}},
+    {"op":"erdMigrate.isGeneratedErd","args":["x\ny\nz\nw\n%% amber:db a/b x"],"at":1793836804000,"ok":true,"result":true,"changes":{}},
+    {"op":"erdMigrate.isGeneratedErd","args":["x\ny\nz\nw\nv\n%% amber:db a/b x"],"at":1793836805000,"ok":true,"result":false,"changes":{}},
+    {"op":"erdMigrate.isGeneratedErd","args":["%%amber:db a/b x"],"at":1793836806000,"ok":true,"result":false,"changes":{}},
+    {"op":"erdMigrate.isGeneratedErd","args":["\t%% amber:db a/b/c x"],"at":1793836807000,"ok":true,"result":true,"changes":{}},
+    {"op":"erdMigrate.copyLegacySnapshots","args":[[{"id":1,"ulid":"01J1","name":"Shop DB","kind":"mysql","env":"dev","host":"h","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"Shop DB","schemas":[{"name":"svc_a","label":"","enabled":true},{"name":"svc_b","label":"","enabled":true}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0},{"id":2,"ulid":"01J2","name":"Mixed","kind":"mysql","env":"dev","host":"h","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"Mixed","schemas":[{"name":"svc_c","label":"","enabled":true}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0},{"id":3,"ulid":"01J3","name":"Clean","kind":"mysql","env":"dev","host":"h","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"Clean","schemas":[{"name":"svc_d","label":"","enabled":true}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0},{"id":4,"ulid":"01J4","name":"Off","kind":"mysql","env":"dev","host":"h","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"Off","schemas":[{"name":"svc_e","label":"","enabled":false}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0},{"id":5,"ulid":"01J5","name":"Missing","kind":"mysql","env":"dev","host":"h","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"Missing","schemas":[{"name":"svc_x","label":"","enabled":true}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0}]],"at":1793836808000,"ok":true,"result":null,"changes":{"__files":{"added":[{"path":"vault/erd/Mixed","kind":"dir"},{"path":"vault/erd/Mixed/svc_c","kind":"dir"},{"path":"vault/erd/Mixed/svc_c/schema.json","kind":"file","text":"{\n  \"amber\": 1,\n  \"connection\": \"c\",\n  \"schema\": \"svc_c\",\n  \"server\": \"MySQL 8\",\n  \"synced_at\": 1,\n  \"fingerprint\": \"f\",\n  \"tables\": []\n}\n"},{"path":"vault/erd/Shop DB","kind":"dir"},{"path":"vault/erd/Shop DB/svc_a","kind":"dir"},{"path":"vault/erd/Shop DB/svc_a/schema.json","kind":"file","text":"{\n  \"amber\": 1,\n  \"connection\": \"c\",\n  \"schema\": \"svc_a\",\n  \"server\": \"MySQL 8\",\n  \"synced_at\": 1,\n  \"fingerprint\": \"f\",\n  \"tables\": []\n}\n"}],"removed":[],"changed":[]}}},
+    {"op":"erdMigrate.findLegacyErds","args":[[{"id":1,"ulid":"01J1","name":"Shop DB","kind":"mysql","env":"dev","host":"h","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"Shop DB","schemas":[{"name":"svc_a","label":"","enabled":true},{"name":"svc_b","label":"","enabled":true}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0},{"id":2,"ulid":"01J2","name":"Mixed","kind":"mysql","env":"dev","host":"h","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"Mixed","schemas":[{"name":"svc_c","label":"","enabled":true}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0},{"id":3,"ulid":"01J3","name":"Clean","kind":"mysql","env":"dev","host":"h","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"Clean","schemas":[{"name":"svc_d","label":"","enabled":true}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0},{"id":4,"ulid":"01J4","name":"Off","kind":"mysql","env":"dev","host":"h","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"Off","schemas":[{"name":"svc_e","label":"","enabled":false}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0},{"id":5,"ulid":"01J5","name":"Missing","kind":"mysql","env":"dev","host":"h","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"Missing","schemas":[{"name":"svc_x","label":"","enabled":true}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0}]],"at":1793836809000,"ok":true,"result":{"folders":["Clean","Off"],"files":["Shop DB/svc_a/ERD.mmd","Shop DB/svc_a/schema.json","Mixed/svc_c/ERD.MERMAID","Mixed/svc_c/schema.json"],"erds":3},"changes":{}},
+    {"op":"erdMigrate.trashLegacyErds","args":[{"folders":["Shop DB","Clean"],"files":["Mixed/svc_c/schema.json","Mixed/svc_c/ERD.MERMAID"],"erds":3}],"at":1793836810000,"ok":true,"result":null,"changes":{"__files":{"added":[{"path":".trash","kind":"dir"},{"path":".trash/1","kind":"dir"},{"path":".trash/1/Shop DB","kind":"dir"},{"path":".trash/1/Shop DB/.DS_Store","kind":"file","text":"x"},{"path":".trash/1/Shop DB/svc_a","kind":"dir"},{"path":".trash/1/Shop DB/svc_a/ERD.mmd","kind":"file","text":"%% amber:db Shop DB/svc_a 2026-01-01\nerDiagram\n  A ||--o{ B : has\n"},{"path":".trash/1/Shop DB/svc_a/schema.json","kind":"file","text":"{\n  \"amber\": 1,\n  \"connection\": \"c\",\n  \"schema\": \"svc_a\",\n  \"server\": \"MySQL 8\",\n  \"synced_at\": 1,\n  \"fingerprint\": \"f\",\n  \"tables\": []\n}\n"},{"path":".trash/1/Shop DB/svc_b","kind":"dir"},{"path":".trash/1/Shop DB/svc_b/schema.json","kind":"file","text":"{}"},{"path":".trash/2","kind":"dir"},{"path":".trash/2/Clean","kind":"dir"},{"path":".trash/2/Clean/svc_d","kind":"dir"},{"path":".trash/2/Clean/svc_d/ERD.mmd","kind":"file","text":"%% amber:db Clean/svc_d 2026-01-01\nerDiagram\n  A ||--o{ B : has\n"},{"path":".trash/2/Clean/svc_d/schema.json","kind":"file","text":"{\n  \"amber\": 1,\n  \"connection\": \"c\",\n  \"schema\": \"svc_d\",\n  \"server\": \"MySQL 8\",\n  \"synced_at\": 1,\n  \"fingerprint\": \"f\",\n  \"tables\": []\n}\n"},{"path":".trash/3","kind":"dir"},{"path":".trash/3/schema.json","kind":"file","text":"{\n  \"amber\": 1,\n  \"connection\": \"c\",\n  \"schema\": \"svc_c\",\n  \"server\": \"MySQL 8\",\n  \"synced_at\": 1,\n  \"fingerprint\": \"f\",\n  \"tables\": []\n}\n"},{"path":".trash/4","kind":"dir"},{"path":".trash/4/ERD.MERMAID","kind":"file","text":"\n\n  %% amber:db Mixed/svc_c x\nerDiagram\n"}],"removed":[{"path":"vault/diagrams/Clean","kind":"dir"},{"path":"vault/diagrams/Clean/svc_d","kind":"dir"},{"path":"vault/diagrams/Clean/svc_d/ERD.mmd","kind":"file","text":"%% amber:db Clean/svc_d 2026-01-01\nerDiagram\n  A ||--o{ B : has\n"},{"path":"vault/diagrams/Clean/svc_d/schema.json","kind":"file","text":"{\n  \"amber\": 1,\n  \"connection\": \"c\",\n  \"schema\": \"svc_d\",\n  \"server\": \"MySQL 8\",\n  \"synced_at\": 1,\n  \"fingerprint\": \"f\",\n  \"tables\": []\n}\n"},{"path":"vault/diagrams/Mixed/svc_c/ERD.MERMAID","kind":"file","text":"\n\n  %% amber:db Mixed/svc_c x\nerDiagram\n"},{"path":"vault/diagrams/Mixed/svc_c/schema.json","kind":"file","text":"{\n  \"amber\": 1,\n  \"connection\": \"c\",\n  \"schema\": \"svc_c\",\n  \"server\": \"MySQL 8\",\n  \"synced_at\": 1,\n  \"fingerprint\": \"f\",\n  \"tables\": []\n}\n"},{"path":"vault/diagrams/Shop DB","kind":"dir"},{"path":"vault/diagrams/Shop DB/.DS_Store","kind":"file","text":"x"},{"path":"vault/diagrams/Shop DB/svc_a","kind":"dir"},{"path":"vault/diagrams/Shop DB/svc_a/ERD.mmd","kind":"file","text":"%% amber:db Shop DB/svc_a 2026-01-01\nerDiagram\n  A ||--o{ B : has\n"},{"path":"vault/diagrams/Shop DB/svc_a/schema.json","kind":"file","text":"{\n  \"amber\": 1,\n  \"connection\": \"c\",\n  \"schema\": \"svc_a\",\n  \"server\": \"MySQL 8\",\n  \"synced_at\": 1,\n  \"fingerprint\": \"f\",\n  \"tables\": []\n}\n"},{"path":"vault/diagrams/Shop DB/svc_b","kind":"dir"},{"path":"vault/diagrams/Shop DB/svc_b/schema.json","kind":"file","text":"{}"}],"changed":[]}}},
+    {"op":"erdMigrate.findLegacyErds","args":[[{"id":1,"ulid":"01J1","name":"Shop DB","kind":"mysql","env":"dev","host":"h","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"Shop DB","schemas":[{"name":"svc_a","label":"","enabled":true},{"name":"svc_b","label":"","enabled":true}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0},{"id":2,"ulid":"01J2","name":"Mixed","kind":"mysql","env":"dev","host":"h","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"Mixed","schemas":[{"name":"svc_c","label":"","enabled":true}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0},{"id":3,"ulid":"01J3","name":"Clean","kind":"mysql","env":"dev","host":"h","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"Clean","schemas":[{"name":"svc_d","label":"","enabled":true}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0},{"id":4,"ulid":"01J4","name":"Off","kind":"mysql","env":"dev","host":"h","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"Off","schemas":[{"name":"svc_e","label":"","enabled":false}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0},{"id":5,"ulid":"01J5","name":"Missing","kind":"mysql","env":"dev","host":"h","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"Missing","schemas":[{"name":"svc_x","label":"","enabled":true}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0}]],"at":1793836811000,"ok":true,"result":{"folders":["Off"],"files":[],"erds":0},"changes":{}}
+  ]
+}

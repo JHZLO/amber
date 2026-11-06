@@ -817,6 +817,53 @@ const erdFiles: Scenario = {
   ],
 };
 
+/** 다이어그램 탭 시절 ERD 옮기기 — 스냅샷 복사(이미 있으면 그대로), 남은 자동 생성물 찾기(자동 생성물뿐이면 폴더째,
+ *  손으로 둔 파일이 섞이면 파일 하나씩), 휴지통으로. 점 파일은 세지 않는다 */
+const erdMigrateFiles: Scenario = {
+  name: "erd/migrate",
+  seed: (() => {
+    const snap = (schema: string) => JSON.stringify({ amber: 1, connection: "c", schema, server: "MySQL 8", synced_at: 1, fingerprint: "f", tables: [] }, null, 2) + "\n";
+    const gen = (who: string) => `%% amber:db ${who} 2026-01-01\nerDiagram\n  A ||--o{ B : has\n`;
+    const D = "vault/diagrams";
+    return [
+      { path: `${D}/Shop DB/svc_a/schema.json`, text: snap("svc_a") },
+      { path: `${D}/Shop DB/svc_a/ERD.mmd`, text: gen("Shop DB/svc_a") },
+      { path: `${D}/Shop DB/.DS_Store`, text: "x" },
+      { path: `${D}/Shop DB/svc_b/schema.json`, text: "{}" },
+      { path: `${D}/Mixed/svc_c/schema.json`, text: snap("svc_c") },
+      { path: `${D}/Mixed/svc_c/ERD.MERMAID`, text: "\n\n  %% amber:db Mixed/svc_c x\nerDiagram\n" },
+      { path: `${D}/Mixed/svc_c/hand.mmd`, text: "erDiagram\n  A ||--o{ B : x\n" },
+      { path: `${D}/Mixed/notes.png`, text: "PNG" },
+      { path: `${D}/Clean/svc_d/schema.json`, text: snap("svc_d") },
+      { path: `${D}/Clean/svc_d/ERD.mmd`, text: gen("Clean/svc_d") },
+      { path: "vault/erd/Clean/svc_d/schema.json", text: snap("already") },
+      { path: `${D}/Off/svc_e/schema.json`, text: snap("svc_e") },
+    ];
+  })(),
+  plan() {
+    const conn = (id: number, folder: string, schemas: [string, boolean][]) => ({
+      id, ulid: `01J${id}`, name: folder, kind: "mysql", env: "dev", host: "h", port: 3306, username: "u", tls: "preferred",
+      credential_command: "", folder_path: folder, schemas: schemas.map(([name, enabled]) => ({ name, label: "", enabled })),
+      last_sync_at: null, last_error: null, created_at: 0, updated_at: 0,
+    });
+    const list = [
+      conn(1, "Shop DB", [["svc_a", true], ["svc_b", true]]),
+      conn(2, "Mixed", [["svc_c", true]]),
+      conn(3, "Clean", [["svc_d", true]]),
+      conn(4, "Off", [["svc_e", false]]),
+      conn(5, "Missing", [["svc_x", true]]),
+    ];
+    return [
+      ...["%% amber:db a/b x", "  %% amber:db a b/c x", "%% amber:db a/b", "%% amber:db /b x", "x\ny\nz\nw\n%% amber:db a/b x", "x\ny\nz\nw\nv\n%% amber:db a/b x", "%%amber:db a/b x", "\t%% amber:db a/b/c x"]
+        .map((t) => s("erdMigrate.isGeneratedErd", t)),
+      s("erdMigrate.copyLegacySnapshots", list),
+      s("erdMigrate.findLegacyErds", list),
+      s("erdMigrate.trashLegacyErds", { folders: ["Shop DB", "Clean"], files: ["Mixed/svc_c/schema.json", "Mixed/svc_c/ERD.MERMAID"], erds: 3 }),
+      s("erdMigrate.findLegacyErds", list),
+    ];
+  },
+};
+
 /** 날짜 계산 훑기 — 월 경계, 윤년, 연 경계, 주 시작, 달력 격자, 공휴일(대체공휴일, 음력 표 밖 연도) */
 const dates: Scenario = {
   name: "dates/sweep",
@@ -1436,6 +1483,7 @@ export const SCENARIOS: Scenario[] = [
   diagramGraphPure,
   erdGenPure,
   schemaSnapshotPure,
+  erdMigrateFiles,
   dbconnPure,
   commentFiles,
   aiConfig,

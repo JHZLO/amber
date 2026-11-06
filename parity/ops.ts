@@ -18,6 +18,7 @@ import * as dbconn from "../src/lib/dbconn";
 import * as diagramGraph from "../src/lib/diagramGraph";
 import * as diagrams from "../src/lib/diagrams";
 import * as erdGen from "../src/lib/erdGen";
+import * as erdMigrate from "../src/lib/erdMigrate";
 import * as schemaSnapshot from "../src/lib/schemaSnapshot";
 import * as erdStore from "../src/lib/erdStore";
 import * as holidays from "../src/lib/holidays";
@@ -69,6 +70,7 @@ export const MODULES = [
   "diagramGraph",
   "erdGen",
   "schemaSnapshot",
+  "erdMigrate",
 ] as const;
 
 export const OPS: Record<string, Op> = {
@@ -226,6 +228,10 @@ export const OPS: Record<string, Op> = {
   "erdGen.generateErd": erdGen.generateErd,
   "erdGen.inferReferences": erdGen.inferReferences,
   "erdGen.commonTablePrefix": erdGen.commonTablePrefix,
+  "erdMigrate.isGeneratedErd": erdMigrate.isGeneratedErd,
+  "erdMigrate.copyLegacySnapshots": erdMigrate.copyLegacySnapshots,
+  "erdMigrate.findLegacyErds": erdMigrate.findLegacyErds,
+  "erdMigrate.trashLegacyErds": erdMigrate.trashLegacyErds,
   "schemaSnapshot.fingerprintOf": schemaSnapshot.fingerprintOf,
   "schemaSnapshot.finalizeSnapshot": schemaSnapshot.finalizeSnapshot,
   "schemaSnapshot.parseSnapshot": schemaSnapshot.parseSnapshot,
