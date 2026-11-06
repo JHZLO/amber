@@ -441,7 +441,7 @@ fn stop(offset: f64, (c, a): (&str, f64)) -> String {
 // ---- 카드 치수(8 단위 격자) ----
 
 const PAD: f64 = 16.;
-const HEAD: f64 = 44.;
+pub const HEAD: f64 = 44.;
 const ROW: f64 = 28.;
 const FOOT: f64 = 18.;
 const RX: f64 = CARD_RADIUS;

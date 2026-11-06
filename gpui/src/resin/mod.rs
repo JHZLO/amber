@@ -4,11 +4,13 @@
 //! 기준은 gpui/tools/resin-fixture.mjs 가 고정 resin 으로 만든 tests/resin_compile.json(resin 시험 파일의 문자열 전부).
 
 mod checker;
+pub mod details;
 mod lexer;
 mod model;
 mod parser;
 pub mod sql;
 pub mod svg;
+pub mod viewer;
 
 pub use model::{
     Model, ModelAudit, ModelColumn, ModelConstraint, ModelForeignKey, ModelIndex, ModelRef,

@@ -190,8 +190,52 @@ for (const [file, source] of sources) {
 writeFileSync(new URL("../tests/resin_svg.json", import.meta.url), JSON.stringify(svgCases) + "\n");
 console.log(`${svgCases.length} svgs, ${Math.round(JSON.stringify(svgCases).length / 1024)} KB`);
 
+// 표 패널과 컬럼 정보창(viewer 의 tableDetails, columnDetails) — 브라우저 없이 부르려고 document 를 흉내 낸다.
+// 요소는 태그, 클래스, data-c, title, 자식만 남긴다(빈 글자 마디도 그대로). 재생은 details.rs
+const element = (tag) => ({
+  tag,
+  className: "",
+  dataset: {},
+  title: "",
+  kids: [],
+  append(...cs) {
+    this.kids.push(...cs);
+  },
+  addEventListener() {},
+  setAttribute() {},
+  insertAdjacentHTML() {},
+});
+globalThis.document = { createElement: element };
+const { tableDetails, columnDetails } = await import(join(nm, "@jhzlo/resin/dist/viewer/details.js"));
+const plain = (n) =>
+  typeof n === "string"
+    ? n
+    : { tag: n.tag, class: n.className || null, ...(n.dataset.c !== undefined && { c: n.dataset.c }), ...(n.title && { title: n.title }), kids: n.kids.map(plain) };
+const details = (source) => {
+  const { model } = compile(source);
+  const noop = () => {};
+  return {
+    source,
+    tables: model.tables.map((t) => ({
+      table: t.name,
+      panel: plain(tableDetails(model, t.name, noop, noop, noop)),
+      columns: t.columns.map((c) => ({ column: c.name, pop: plain(columnDetails(model, t.name, c.name, noop)) })),
+    })),
+  };
+};
+const detailCases = sources.map(([, source]) => details(source));
+writeFileSync(new URL("../tests/resin_details.json", import.meta.url), JSON.stringify(detailCases) + "\n");
+console.log(`${detailCases.reduce((n, d) => n + d.tables.length, 0)} panels`);
+
 // 실데이터(로컬 전용) — AMBER_REAL_ERD 에 하네스의 real__erd.json 을 주면 그 원문들을 amber 기본 보기 둘로 그려
-// AMBER_REAL_SVG_OUT 에 남긴다. 저장소에 올리지 않는다(.claude/parity/real). 재생은 svg.rs 의 draws_real_schemas_like_resin
+// AMBER_REAL_SVG_OUT 에 남긴다. 저장소에 올리지 않는다(.claude/parity/real). 재생은 svg.rs 의 draws_real_schemas_like_resin.
+// AMBER_REAL_DETAILS_OUT 을 주면 같은 원문들의 패널과 정보창도 남긴다(details.rs 의 matches_real_details)
+if (process.env.AMBER_REAL_ERD && process.env.AMBER_REAL_DETAILS_OUT) {
+  const steps = JSON.parse(readFileSync(process.env.AMBER_REAL_ERD, "utf8")).steps;
+  const real = [...new Set(steps.map((st) => st.result?.source).filter(Boolean))].map(details);
+  writeFileSync(process.env.AMBER_REAL_DETAILS_OUT, JSON.stringify(real));
+  console.log(`real: ${real.reduce((n, d) => n + d.tables.length, 0)} panels`);
+}
 if (process.env.AMBER_REAL_ERD && process.env.AMBER_REAL_SVG_OUT) {
   const steps = JSON.parse(readFileSync(process.env.AMBER_REAL_ERD, "utf8")).steps;
   const seen = new Set();
