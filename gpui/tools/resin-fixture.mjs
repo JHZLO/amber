@@ -168,3 +168,47 @@ fixtures[0].types = [
 ].map((text) => ({ text, type: parseType(text) }));
 writeFileSync(new URL("../tests/resin_from_schema.json", import.meta.url), JSON.stringify(fixtures, null, 1) + "\n");
 console.log(`${fixtures.length} schemas, ${fixtures[0].types.length} types`);
+
+// toSvg — amber 의 정지 그림(stage: true, `<무대>-<어둠>` 룩, idPrefix erd-)을 중심으로 보기 조합을 돈다
+const svgOptions = [
+  { direction: "down", look: "aurora-dark", stage: true, idPrefix: "erd-" },
+  { direction: "right", look: "aurora-light", stage: true, edges: "curved", idPrefix: "erd-" },
+  { direction: "down", look: "silk-dark", stage: true, columns: "keys", hide: ["descriptions", "nulls"], idPrefix: "erd-" },
+  { direction: "right", look: "caustic-light", stage: true, columns: "none", audit: "expand", idPrefix: "erd-" },
+  { direction: "down", look: "graphite", standalone: true, edges: "curved", hide: ["keys", "tags", "types"] },
+  { direction: "right", look: "silk-light", stage: false },
+  { direction: "down", look: "caustic-dark", stage: true, audit: "expand", columns: "keys", edges: "curved", idPrefix: "erd-" },
+];
+const svgCases = [];
+for (const [file, source] of sources) {
+  const { model } = compile(source);
+  for (const [k, options] of svgOptions.entries()) {
+    const r = await toSvg(model, elk, options);
+    svgCases.push({ name: `${file}#${k}`, source, options, ...r });
+  }
+}
+writeFileSync(new URL("../tests/resin_svg.json", import.meta.url), JSON.stringify(svgCases) + "\n");
+console.log(`${svgCases.length} svgs, ${Math.round(JSON.stringify(svgCases).length / 1024)} KB`);
+
+// 실데이터(로컬 전용) — AMBER_REAL_ERD 에 하네스의 real__erd.json 을 주면 그 원문들을 amber 기본 보기 둘로 그려
+// AMBER_REAL_SVG_OUT 에 남긴다. 저장소에 올리지 않는다(.claude/parity/real). 재생은 svg.rs 의 draws_real_schemas_like_resin
+if (process.env.AMBER_REAL_ERD && process.env.AMBER_REAL_SVG_OUT) {
+  const steps = JSON.parse(readFileSync(process.env.AMBER_REAL_ERD, "utf8")).steps;
+  const seen = new Set();
+  const real = [];
+  for (const st of steps) {
+    const source = st.result?.source;
+    if (!source || seen.has(source)) continue;
+    seen.add(source);
+    const { model } = compile(source);
+    for (const options of [
+      { direction: "down", look: "aurora-dark", stage: true, idPrefix: "erd-" },
+      { direction: "right", look: "silk-light", stage: true, edges: "curved", idPrefix: "erd-" },
+    ]) {
+      const r = await toSvg(model, elk, options);
+      real.push({ source, options, svg: r.svg, width: r.width, height: r.height });
+    }
+  }
+  writeFileSync(process.env.AMBER_REAL_SVG_OUT, JSON.stringify(real));
+  console.log(`real: ${real.length} svgs`);
+}

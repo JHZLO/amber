@@ -8,6 +8,7 @@ mod lexer;
 mod model;
 mod parser;
 pub mod sql;
+pub mod svg;
 
 pub use model::{
     Model, ModelAudit, ModelColumn, ModelConstraint, ModelForeignKey, ModelIndex, ModelRef,
