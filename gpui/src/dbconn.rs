@@ -221,3 +221,177 @@ pub fn set_schema_starred(
         },
     )
 }
+
+// ---- 순수 판정(lib/dbconn.ts) — 설정 목록과 ERD 트리가 같은 판정, 같은 색을 쓴다 ----
+
+/// 연동 대상 스키마 하나 — 물리 이름 + 표시명. 체크를 풀면 enabled=false 로 남는다
+#[derive(Debug, Clone, PartialEq, Deserialize, serde::Serialize)]
+pub struct DbSchemaPref {
+    pub name: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub enabled: bool,
+    /// ERD 에 감사 표를 그리는가 — 없으면 true
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub starred: Option<bool>,
+}
+
+/// db_connections 한 행(list_connections 의 JSON)
+#[derive(Debug, Clone, PartialEq, Deserialize, serde::Serialize)]
+pub struct DbConnection {
+    pub id: i64,
+    pub ulid: String,
+    pub name: String,
+    pub kind: String,
+    pub env: String,
+    pub host: String,
+    pub port: i64,
+    pub username: String,
+    pub tls: String,
+    #[serde(default)]
+    pub credential_command: String,
+    /// ERD 저장소 기준 연결 폴더 — 스키마 폴더는 `{folder_path}/{schema}`
+    pub folder_path: String,
+    pub schemas: Vec<DbSchemaPref>,
+    pub last_sync_at: Option<i64>,
+    pub last_error: Option<String>,
+    #[serde(default)]
+    pub created_at: i64,
+    #[serde(default)]
+    pub updated_at: i64,
+}
+
+pub fn pref_audit(p: &DbSchemaPref) -> bool {
+    p.audit != Some(false)
+}
+
+pub fn schema_folder(c: &DbConnection, schema: &str) -> String {
+    format!("{}/{schema}", c.folder_path)
+}
+
+/// 스키마 폴더 안의 스냅샷 — 트리는 .mmd 만 보이니 여기 뜨지 않는다
+pub fn snapshot_path(c: &DbConnection, schema: &str) -> String {
+    format!("{}/schema.json", schema_folder(c, schema))
+}
+
+/// 열 때 자동 동기화하는 최소 간격 — 폴링 대신 '열 때 한 번'
+pub const SYNC_THROTTLE_MS: i64 = 10 * 60 * 1000;
+
+pub fn is_stale(synced_at: Option<i64>, now: i64) -> bool {
+    synced_at.is_none_or(|t| now - t > SYNC_THROTTLE_MS)
+}
+
+pub fn enabled_schemas(c: &DbConnection) -> Vec<&DbSchemaPref> {
+    c.schemas.iter().filter(|s| s.enabled).collect()
+}
+
+pub fn env_label(env: &str) -> String {
+    crate::i18n::t(match env {
+        "prod" => "erd.db.env.prod",
+        "staging" => "erd.db.env.staging",
+        _ => "erd.db.env.dev",
+    })
+}
+
+/// 연결 상태 — 키체인을 읽어 확인하지 않는다(읽기만 해도 macOS 확인창). 실패 흔적(last_error)으로 안다
+pub fn conn_status(c: &DbConnection) -> &'static str {
+    match c.last_error.as_deref() {
+        Some("KEYCHAIN_MISSING") => "needsPassword",
+        Some(e) if !e.is_empty() => "failed",
+        _ if c.last_sync_at.is_some_and(|t| t != 0) => "connected",
+        _ => "never",
+    }
+}
+
+pub fn conn_status_label(st: &str) -> String {
+    crate::i18n::t(&format!("erd.db.status.{st}"))
+}
+
+/// 상태 점의 꼴 — 채움=연결됨, 색=안 됐다면 왜. 동기화 전은 빈 글(무채색)
+pub fn conn_status_dot(st: &str) -> &'static str {
+    match st {
+        "connected" => "ok",
+        "needsPassword" => "warn",
+        "failed" => "bad",
+        _ => "",
+    }
+}
+
+/// 연결 이름 → 폴더 이름. 경로 구분자, 앞의 점만 거른다(80 UTF-16 단위까지)
+pub fn folder_name_for(name: &str) -> String {
+    let t: String = name
+        .trim_matches(|c: char| {
+            // JS 의 trim 이 보는 공백(U+0085 는 아니고 U+FEFF 는 맞다)
+            matches!(
+                c,
+                '\t' | '\n' | '\u{b}' | '\u{c}' | '\r' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'
+                    ..='\u{200a}'
+                        | '\u{2028}'
+                        | '\u{2029}'
+                        | '\u{202f}'
+                        | '\u{205f}'
+                        | '\u{3000}'
+                        | '\u{feff}'
+            )
+        })
+        .chars()
+        .map(|c| {
+            if matches!(c, '/' | '\\' | ':') {
+                '-'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let t = t.trim_start_matches('.');
+    let units: Vec<u16> = t.encode_utf16().take(80).collect();
+    let out = String::from_utf16_lossy(&units);
+    if out.is_empty() { "db".into() } else { out }
+}
+
+/// 하네스 — 순수 판정
+pub fn call_pure(op: &str, args: &[Json]) -> Option<std::result::Result<Json, String>> {
+    let conn = || -> std::result::Result<DbConnection, String> {
+        serde_json::from_value(args.first().cloned().unwrap_or(Json::Null))
+            .map_err(|e| e.to_string())
+    };
+    let s = |i: usize| {
+        args.get(i)
+            .and_then(Json::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let out = match op {
+        "dbconn.prefAudit" => {
+            serde_json::from_value::<DbSchemaPref>(args.first().cloned().unwrap_or(Json::Null))
+                .map(|p| json!(pref_audit(&p)))
+                .map_err(|e| e.to_string())
+        }
+        "dbconn.schemaFolder" => conn().map(|c| json!(schema_folder(&c, &s(1)))),
+        "dbconn.enabledSchemas" => conn().map(|c| json!(enabled_schemas(&c))),
+        "dbconn.isStale" => {
+            let synced = args
+                .first()
+                .and_then(|v| v.get("synced_at"))
+                .and_then(Json::as_i64);
+            let now = args.get(1).and_then(Json::as_i64).unwrap_or_default();
+            Ok(json!(is_stale(synced, now)))
+        }
+        "dbconn.envLabel" => Ok(json!(env_label(&s(0)))),
+        "dbconn.connStatus" => conn().map(|c| json!(conn_status(&c))),
+        "dbconn.connStatusLabel" => Ok(json!(conn_status_label(&s(0)))),
+        "dbconn.connStatusDot" => Ok(json!(conn_status_dot(&s(0)))),
+        "dbconn.folderNameFor" => Ok(json!(folder_name_for(&s(0)))),
+        "dbconn.profileOf" => {
+            let a = args.first().cloned().unwrap_or(Json::Null);
+            Ok(
+                json!({"ulid": a["ulid"], "kind": a["kind"], "host": a["host"], "port": a["port"], "username": a["username"], "tls": a["tls"], "credential_command": a["credential_command"]}),
+            )
+        }
+        _ => return None,
+    };
+    Some(out)
+}

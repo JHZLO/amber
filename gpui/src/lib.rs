@@ -181,6 +181,16 @@ pub const OPS: &[&str] = &[
     "aiActivity.shortTarget",
     "aiActivity.describeActivity",
     "aiWait.waitLine",
+    "dbconn.prefAudit",
+    "dbconn.schemaFolder",
+    "dbconn.enabledSchemas",
+    "dbconn.isStale",
+    "dbconn.envLabel",
+    "dbconn.connStatus",
+    "dbconn.connStatusLabel",
+    "dbconn.connStatusDot",
+    "dbconn.folderNameFor",
+    "dbconn.profileOf",
     "erdGen.generateErd",
     "erdGen.inferReferences",
     "erdGen.commonTablePrefix",
@@ -382,6 +392,7 @@ fn call_files(db: &Db, op: &str, a: &Args) -> Result<Json, String> {
             .or_else(|| note_ai_text::call(op, a.0))
             .or_else(|| diagram_graph::call(op, a.0))
             .or_else(|| erd_gen::call(op, a.0))
+            .or_else(|| dbconn::call_pure(op, a.0))
             .or_else(|| dates::call(op, a.0, db.now()))
             .or_else(|| tree::call(op, a.0))
             .or_else(|| timetable::call(op, a.0, db.now()))
