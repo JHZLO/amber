@@ -64,6 +64,7 @@ mod tt_drag;
 #[cfg(test)]
 mod ui_tests;
 mod vault_pane;
+mod widget;
 
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -136,6 +137,9 @@ struct Spike {
     reports: report_run::Reports,
     /// AI 로그인 창(설정의 로그인 단추, 또는 AI 호출이 AI_AUTH 로 실패했을 때)
     auth: Option<ai_auth::AuthModal>,
+    /// 바탕화면 위젯 창과 '개념이 바뀌었다' 깃발(위젯과 나눠 쥔다)
+    widget: Option<WindowHandle<widget::Widget>>,
+    widget_flag: std::rc::Rc<std::cell::Cell<bool>>,
     /// 첫 실행 안내(연결도 건너뛰기도 안 했을 때)
     onboarding: Option<onboarding::Onboarding>,
     /// 빠른 검색(⌘K, ⌘P)
@@ -314,6 +318,8 @@ impl Spike {
             settings: settings_view::SettingsUi::default(),
             search: None,
             onboarding: None,
+            widget: None,
+            widget_flag: Default::default(),
             auth: None,
             concepts,
             notes: notes_view::NotesState {
@@ -1109,7 +1115,9 @@ impl Render for Spike {
                             )
                             .when(self.section == Section::Til, |d| {
                                 d.children(self.concepts_topbar(&k, cx))
-                            }),
+                            })
+                            .when(self.section != Section::Til, |d| d.child(div().flex_1()))
+                            .children(self.topbar_right(&k, cx)),
                     )
                     .child(div().flex_1().min_h_0().child(body)),
             )
@@ -1162,6 +1170,38 @@ impl Spike {
             }
             None => cx.open_url(url),
         })
+    }
+
+    /// 머리 줄 오른쪽 — 테마 바꾸기(아이콘), [위젯]. 모든 탭 공통
+    fn topbar_right(&self, k: &Tokens, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let dark = k.dark;
+        let label = t(if dark {
+            "app.theme.toLight"
+        } else {
+            "app.theme.toDark"
+        });
+        vec![
+            day_card::button("topbar-theme", k, false, false)
+                .w(px(34.))
+                .h(px(34.))
+                .px_0()
+                .justify_center()
+                .tooltip(tip::tip(label))
+                .child(assets::icon(if dark { "sun" } else { "moon" }, 17.).text_color(k.text))
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.set_theme_pref(if dark { "light" } else { "dark" }, window, cx)
+                }))
+                .into_any_element(),
+            day_card::button("topbar-widget", k, false, false)
+                .h(px(34.))
+                .px(px(14.))
+                .text_size(px(13.))
+                .tooltip(tip::tip(t("app.widget.open")))
+                .child(assets::icon("panel", 15.).text_color(k.text))
+                .child(t("app.widget.label"))
+                .on_click(cx.listener(|this, _, window, cx| this.open_widget(window, cx)))
+                .into_any_element(),
+        ]
     }
 
     /// 작업공간 탭을 바꾼다 — 레일, ⌘1~5, 빠른 검색, 노트↔개념 이동이 같이 쓴다

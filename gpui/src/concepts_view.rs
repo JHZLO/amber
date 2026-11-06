@@ -150,6 +150,8 @@ fn row_str<'a>(r: &'a Row, k: &str) -> &'a str {
 impl Spike {
     /// 목록, 상태별 수, 태그를 다시 읽는다
     pub(crate) fn reload_concepts(&mut self) {
+        // 위젯은 다음 이동 때 다시 읽는다
+        self.widget_flag.set(true);
         let c = &self.concepts;
         let search = c.search.trim().to_string();
         let filter = ConceptFilter {

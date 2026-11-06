@@ -1540,6 +1540,21 @@ fn concepts(s: &mut Shots) {
     s.settle();
     s.shot("search-0");
     s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.close_search(window, cx);
+            sp.open_widget(window, cx);
+        })
+        .unwrap();
+    s.settle();
+    let wh = s.window.update(&mut s.cx, |sp, _, _| sp.widget).unwrap();
+    if let Some(wh) = wh {
+        s.cx.run_until_parked();
+        let img = s.cx.capture_screenshot(wh.into()).unwrap();
+        let path = s.out.join("widget-0.png");
+        img.save(&path).unwrap();
+        eprintln!("{}", path.display());
+    }
+    s.window
         .update(&mut s.cx, |sp, window, cx| sp.close_search(window, cx))
         .unwrap();
 }

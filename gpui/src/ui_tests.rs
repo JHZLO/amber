@@ -4665,3 +4665,64 @@ fn the_login_window_shows_the_url_and_takes_a_code(cx: &mut TestAppContext) {
     ui.run_until_parked();
     ui.update(|_, cx| assert!(spike().read(cx).auth.is_some()));
 }
+
+#[gpui_kit::test]
+fn the_widget_window_flips_concepts_and_updates_the_main_window(cx: &mut TestAppContext) {
+    let db = seeded("widget", &[]);
+    {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        for (u, title, conf) in [("01JA", "Alpha", 1), ("01JB", "Beta", 2)] {
+            d.execute(
+                &format!("INSERT INTO concepts (ulid, title, summary, detail_path, status, confidence) VALUES ('{u}', '{title}', 's', 'concepts/{u}/index.md', 'learning', {conf})"),
+                &[],
+            )
+            .unwrap();
+        }
+    }
+    let mut ui = open(cx, &db);
+    click(&mut ui, "topbar-widget");
+    let h = ui
+        .update(|_, cx| spike().read(cx).widget)
+        .expect("위젯 창이 열린다");
+    let titles = |ui: &mut VisualTestContext| {
+        ui.update(|_, cx| {
+            h.update(cx, |w, _, _| {
+                w.queue
+                    .iter()
+                    .map(|r| r["title"].as_str().unwrap().to_string())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap()
+        })
+    };
+    // 학습 중 큐 — 낮은 확신부터
+    assert_eq!(titles(&mut ui), ["Alpha", "Beta"]);
+    ui.update(|_, cx| h.update(cx, |w, _, cx| w.go(-1, cx)).unwrap());
+    ui.update(|_, cx| {
+        assert_eq!(
+            h.update(cx, |w, _, _| w.idx).unwrap(),
+            1,
+            "처음에서 뒤로 = 끝"
+        )
+    });
+    // 확신 + → 점만 바로, 순서는 다음 이동부터
+    ui.update(|_, cx| h.update(cx, |w, _, cx| w.conf(1, cx)).unwrap());
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    assert_eq!(
+        amber_gpui::concepts::get_concept(&d, 2).unwrap().unwrap()["confidence"],
+        3
+    );
+    // 학습완료 → 큐에서 빠지고 메인 목록도 다시 읽는다
+    ui.update(|_, cx| h.update(cx, |w, _, cx| w.complete(cx)).unwrap());
+    assert_eq!(titles(&mut ui), ["Alpha"]);
+    assert_eq!(
+        amber_gpui::concepts::get_concept(&d, 2).unwrap().unwrap()["status"],
+        "learned"
+    );
+    // 메인에서 바뀌면 위젯은 다음 이동 때 다시 읽는다
+    d.execute("UPDATE concepts SET status = 'learned' WHERE id = 1", &[])
+        .unwrap();
+    ui.update(|_, cx| spike().update(cx, |s, _| s.reload_concepts()));
+    ui.update(|_, cx| h.update(cx, |w, _, cx| w.go(1, cx)).unwrap());
+    assert!(titles(&mut ui).is_empty());
+}
