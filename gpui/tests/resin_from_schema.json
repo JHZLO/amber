@@ -1,0 +1,2024 @@
+[
+ {
+  "name": "basic",
+  "input": {
+   "tables": [
+    {
+     "name": "users",
+     "comment": "People\nwho sign in",
+     "columns": [
+      {
+       "name": "id",
+       "type": "bigint",
+       "nullable": false
+      },
+      {
+       "name": "email",
+       "type": "varchar(255)",
+       "nullable": false,
+       "comment": "say \"hi\" \\ there"
+      },
+      {
+       "name": "name",
+       "type": "varchar(64)",
+       "nullable": true,
+       "encrypted": true
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ],
+     "indexes": [
+      {
+       "name": "uk_email",
+       "columns": [
+        "email"
+       ],
+       "unique": true
+      }
+     ]
+    },
+    {
+     "name": "orders",
+     "columns": [
+      {
+       "name": "id",
+       "type": "bigint",
+       "nullable": false
+      },
+      {
+       "name": "user_id",
+       "type": "bigint",
+       "nullable": true
+      },
+      {
+       "name": "status",
+       "type": "varchar(16)",
+       "nullable": false,
+       "values": [
+        "PENDING",
+        "PAID",
+        "two words",
+        "",
+        "a`b",
+        "PAID",
+        "7"
+       ]
+      },
+      {
+       "name": "created_at",
+       "type": "datetime(6)",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ],
+     "indexes": [
+      {
+       "name": "idx_user",
+       "columns": [
+        "user_id"
+       ]
+      },
+      {
+       "columns": [
+        "user_id"
+       ]
+      },
+      {
+       "name": "idx_s_c",
+       "columns": [
+        "status",
+        "created_at"
+       ]
+      },
+      {
+       "name": "idx_s_c2",
+       "columns": [
+        "status",
+        "created_at"
+       ]
+      }
+     ],
+     "foreignKeys": [
+      {
+       "name": "fk_user",
+       "columns": [
+        "user_id"
+       ],
+       "table": "users"
+      }
+     ]
+    },
+    {
+     "name": "notes",
+     "columns": [
+      {
+       "name": "id",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "order_id",
+       "type": "bigint",
+       "nullable": false
+      },
+      {
+       "name": "author_id",
+       "type": "bigint",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ],
+     "foreignKeys": [
+      {
+       "columns": [
+        "order_id"
+       ],
+       "table": "orders",
+       "references": [
+        "id"
+       ],
+       "kind": "logical"
+      },
+      {
+       "columns": [
+        "author_id"
+       ],
+       "table": "users",
+       "references": [
+        "email"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "output": {
+   "source": "table users \"People who sign in\" {\n  id     bigint        pk\n  email  varchar(255)  uk as uk_email  \"say \\\"hi\\\" \\\\ there\"\n  name   varchar(64)?  enc\n}\n\ntable orders {\n  id          bigint       pk\n  user_id     bigint?      -> users  index as idx_user\n  status      varchar(16)  enum(PENDING, PAID, `two words`, 7)\n  created_at  datetime(6)\n  index(status, created_at) as idx_s_c\n  %% Not converted: enum value \"\" of column \"status\"\n  %% Not converted: enum value \"a`b\" of column \"status\"\n}\n\ntable notes {\n  id         int     pk\n  order_id   bigint  ~> orders\n  author_id  bigint  -> users.email\n}\n",
+   "notes": [
+    {
+     "message": "table `orders`: not converted: enum value \"\" of column \"status\"",
+     "line": 2,
+     "col": 3
+    },
+    {
+     "message": "table `orders`: not converted: enum value \"a`b\" of column \"status\"",
+     "line": 2,
+     "col": 3
+    }
+   ],
+   "tables": 3
+  },
+  "types": [
+   {
+    "text": "varchar(255)",
+    "type": {
+     "name": "varchar",
+     "args": [
+      255
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "bigint unsigned",
+    "type": {
+     "name": "bigint",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "int(11)",
+    "type": {
+     "name": "int",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "decimal(12,2)",
+    "type": {
+     "name": "decimal",
+     "args": [
+      12,
+      2
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "enum('A','B','it''s')",
+    "type": {
+     "name": "enum",
+     "args": null,
+     "values": [
+      "A",
+      "B",
+      "it's"
+     ]
+    }
+   },
+   {
+    "text": "set('x','y')",
+    "type": {
+     "name": "set",
+     "args": null,
+     "values": [
+      "x",
+      "y"
+     ]
+    }
+   },
+   {
+    "text": "character varying(20)",
+    "type": {
+     "name": "varchar",
+     "args": [
+      20
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "double precision",
+    "type": {
+     "name": "double",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "timestamp with time zone",
+    "type": {
+     "name": "timestamptz",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "timestamp with local time zone",
+    "type": {
+     "name": "timestampltz",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "text[]",
+    "type": {
+     "name": "_text",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "tinyint(1)",
+    "type": {
+     "name": "tinyint",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "national char varying(10)",
+    "type": {
+     "name": "nvarchar",
+     "args": [
+      10
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "national character(3)",
+    "type": {
+     "name": "nchar",
+     "args": [
+      3
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "",
+    "type": {
+     "name": "any",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "public.my_enum",
+    "type": {
+     "name": "my_enum",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "long varchar",
+    "type": {
+     "name": "long_varchar",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "long raw",
+    "type": {
+     "name": "long_raw",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "bit varying(3)",
+    "type": {
+     "name": "varbit",
+     "args": [
+      3
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "interval day to second(3)",
+    "type": {
+     "name": "interval",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "numeric(*,0)",
+    "type": {
+     "name": "numeric",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "varchar(max)",
+    "type": {
+     "name": "varchar",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "serial",
+    "type": {
+     "name": "integer",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "BIGSERIAL",
+    "type": {
+     "name": "bigint",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "integer ARRAY",
+    "type": {
+     "name": "_integer",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "enum(\"q\",\"r\")",
+    "type": {
+     "name": "enum",
+     "args": null,
+     "values": [
+      "q",
+      "r"
+     ]
+    }
+   },
+   {
+    "text": "geometry(Point, 4326)",
+    "type": {
+     "name": "geometry",
+     "args": [
+      4326
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "2xtype",
+    "type": {
+     "name": "_2",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "money-ish",
+    "type": {
+     "name": "money",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "decimal(10, 2) zerofill",
+    "type": {
+     "name": "decimal",
+     "args": [
+      10,
+      2
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "float(7,4) unsigned",
+    "type": {
+     "name": "float",
+     "args": [
+      7,
+      4
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "nchar varying(5)",
+    "type": {
+     "name": "nvarchar",
+     "args": [
+      5
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "char(36)",
+    "type": {
+     "name": "char",
+     "args": [
+      36
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "json",
+    "type": {
+     "name": "json",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "datetime(6)",
+    "type": {
+     "name": "datetime",
+     "args": [
+      6
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "varchar(20) character set utf8mb4",
+    "type": {
+     "name": "varchar",
+     "args": [
+      20
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "int[][]",
+    "type": {
+     "name": "_int",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "_text",
+    "type": {
+     "name": "_text",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "number(12)",
+    "type": {
+     "name": "number",
+     "args": [
+      12
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "enum(E'a\\'b', N'c')",
+    "type": {
+     "name": "enum",
+     "args": null,
+     "values": [
+      "a'b",
+      "c"
+     ]
+    }
+   },
+   {
+    "text": "x(1e3, .5, 7)",
+    "type": {
+     "name": "x",
+     "args": [
+      7
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "a.b.c(1)",
+    "type": {
+     "name": "c",
+     "args": [
+      1
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "-- comment\nint",
+    "type": {
+     "name": "int",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "/* c */ bigint",
+    "type": {
+     "name": "bigint",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "varchar('a'",
+    "type": {
+     "name": "varchar",
+     "args": null,
+     "values": [
+      "a"
+     ]
+    }
+   },
+   {
+    "text": "`quoted` type",
+    "type": {
+     "name": "quoted",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "[nvarchar](10)",
+    "type": {
+     "name": "nvarchar",
+     "args": [
+      10
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "$$x$$",
+    "type": {
+     "name": "x",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "time(3) with time zone",
+    "type": {
+     "name": "timetz",
+     "args": [
+      3
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "tinyint(1) unsigned zerofill",
+    "type": {
+     "name": "tinyint",
+     "args": null,
+     "values": null
+    }
+   },
+   {
+    "text": "year(4)",
+    "type": {
+     "name": "year",
+     "args": [
+      4
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "bit(1)",
+    "type": {
+     "name": "bit",
+     "args": [
+      1
+     ],
+     "values": null
+    }
+   },
+   {
+    "text": "a b c",
+    "type": {
+     "name": "a",
+     "args": null,
+     "values": null
+    }
+   }
+  ]
+ },
+ {
+  "name": "composite",
+  "input": {
+   "tables": [
+    {
+     "name": "a",
+     "columns": [
+      {
+       "name": "x",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "y",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "z",
+       "type": "int",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "x",
+      "y"
+     ],
+     "indexes": [
+      {
+       "name": "u_xy",
+       "columns": [
+        "y",
+        "x"
+       ],
+       "unique": true
+      },
+      {
+       "name": "u_x",
+       "columns": [
+        "x"
+       ],
+       "unique": true
+      },
+      {
+       "name": "u_zx",
+       "columns": [
+        "z",
+        "x"
+       ],
+       "unique": true
+      },
+      {
+       "name": "u_xz",
+       "columns": [
+        "x",
+        "z"
+       ],
+       "unique": true
+      }
+     ]
+    },
+    {
+     "name": "b",
+     "columns": [
+      {
+       "name": "id",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "ax",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "ay",
+       "type": "int",
+       "nullable": true
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ],
+     "indexes": [
+      {
+       "name": "u_id",
+       "columns": [
+        "id"
+       ],
+       "unique": true
+      }
+     ],
+     "foreignKeys": [
+      {
+       "name": "fk_ab",
+       "columns": [
+        "ax",
+        "ay"
+       ],
+       "table": "a",
+       "references": [
+        "x",
+        "y"
+       ]
+      },
+      {
+       "columns": [
+        "ax",
+        "ay"
+       ],
+       "table": "a"
+      },
+      {
+       "columns": [
+        "ax",
+        "ax"
+       ],
+       "table": "a",
+       "references": [
+        "x",
+        "y"
+       ]
+      },
+      {
+       "columns": [
+        "ax",
+        "ay"
+       ],
+       "table": "a",
+       "references": [
+        "x"
+       ]
+      },
+      {
+       "columns": [
+        "ax",
+        "nope"
+       ],
+       "table": "a",
+       "references": [
+        "x",
+        "y"
+       ]
+      },
+      {
+       "columns": [],
+       "table": "a"
+      },
+      {
+       "columns": [
+        "ax",
+        "ay"
+       ],
+       "table": "a",
+       "references": [
+        "x",
+        "nope"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "output": {
+   "source": "table a {\n  x  int  pk  uk as u_x\n  y  int  pk\n  z  int\n  unique(z, x) as u_zx\n}\n\ntable b {\n  id  int   pk\n  ax  int\n  ay  int?\n  foreign(ax, ay) -> a(x, y) as fk_ab\n  foreign(ax, ay) -> a(x, y)\n  %% Not converted: foreign key (ax, ax) needs equal lists of distinct columns\n  %% Not converted: foreign key (ax, ay) needs equal lists of distinct columns\n  %% Not converted: foreign key (ax, nope) has a missing source column\n  %% Not converted: foreign key () needs equal lists of distinct columns\n  %% Not converted: foreign key (ax, ay) -> a, target columns are missing or do not match the source list\n}\n",
+   "notes": [
+    {
+     "message": "table `b`: not converted: foreign key (ax, ax) needs equal lists of distinct columns",
+     "line": 2,
+     "col": 0
+    },
+    {
+     "message": "table `b`: not converted: foreign key (ax, ay) needs equal lists of distinct columns",
+     "line": 2,
+     "col": 0
+    },
+    {
+     "message": "table `b`: a foreign key names `nope`, which the table does not have",
+     "line": 2,
+     "col": 0
+    },
+    {
+     "message": "table `b`: not converted: foreign key () needs equal lists of distinct columns",
+     "line": 2,
+     "col": 0
+    },
+    {
+     "message": "table `b`: not converted: foreign key (ax, ay) -> a, target columns are missing or do not match the source list",
+     "line": 2,
+     "col": 0
+    }
+   ],
+   "tables": 2
+  }
+ },
+ {
+  "name": "types",
+  "input": {
+   "tables": [
+    {
+     "name": "t",
+     "columns": [
+      {
+       "name": "a",
+       "type": "bigint unsigned",
+       "nullable": false
+      },
+      {
+       "name": "b",
+       "type": "int(11)",
+       "nullable": false
+      },
+      {
+       "name": "c",
+       "type": "decimal(12,2)",
+       "nullable": false
+      },
+      {
+       "name": "d",
+       "type": "enum('A','B','a b')",
+       "nullable": false
+      },
+      {
+       "name": "e",
+       "type": "set('x','y')",
+       "nullable": false
+      },
+      {
+       "name": "f",
+       "type": "character varying(20)",
+       "nullable": false
+      },
+      {
+       "name": "g",
+       "type": "double precision",
+       "nullable": false
+      },
+      {
+       "name": "h",
+       "type": "timestamp with time zone",
+       "nullable": false
+      },
+      {
+       "name": "i",
+       "type": "text[]",
+       "nullable": false
+      },
+      {
+       "name": "j",
+       "type": "tinyint(1)",
+       "nullable": false
+      },
+      {
+       "name": "k",
+       "type": "national char varying(10)",
+       "nullable": false
+      },
+      {
+       "name": "l",
+       "type": "",
+       "nullable": false
+      },
+      {
+       "name": "m",
+       "type": "public.my_enum",
+       "nullable": false
+      },
+      {
+       "name": "n",
+       "type": "long varchar",
+       "nullable": false
+      },
+      {
+       "name": "o",
+       "type": "bit varying(3)",
+       "nullable": false
+      },
+      {
+       "name": "p",
+       "type": "interval day to second(3)",
+       "nullable": false
+      },
+      {
+       "name": "q",
+       "type": "numeric(*,0)",
+       "nullable": false
+      },
+      {
+       "name": "r",
+       "type": "varchar(max)",
+       "nullable": false
+      },
+      {
+       "name": "s",
+       "type": "serial",
+       "nullable": false
+      },
+      {
+       "name": "t2",
+       "type": "BIGSERIAL",
+       "nullable": false
+      },
+      {
+       "name": "u",
+       "type": "time without time zone",
+       "nullable": false
+      },
+      {
+       "name": "v",
+       "type": "integer ARRAY",
+       "nullable": false
+      },
+      {
+       "name": "w",
+       "type": "enum(\"q\",\"r\")",
+       "nullable": false
+      },
+      {
+       "name": "x",
+       "type": "geometry(Point, 4326)",
+       "nullable": false
+      },
+      {
+       "name": "y",
+       "type": "2xtype",
+       "nullable": false
+      },
+      {
+       "name": "z",
+       "type": "money-ish",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "s"
+     ]
+    }
+   ]
+  },
+  "output": {
+   "source": "table t {\n  a   bigint\n  b   int\n  c   decimal(12,2)\n  d   enum            enum(A, B, `a b`)\n  e   set             enum(x, y)\n  f   varchar(20)\n  g   double\n  h   timestamptz\n  i   _text\n  j   tinyint\n  k   nvarchar(10)\n  l   any\n  m   my_enum\n  n   long_varchar\n  o   varbit(3)\n  p   interval\n  q   numeric\n  r   varchar\n  s   integer         pk\n  t2  bigint\n  u   time\n  v   _integer\n  w   enum            enum(q, r)\n  x   geometry(4326)\n  y   _2\n  z   money\n}\n",
+   "notes": [],
+   "tables": 1
+  }
+ },
+ {
+  "name": "names",
+  "input": {
+   "tables": [
+    {
+     "name": "order-items",
+     "columns": [
+      {
+       "name": "id",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "1st",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "a`b",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "a_b",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "col with space",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "주문번호",
+       "type": "varchar(20)",
+       "nullable": false,
+       "comment": "한글 설명"
+      },
+      {
+       "name": "ID",
+       "type": "int",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ],
+     "indexes": [
+      {
+       "name": "ix`1",
+       "columns": [
+        "1st"
+       ]
+      },
+      {
+       "name": "ix_1",
+       "columns": [
+        "a_b"
+       ]
+      },
+      {
+       "name": "ix_1",
+       "columns": [
+        "a`b",
+        "id"
+       ]
+      }
+     ]
+    },
+    {
+     "name": "a.b",
+     "columns": [
+      {
+       "name": "id",
+       "type": "int",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ]
+    },
+    {
+     "name": "a`b",
+     "columns": [
+      {
+       "name": "id",
+       "type": "int",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ]
+    },
+    {
+     "name": "a_b",
+     "columns": [
+      {
+       "name": "id",
+       "type": "int",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ]
+    },
+    {
+     "name": "주문",
+     "columns": [
+      {
+       "name": "아이디",
+       "type": "bigint",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "아이디"
+     ]
+    },
+    {
+     "name": "order-items",
+     "columns": [
+      {
+       "name": "id",
+       "type": "int",
+       "nullable": false
+      }
+     ]
+    }
+   ]
+  },
+  "output": {
+   "source": "table `order-items` {\n  id                int          pk\n  `1st`             int          index as ix_1_2\n  a_b_2             int\n  a_b               int          index as ix_1\n  _                 int\n  `col with space`  int\n  `주문번호`        varchar(20)  \"한글 설명\"\n  index(a_b_2, id) as ix_1_3\n}\n\ntable `a.b` {\n  id  int  pk\n}\n\ntable a_b_2 {\n  id  int  pk\n}\n\ntable a_b {\n  id  int  pk\n}\n\ntable `주문` {\n  `아이디`  bigint  pk\n}\n",
+   "notes": [
+    {
+     "message": "index name \"ix`1\" renamed to \"ix_1_2\" in table \"order-items\"",
+     "line": 1,
+     "col": 0
+    },
+    {
+     "message": "index name \"ix_1\" renamed to \"ix_1_3\" in table \"order-items\"",
+     "line": 1,
+     "col": 0
+    },
+    {
+     "message": "column of \"order-items\" \"a`b\" renamed to \"a_b_2\" for resin",
+     "line": 1,
+     "col": 3
+    },
+    {
+     "message": "column of \"order-items\" \"\" renamed to \"_\" for resin",
+     "line": 1,
+     "col": 5
+    },
+    {
+     "message": "table `order-items`: column `ID` appears twice; the first is kept",
+     "line": 1,
+     "col": 8
+    },
+    {
+     "message": "table \"a`b\" renamed to \"a_b_2\" for resin",
+     "line": 3,
+     "col": 0
+    },
+    {
+     "message": "table `order-items` is created twice; the first is kept",
+     "line": 6,
+     "col": 0
+    }
+   ],
+   "tables": 5
+  }
+ },
+ {
+  "name": "schemas",
+  "input": {
+   "tables": [
+    {
+     "name": "users",
+     "schema": "Svc_A",
+     "columns": [
+      {
+       "name": "id",
+       "type": "bigint",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ]
+    },
+    {
+     "name": "users",
+     "schema": "svc_b",
+     "columns": [
+      {
+       "name": "id",
+       "type": "bigint",
+       "nullable": false
+      },
+      {
+       "name": "a_user",
+       "type": "bigint",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ],
+     "foreignKeys": [
+      {
+       "columns": [
+        "a_user"
+       ],
+       "table": "users",
+       "schema": "svc_a"
+      }
+     ]
+    },
+    {
+     "name": "orders",
+     "schema": "svc_a",
+     "columns": [
+      {
+       "name": "id",
+       "type": "bigint",
+       "nullable": false
+      },
+      {
+       "name": "user_id",
+       "type": "bigint",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ],
+     "foreignKeys": [
+      {
+       "columns": [
+        "user_id"
+       ],
+       "table": "users"
+      }
+     ]
+    },
+    {
+     "name": "loose",
+     "columns": [
+      {
+       "name": "id",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "user_id",
+       "type": "bigint",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ],
+     "foreignKeys": [
+      {
+       "columns": [
+        "user_id"
+       ],
+       "table": "users"
+      }
+     ]
+    },
+    {
+     "name": "svc a",
+     "schema": "svc a",
+     "columns": [
+      {
+       "name": "id",
+       "type": "int",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ]
+    }
+   ]
+  },
+  "output": {
+   "source": "service svc_a {\n  table `Svc_A.users` {\n    id  bigint  pk\n  }\n\n  table orders {\n    id       bigint  pk\n    user_id  bigint  -> `Svc_A.users`\n  }\n}\n\nservice svc_b {\n  table `svc_b.users` {\n    id      bigint  pk\n    a_user  bigint  -> `Svc_A.users`\n  }\n}\n\ntable loose {\n  id       int     pk\n  user_id  bigint\n  %% Not converted: reference user_id -> users, ambiguous target (Svc_A.users, svc_b.users)\n}\n\nservice `svc a` {\n  table `svc a` {\n    id  int  pk\n  }\n}\n",
+   "notes": [
+    {
+     "message": "table `loose`: not converted: reference user_id -> users, ambiguous target (Svc_A.users, svc_b.users)",
+     "line": 4,
+     "col": 0
+    }
+   ],
+   "tables": 5
+  }
+ },
+ {
+  "name": "external",
+  "input": {
+   "tables": [
+    {
+     "name": "orders",
+     "schema": "shop",
+     "columns": [
+      {
+       "name": "id",
+       "type": "bigint",
+       "nullable": false
+      },
+      {
+       "name": "user_id",
+       "type": "bigint",
+       "nullable": false
+      },
+      {
+       "name": "buyer_id",
+       "type": "varchar(36)",
+       "nullable": false
+      },
+      {
+       "name": "seller_id",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "cx",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "cy",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "dx",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "dy",
+       "type": "int",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ],
+     "foreignKeys": [
+      {
+       "columns": [
+        "user_id"
+       ],
+       "table": "users",
+       "schema": "accounts"
+      },
+      {
+       "columns": [
+        "buyer_id"
+       ],
+       "table": "users",
+       "schema": "accounts",
+       "references": [
+        "uuid"
+       ]
+      },
+      {
+       "columns": [
+        "seller_id"
+       ],
+       "table": "users",
+       "schema": "accounts",
+       "references": [
+        "uuid"
+       ]
+      },
+      {
+       "name": "fk_c",
+       "columns": [
+        "cx",
+        "cy"
+       ],
+       "table": "pairs",
+       "schema": "accounts",
+       "references": [
+        "x",
+        "y"
+       ]
+      },
+      {
+       "columns": [
+        "dx",
+        "dy"
+       ],
+       "table": "pairs",
+       "schema": "accounts"
+      },
+      {
+       "columns": [
+        "dx",
+        "dy"
+       ],
+       "table": "other-pairs",
+       "references": [
+        "p`q",
+        "p_q"
+       ]
+      },
+      {
+       "columns": [
+        "seller_id"
+       ],
+       "table": "gone"
+      }
+     ]
+    }
+   ]
+  },
+  "output": {
+   "source": "external table `accounts.users` {\n  id    bigint\n  uuid  varchar(36)\n}\n\nexternal table `accounts.pairs` {\n  x  int\n  y  int\n}\n\nexternal table `other-pairs` {\n  p_q_2  int\n  p_q    int\n}\n\ntable orders {\n  id         bigint       pk\n  user_id    bigint       -> `accounts.users`.id\n  buyer_id   varchar(36)  -> `accounts.users`.uuid\n  seller_id  int          -> `accounts.users`.uuid\n  cx         int\n  cy         int\n  dx         int\n  dy         int\n  foreign(cx, cy) -> `accounts.pairs`(x, y) as fk_c\n  foreign(dx, dy) -> `other-pairs`(p_q_2, p_q)\n  %% Not converted: foreign key (dx, dy) -> accounts.pairs, the target key columns are unknown\n}\n",
+   "notes": [
+    {
+     "message": "table `accounts.users` is not in the SQL; its primary key is taken to be `id`",
+     "line": 1,
+     "col": 0
+    },
+    {
+     "message": "external column `accounts.users.uuid` has conflicting inferred types; varchar(36) is kept",
+     "line": 1,
+     "col": 0
+    },
+    {
+     "message": "table `orders`: not converted: foreign key (dx, dy) -> accounts.pairs, the target key columns are unknown",
+     "line": 1,
+     "col": 0
+    },
+    {
+     "message": "column of \"other-pairs\" \"p`q\" renamed to \"p_q_2\" for resin",
+     "line": 1,
+     "col": 0
+    }
+   ],
+   "tables": 1
+  }
+ },
+ {
+  "name": "envers",
+  "input": {
+   "tables": [
+    {
+     "name": "orders",
+     "columns": [
+      {
+       "name": "id",
+       "type": "bigint",
+       "nullable": false
+      },
+      {
+       "name": "status",
+       "type": "varchar(8)",
+       "nullable": false
+      },
+      {
+       "name": "memo",
+       "type": "text",
+       "nullable": true
+      },
+      {
+       "name": "created_at",
+       "type": "datetime",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ]
+    },
+    {
+     "name": "orders_aud",
+     "columns": [
+      {
+       "name": "id",
+       "type": "bigint",
+       "nullable": false
+      },
+      {
+       "name": "rev",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "revtype",
+       "type": "tinyint",
+       "nullable": false
+      },
+      {
+       "name": "status",
+       "type": "varchar(8)",
+       "nullable": true
+      },
+      {
+       "name": "memo",
+       "type": "text",
+       "nullable": true
+      }
+     ],
+     "primaryKey": [
+      "id",
+      "rev"
+     ]
+    },
+    {
+     "name": "items",
+     "columns": [
+      {
+       "name": "id",
+       "type": "bigint",
+       "nullable": false
+      },
+      {
+       "name": "qty",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "price",
+       "type": "int",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ]
+    },
+    {
+     "name": "items_aud",
+     "columns": [
+      {
+       "name": "id",
+       "type": "bigint",
+       "nullable": false
+      },
+      {
+       "name": "REV",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "REVTYPE",
+       "type": "tinyint",
+       "nullable": false
+      },
+      {
+       "name": "qty",
+       "type": "int",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id",
+      "rev"
+     ]
+    },
+    {
+     "name": "nokey",
+     "columns": [
+      {
+       "name": "a",
+       "type": "int",
+       "nullable": false
+      }
+     ]
+    },
+    {
+     "name": "nokey_aud",
+     "columns": [
+      {
+       "name": "a",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "rev",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "revtype",
+       "type": "tinyint",
+       "nullable": false
+      }
+     ]
+    },
+    {
+     "name": "orphan_aud",
+     "columns": [
+      {
+       "name": "id",
+       "type": "bigint",
+       "nullable": false
+      },
+      {
+       "name": "rev",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "revtype",
+       "type": "tinyint",
+       "nullable": false
+      }
+     ]
+    },
+    {
+     "name": "refs",
+     "columns": [
+      {
+       "name": "id",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "order_aud_id",
+       "type": "bigint",
+       "nullable": false
+      },
+      {
+       "name": "x",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "y",
+       "type": "int",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ],
+     "foreignKeys": [
+      {
+       "columns": [
+        "order_aud_id"
+       ],
+       "table": "orders_aud"
+      },
+      {
+       "columns": [
+        "x",
+        "y"
+       ],
+       "table": "orders_aud",
+       "references": [
+        "id",
+        "rev"
+       ]
+      }
+     ]
+    },
+    {
+     "name": "revinfo",
+     "columns": [
+      {
+       "name": "rev",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "revtstmp",
+       "type": "bigint",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "rev"
+     ]
+    }
+   ]
+  },
+  "output": {
+   "source": "table orders {\n  id          bigint      pk\n  status      varchar(8)\n  memo        text?\n  created_at  datetime\n} audit envers\n\ntable items {\n  id     bigint  pk\n  qty    int\n  price  int\n} audit envers(qty)\n\ntable nokey {\n  a  int\n}\n\ntable nokey_aud {\n  a        int\n  rev      int\n  revtype  tinyint\n}\n\ntable orphan_aud {\n  id       bigint\n  rev      int\n  revtype  tinyint\n}\n\ntable refs {\n  id            int     pk\n  order_aud_id  bigint\n  x             int\n  y             int\n  %% Not converted: reference order_aud_id -> orders_aud, a table that `audit envers` generates\n  %% Not converted: foreign key (x, y) -> orders_aud, the target is generated by audit envers\n}\n",
+   "notes": [
+    {
+     "message": "table `refs`: not converted: reference order_aud_id -> orders_aud, a table that `audit envers` generates",
+     "line": 8,
+     "col": 0
+    },
+    {
+     "message": "table `refs`: not converted: foreign key (x, y) -> orders_aud, the target is generated by audit envers",
+     "line": 8,
+     "col": 0
+    }
+   ],
+   "tables": 6
+  }
+ },
+ {
+  "name": "noRevinfo",
+  "input": {
+   "tables": [
+    {
+     "name": "orders",
+     "columns": [
+      {
+       "name": "id",
+       "type": "bigint",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ]
+    },
+    {
+     "name": "orders_aud",
+     "columns": [
+      {
+       "name": "id",
+       "type": "bigint",
+       "nullable": false
+      },
+      {
+       "name": "rev",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "revtype",
+       "type": "tinyint",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id",
+      "rev"
+     ]
+    }
+   ]
+  },
+  "output": {
+   "source": "table orders {\n  id  bigint  pk\n}\n\ntable orders_aud {\n  id       bigint   pk\n  rev      int      pk\n  revtype  tinyint\n}\n",
+   "notes": [],
+   "tables": 2
+  }
+ },
+ {
+  "name": "dupes",
+  "input": {
+   "tables": [
+    {
+     "name": "t",
+     "columns": [
+      {
+       "name": "id",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "ID",
+       "type": "bigint",
+       "nullable": false
+      },
+      {
+       "name": "x",
+       "type": "int",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id",
+      "nope"
+     ],
+     "indexes": [
+      {
+       "name": "i",
+       "columns": [
+        "x",
+        "nope"
+       ]
+      },
+      {
+       "name": "u",
+       "columns": [],
+       "unique": true
+      }
+     ]
+    },
+    {
+     "name": "T",
+     "columns": [
+      {
+       "name": "id",
+       "type": "int",
+       "nullable": false
+      }
+     ]
+    },
+    {
+     "name": "s",
+     "columns": [
+      {
+       "name": "id",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "t_id",
+       "type": "int",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ],
+     "foreignKeys": [
+      {
+       "columns": [
+        "t_id"
+       ],
+       "table": "t",
+       "references": [
+        "nope"
+       ]
+      },
+      {
+       "columns": [
+        "t_id"
+       ],
+       "table": "T"
+      }
+     ]
+    },
+    {
+     "name": "k",
+     "columns": [
+      {
+       "name": "a",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "b",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "t_id",
+       "type": "int",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "a",
+      "b"
+     ],
+     "foreignKeys": [
+      {
+       "columns": [
+        "t_id"
+       ],
+       "table": "k"
+      }
+     ]
+    }
+   ]
+  },
+  "output": {
+   "source": "table t {\n  id  int\n  x   int\n}\n\ntable s {\n  id    int  pk\n  t_id  int\n  %% Not converted: reference t_id -> t.nope, t has no column nope\n}\n\ntable k {\n  a     int  pk\n  b     int  pk\n  t_id  int\n  %% Not converted: reference t_id -> k, the primary key of k is not one column\n}\n",
+   "notes": [
+    {
+     "message": "table `t`: the primary key names `nope`, which the table does not have",
+     "line": 1,
+     "col": 0
+    },
+    {
+     "message": "table `t`: index i names `nope`, which the table does not have",
+     "line": 1,
+     "col": 0
+    },
+    {
+     "message": "table `t`: column `ID` appears twice; the first is kept",
+     "line": 1,
+     "col": 2
+    },
+    {
+     "message": "table `T` is created twice; the first is kept",
+     "line": 2,
+     "col": 0
+    },
+    {
+     "message": "table `s`: not converted: reference t_id -> t.nope, t has no column nope",
+     "line": 3,
+     "col": 0
+    },
+    {
+     "message": "table `k`: not converted: reference t_id -> k, the primary key of k is not one column",
+     "line": 4,
+     "col": 0
+    }
+   ],
+   "tables": 3
+  }
+ },
+ {
+  "name": "empty",
+  "input": {
+   "tables": []
+  },
+  "output": {
+   "source": "",
+   "notes": [],
+   "tables": 0
+  }
+ },
+ {
+  "name": "emptyNames",
+  "input": {
+   "tables": [
+    {
+     "name": "p",
+     "columns": [
+      {
+       "name": "id",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "q",
+       "type": "int",
+       "nullable": false
+      },
+      {
+       "name": "r",
+       "type": "int",
+       "nullable": false
+      }
+     ],
+     "primaryKey": [
+      "id"
+     ],
+     "indexes": [
+      {
+       "name": "",
+       "columns": [
+        "nope"
+       ]
+      },
+      {
+       "name": "",
+       "columns": [
+        "q"
+       ]
+      },
+      {
+       "name": "",
+       "columns": [
+        "q",
+        "r"
+       ],
+       "unique": true
+      }
+     ],
+     "foreignKeys": [
+      {
+       "name": "",
+       "columns": [
+        "q",
+        "r"
+       ],
+       "table": "p",
+       "references": [
+        "id",
+        "q"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "output": {
+   "source": "table p {\n  id  int  pk\n  q   int  index as __2\n  r   int\n  unique(q, r) as _\n  foreign(q, r) -> p(id, q) as __3\n}\n",
+   "notes": [
+    {
+     "message": "table `p`: index names `nope`, which the table does not have",
+     "line": 1,
+     "col": 0
+    },
+    {
+     "message": "index name \"\" renamed to \"_\" in table \"p\"",
+     "line": 1,
+     "col": 0
+    },
+    {
+     "message": "index name \"\" renamed to \"__2\" in table \"p\"",
+     "line": 1,
+     "col": 0
+    },
+    {
+     "message": "index name \"\" renamed to \"__3\" in table \"p\"",
+     "line": 1,
+     "col": 0
+    }
+   ],
+   "tables": 1
+  }
+ }
+]

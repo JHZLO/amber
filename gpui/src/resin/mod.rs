@@ -7,6 +7,7 @@ mod checker;
 mod lexer;
 mod model;
 mod parser;
+pub mod sql;
 
 pub use model::{
     Model, ModelAudit, ModelColumn, ModelConstraint, ModelForeignKey, ModelIndex, ModelRef,
@@ -55,6 +56,19 @@ pub(crate) fn warning(message: String, span: Span, hint: Option<String>) -> Diag
         span,
         hint,
     }
+}
+
+/// 정규식 \p{L}, \p{N} — JS 의 /u 판정과 같은 일반 범주
+pub(crate) fn is_letter(c: char) -> bool {
+    static RE: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"^\p{L}$").unwrap());
+    RE.is_match(c.encode_utf8(&mut [0; 4]))
+}
+
+pub(crate) fn is_number(c: char) -> bool {
+    static RE: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"^\p{N}$").unwrap());
+    RE.is_match(c.encode_utf8(&mut [0; 4]))
 }
 
 pub fn has_errors(ds: &[Diagnostic]) -> bool {
@@ -134,7 +148,7 @@ pub struct EnumValue {
     pub span: Span,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RefKind {
     /// `->` FOREIGN KEY
@@ -287,7 +301,11 @@ mod tests {
                     n["table"].as_str().unwrap(),
                     n["steps"].as_u64().unwrap() as usize,
                 );
-                assert_eq!(serde_json::to_value(&near).unwrap(), n["model"], "이웃\n{source}");
+                assert_eq!(
+                    serde_json::to_value(&near).unwrap(),
+                    n["model"],
+                    "이웃\n{source}"
+                );
             }
         }
     }

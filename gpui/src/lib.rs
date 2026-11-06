@@ -7,6 +7,7 @@ pub mod db;
 pub mod dbconn;
 pub mod diagram_graph;
 pub mod elk;
+pub mod erd_gen;
 pub mod i18n;
 pub mod line_diff;
 pub mod mermaid;
@@ -180,6 +181,9 @@ pub const OPS: &[&str] = &[
     "aiActivity.shortTarget",
     "aiActivity.describeActivity",
     "aiWait.waitLine",
+    "erdGen.generateErd",
+    "erdGen.inferReferences",
+    "erdGen.commonTablePrefix",
     "diagramGraph.splitOptionalType",
     "diagramGraph.nullFlagOf",
     "diagramGraph.nullabilityFlag",
@@ -377,6 +381,7 @@ fn call_files(db: &Db, op: &str, a: &Args) -> Result<Json, String> {
             .or_else(|| tree_find::call(op, a.0))
             .or_else(|| note_ai_text::call(op, a.0))
             .or_else(|| diagram_graph::call(op, a.0))
+            .or_else(|| erd_gen::call(op, a.0))
             .or_else(|| dates::call(op, a.0, db.now()))
             .or_else(|| tree::call(op, a.0))
             .or_else(|| timetable::call(op, a.0, db.now()))
