@@ -59,6 +59,12 @@ pub(crate) enum Confirm {
         name: String,
         is_dir: bool,
     },
+    /// 다이어그램 탭의 파일 또는 폴더 — 휴지통으로 간다
+    Diagram {
+        rel: String,
+        name: String,
+        is_dir: bool,
+    },
     /// 노트의 질문 스레드 — 사이드카에서 지운다(이어 물은 것까지)
     Comment {
         id: String,
@@ -1110,6 +1116,10 @@ impl Spike {
             Some(Confirm::Parked { id, .. }) => amber_gpui::todos::delete_todo(&self.db, id),
             Some(Confirm::Note { rel, .. }) => self.delete_note(&rel).map_err(|e| {
                 eprintln!("deleteNote: {e}");
+                rusqlite::Error::InvalidQuery
+            }),
+            Some(Confirm::Diagram { rel, .. }) => self.delete_diagram(&rel).map_err(|e| {
+                eprintln!("deleteDiagram: {e}");
                 rusqlite::Error::InvalidQuery
             }),
             Some(Confirm::Block { id, .. }) => {

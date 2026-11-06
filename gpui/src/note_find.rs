@@ -12,6 +12,7 @@ use crate::Spike;
 use crate::assets::icon;
 use crate::day_card::Tag;
 use crate::theme::Tokens;
+use crate::vault_pane::Which;
 
 pub struct TreeFindState {
     pub input: Entity<InputState>,
@@ -20,8 +21,13 @@ pub struct TreeFindState {
 }
 
 impl Spike {
-    pub(crate) fn start_tree_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(f) = self.notes.find.as_ref() {
+    pub(crate) fn start_tree_find(
+        &mut self,
+        w: Which,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(f) = self.ui(w).find.as_ref() {
             // 이미 열려 있으면 글자를 고른 채 다시 잡는다
             f.input.update(cx, |s, cx| s.focus(window, cx));
             return;
@@ -30,11 +36,11 @@ impl Spike {
         cx.subscribe_in(
             &input,
             window,
-            |this, input, ev: &InputEvent, _, cx| match ev {
+            move |this, input, ev: &InputEvent, _, cx| match ev {
                 InputEvent::Change => {
                     let q = input.read(cx).value().to_string();
                     // Enter 뒤에도 값이 그대로인 Change 가 온다 — 검색어가 바뀔 때만 처음으로
-                    if let Some(f) = this.notes.find.as_mut()
+                    if let Some(f) = this.ui_mut(w).find.as_mut()
                         && f.query != q
                     {
                         f.query = q;
@@ -43,7 +49,7 @@ impl Spike {
                     cx.notify();
                 }
                 InputEvent::PressEnter { .. } => {
-                    this.tree_find_open(cx);
+                    this.tree_find_open(w, cx);
                     cx.notify();
                 }
                 _ => {}
@@ -51,23 +57,24 @@ impl Spike {
         )
         .detach();
         input.update(cx, |s, cx| s.focus(window, cx));
-        self.notes.find = Some(TreeFindState {
+        self.ui_mut(w).find = Some(TreeFindState {
             input,
             query: String::new(),
             idx: 0,
         });
     }
 
-    fn tree_find_matches(&self) -> Vec<tree_find::Match> {
-        match (self.notes.find.as_ref(), self.notes.tree.as_ref()) {
+    fn tree_find_matches(&self, w: Which) -> Vec<tree_find::Match> {
+        let ui = self.ui(w);
+        match (ui.find.as_ref(), ui.tree.as_ref()) {
             (Some(f), Some(tree)) => tree_find::filter_tree(tree, &f.query).matches,
             _ => Vec::new(),
         }
     }
 
-    fn tree_find_step(&mut self, delta: i64) {
-        let n = self.tree_find_matches().len() as i64;
-        if let Some(f) = self.notes.find.as_mut()
+    fn tree_find_step(&mut self, w: Which, delta: i64) {
+        let n = self.tree_find_matches(w).len() as i64;
+        if let Some(f) = self.ui_mut(w).find.as_mut()
             && n > 0
         {
             f.idx = (f.idx as i64 + delta).rem_euclid(n) as usize;
@@ -75,35 +82,37 @@ impl Spike {
     }
 
     /// Enter — 폴더면 펼치기만(찾기는 그대로), 파일이면 열고 찾기를 닫는다
-    fn tree_find_open(&mut self, cx: &mut Context<Self>) {
-        let idx = self.notes.find.as_ref().map_or(0, |f| f.idx);
-        let Some((path, is_dir)) = self.tree_find_matches().get(idx).cloned() else {
+    fn tree_find_open(&mut self, w: Which, cx: &mut Context<Self>) {
+        let idx = self.ui(w).find.as_ref().map_or(0, |f| f.idx);
+        let Some((path, is_dir)) = self.tree_find_matches(w).get(idx).cloned() else {
             return;
         };
         if is_dir {
-            let n = &mut self.notes;
-            n.expanded.extend(amber_gpui::vault::ancestor_paths(&path));
-            n.active_dir = path;
+            let ui = self.ui_mut(w);
+            ui.expanded.extend(amber_gpui::vault::ancestor_paths(&path));
+            ui.active_dir = path;
             return;
         }
-        self.request_open_note(&path, cx);
-        self.notes.find = None;
+        self.request_open(w, &path, cx);
+        self.ui_mut(w).find = None;
     }
 
     /// 찾기 줄(.page-find.tree-find) — 돋보기, 입력, 몇 번째/몇 개, 이전, 다음, 닫기
     pub(crate) fn tree_find_bar(
         &self,
+        w: Which,
         count: usize,
         k: &Tokens,
         cx: &mut Context<Self>,
     ) -> Option<Div> {
-        let f = self.notes.find.as_ref()?;
+        let f = self.ui(w).find.as_ref()?;
         let nav = |id: &'static str, name: &'static str, enabled: bool| {
             let (bg, fg) = (k.surface_2, k.text_2);
+            let id = SharedString::from(w.tag(id));
             div()
-                .id(id)
-                .tag(id)
-                .group(id)
+                .id(id.clone())
+                .tag(id.clone())
+                .group(id.clone())
                 .flex()
                 .p(px(3.))
                 .rounded(px(5.))
@@ -137,11 +146,11 @@ impl Spike {
                     linear_color_stop(k.glass_fill_hover.0, 0.),
                     linear_color_stop(k.glass_fill_hover.1, 1.),
                 ))
-                .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+                .on_key_down(cx.listener(move |this, e: &KeyDownEvent, _, cx| {
                     match e.keystroke.key.as_str() {
-                        "escape" => this.notes.find = None,
-                        "down" => this.tree_find_step(1),
-                        "up" => this.tree_find_step(-1),
+                        "escape" => this.ui_mut(w).find = None,
+                        "down" => this.tree_find_step(w, 1),
+                        "up" => this.tree_find_step(w, -1),
                         _ => return,
                     }
                     cx.stop_propagation();
@@ -157,8 +166,8 @@ impl Spike {
                 )
                 .child(
                     div()
-                        .id("tree-find-count")
-                        .tag("tree-find-count")
+                        .id(SharedString::from(w.tag("tree-find-count")))
+                        .tag(w.tag("tree-find-count"))
                         .min_w(px(34.))
                         .flex()
                         .justify_end()
@@ -168,23 +177,23 @@ impl Spike {
                 )
                 .child(
                     nav("tree-find-prev", "chevron-up", count > 0).on_click(cx.listener(
-                        |this, _, _, cx| {
-                            this.tree_find_step(-1);
+                        move |this, _, _, cx| {
+                            this.tree_find_step(w, -1);
                             cx.notify();
                         },
                     )),
                 )
                 .child(
                     nav("tree-find-next", "chevron-down", count > 0).on_click(cx.listener(
-                        |this, _, _, cx| {
-                            this.tree_find_step(1);
+                        move |this, _, _, cx| {
+                            this.tree_find_step(w, 1);
                             cx.notify();
                         },
                     )),
                 )
                 .child(nav("tree-find-close", "x", true).on_click(cx.listener(
-                    |this, _, _, cx| {
-                        this.notes.find = None;
+                    move |this, _, _, cx| {
+                        this.ui_mut(w).find = None;
                         cx.notify();
                     },
                 ))),

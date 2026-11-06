@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use amber_gpui::i18n::{t, t_with};
-use amber_gpui::vault::{self, Node};
+use amber_gpui::vault;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
@@ -15,6 +15,7 @@ use crate::assets::icon;
 use crate::day_card::{Confirm, Tag, button, danger_button};
 use crate::pane::PaneGrab;
 use crate::theme::Tokens;
+use crate::vault_pane::{TreeUi, Which};
 use crate::{Spike, figure, hex, markdown, note};
 
 /// 지금 앱 usePaneResize 의 기본값(PANE_MIN/MAX/DEFAULT), 키 amber.notes.list-width
@@ -130,13 +131,8 @@ fn blocks_of(src: &str, text_hex: &str, prefix: &str, cx: &mut App) -> Vec<Block
 
 #[derive(Default)]
 pub struct NotesState {
-    /// None = 아직 안 읽음
-    pub tree: Option<Vec<Node>>,
-    pub error: Option<String>,
-    pub expanded: HashSet<String>,
-    /// 새 노트/폴더가 들어갈 폴더 — 마지막으로 누른 폴더(또는 연 노트의 폴더)
-    pub active_dir: String,
-    pub selected: Option<String>,
+    /// 트리(다이어그램 탭과 같은 것) — Deref 로 self.notes.selected 처럼 그대로 쓴다
+    pub ui: TreeUi,
     pub body: String,
     pub read_error: Option<String>,
     pub blocks: Vec<Block>,
@@ -150,15 +146,6 @@ pub struct NotesState {
     /// 편집 중이면 초안과 미리보기, 그리고 떠 있는 확인 창(저장 안 한 변경, 디스크 충돌)
     pub edit: Option<crate::note_edit::NoteEdit>,
     pub prompt: Option<crate::note_edit::NotePrompt>,
-    /// 새 노트, 새 폴더, 이름 바꾸기 모달
-    pub names: Option<crate::note_names::NameModal>,
-    /// 트리 끌기: 끄는 중인 것, 행마다(경로 → 자리, 폴더인가)와 트리 판의 자리, 누른 자리
-    pub tree_drag: Option<crate::tree_drag::TreeDrag>,
-    pub tree_rows: crate::tree_drag::RowBounds,
-    pub tree_area: crate::tree_drag::ListBounds,
-    pub tree_press: Option<Point<Pixels>>,
-    /// 트리에서 찾기(⌘F)
-    pub find: Option<crate::note_find::TreeFindState>,
     /// 노트 안에서 찾기(⌘F, 트리 밖에서)
     pub page_find: Option<crate::note_page_find::PageFindState>,
     /// 보관함 감시(FSEvents)와 그 세대 — 뿌리가 바뀌면 옛 감시의 일은 버린다
@@ -170,10 +157,6 @@ pub struct NotesState {
     pub disk_change: Option<crate::note_watch::DiskChange>,
     pub dismissed_disk: Option<String>,
     pub pending_draft: Option<String>,
-    /// 작업 폴더 고르기 판이 열렸는가, 트리거 자리
-    pub root_menu: bool,
-    pub root_anchor: Rc<Cell<Bounds<Pixels>>>,
-    pub width: f32,
     pub copied: bool,
     /// 경로 줄을 눌러 복사한 직후(1.5초 동안 체크 표식)
     pub crumb_copied: bool,
@@ -196,6 +179,19 @@ pub struct NotesState {
     pub pending_apply: Option<String>,
     /// 부분 수정 모달 — note_span_ai.rs
     pub span_modal: Option<crate::note_span_ai::SpanModal>,
+}
+
+impl std::ops::Deref for NotesState {
+    type Target = TreeUi;
+    fn deref(&self) -> &TreeUi {
+        &self.ui
+    }
+}
+
+impl std::ops::DerefMut for NotesState {
+    fn deref_mut(&mut self) -> &mut TreeUi {
+        &mut self.ui
+    }
 }
 
 /// 본문 판의 위 여백(.detail padding-top)
@@ -275,26 +271,11 @@ fn ancestors(dir: &str) -> Vec<String> {
 impl Spike {
     /// 탭에 들어올 때마다 — Finder, git, 다른 편집기가 바꾼 것을 반영한다
     pub(crate) fn reload_notes(&mut self) {
-        match vault::notes(&self.db).list_tree() {
-            Ok(tree) => {
-                self.notes.tree = Some(tree);
-                self.notes.error = None;
-            }
-            Err(e) => self.notes.error = Some(e),
-        }
+        self.reload_tree(Which::Notes);
     }
 
-    /// 보관함 이름 — 기본 보관함은 언어를 따르고, 고른 작업 폴더는 폴더 이름 그대로
     fn notes_root_name(&self) -> String {
-        match amber_gpui::prefs::get(&self.db, "amber.root.notes").filter(|r| !r.is_empty()) {
-            Some(r) => r
-                .split('/')
-                .filter(|s| !s.is_empty())
-                .next_back()
-                .unwrap_or(&r)
-                .to_string(),
-            None => t("settings.root.default"),
-        }
+        self.root_name(Which::Notes)
     }
 
     pub(crate) fn open_note(&mut self, rel: &str, cx: &mut Context<Self>) {
@@ -352,14 +333,6 @@ impl Spike {
         self.notes.dismissed_disk = None;
         self.scroll.set_offset(point(px(0.), px(0.)));
         self.load_note_comments(rel, same, cx);
-    }
-
-    fn toggle_dir(&mut self, path: &str) {
-        let n = &mut self.notes;
-        if !n.expanded.remove(path) {
-            n.expanded.insert(path.to_string());
-        }
-        n.active_dir = path.to_string();
     }
 
     /// 지우기 확인을 지난 뒤 — 고른 노트가 그 안에 있었으면 닫는다
@@ -454,63 +427,7 @@ impl Spike {
         div()
             .size_full()
             .flex()
-            .child(
-                div()
-                    .relative()
-                    .w(px(width))
-                    .flex_shrink_0()
-                    .h_full()
-                    .pt(px(8.))
-                    .pb(px(8.))
-                    .pl(px(8.))
-                    .pr(px(4.))
-                    .child({
-                        // 찾기 줄의 몇 개는 트리를 거른 결과로 센다
-                        let count = match (self.notes.find.as_ref(), self.notes.tree.as_ref()) {
-                            (Some(f), Some(tree)) => {
-                                amber_gpui::tree_find::filter_tree(tree, &f.query)
-                                    .matches
-                                    .len()
-                            }
-                            _ => 0,
-                        };
-                        // 트리 판 — 누르면 포커스를 가져가 그 뒤의 ⌘F 가 트리 찾기로 온다(본문의 ⌘F 와 안 겹치게)
-                        card(
-                            div()
-                                .track_focus(&self.tree_focus)
-                                .size_full()
-                                .flex()
-                                .flex_col()
-                                .overflow_hidden()
-                                .on_mouse_down(
-                                    MouseButton::Left,
-                                    cx.listener(|this, _, window, cx| {
-                                        if !this.tree_focus.contains_focused(window, cx) {
-                                            this.tree_focus.focus(window, cx);
-                                        }
-                                    }),
-                                )
-                                // 바깥을 누르면 트리에서 포커스를 놓는다 — 그래야 본문에서의 ⌘F 가 노트 안 찾기로 간다
-                                .on_mouse_down_out(cx.listener(|this, _, window, cx| {
-                                    if this.tree_focus.is_focused(window) {
-                                        this.focus.focus(window, cx);
-                                    }
-                                }))
-                                .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
-                                    let m = &e.keystroke.modifiers;
-                                    if m.platform && !m.alt && e.keystroke.key == "f" {
-                                        this.start_tree_find(window, cx);
-                                        cx.stop_propagation();
-                                        cx.notify();
-                                    }
-                                })),
-                        )
-                        .children([self.tree_head(k, cx).into_any_element()])
-                        .children(self.tree_find_bar(count, k, cx))
-                        .child(self.tree_list(k, cx))
-                    })
-                    .child(self.pane_resizer(LIST_PANE, width, body_w, k, cx)),
-            )
+            .child(self.tree_pane(Which::Notes, width, body_w, k, cx))
             .child(
                 div()
                     .flex_1()
@@ -527,413 +444,6 @@ impl Spike {
                             .children(self.page_find_bar(k, cx)),
                     ),
             )
-    }
-
-    /// .notes-tree-head — 보관함 고르기 | 새 노트, 새 폴더, 찾기, 다시 읽기
-    fn tree_head(&self, k: &Tokens, cx: &mut Context<Self>) -> Div {
-        let icon_btn = |id: &'static str, name: &str, size: f32| {
-            let (bg, text) = (k.surface_2, k.text);
-            div()
-                .id(id)
-                .tag(id)
-                .size(px(24.))
-                .flex()
-                .flex_shrink_0()
-                .items_center()
-                .justify_center()
-                .rounded(px(5.))
-                .cursor_pointer()
-                .group(id)
-                .hover(move |s| s.bg(bg))
-                .child(
-                    icon(name, size)
-                        .text_color(k.text_2)
-                        .group_hover(id, move |s| s.text_color(text)),
-                )
-        };
-        div()
-            .flex()
-            .flex_shrink_0()
-            .items_center()
-            .gap(px(2.))
-            .pt(px(9.))
-            .pb(px(9.))
-            .pr(px(10.))
-            .pl(px(16.))
-            .border_b_1()
-            .border_color(k.glass_edge)
-            .child({
-                // .root-picker — 누르면 기본 보관함, 최근 폴더, 폴더 열기
-                let anchor = self.notes.root_anchor.clone();
-                div()
-                    .id("root-picker")
-                    .tag("root-picker")
-                    .relative()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .max_w(px(170.))
-                    .px(px(8.))
-                    .py(px(4.))
-                    .rounded(px(6.))
-                    .text_size(px(12.))
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(k.text)
-                    .cursor_pointer()
-                    .hover(|s| s.bg(k.surface_2))
-                    .child(icon("folder-open", 14.).text_color(k.text_3))
-                    .child(
-                        div()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .text_ellipsis()
-                            .child(self.notes_root_name()),
-                    )
-                    .child(icon("chevron-down", 10.).text_color(k.text_3))
-                    .child(
-                        canvas(move |b, _, _| anchor.set(b), |_, _, _, _| {})
-                            .absolute()
-                            .inset_0(),
-                    )
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.notes.root_menu = !this.notes.root_menu;
-                        cx.notify();
-                    }))
-            })
-            .children(self.root_menu(k, cx))
-            .child(div().flex_1())
-            .child(
-                icon_btn("notes-new-note", "file-plus", 15.).on_click(cx.listener(
-                    |this, _, window, cx| {
-                        this.open_name_modal(
-                            crate::note_names::NameKind::NewNote,
-                            None,
-                            window,
-                            cx,
-                        );
-                        cx.notify();
-                    },
-                )),
-            )
-            .child(
-                icon_btn("notes-new-folder", "folder-plus", 15.).on_click(cx.listener(
-                    |this, _, window, cx| {
-                        this.open_name_modal(
-                            crate::note_names::NameKind::NewFolder,
-                            None,
-                            window,
-                            cx,
-                        );
-                        cx.notify();
-                    },
-                )),
-            )
-            .child(icon_btn("notes-find", "search", 14.).on_click(cx.listener(
-                |this, _, window, cx| {
-                    this.start_tree_find(window, cx);
-                    cx.notify();
-                },
-            )))
-            .child(
-                icon_btn("notes-refresh", "refresh", 14.).on_click(cx.listener(
-                    |this, _, _, cx| {
-                        this.reload_notes();
-                        cx.notify();
-                    },
-                )),
-            )
-    }
-
-    fn tree_list(&self, k: &Tokens, cx: &mut Context<Self>) -> Stateful<Div> {
-        // 이번 그림의 행 자리만 남긴다 — 접혀 사라진 행이 놓을 곳으로 잡히지 않게
-        self.notes.tree_rows.borrow_mut().clear();
-        let area = self.notes.tree_area.clone();
-        let drop_root = self
-            .notes
-            .tree_drag
-            .as_ref()
-            .is_some_and(|d| d.target.as_deref() == Some(""));
-        let list = div()
-            .id("notes-tree")
-            .tag("notes-tree")
-            .relative()
-            .flex_1()
-            .min_h_0()
-            .overflow_y_scroll()
-            .pt(px(6.))
-            .px(px(8.))
-            .pb(px(24.))
-            // 루트(트리 여백)로 놓을 때 — 판 안쪽 2px 링
-            .when(drop_root, |d| {
-                d.rounded(px(8.)).shadow(vec![Tokens::ring(k.text_3, 2.)])
-            })
-            .on_drag_move::<crate::tree_drag::TreeGrab>(cx.listener(
-                |this, e: &DragMoveEvent<crate::tree_drag::TreeGrab>, _, cx| {
-                    if this.tree_drag_move(e.event.position) {
-                        cx.notify();
-                    }
-                },
-            ))
-            .child(
-                canvas(move |b, _, _| area.set(b), |_, _, _, _| {})
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .size_full(),
-            );
-        if let Some(e) = &self.notes.error {
-            return list.child(
-                div()
-                    .m(px(4.))
-                    .text_size(px(12.5))
-                    .text_color(k.danger)
-                    .child(e.clone()),
-            );
-        }
-        match &self.notes.tree {
-            None => list,
-            Some(tree) if tree.is_empty() => list.child(
-                div()
-                    .py(px(44.))
-                    .px(px(12.))
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .text_size(px(13.))
-                    .line_height(relative(1.7))
-                    .text_color(k.text_3)
-                    .child(t("notes.tree.empty.lead"))
-                    .child(t("notes.tree.empty.sub")),
-            ),
-            Some(tree) => {
-                // 찾는 중이면 맞은 것과 그 조상만, 조상은 임시로 펼친다
-                let found = self
-                    .notes
-                    .find
-                    .as_ref()
-                    .map(|f| amber_gpui::tree_find::filter_tree(tree, &f.query));
-                let hit = self.notes.find.as_ref().and_then(|f| {
-                    let cur = found.as_ref()?.matches.get(f.idx)?.0.clone();
-                    Some((f.query.clone(), cur))
-                });
-                let nodes = found
-                    .as_ref()
-                    .map_or(tree.as_slice(), |f| f.nodes.as_slice());
-                let auto: Vec<String> =
-                    found.as_ref().map(|f| f.expand.clone()).unwrap_or_default();
-                if found.is_some() && nodes.is_empty() {
-                    return list.child(
-                        div()
-                            .px(px(10.))
-                            .py(px(14.))
-                            .text_size(px(12.5))
-                            .text_color(k.text_3)
-                            .child(t("common.find.treeEmpty")),
-                    );
-                }
-                let mut rows = Vec::new();
-                self.tree_rows(nodes, 0, &auto, hit.as_ref(), &mut rows, k, cx);
-                list.children(rows)
-            }
-        }
-    }
-
-    /// 펼친 폴더만 자식을 그린다(1,000개 규모에서 접힌 것까지 그리면 수천 개가 살아 있다)
-    #[allow(clippy::too_many_arguments)]
-    fn tree_rows(
-        &self,
-        nodes: &[Node],
-        depth: usize,
-        auto: &[String],
-        hit: Option<&(String, String)>,
-        out: &mut Vec<AnyElement>,
-        k: &Tokens,
-        cx: &mut Context<Self>,
-    ) {
-        for n in nodes {
-            let open =
-                n.is_dir && (self.notes.expanded.contains(&n.path) || auto.contains(&n.path));
-            out.push(self.tree_row(n, depth, open, hit, k, cx).into_any_element());
-            if open && let Some(kids) = &n.children {
-                self.tree_rows(kids, depth + 1, auto, hit, out, k, cx);
-            }
-        }
-    }
-
-    fn tree_row(
-        &self,
-        n: &Node,
-        depth: usize,
-        open: bool,
-        hit: Option<&(String, String)>,
-        k: &Tokens,
-        cx: &mut Context<Self>,
-    ) -> Stateful<Div> {
-        // 찾기의 지금 결과 — 행 배경은 그대로 두고(연 것과 헷갈리지 않게) 가는 테와 노란 글자만
-        let find_current = hit.is_some_and(|(_, cur)| *cur == n.path);
-        let label = crate::note_find::label(&n.name, hit.map(|(q, _)| q.as_str()), find_current, k);
-        let selected = !n.is_dir && self.notes.selected.as_deref() == Some(n.path.as_str());
-        let active = n.is_dir && self.notes.active_dir == n.path;
-        let fill = |pair: (Hsla, Hsla)| {
-            linear_gradient(
-                150.,
-                linear_color_stop(pair.0, 0.),
-                linear_color_stop(pair.1, 1.),
-            )
-        };
-        // 왼쪽 바(§3 '너 여기 있다') — inset 2px 0 0
-        let bar = |color| BoxShadow {
-            color,
-            offset: point(px(2.), px(0.)),
-            blur_radius: px(0.),
-            spread_radius: px(0.),
-            inset: true,
-        };
-        let path = n.path.clone();
-        let is_dir = n.is_dir;
-        let tag = format!("tree-{}", n.path);
-        let actions = self.tree_row_actions(n, k, cx);
-        // AI 실행 점 — 쓰는 중 / 준비됨 / 실패(정확한 말은 배너가 갖는다)
-        let ai_dot = self.ai_tree_dot(&n.path, k, cx.reduce_motion());
-        let drag = self.notes.tree_drag.as_ref();
-        let lifted = drag.is_some_and(|d| d.grab.path == n.path);
-        let target = is_dir && drag.is_some_and(|d| d.target.as_deref() == Some(n.path.as_str()));
-        let rows = self.notes.tree_rows.clone();
-        let (rec_path, pad) = (n.path.clone(), px(8. + depth as f32 * 14.));
-        let this = cx.entity().downgrade();
-        let grab = crate::tree_drag::TreeGrab {
-            path: n.path.clone(),
-            is_dir,
-            name: n.name.clone(),
-        };
-        div()
-            .id(SharedString::from(tag.clone()))
-            .tag(tag)
-            .group("tree-row")
-            .relative()
-            .flex()
-            .items_center()
-            .gap(px(6.))
-            .pl(px(8. + depth as f32 * 14.))
-            .pr(px(6.))
-            .py(px(4.))
-            .rounded(px(6.))
-            .border_1()
-            .border_color(transparent_black())
-            .cursor_pointer()
-            .text_size(px(13.5))
-            .text_color(if is_dir || selected { k.text } else { k.text_2 })
-            .when(is_dir || selected, |d| d.font_weight(FontWeight::SEMIBOLD))
-            .when(!selected && !active && drag.is_none(), |d| {
-                let bg = fill(k.glass_fill);
-                d.hover(move |s| s.bg(bg))
-            })
-            // 들린 원본은 자리에 흐리게 남는다
-            .when(lifted, |d| d.opacity(0.4))
-            .when(active, |d| {
-                let mut shadow = k.glass_shadow(false);
-                shadow.push(bar(k.border_strong));
-                d.bg(fill(k.glass_fill))
-                    .border_color(k.glass_edge)
-                    .shadow(shadow)
-            })
-            .when(selected, |d| {
-                let mut shadow = k.glass_shadow(true)[..1].to_vec();
-                shadow.extend(k.glass_shadow(false)[1..].iter().cloned());
-                shadow.push(bar(k.text));
-                d.bg(fill(k.glass_fill_accent))
-                    .border_color(k.glass_edge_accent)
-                    .shadow(shadow)
-            })
-            // 놓을 폴더 — 채움 + 굵은 링(받아들이는 표시)
-            .when(target, |d| {
-                d.bg(k.surface_3)
-                    .shadow(vec![Tokens::ring(k.text_3, 2.)])
-                    .text_color(k.text)
-            })
-            .child(div().w(px(13.)).flex_shrink_0().when(is_dir, |d| {
-                d.child(
-                    icon(
-                        if open {
-                            "chevron-down"
-                        } else {
-                            "chevron-right"
-                        },
-                        13.,
-                    )
-                    .text_color(k.text_3),
-                )
-            }))
-            .child(
-                icon(
-                    if !is_dir {
-                        "file"
-                    } else if open || target {
-                        "folder-open"
-                    } else {
-                        "folder"
-                    },
-                    14.,
-                )
-                .flex_shrink_0()
-                .text_color(if is_dir || selected {
-                    k.text_2
-                } else {
-                    k.text_3
-                }),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .text_ellipsis()
-                    .child(label),
-            )
-            .when(find_current && !selected, |d| {
-                d.shadow(vec![Tokens::ring(k.border_strong, 1.)])
-            })
-            .children(ai_dot)
-            .child(actions)
-            .child(
-                canvas(
-                    move |b, _, _| {
-                        rows.borrow_mut().insert(rec_path, (b, is_dir));
-                    },
-                    |_, _, _, _| {},
-                )
-                .absolute()
-                .top_0()
-                .left_0()
-                .size_full(),
-            )
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, e: &MouseDownEvent, _, _| {
-                    this.notes.tree_press = Some(e.position);
-                }),
-            )
-            .on_drag(
-                grab,
-                move |g: &crate::tree_drag::TreeGrab, _, _, cx: &mut App| {
-                    let g = g.clone();
-                    let _ = this.update(cx, |s, cx| {
-                        s.begin_tree_drag(g, pad);
-                        cx.notify();
-                    });
-                    cx.new(|_| crate::tree_drag::Nothing)
-                },
-            )
-            .on_click(cx.listener(move |this, _, _, cx| {
-                if is_dir {
-                    this.toggle_dir(&path);
-                } else if this.notes.selected.as_deref() != Some(path.as_str()) {
-                    this.request_open_note(&path, cx);
-                }
-                cx.notify();
-            }))
     }
 
     /// 오른쪽 카드 — 고른 노트(경로 줄, 제목, 동작 줄, 본문) 또는 빈 안내
@@ -1118,6 +628,7 @@ impl Spike {
                             let rel = rel.clone();
                             cx.listener(move |this, _, window, cx| {
                                 this.open_name_modal(
+                                    Which::Notes,
                                     crate::note_names::NameKind::Rename {
                                         path: rel.clone(),
                                         is_dir: false,

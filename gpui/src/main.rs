@@ -7,6 +7,7 @@ mod ai;
 mod assets;
 mod calendar;
 mod day_card;
+mod diagrams_view;
 mod dialog;
 mod drawer;
 mod figure;
@@ -35,6 +36,7 @@ mod tt_card;
 mod tt_drag;
 #[cfg(test)]
 mod ui_tests;
+mod vault_pane;
 
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -131,6 +133,9 @@ struct Spike {
     focus: FocusHandle,
     /// 노트 트리 판의 포커스 — 여기 있을 때의 ⌘F 는 트리 찾기
     tree_focus: FocusHandle,
+    /// 다이어그램 탭 트리의 포커스(⌘F 가 트리 찾기로)
+    dtree_focus: FocusHandle,
+    diagrams: diagrams_view::DiagramsState,
     started: Instant,
     first_frame: bool,
 }
@@ -160,6 +165,11 @@ impl Spike {
             if window.is_window_active() && this.section == Section::Notes {
                 this.reload_notes();
                 this.sync_from_disk(cx);
+                cx.notify();
+            }
+            // 다이어그램 탭은 감시 없이 창으로 돌아올 때 트리만 다시 읽는다(DiagramsView 의 focus)
+            if window.is_window_active() && this.section == Section::Diagrams {
+                this.reload_tree(vault_pane::Which::Diagrams);
                 cx.notify();
             }
         })
@@ -210,10 +220,17 @@ impl Spike {
             &amber_gpui::prefs::get(&db, "amber.todo.tt-view").unwrap_or_default(),
         );
         // 지금 앱 usePaneResize: 범위 밖 값은 기본값으로
-        let notes_w = amber_gpui::prefs::get(&db, notes_view::LIST_PANE.key)
-            .and_then(|w| w.parse::<f32>().ok())
-            .filter(|w| (notes_view::LIST_PANE.min..=notes_view::LIST_PANE.max).contains(w))
-            .unwrap_or(notes_view::LIST_DEFAULT);
+        let list_w = |w: vault_pane::Which| {
+            let p = w.pane();
+            amber_gpui::prefs::get(&db, p.key)
+                .and_then(|v| v.parse::<f32>().ok())
+                .filter(|v| (p.min..=p.max).contains(v))
+                .unwrap_or(notes_view::LIST_DEFAULT)
+        };
+        let (notes_w, diagrams_w) = (
+            list_w(vault_pane::Which::Notes),
+            list_w(vault_pane::Which::Diagrams),
+        );
         let mut this = Spike {
             db,
             date,
@@ -231,7 +248,10 @@ impl Spike {
             confirm: None,
             input,
             notes: notes_view::NotesState {
-                width: notes_w,
+                ui: vault_pane::TreeUi {
+                    width: notes_w,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             scroll: ScrollHandle::new(),
@@ -257,6 +277,14 @@ impl Spike {
             list_bounds: Default::default(),
             focus: cx.focus_handle(),
             tree_focus: cx.focus_handle(),
+            dtree_focus: cx.focus_handle(),
+            diagrams: diagrams_view::DiagramsState {
+                ui: vault_pane::TreeUi {
+                    width: diagrams_w,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
             started,
             first_frame: false,
         };
@@ -266,6 +294,9 @@ impl Spike {
         this.reload_blocks();
         if this.section == Section::Notes || open.is_some() {
             this.reload_notes();
+        }
+        if this.section == Section::Diagrams {
+            this.reload_tree(vault_pane::Which::Diagrams);
         }
         if let Some(rel) = open {
             this.open_note(&rel, cx);
@@ -458,8 +489,8 @@ impl Render for Spike {
             if self.pane_drag.is_some() {
                 self.pane_drop();
             }
-            if self.notes.tree_drag.is_some() {
-                self.tree_drop();
+            if let Some(w) = self.dragging_tree() {
+                self.tree_drop(w);
             }
         }
         // 판 폭은 희망 폭 — 창이 좁으면 오른쪽 몫(340px)을 남기고 줄인다. 몸통은 레일을 뺀 전부다
@@ -505,6 +536,7 @@ impl Render for Spike {
                 .when(parked, |d| d.child(self.drawer(&k, cx)))
                 .into_any_element(),
             Section::Notes => self.notes_body(body_w, &k, cx).into_any_element(),
+            Section::Diagrams => self.diagrams_body(body_w, &k, cx).into_any_element(),
             // 아직 옮기지 않은 탭 — 체크리스트(D)에서 하나씩
             _ => div().into_any_element(),
         };
@@ -550,6 +582,24 @@ impl Render for Spike {
                     } else {
                         "notes.delete.confirmNote"
                     }),
+                    name.clone(),
+                ),
+                // 지금 앱: <b>이름</b> 다이어그램을 삭제할까요? + 휴지통 안내 한 줄
+                day_card::Confirm::Diagram { name, is_dir, .. } => (
+                    t(if *is_dir {
+                        "diagrams.delete.folderTitle"
+                    } else {
+                        "diagrams.delete.fileTitle"
+                    }),
+                    format!(
+                        "{{name}} {}\n{}",
+                        t(if *is_dir {
+                            "diagrams.delete.bodyDir"
+                        } else {
+                            "diagrams.delete.bodyFile"
+                        }),
+                        t("diagrams.delete.trashNote")
+                    ),
                     name.clone(),
                 ),
                 day_card::Confirm::Comment { name, .. } => (
@@ -643,8 +693,8 @@ impl Render for Spike {
                     }
                 },
             ))
-            .on_drop(cx.listener(|this, _: &tree_drag::TreeGrab, _, cx| {
-                this.tree_drop();
+            .on_drop(cx.listener(|this, g: &tree_drag::TreeGrab, _, cx| {
+                this.tree_drop(g.which);
                 cx.notify();
             }))
             .on_drop(cx.listener(|this, _: &pane::PaneGrab, _, cx| {
@@ -683,7 +733,12 @@ impl Render for Spike {
             .children(self.comment_fab(&k, cx))
             .children(ai_modal)
             .children(span_modal)
-            .children(self.name_modal_view(&k, window, cx))
+            .children(match self.section {
+                Section::Diagrams => {
+                    self.name_modal_view(vault_pane::Which::Diagrams, &k, window, cx)
+                }
+                _ => self.name_modal_view(vault_pane::Which::Notes, &k, window, cx),
+            })
             .children(self.note_prompt(&k, cx))
             .children(confirm)
     }
@@ -824,6 +879,9 @@ impl Spike {
                         // 탭에 들어올 때마다 트리를 다시 읽는다(Finder, git, 다른 편집기가 바꾼 것)
                         if section == Section::Notes {
                             this.reload_notes();
+                        }
+                        if section == Section::Diagrams {
+                            this.reload_tree(vault_pane::Which::Diagrams);
                         }
                         cx.notify();
                     }))

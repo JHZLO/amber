@@ -296,7 +296,7 @@ impl Spike {
                             .child(t("common.unsaved.discard"))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.notes.prompt = None;
-                                this.apply_root(root.clone());
+                                this.apply_root(crate::vault_pane::Which::Notes, root.clone());
                                 cx.notify();
                             })),
                     ],

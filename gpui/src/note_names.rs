@@ -1,6 +1,6 @@
-// 새 노트, 새 폴더, 이름 바꾸기 — 지금 앱 NotesView.tsx 의 이름 모달과 트리 행 hover 동작.
+// 새 파일, 새 폴더, 이름 바꾸기 — 지금 앱 NotesView.tsx / DiagramsView.tsx 의 이름 모달과 트리 행 hover 동작.
 // 만들기는 'CS/네트워크' 처럼 여러 단 경로를 받고(중간 폴더를 만든다) 놓을 자리를 고른다. 이름 바꾸기는 이름 하나만.
-// 검증 문구는 vaultTree.ts 와 같다(빈 이름, `/ \ :`, 점으로 시작, 80자). 만든 노트는 바로 편집으로 연다.
+// 검증 문구는 vaultTree.ts 와 같다(빈 이름, `/ \ :`, 점으로 시작, 80자). 만든 파일은 바로 편집으로 연다.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -15,11 +15,12 @@ use crate::assets::icon;
 use crate::day_card::{Confirm, Tag, button, primary_button};
 use crate::menu::{MenuItem, select_menu};
 use crate::theme::Tokens;
+use crate::vault_pane::{L, Which, tree_of};
 use crate::{Spike, dialog};
 
 #[derive(Clone)]
 pub enum NameKind {
-    NewNote,
+    NewFile,
     NewFolder,
     Rename { path: String, is_dir: bool },
 }
@@ -47,6 +48,7 @@ fn err_text(e: &str) -> String {
 impl Spike {
     pub(crate) fn open_name_modal(
         &mut self,
+        w: Which,
         kind: NameKind,
         dir: Option<String>,
         window: &mut Window,
@@ -56,14 +58,14 @@ impl Spike {
             NameKind::Rename { path, is_dir } => {
                 let name = path.rsplit('/').next().unwrap_or(path);
                 let name = if *is_dir {
-                    name
+                    name.to_string()
                 } else {
-                    name.strip_suffix(".md").unwrap_or(name)
+                    w.stem(name)
                 };
-                (name.to_string(), "")
+                (name, "")
             }
-            NameKind::NewNote => (String::new(), "notes.ph.noteName"),
-            NameKind::NewFolder => (String::new(), "notes.ph.folderName"),
+            NameKind::NewFile => (String::new(), w.l(L::PhFile)),
+            NameKind::NewFolder => (String::new(), w.l(L::PhFolder)),
         };
         let input = cx.new(|cx| {
             let mut s = InputState::new(window, cx);
@@ -73,17 +75,22 @@ impl Spike {
             s.set_value(value, window, cx);
             s
         });
-        cx.subscribe_in(&input, window, |this, _, ev: &InputEvent, window, cx| {
-            if let InputEvent::PressEnter { .. } = ev {
-                this.submit_name_modal(window, cx);
-                cx.notify();
-            }
-        })
+        cx.subscribe_in(
+            &input,
+            window,
+            move |this, _, ev: &InputEvent, window, cx| {
+                if let InputEvent::PressEnter { .. } = ev {
+                    this.submit_name_modal(w, window, cx);
+                    cx.notify();
+                }
+            },
+        )
         .detach();
         input.update(cx, |s, cx| s.focus(window, cx));
-        self.notes.names = Some(NameModal {
+        let dir = dir.unwrap_or_else(|| self.ui(w).active_dir.clone());
+        self.ui_mut(w).names = Some(NameModal {
             kind,
-            dir: dir.unwrap_or_else(|| self.notes.active_dir.clone()),
+            dir,
             input,
             error: None,
             dir_open: false,
@@ -91,8 +98,13 @@ impl Spike {
         });
     }
 
-    pub(crate) fn submit_name_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(m) = self.notes.names.as_ref() else {
+    pub(crate) fn submit_name_modal(
+        &mut self,
+        w: Which,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(m) = self.ui(w).names.as_ref() else {
             return;
         };
         let name = m.input.read(cx).value().trim().to_string();
@@ -104,84 +116,101 @@ impl Spike {
             _ => vault::invalid_path_reason(&name),
         };
         if let Some(r) = reason {
-            if let Some(m) = self.notes.names.as_mut() {
+            if let Some(m) = self.ui_mut(w).names.as_mut() {
                 m.error = Some(r);
             }
             return;
         }
-        let tree = vault::notes(&self.db);
         let r = match &kind {
             NameKind::Rename { path, is_dir } => {
-                vault::rename_note_entry(&self.db, path, &name, *is_dir).map(|new| {
-                    self.remap_note_paths(path, &new, *is_dir);
+                // 노트는 곁딸린 것(댓글, 개념 출처)까지 함께 옮긴다
+                let renamed = match w {
+                    Which::Notes => vault::rename_note_entry(&self.db, path, &name, *is_dir),
+                    Which::Diagrams => tree_of(&self.db, w).rename_entry(path, &name, *is_dir),
+                };
+                renamed.map(|new| {
+                    self.remap_tree_paths(w, path, &new, *is_dir);
                     None
                 })
             }
-            NameKind::NewNote => tree.create_file(&dir, &name).map(Some),
-            NameKind::NewFolder => tree.create_folder(&dir, &name).map(|rel| {
-                let n = &mut self.notes;
-                n.expanded.extend(vault::ancestor_paths(&rel));
-                n.active_dir = rel;
+            NameKind::NewFile => tree_of(&self.db, w).create_file(&dir, &name).map(Some),
+            NameKind::NewFolder => tree_of(&self.db, w).create_folder(&dir, &name).map(|rel| {
+                let ui = self.ui_mut(w);
+                ui.expanded.extend(vault::ancestor_paths(&rel));
+                ui.active_dir = rel;
                 None
             }),
         };
         match r {
             Err(e) => {
-                if let Some(m) = self.notes.names.as_mut() {
+                if let Some(m) = self.ui_mut(w).names.as_mut() {
                     m.error = Some(err_text(&e));
                 }
             }
             Ok(created) => {
-                self.notes.names = None;
-                self.reload_notes();
-                // 새 노트는 바로 편집으로 연다 — 고치던 초안이 있으면 만들기만(초안 보호)
-                if let Some(rel) = created
-                    && !self.notes.edit.as_ref().is_some_and(|e| e.dirty)
-                {
-                    self.notes.edit = None;
-                    self.open_note(&rel, cx);
-                    self.start_note_edit(window, cx);
+                self.ui_mut(w).names = None;
+                self.reload_tree(w);
+                // 새 파일은 바로 편집으로 연다 — 고치던 초안이 있으면 만들기만(초안 보호)
+                if let Some(rel) = created {
+                    let ui = self.ui_mut(w);
+                    ui.expanded
+                        .extend(vault::ancestor_paths(vault::parent_of(&rel)));
+                    match w {
+                        Which::Notes if !self.notes.edit.as_ref().is_some_and(|e| e.dirty) => {
+                            self.notes.edit = None;
+                            self.open_note(&rel, cx);
+                            self.start_note_edit(window, cx);
+                        }
+                        Which::Diagrams if !self.diagram_dirty(cx) => {
+                            self.open_diagram(&rel, cx);
+                            self.start_diagram_edit(window, cx);
+                        }
+                        _ => {}
+                    }
                 }
             }
         }
     }
 
-    /// 이름이 바뀐 것 아래의 펼침, 고른 노트, 자리를 새 경로로 옮긴다
-    fn remap_note_paths(&mut self, old: &str, new: &str, is_dir: bool) {
-        let n = &mut self.notes;
+    /// 이름이 바뀐(옮겨진) 것 아래의 펼침, 고른 파일, 자리를 새 경로로 옮긴다
+    pub(crate) fn remap_tree_paths(&mut self, w: Which, old: &str, new: &str, is_dir: bool) {
+        let ui = self.ui_mut(w);
         if is_dir {
-            n.expanded = n
+            ui.expanded = ui
                 .expanded
                 .iter()
                 .map(|p| vault::remap_path(p, old, new))
                 .collect();
-            n.active_dir = vault::remap_path(&n.active_dir, old, new);
+            ui.active_dir = vault::remap_path(&ui.active_dir, old, new);
         }
-        if let Some(sel) = n.selected.as_mut() {
+        if let Some(sel) = ui.selected.as_mut() {
             *sel = vault::remap_path(sel, old, new);
         }
         // AI 실행은 경로가 키다 — 안 옮기면 결과가 고아가 된다
-        n.ai.remap(old, new, is_dir);
+        if w == Which::Notes {
+            self.notes.ai.remap(old, new, is_dir);
+        }
     }
 
     /// 이름 모달 — 만들기는 자리(드롭다운) + 이름 + 경로 안내, 바꾸기는 이름만
     pub(crate) fn name_modal_view(
         &self,
+        w: Which,
         k: &Tokens,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> Option<Div> {
-        let m = self.notes.names.as_ref()?;
+        let m = self.ui(w).names.as_ref()?;
         let creating = !matches!(m.kind, NameKind::Rename { .. });
         let (title, label) = match m.kind {
-            NameKind::NewNote => ("notes.newNote", "notes.field.noteName"),
-            NameKind::NewFolder => ("notes.newFolder", "notes.field.folderName"),
+            NameKind::NewFile => (w.l(L::NewFile), w.l(L::FieldFile)),
+            NameKind::NewFolder => (w.l(L::NewFolder), w.l(L::FieldFolder)),
             NameKind::Rename { is_dir, .. } => (
-                "notes.rename",
+                w.l(L::Rename),
                 if is_dir {
-                    "notes.field.folderName"
+                    w.l(L::FieldFolder)
                 } else {
-                    "notes.field.noteName"
+                    w.l(L::FieldFile)
                 },
             ),
         };
@@ -204,7 +233,7 @@ impl Spike {
                     div()
                         .flex()
                         .flex_col()
-                        .child(field_label("notes.field.location"))
+                        .child(field_label(w.l(L::Location)))
                         .child(
                             // .select.block — 폭을 채우는 트리거, 끝의 꺾쇠
                             div()
@@ -237,8 +266,8 @@ impl Spike {
                                         .absolute()
                                         .inset_0(),
                                 )
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    if let Some(m) = this.notes.names.as_mut() {
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    if let Some(m) = this.ui_mut(w).names.as_mut() {
                                         m.dir_open = !m.dir_open;
                                     }
                                     cx.notify();
@@ -261,9 +290,9 @@ impl Spike {
                             .px(px(11.))
                             .py(px(4.))
                             .text_size(px(14.))
-                            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+                            .on_key_down(cx.listener(move |this, e: &KeyDownEvent, _, cx| {
                                 if e.keystroke.key == "escape" {
-                                    this.notes.names = None;
+                                    this.ui_mut(w).names = None;
                                     cx.notify();
                                 }
                             }))
@@ -275,7 +304,7 @@ impl Spike {
                                 .mt(px(6.))
                                 .text_size(px(12.))
                                 .text_color(k.text_3)
-                                .child(t("notes.hint.path")),
+                                .child(t(w.l(L::PathHint))),
                         )
                     }),
             )
@@ -294,8 +323,8 @@ impl Spike {
                         .child(e),
                 )
             });
-        let close = cx.listener(|this, _, _, cx| {
-            this.notes.names = None;
+        let close = cx.listener(move |this, _, _, cx| {
+            this.ui_mut(w).names = None;
             cx.notify();
         });
         let shell = dialog::shell(
@@ -306,18 +335,18 @@ impl Spike {
             vec![
                 button("name-cancel", k, false, false)
                     .child(t("common.cancel"))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.notes.names = None;
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.ui_mut(w).names = None;
                         cx.notify();
                     })),
                 primary_button("name-submit", k, false)
                     .child(t(if creating {
-                        "notes.create"
+                        w.l(L::Create)
                     } else {
-                        "notes.renameConfirm"
+                        w.l(L::RenameConfirm)
                     }))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.submit_name_modal(window, cx);
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.submit_name_modal(w, window, cx);
                         cx.notify();
                     })),
             ],
@@ -325,7 +354,7 @@ impl Spike {
         );
         // 자리 고르기 판 — 지금 트리의 폴더 전부(루트 포함)
         let menu = m.dir_open.then(|| {
-            let dirs = vault::flatten_dirs(self.notes.tree.as_deref().unwrap_or_default());
+            let dirs = vault::flatten_dirs(self.ui(w).tree.as_deref().unwrap_or_default());
             let items = dirs
                 .iter()
                 .map(|d| MenuItem {
@@ -342,7 +371,7 @@ impl Spike {
                 k,
                 move |i, _, cx| {
                     let _ = pick.update(cx, |this, cx| {
-                        if let (Some(m), Some(d)) = (this.notes.names.as_mut(), dirs.get(i)) {
+                        if let (Some(m), Some(d)) = (this.ui_mut(w).names.as_mut(), dirs.get(i)) {
                             m.dir = d.clone();
                             m.dir_open = false;
                         }
@@ -351,7 +380,7 @@ impl Spike {
                 },
                 move |_, cx| {
                     let _ = close.update(cx, |this, cx| {
-                        if let Some(m) = this.notes.names.as_mut() {
+                        if let Some(m) = this.ui_mut(w).names.as_mut() {
                             m.dir_open = false;
                         }
                         cx.notify();
@@ -364,7 +393,13 @@ impl Spike {
 
     /// 트리 행 위에 겹쳐 페이드인하는 동작(.row-actions) — 라벨을 밀지 않는다.
     /// 폴더는 '여기에 새 노트, 새 폴더'가 앞에, 모두 이름 바꾸기와 지우기
-    pub(crate) fn tree_row_actions(&self, n: &Node, k: &Tokens, cx: &mut Context<Self>) -> Div {
+    pub(crate) fn tree_row_actions(
+        &self,
+        w: Which,
+        n: &Node,
+        k: &Tokens,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let act = |id: String, icon_name: &'static str, danger: bool| {
             let (soft, red, hover_bg, text) = (
                 k.danger_soft,
@@ -376,6 +411,7 @@ impl Spike {
                 ),
                 k.text,
             );
+            let id = w.tag(&id);
             let group: SharedString = format!("{id}-g").into();
             div()
                 .id(SharedString::from(id.clone()))
@@ -422,7 +458,13 @@ impl Spike {
                     act(format!("row-new-note-{path}"), "file-plus", false).on_click(cx.listener(
                         move |this, _, window, cx| {
                             cx.stop_propagation();
-                            this.open_name_modal(NameKind::NewNote, Some(p1.clone()), window, cx);
+                            this.open_name_modal(
+                                w,
+                                NameKind::NewFile,
+                                Some(p1.clone()),
+                                window,
+                                cx,
+                            );
                             cx.notify();
                         },
                     )),
@@ -431,7 +473,13 @@ impl Spike {
                     act(format!("row-new-folder-{path}"), "folder-plus", false).on_click(
                         cx.listener(move |this, _, window, cx| {
                             cx.stop_propagation();
-                            this.open_name_modal(NameKind::NewFolder, Some(p2.clone()), window, cx);
+                            this.open_name_modal(
+                                w,
+                                NameKind::NewFolder,
+                                Some(p2.clone()),
+                                window,
+                                cx,
+                            );
                             cx.notify();
                         }),
                     ),
@@ -443,6 +491,7 @@ impl Spike {
                     move |this, _, window, cx| {
                         cx.stop_propagation();
                         this.open_name_modal(
+                            w,
                             NameKind::Rename {
                                 path: p.clone(),
                                 is_dir,
@@ -459,10 +508,17 @@ impl Spike {
                 act(format!("row-delete-{path}"), "trash", true).on_click(cx.listener(
                     move |this, _, _, cx| {
                         cx.stop_propagation();
-                        this.confirm = Some(Confirm::Note {
-                            rel: path.clone(),
-                            name: name.clone(),
-                            is_dir,
+                        this.confirm = Some(match w {
+                            Which::Notes => Confirm::Note {
+                                rel: path.clone(),
+                                name: name.clone(),
+                                is_dir,
+                            },
+                            Which::Diagrams => Confirm::Diagram {
+                                rel: path.clone(),
+                                name: name.clone(),
+                                is_dir,
+                            },
                         });
                         cx.notify();
                     },

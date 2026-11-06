@@ -12,6 +12,7 @@ use gpui_kit::*;
 use crate::Spike;
 use crate::assets::icon;
 use crate::theme::Tokens;
+use crate::vault_pane::Which;
 
 pub type RowBounds = Rc<RefCell<HashMap<String, (Bounds<Pixels>, bool)>>>;
 pub type ListBounds = Rc<Cell<Bounds<Pixels>>>;
@@ -19,6 +20,8 @@ pub type ListBounds = Rc<Cell<Bounds<Pixels>>>;
 /// 들고 있는 것 — GPUI 의 끌기 값
 #[derive(Clone)]
 pub struct TreeGrab {
+    /// 어느 탭의 트리인가 — 놓을 때 그 보관함 안에서 옮긴다
+    pub which: crate::vault_pane::Which,
     pub path: String,
     pub is_dir: bool,
     pub name: String,
@@ -57,15 +60,15 @@ fn valid_target(from: &TreeGrab, dir: Option<String>) -> Option<String> {
 
 impl Spike {
     pub(crate) fn begin_tree_drag(&mut self, grab: TreeGrab, depth_pad: Pixels) {
-        let row = self
-            .notes
+        let ui = self.ui_mut(grab.which);
+        let row = ui
             .tree_rows
             .borrow()
             .get(&grab.path)
             .map(|(b, _)| *b)
             .unwrap_or_default();
-        let start_y = self.notes.tree_press.take().map_or(row.center().y, |p| p.y);
-        self.notes.tree_drag = Some(TreeDrag {
+        let start_y = ui.tree_press.take().map_or(row.center().y, |p| p.y);
+        ui.tree_drag = Some(TreeDrag {
             grab,
             start_y,
             row,
@@ -76,19 +79,20 @@ impl Spike {
     }
 
     /// 커서 밑 — 행이면 폴더/상위 폴더, 트리 여백이면 루트, 트리 밖이면 None
-    pub(crate) fn tree_drag_move(&mut self, pos: Point<Pixels>) -> bool {
+    pub(crate) fn tree_drag_move(&mut self, w: Which, pos: Point<Pixels>) -> bool {
+        let ui = self.ui_mut(w);
         let under = {
-            let rows = self.notes.tree_rows.borrow();
+            let rows = ui.tree_rows.borrow();
             match rows.iter().find(|(_, (b, _))| b.contains(&pos)) {
                 Some((path, (_, is_dir))) => Some(if *is_dir {
                     path.clone()
                 } else {
                     vault::parent_of(path).to_string()
                 }),
-                None => self.notes.tree_area.get().contains(&pos).then(String::new),
+                None => ui.tree_area.get().contains(&pos).then(String::new),
             }
         };
-        let Some(d) = self.notes.tree_drag.as_mut() else {
+        let Some(d) = ui.tree_drag.as_mut() else {
             return false;
         };
         d.dy = pos.y - d.start_y;
@@ -97,40 +101,44 @@ impl Spike {
     }
 
     /// 놓았다 — 놓을 수 있는 자리면 옮기고, 옮겨 간 자리를 펼쳐 보여 준다
-    pub(crate) fn tree_drop(&mut self) {
-        let Some(d) = self.notes.tree_drag.take() else {
+    pub(crate) fn tree_drop(&mut self, w: Which) {
+        let Some(d) = self.ui_mut(w).tree_drag.take() else {
             return;
         };
         let Some(target) = d.target else {
             return;
         };
         let from = d.grab.path;
-        match vault::move_note_entry(&self.db, &from, &target) {
+        // 노트는 곁딸린 것(댓글, 그림)과 함께 옮긴다
+        let moved = match w {
+            Which::Notes => vault::move_note_entry(&self.db, &from, &target),
+            Which::Diagrams => crate::vault_pane::tree_of(&self.db, w).move_entry(&from, &target),
+        };
+        match moved {
             Ok(new) => {
-                let n = &mut self.notes;
-                if d.grab.is_dir {
-                    n.expanded = n
-                        .expanded
-                        .iter()
-                        .map(|p| vault::remap_path(p, &from, &new))
-                        .collect();
-                    n.active_dir = vault::remap_path(&n.active_dir, &from, &new);
-                }
-                if let Some(sel) = n.selected.as_mut() {
-                    *sel = vault::remap_path(sel, &from, &new);
-                }
-                n.ai.remap(&from, &new, d.grab.is_dir);
-                n.expanded
+                self.remap_tree_paths(w, &from, &new, d.grab.is_dir);
+                self.ui_mut(w)
+                    .expanded
                     .extend(vault::ancestor_paths(vault::parent_of(&new)));
             }
-            Err(e) => self.notes.read_error = Some(amber_gpui::i18n::t(&e)),
+            Err(e) => match w {
+                Which::Notes => self.notes.read_error = Some(amber_gpui::i18n::t(&e)),
+                Which::Diagrams => self.diagrams.read_error = Some(amber_gpui::i18n::t(&e)),
+            },
         }
-        self.reload_notes();
+        self.reload_tree(w);
+    }
+
+    /// 끌기가 남아 있는 탭(창 밖에서 놓았으면 render 가 마저 놓는다)
+    pub(crate) fn dragging_tree(&self) -> Option<Which> {
+        [Which::Notes, Which::Diagrams]
+            .into_iter()
+            .find(|w| self.ui(*w).tree_drag.is_some())
     }
 
     /// 떠 있는 복제본(.tree-drag-overlay) — 창 좌표로 뿌리 판에 그린다
     pub(crate) fn tree_drag_ghost(&self, k: &Tokens) -> Option<Div> {
-        let d = self.notes.tree_drag.as_ref()?;
+        let d = self.ui(self.dragging_tree()?).tree_drag.as_ref()?;
         Some(
             div()
                 .absolute()

@@ -34,6 +34,19 @@ fn seed(dir: &Path) -> String {
         include_str!("../assets/reading-sample.md"),
     )
     .unwrap();
+    // 다이어그램 보관함 — 폴더 하나, 파일 둘
+    let diagrams = dir.join("vault/diagrams");
+    std::fs::create_dir_all(diagrams.join("ERD")).unwrap();
+    std::fs::write(
+        diagrams.join("ERD/Orders.mmd"),
+        "erDiagram\n  USER ||--o{ ORDER : places\n  ORDER ||--|{ ORDER_ITEM : contains\n  USER {\n    bigint id PK\n    varchar email\n  }\n  ORDER {\n    bigint id PK\n    bigint user_id FK\n  }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        diagrams.join("Release flow.mmd"),
+        "flowchart LR\n  A[Tag] --> B[Push] --> C[Rebuild app]\n",
+    )
+    .unwrap();
     std::fs::write(
         notes.join("Engineering/Runbooks/Release.md"),
         "# Release\n\n1. Tag\n2. Push\n",
@@ -225,6 +238,7 @@ pub fn run(dir: &str) {
     notes(&mut s);
     comments(&mut s);
     note_ai(&mut s);
+    diagrams(&mut s);
     for (name, level) in [
         ("cal-month", crate::calendar::Level::Month),
         ("cal-year", crate::calendar::Level::Year),
@@ -255,7 +269,13 @@ fn notes(s: &mut Shots) {
     s.shot("notes-open");
     s.window
         .update(&mut s.cx, |sp, window, cx| {
-            sp.open_name_modal(crate::note_names::NameKind::NewNote, None, window, cx);
+            sp.open_name_modal(
+                crate::vault_pane::Which::Notes,
+                crate::note_names::NameKind::NewFile,
+                None,
+                window,
+                cx,
+            );
             cx.notify();
         })
         .unwrap();
@@ -276,7 +296,7 @@ fn notes(s: &mut Shots) {
     s.window
         .update(&mut s.cx, |sp, window, cx| {
             sp.notes.root_menu = false;
-            sp.start_tree_find(window, cx);
+            sp.start_tree_find(crate::vault_pane::Which::Notes, window, cx);
             if let Some(f) = sp.notes.find.as_mut() {
                 f.query = "re".into();
                 f.idx = 1;
@@ -639,6 +659,33 @@ fn note_ai(s: &mut Shots) {
         .update(&mut s.cx, |sp, _, cx| {
             sp.notes.span_modal = None;
             sp.dismiss_note_ai(path);
+            cx.notify();
+        })
+        .unwrap();
+}
+
+/// 다이어그램 탭 — 빈 안내, 폴더를 펼치고 ERD 하나를 연 화면
+fn diagrams(s: &mut Shots) {
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.section = crate::Section::Diagrams;
+            sp.reload_tree(crate::vault_pane::Which::Diagrams);
+            cx.notify();
+        })
+        .unwrap();
+    s.mouse(point(px(1300.), px(880.)), false);
+    s.shot("dgm-empty");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.toggle_dir(crate::vault_pane::Which::Diagrams, "ERD");
+            sp.open_diagram("ERD/Orders.mmd", cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.shot("dgm-open");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.section = crate::Section::Notes;
             cx.notify();
         })
         .unwrap();

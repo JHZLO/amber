@@ -112,6 +112,8 @@ impl Spike {
     fn pane_width(&mut self, key: &str) -> &mut f32 {
         if key == crate::notes_view::LIST_PANE.key {
             &mut self.notes.width
+        } else if key == crate::vault_pane::Which::Diagrams.pane().key {
+            &mut self.diagrams.width
         } else {
             &mut self.cal_w
         }

@@ -490,9 +490,10 @@ fn the_vacation_picker_sets_and_clears_the_day(cx: &mut TestAppContext) {
     click(&mut ui, "vac-menu-1");
     assert_eq!(vacation_of(&db).as_deref(), Some("half"));
     assert!(ui.debug_bounds("vac-menu").is_none(), "고르면 닫힌다");
-    // 바깥을 누르면 아무것도 바꾸지 않고 닫힌다
+    // 바깥을 누르면 아무것도 바꾸지 않고 닫힌다 — 레일의 빈자리(오늘 단추는 실제 날짜로 옮겨 가서 안 된다)
     click(&mut ui, "vac");
-    click(&mut ui, "today");
+    ui.simulate_click(point(px(34.), px(600.)), Modifiers::none());
+    ui.run_until_parked();
     assert!(ui.debug_bounds("vac-menu").is_none());
     assert_eq!(vacation_of(&db).as_deref(), Some("half"));
     // 잡혀 있을 때만 맨 끝에 '해제'
@@ -1727,4 +1728,136 @@ fn separate_sections_run_one_after_another(cx: &mut TestAppContext) {
     });
     let sent = std::fs::read_to_string(dir.join("fake-claude.in")).unwrap();
     assert_eq!(sent.matches("[수정 지시]").count(), 2, "묶음마다 한 번");
+}
+
+/// 다이어그램 보관함(데이터 폴더의 vault/diagrams)에 파일을 깐다
+fn vault_diagram(db: &PathBuf, rel: &str, body: &str) {
+    let path = db.parent().unwrap().join("vault/diagrams").join(rel);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, body).unwrap();
+}
+
+fn diagram_has(db: &PathBuf, rel: &str) -> bool {
+    db.parent()
+        .unwrap()
+        .join("vault/diagrams")
+        .join(rel)
+        .exists()
+}
+
+#[gpui_kit::test]
+fn the_diagrams_tree_opens_creates_renames_and_moves(cx: &mut TestAppContext) {
+    let db = seeded("dgm-tree", &[]);
+    vault_diagram(
+        &db,
+        "ERD/order.mmd",
+        "erDiagram\n  USER ||--o{ ORDER : places\n",
+    );
+    vault_diagram(&db, "flow.mmd", "flowchart LR\n  A --> B\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    assert!(ui.debug_bounds("dtree-flow.mmd").is_some());
+    assert!(
+        ui.debug_bounds("tree-flow.mmd").is_none(),
+        "노트 트리가 아니다"
+    );
+    click(&mut ui, "dtree-ERD");
+    click(&mut ui, "dtree-ERD/order.mmd");
+    ui.update(|_, cx| {
+        let d = &spike().read(cx).diagrams;
+        assert_eq!(d.selected.as_deref(), Some("ERD/order.mmd"));
+        assert!(matches!(d.figure, Some(Ok(_))), "그렸다");
+    });
+    assert!(ui.debug_bounds("dgm-figure").is_some());
+    // 새 다이어그램 — 여러 단 경로, 확장자는 보관함이 붙인다
+    click(&mut ui, "dnotes-new-note");
+    ui.simulate_input("New/one");
+    ui.simulate_keystrokes("enter");
+    ui.run_until_parked();
+    assert!(diagram_has(&db, "ERD/New/one.mmd"), "고른 폴더(ERD) 아래에");
+    ui.update(|_, cx| {
+        assert_eq!(
+            spike().read(cx).diagrams.selected.as_deref(),
+            Some("ERD/New/one.mmd")
+        );
+    });
+    // 이름 바꾸기 — 칸에는 확장자 없는 이름
+    click(&mut ui, "drow-rename-flow.mmd");
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_input("flow2");
+    ui.simulate_keystrokes("enter");
+    ui.run_until_parked();
+    assert!(diagram_has(&db, "flow2.mmd") && !diagram_has(&db, "flow.mmd"));
+    // 끌어서 폴더로
+    let to = bounds(&mut ui, "dtree-ERD").center();
+    drag(&mut ui, "dtree-flow2.mmd", to);
+    assert!(diagram_has(&db, "ERD/flow2.mmd"));
+    assert!(
+        !db.parent().unwrap().join("vault/notes/ERD").exists(),
+        "노트 보관함은 그대로"
+    );
+}
+
+#[gpui_kit::test]
+fn deleting_a_diagram_asks_then_trashes_it(cx: &mut TestAppContext) {
+    let db = seeded("dgm-delete", &[]);
+    vault_diagram(&db, "x.mmd", "flowchart LR\n  A --> B\n");
+    let mut ui = open_fixed(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    click(&mut ui, "dtree-x.mmd");
+    click(&mut ui, "dgm-delete");
+    click(&mut ui, "confirm-delete");
+    let dir = db.parent().unwrap();
+    assert!(!diagram_has(&db, "x.mmd"));
+    assert!(
+        dir.join(".trash/1/x.mmd").exists(),
+        "지우지 않고 휴지통으로"
+    );
+    assert!(
+        ui.debug_bounds("dgm-delete").is_none(),
+        "열려 있던 파일은 닫힌다"
+    );
+}
+
+#[gpui_kit::test]
+fn diagrams_have_their_own_find_and_work_folder(cx: &mut TestAppContext) {
+    let db = seeded("dgm-root", &[]);
+    vault_diagram(&db, "Deep/Deeper/target.mmd", "flowchart LR\n  A --> B\n");
+    vault_note(&db, "note.md", "# n\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    // 트리 판을 누르면 ⌘F 가 그 트리의 찾기 — 접힌 폴더까지
+    click(&mut ui, "dnotes-tree");
+    ui.simulate_keystrokes("cmd-f");
+    ui.simulate_input("targ");
+    ui.run_until_parked();
+    assert!(ui.debug_bounds("dtree-find-count").is_some());
+    ui.simulate_keystrokes("enter");
+    ui.run_until_parked();
+    ui.update(|_, cx| {
+        assert_eq!(
+            spike().read(cx).diagrams.selected.as_deref(),
+            Some("Deep/Deeper/target.mmd")
+        );
+    });
+    // 작업 폴더는 탭마다 — 다이어그램만 다른 폴더로
+    let other = db.parent().unwrap().join("elsewhere");
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::write(other.join("there.mmd"), "flowchart LR\n  X --> Y\n").unwrap();
+    ui.update(|_, cx| {
+        spike().update(cx, |s, cx| {
+            s.apply_root(
+                crate::vault_pane::Which::Diagrams,
+                Some(other.to_string_lossy().into_owned()),
+            );
+            cx.notify();
+        })
+    });
+    ui.run_until_parked();
+    assert!(ui.debug_bounds("dtree-there.mmd").is_some());
+    click(&mut ui, "app.rail.notes");
+    assert!(
+        ui.debug_bounds("tree-note.md").is_some(),
+        "노트 보관함은 그대로"
+    );
 }
