@@ -3387,3 +3387,60 @@ fn the_erd_connection_modal_tests_saves_and_edits(cx: &mut TestAppContext) {
     ui.simulate_keystrokes("escape");
     assert!(state(&mut ui).is_none(), "Esc 로 닫는다");
 }
+
+#[gpui_kit::test]
+fn disconnecting_and_cleaning_up_old_erds(cx: &mut TestAppContext) {
+    let db = seeded("erd-disconnect", &[]);
+    seed_erd(&db);
+    let dir = db.parent().unwrap().to_path_buf();
+    // 다이어그램 탭 시절 — svc_empty 의 스냅샷과 자동 생성 ERD 가 옛 자리에 남았다
+    let old = dir.join("vault/diagrams/Local DB/svc_empty");
+    std::fs::create_dir_all(&old).unwrap();
+    std::fs::write(
+        old.join("schema.json"),
+        r#"{"amber": 1, "schema": "svc_empty", "connection": "x", "server": "MySQL 8", "synced_at": 1, "tables": [], "fingerprint": "f"}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        old.join("ERD.mmd"),
+        "%% amber:db Local DB/svc_empty 2025\nerDiagram\n",
+    )
+    .unwrap();
+    let mut ui = open_fixed(cx, &db);
+    let fake = FakeDb::new(|_| Err(amber_core::ai::AiError::new("DB_REFUSED", "")));
+    let secrets = fake.secrets.clone();
+    plug_db(&mut ui, fake);
+    click(&mut ui, "app.rail.erd");
+    erd_canvas(&mut ui);
+    // 스냅샷은 말없이 복사, 남은 것은 띠로 묻는다
+    let copied = dir.join("vault/erd/Local DB/svc_empty/schema.json");
+    assert!(copied.exists(), "옛 스냅샷을 ERD 저장소로");
+    assert!(ui.debug_bounds("erd-legacy").is_some());
+    click(&mut ui, "erd-legacy-trash");
+    click(&mut ui, "erd-legacy-ok");
+    assert!(ui.debug_bounds("erd-legacy").is_none());
+    assert!(
+        !dir.join("vault/diagrams/Local DB").exists(),
+        "자동 생성물뿐이라 폴더째 휴지통으로"
+    );
+    assert!(copied.exists(), "옮겨 온 사본은 그대로");
+    // 연결 끊기 — 확인하면 키체인, 행, 스냅샷 폴더가 사라진다
+    click(&mut ui, "erd-disconnect-c1");
+    click(&mut ui, "erd-disconnect-ok");
+    erd_canvas(&mut ui);
+    let saved = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    assert!(
+        amber_gpui::dbconn::get_connection(&saved, 1)
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(secrets.borrow().len(), 1);
+    assert!(secrets.borrow()[0].1.is_none(), "키체인에서 뺐다");
+    assert!(!dir.join("vault/erd/Local DB").exists());
+    assert!(dir.join(".trash").exists(), "휴지통으로(되돌릴 수 있다)");
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        assert!(s.erd.connections.as_ref().unwrap().is_empty());
+        assert!(s.erd.selected.is_none());
+    });
+}

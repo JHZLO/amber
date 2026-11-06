@@ -596,10 +596,13 @@ impl Render for Spike {
         } else {
             (None, None, None)
         };
-        let erd_modal = if self.section == Section::Erd {
-            self.erd_conn_view(&k, window, cx)
+        let (erd_modal, erd_confirm) = if self.section == Section::Erd {
+            (
+                self.erd_conn_view(&k, window, cx),
+                self.erd_confirm_view(&k, cx),
+            )
         } else {
-            None
+            (None, None)
         };
         let (ai_modal, span_modal) = if self.section == Section::Notes {
             (self.ai_modal_view(&k, cx), self.span_modal_view(&k, cx))
@@ -734,6 +737,19 @@ impl Render for Spike {
                         cx.notify();
                         return;
                     }
+                }
+                // ERD 확인 창(끊기, 옛 ERD 정리) — Esc 는 닫기
+                if this.section == Section::Erd
+                    && e.keystroke.key == "escape"
+                    && (this.erd.confirm_disconnect.is_some() || this.erd.confirm_legacy)
+                {
+                    if !this.erd.busy {
+                        this.erd.confirm_disconnect = None;
+                        this.erd.confirm_legacy = false;
+                    }
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
                 }
                 // ERD 연결 모달 — Esc 는 위의 확인부터, 그다음 모달
                 if this.section == Section::Erd
@@ -914,6 +930,7 @@ impl Render for Spike {
             .children(dgm_prompt)
             .children(dgm_ai)
             .children(erd_modal)
+            .children(erd_confirm)
             .children(span_modal)
             .children(match self.section {
                 Section::Diagrams => {

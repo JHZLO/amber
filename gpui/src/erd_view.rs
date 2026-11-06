@@ -554,6 +554,14 @@ pub struct ErdState {
     pub db: Option<Rc<dyn crate::erd_sync::DbBackend>>,
     /// DB 연결 모달(새 연결, 편집)
     pub conn: Option<crate::erd_conn::ConnModal>,
+    /// 다이어그램 탭 시절 ERD — 이번 실행에 한 번 옮기고, 남은 자동 생성물을 띠로 묻는다
+    pub migrated: bool,
+    pub legacy: Option<amber_gpui::erd_migrate::LegacyPlan>,
+    pub confirm_legacy: bool,
+    /// 끊을까 묻는 연결
+    pub confirm_disconnect: Option<DbConnection>,
+    /// 끊기가 도는 중
+    pub busy: bool,
 }
 
 /// 트리를 찾기로 거른 모양 — 남길 경로(없으면 다), 임시로 펼칠 경로, 칠할 검색어, 지금 것
@@ -1552,6 +1560,7 @@ impl Spike {
                     }))
                     .child(head)
                     .children(self.tree_find_bar(crate::note_find::FindIn::Erd, count, k, cx))
+                    .children(self.erd_legacy_banner(k, cx))
                     .child(body),
             )
             .child(self.pane_resizer(LIST_PANE, width, body_w, k, cx))
@@ -1694,6 +1703,7 @@ impl Spike {
                 .child({
                     let c = c.clone();
                     let edit = c.clone();
+                    let gone = c.clone();
                     crate::note_names::row_actions(k)
                         .child(
                             crate::note_names::row_act(
@@ -1728,6 +1738,22 @@ impl Spike {
                                 move |this, _, window, cx| {
                                     cx.stop_propagation();
                                     this.open_conn_modal(Some(edit.clone()), window, cx);
+                                    cx.notify();
+                                },
+                            )),
+                        )
+                        .child(
+                            crate::note_names::row_act(
+                                format!("erd-disconnect-{path}"),
+                                "x",
+                                true,
+                                k,
+                            )
+                            .tooltip(tip(t("erd.db.tree.disconnect")))
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.erd.confirm_disconnect = Some(gone.clone());
                                     cx.notify();
                                 },
                             )),
@@ -3276,6 +3302,128 @@ fn glass_layer(k: &Tokens, radius: f32) -> Div {
         .inset_0()
         .rounded(px(radius))
         .bg(crate::note_ai_view::glass(k.glass_fill))
+}
+
+impl Spike {
+    /// 옛 ERD 띠(.erd-legacy) — 다이어그램 탭 시절 ERD 파일이 남아 있다. 남기기 | 휴지통으로
+    fn erd_legacy_banner(&self, k: &Tokens, cx: &mut Context<Self>) -> Option<Div> {
+        let plan = self.erd.legacy.as_ref()?;
+        Some(
+            div()
+                .tag("erd-legacy")
+                .mx(px(10.))
+                .mt(px(10.))
+                .mb(px(4.))
+                .px(px(12.))
+                .py(px(10.))
+                .flex()
+                .flex_col()
+                .gap(px(8.))
+                .rounded(px(8.))
+                .bg(k.surface_2)
+                .text_size(px(12.5))
+                .line_height(relative(1.5))
+                .text_color(k.text_2)
+                .child(t_with("erd.legacy.body", &[("n", &plan.erds.to_string())]))
+                .child(
+                    div()
+                        .flex()
+                        .justify_end()
+                        .gap(px(6.))
+                        .child(
+                            crate::day_card::button("erd-legacy-keep", k, false, false)
+                                .child(t("erd.legacy.keep"))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.erd_keep_legacy();
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            crate::day_card::danger_button("erd-legacy-trash", k)
+                                .child(t("erd.legacy.trash"))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.erd.confirm_legacy = true;
+                                    cx.notify();
+                                })),
+                        ),
+                ),
+        )
+    }
+
+    /// 확인 창 — 연결 끊기(지워지는 것을 그 자리에서 말한다), 옛 ERD 정리(휴지통, 되돌릴 수 있다)
+    pub(crate) fn erd_confirm_view(&self, k: &Tokens, cx: &mut Context<Self>) -> Option<Div> {
+        let busy = self.erd.busy;
+        if let Some(c) = &self.erd.confirm_disconnect {
+            let name = c.name.clone();
+            let sentence = format!("{name} {}", t("erd.db.disconnect.body"));
+            let body = StyledText::new(sentence).with_highlights(vec![(
+                0..name.len(),
+                HighlightStyle {
+                    font_weight: Some(FontWeight::BOLD),
+                    ..Default::default()
+                },
+            )]);
+            return Some(crate::dialog::shell(
+                k,
+                440.,
+                t("erd.db.disconnect.title"),
+                div().child(body).into_any_element(),
+                vec![
+                    crate::day_card::button("erd-disconnect-cancel", k, false, busy)
+                        .child(t("common.cancel"))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.erd.confirm_disconnect = None;
+                            cx.notify();
+                        })),
+                    crate::day_card::danger_button("erd-disconnect-ok", k)
+                        .when(busy, |d| d.opacity(0.45))
+                        .child(t(if busy {
+                            "erd.db.disconnect.working"
+                        } else {
+                            "erd.db.disconnect.confirm"
+                        }))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.erd_disconnect(cx);
+                            cx.notify();
+                        })),
+                ],
+                cx.listener(|this, _, _, cx| {
+                    this.erd.confirm_disconnect = None;
+                    cx.notify();
+                }),
+            ));
+        }
+        if self.erd.confirm_legacy {
+            let n = self.erd.legacy.as_ref().map_or(0, |p| p.erds);
+            return Some(crate::dialog::shell(
+                k,
+                440.,
+                t("erd.legacy.confirmTitle"),
+                div()
+                    .child(t_with("erd.legacy.confirmBody", &[("n", &n.to_string())]))
+                    .into_any_element(),
+                vec![
+                    crate::day_card::button("erd-legacy-cancel", k, false, false)
+                        .child(t("common.cancel"))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.erd.confirm_legacy = false;
+                            cx.notify();
+                        })),
+                    crate::day_card::danger_button("erd-legacy-ok", k)
+                        .child(t("erd.legacy.confirm"))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.erd_trash_legacy();
+                            cx.notify();
+                        })),
+                ],
+                cx.listener(|this, _, _, cx| {
+                    this.erd.confirm_legacy = false;
+                    cx.notify();
+                }),
+            ));
+        }
+        None
+    }
 }
 
 fn columns_key(c: Columns) -> &'static str {

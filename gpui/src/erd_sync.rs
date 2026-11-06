@@ -22,6 +22,8 @@ use crate::Spike;
 
 /// 한 연결의 스키마를 동시에 읽는 수
 const SYNC_WORKERS: usize = 3;
+/// 옛 ERD 정리 띠를 다시 묻지 않는다
+const LEGACY_DISMISSED_KEY: &str = "amber.erd.legacy-dismissed";
 
 type Rx<T> = oneshot::Receiver<Result<T, AiError>>;
 
@@ -311,10 +313,81 @@ impl Spike {
         .detach();
     }
 
-    /// 탭에 들어올 때마다 — 연결과 스냅샷을 다시 읽고, 없는 것을 채운다
+    /// 탭에 들어올 때마다 — 연결과 스냅샷을 다시 읽고, 없는 것을 채운다. 처음 한 번은 옛 다이어그램 탭의 스냅샷을
+    /// 옮겨 온다(복사 — 다시 읽지 않아도 지난 구조가 바로 보이게). 남은 자동 생성물은 띠로 묻는다
     pub(crate) fn erd_enter(&mut self, cx: &mut Context<Self>) {
+        if !self.erd.migrated {
+            self.erd.migrated = true;
+            let list: Vec<DbConnection> = amber_gpui::dbconn::list_connections(&self.db)
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|r| serde_json::from_value(r).ok())
+                .collect();
+            let _ = amber_gpui::erd_migrate::copy_legacy_snapshots(&self.db, &list);
+            if amber_gpui::prefs::get(&self.db, LEGACY_DISMISSED_KEY).as_deref() != Some("1") {
+                self.erd.legacy = amber_gpui::erd_migrate::find_legacy_erds(&self.db, &list);
+            }
+        }
         self.load_erd();
         self.erd_auto_sync(cx);
+    }
+
+    /// 연결 끊기 — 프로필, 키체인 비밀번호, 이 연결의 스냅샷(휴지통). DB 에는 아무 일도 없다
+    pub(crate) fn erd_disconnect(&mut self, cx: &mut Context<Self>) {
+        let Some(c) = self.erd.confirm_disconnect.clone() else {
+            return;
+        };
+        if self.erd.busy {
+            return;
+        }
+        self.erd.busy = true;
+        let task = self.erd_delete_connection(&c, cx);
+        cx.spawn(async move |this, cx| {
+            let r = task.await;
+            let _ = this.update(cx, |s, cx| {
+                s.erd.busy = false;
+                s.erd.confirm_disconnect = None;
+                match r {
+                    Ok(()) => {
+                        if s.erd.selected.as_ref().is_some_and(|(u, _)| *u == c.ulid) {
+                            s.erd.selected = None;
+                            amber_gpui::prefs::set(&s.db, "amber.erd.selected", "null");
+                        }
+                        // 같은 이름으로 다시 연결하면 같은 폴더를 쓴다 — 지난 시도와 바뀐 것 기록을 비워 첫 동기화가 다시 돌게
+                        let prefix = format!("{}/", c.folder_path);
+                        s.erd.attempted.retain(|f| !f.starts_with(&prefix));
+                        s.erd.diffs.retain(|f, _| !f.starts_with(&prefix));
+                        s.load_erd();
+                    }
+                    Err(e) => s.erd.error = Some(crate::ai::err_text(&e)),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// 옛 ERD 정리 — 확인을 누른 지금 다시 본다(띠가 떠 있는 사이 그 폴더에 파일을 만들었을 수 있다)
+    pub(crate) fn erd_trash_legacy(&mut self) {
+        if self.erd.legacy.is_none() {
+            return;
+        }
+        let list = self.erd.connections.clone().unwrap_or_default();
+        let r = match amber_gpui::erd_migrate::find_legacy_erds(&self.db, &list) {
+            Some(plan) => amber_gpui::erd_migrate::trash_legacy_erds(&self.db, &plan),
+            None => Ok(()),
+        };
+        match r {
+            Ok(()) => self.erd.legacy = None,
+            Err(e) => self.erd.error = Some(e),
+        }
+        self.erd.confirm_legacy = false;
+    }
+
+    /// 옛 ERD 를 남겨 둔다 — 다시 묻지 않는다
+    pub(crate) fn erd_keep_legacy(&mut self) {
+        amber_gpui::prefs::set(&self.db, LEGACY_DISMISSED_KEY, "1");
+        self.erd.legacy = None;
     }
 
     /// 연결 삭제(deleteConnection) — 키체인 항목, 행, 스냅샷 폴더(휴지통). 키체인을 못 지우면 멈춘다.
