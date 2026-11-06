@@ -36,7 +36,9 @@ mod root_picker;
 mod row_drag;
 #[cfg(feature = "shots")]
 mod shots;
+mod spinner;
 mod theme;
+mod tip;
 mod tree_drag;
 mod tt_card;
 mod tt_drag;
@@ -722,11 +724,22 @@ impl Render for Spike {
                         return;
                     }
                 }
-                // ERD — Esc 는 안쪽부터(정보창, 그다음 패널)
+                // ERD — Esc 는 안쪽부터([보기] 판, 정보창, 그다음 패널), ⌘F 는 그린 표와 컬럼에서 찾기
                 if this.section == Section::Erd
                     && e.keystroke.key == "escape"
                     && this.erd_escape(cx)
                 {
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
+                if this.section == Section::Erd
+                    && m.platform
+                    && !m.alt
+                    && !m.shift
+                    && e.keystroke.key == "f"
+                {
+                    this.erd_open_find(window, cx);
                     cx.stop_propagation();
                     cx.notify();
                     return;

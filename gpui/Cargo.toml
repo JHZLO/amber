@@ -46,3 +46,7 @@ gpui-kit = { version = "=0.9.0", features = ["test-support"] }
 # build.rs 가 지금 앱 소스(아이콘, 다국어 사전)를 읽어 굽는다
 regex = "1"
 serde_json = "1"
+
+# 의존성만 최적화 — 시험대와 찍기가 SVG 읽기(usvg), 굽기(resvg)를 디버그 빌드로 돌면 ERD 시험 하나가 몇 분 걸린다
+[profile.dev.package."*"]
+opt-level = 2

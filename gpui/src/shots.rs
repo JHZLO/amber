@@ -902,6 +902,52 @@ fn erd(s: &mut Shots) {
     s.settle();
     s.settle();
     s.shot("erd-panel");
+    // [보기] 판 — 키만, 타입 빼기
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.erd_escape(cx);
+            sp.erd_escape(cx);
+            sp.erd.canvas.view_open = true;
+            sp.erd.view.columns = amber_gpui::resin::svg::Columns::Keys;
+            sp.erd.view.hide = vec![amber_gpui::resin::svg::CardPart::Types];
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.settle();
+    s.settle();
+    s.shot("erd-view");
+    // ⌘F — "order" 는 표 둘(orders, order_items)과 컬럼 둘(order_items.order_id, payments.order_id)
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.erd.canvas.view_open = false;
+            sp.erd.view.columns = amber_gpui::resin::svg::Columns::All;
+            sp.erd.view.hide = Vec::new();
+            sp.erd_open_find(window, cx);
+            let f = sp.erd.canvas.find.as_mut().unwrap();
+            f.query = "order".into();
+            f.input.update(cx, |i, cx| i.set_value("order", window, cx));
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.settle();
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.erd_run_find(true, cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.settle();
+    s.settle();
+    s.shot("erd-find");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.erd_close_find(cx);
+            cx.notify();
+        })
+        .unwrap();
     s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.section = crate::Section::Notes;

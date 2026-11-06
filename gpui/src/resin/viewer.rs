@@ -98,6 +98,16 @@ fn row_id(i: usize, j: usize) -> String {
 fn rel_id(i: usize) -> String {
     format!("rzx-r{i}")
 }
+fn head_id(i: usize) -> String {
+    format!("rzx-t{i}-h")
+}
+
+/// 찾기에 걸린 것 — 카드의 머리글(row 가 None) 또는 컬럼 행
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FindHit {
+    pub card: usize,
+    pub row: Option<usize>,
+}
 
 impl Drawn {
     /// to_svg 의 결과를 읽는다 — 카드 자리는 boxes 가, 행과 관계는 SVG 가 말한다
@@ -127,6 +137,9 @@ impl Drawn {
                 };
                 let i = cards.len();
                 ids.push((n.range().start, tag, table_id(i)));
+                if let Some(h) = n.descendants().find(|h| has_class(h, "rz-head")) {
+                    ids.push((h.range().start, h.tag_name().name().len(), head_id(i)));
+                }
                 let mut rows = Vec::new();
                 for r in n.descendants().filter(|r| has_class(r, "rz-c")) {
                     let Some(column) = r.attribute("data-c") else {
@@ -274,6 +287,55 @@ impl Drawn {
         Some(f)
     }
 
+    /// 찾기(ErdCanvas.tsx runFind) — 그린 표 이름(머리글)과 컬럼 이름에서, 대소문자 없이. 그린 순서대로
+    pub fn find(&self, query: &str) -> Vec<FindHit> {
+        let term = query.trim().to_lowercase();
+        if term.is_empty() {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        for (i, c) in self.cards.iter().enumerate() {
+            if c.table.to_lowercase().contains(&term) {
+                out.push(FindHit { card: i, row: None });
+            }
+            for (j, r) in c.rows.iter().enumerate() {
+                if r.column.to_lowercase().contains(&term) {
+                    out.push(FindHit {
+                        card: i,
+                        row: Some(j),
+                    });
+                }
+            }
+        }
+        out
+    }
+
+    /// 찾기를 칠하는 CSS(styles.css 의 .erd-find-hit, .erd-find-cur) — 누를 자리(.rz-hit)를 칠한다.
+    /// 맞은 것 회색, 지금 것 노랑. 초점의 고른 행과 구체성이 같아 뒤에 둔다
+    pub fn find_css(&self, hits: &[FindHit], cur: usize, dark: bool) -> String {
+        if hits.is_empty() {
+            return String::new();
+        }
+        let sel = |h: &FindHit| match h.row {
+            Some(j) => format!("#{} > .rz-hit", row_id(h.card, j)),
+            None => format!("#{} > .rz-hit", head_id(h.card)),
+        };
+        let all: Vec<String> = hits.iter().map(sel).collect();
+        let (hit, cur_fill, cur_op) = if dark {
+            ("rgb(160, 160, 175)", "rgb(202, 138, 4)", 0.62)
+        } else {
+            ("rgb(120, 120, 130)", "rgb(250, 204, 21)", 0.55)
+        };
+        let mut css = format!("{} {{ fill: {hit}; fill-opacity: 0.3; }}", all.join(", "));
+        if let Some(h) = hits.get(cur) {
+            css += &format!(
+                " {} {{ fill: {cur_fill}; fill-opacity: {cur_op}; }}",
+                sel(h)
+            );
+        }
+        css
+    }
+
     /// 초점을 칠하는 CSS(viewer.css 의 .is-focus, .is-on) — 표, 관계, 그림자는 0.14 로 흐리고 남는 것만 되돌린다.
     /// 고른 행은 누를 자리(.rz-hit)를 강조색 0.18 로. usvg 는 규칙을 구체성 순으로 적용하므로 !important 없이 덮인다
     pub fn focus_css(&self, f: &Focus, accent: &str) -> String {
@@ -416,6 +478,30 @@ table items {\n  id bigint pk\n  order_id bigint -> orders.id\n}\n";
             .collect();
         assert_eq!(rows, [("orders", "note")]);
         assert!(d.focus("nope", None).is_none());
+    }
+
+    #[test]
+    fn find_matches_table_and_column_names() {
+        let d = drawn();
+        let hits = d.find("  USER ");
+        let named: Vec<String> = hits
+            .iter()
+            .map(|h| {
+                let c = &d.cards[h.card];
+                match h.row {
+                    Some(j) => format!("{}.{}", c.table, c.rows[j].column),
+                    None => c.table.clone(),
+                }
+            })
+            .collect();
+        let mut sorted = named.clone();
+        sorted.sort();
+        assert_eq!(sorted, ["orders.user_id", "users"]);
+        assert!(d.find(" ").is_empty());
+        let css = d.find_css(&hits, 1, false);
+        assert!(css.contains("fill-opacity: 0.3") && css.contains("rgb(250, 204, 21)"));
+        // 머리글에도 id 를 달았다
+        assert!(d.svg.contains("-h\""));
     }
 
     /// CSS 가 usvg 에서 정말 흐리게 하는지 — 투명도가 걸린 묶음을 센다

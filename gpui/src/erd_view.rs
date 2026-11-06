@@ -22,7 +22,8 @@ use amber_gpui::resin::details::{Act, column_details, table_details};
 use amber_gpui::resin::svg::{
     AuditView, CARD_PARTS, CARD_RADIUS, CardPart, Columns, Direction, Edges, SvgOptions,
 };
-use amber_gpui::resin::viewer::Drawn;
+use amber_gpui::resin::viewer::{Drawn, FindHit};
+use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use resvg::usvg;
@@ -31,6 +32,7 @@ use crate::Spike;
 use crate::assets::icon;
 use crate::day_card::Tag;
 use crate::theme::Tokens;
+use crate::tip::tip;
 
 pub const LIST_PANE: crate::pane::PaneGrab = crate::pane::PaneGrab {
     key: "amber.erd.list-width",
@@ -200,6 +202,16 @@ enum AfterDraw {
     Pick(String, String),
 }
 
+/// ⌘F 찾기 — 그린 표 이름과 컬럼 이름에서(ErdCanvas.tsx runFind)
+pub struct ErdFind {
+    pub input: Entity<InputState>,
+    pub query: String,
+    pub hits: Vec<FindHit>,
+    pub idx: usize,
+    /// 찾느라 초점 흐림을 걷었나 — 비우거나 닫을 때 한 번만 되돌린다
+    lifted: bool,
+}
+
 /// 손이 올라간 곳 — 머리글과 행은 옅게 칠하고, 카드 위면 손가락 모양
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Over {
@@ -215,10 +227,17 @@ pub struct ErdCanvas {
     pub model: Option<Arc<Model>>,
     /// 초점 없는 그림 — 초점을 걷을 때 다시 읽지 않는다
     plain: Option<Arc<usvg::Tree>>,
-    /// 칠한(칠하는 중인) 초점: 표, 컬럼
+    /// 초점: 표, 컬럼
     focus: Option<(String, Option<String>)>,
+    /// 지금 얹은(얹는 중인) CSS — 격자, 초점, 찾기를 합친 것
+    css: String,
     focus_task: Option<Task<()>>,
     focus_gen: u64,
+    /// [보기] 판이 열렸나, [보기] 단추와 찾기 바의 자리(부딪히면 찾기 바가 한 줄 내려간다)
+    pub view_open: bool,
+    view_bounds: Rc<Cell<Bounds<Pixels>>>,
+    find_w: Rc<Cell<f32>>,
+    pub find: Option<ErdFind>,
     dark: bool,
     /// 오른쪽 패널의 표, 정보창의 컬럼
     pub inspected: Option<String>,
@@ -405,9 +424,37 @@ impl ErdCanvas {
 
     /// 컬럼 행을 보이는 곳 가운데로 — 이미 다 보이면 그대로(revealElement)
     fn reveal_row(&mut self, table: &str, column: &str) {
-        let Some((x0, y0, x1, y1)) = self.row_rect(table, column) else {
+        if let Some(r) = self.row_rect(table, column) {
+            self.reveal_area(r, true);
+        }
+    }
+
+    /// 찾기에 걸린 것(머리글이나 행)을 보이게
+    fn reveal_hit(&mut self, h: FindHit, animate: bool) {
+        let Some(card) = self
+            .drawn
+            .as_ref()
+            .and_then(|d| d.cards.get(h.card))
+            .cloned()
+        else {
             return;
         };
+        let (y0, y1) = match h.row.and_then(|j| card.rows.get(j)) {
+            Some(r) => (r.y, r.y + r.h),
+            None => (card.y, card.y + card.head()),
+        };
+        let (x, y, s) = self.shown();
+        let r = (
+            x + card.x as f32 * s,
+            y + y0 as f32 * s,
+            x + (card.x + card.w) as f32 * s,
+            y + y1 as f32 * s,
+        );
+        self.reveal_area(r, animate);
+    }
+
+    /// 판 안의 구간(왼쪽, 위, 오른쪽, 아래)이 다 보이면 그대로, 아니면 가운데로
+    fn reveal_area(&mut self, (x0, y0, x1, y1): (f32, f32, f32, f32), animate: bool) {
         let (vw, vh) = self.view();
         let covered = self.covered();
         if x0 >= 8. && x1 <= vw - covered - 8. && y0 >= 8. && y1 <= vh - 8. {
@@ -418,7 +465,7 @@ impl ErdCanvas {
             ((x0 + x1) / 2. - x) / s,
             ((y0 + y1) / 2. - y) / s,
             covered,
-            true,
+            animate,
         );
     }
 
@@ -706,6 +753,7 @@ impl Spike {
                         c.drawn = Some(d.drawn);
                         c.model = Some(d.model);
                         c.focus = None;
+                        c.css = String::new();
                         c.focus_task = None;
                         c.over = None;
                         c.size = d.size;
@@ -788,7 +836,7 @@ impl Spike {
         ))
     }
 
-    /// 초점을 칠한다(None = 걷는다). 그림에 없는 표면 걷는다(createFocus). 칠한 그림은 뒤에서 다시 읽는다
+    /// 초점을 바꾼다(None = 걷는다). 그림에 없는 표면 걷는다(createFocus)
     fn erd_focus(&mut self, target: Option<(String, Option<String>)>, cx: &mut Context<Self>) {
         let c = &mut self.erd.canvas;
         let Some(drawn) = c.drawn.clone() else {
@@ -798,21 +846,45 @@ impl Spike {
         if c.focus == target {
             return;
         }
-        c.focus = target.clone();
+        c.focus = target;
+        self.erd_restyle(cx);
+    }
+
+    /// 그림에 얹을 CSS — 격자 끄기, 초점, 찾기. 바뀌었으면 뒤에서 다시 읽는다(없으면 칠하지 않은 그림으로)
+    fn erd_restyle(&mut self, cx: &mut Context<Self>) {
+        let grid = self.erd.view.grid;
+        let c = &mut self.erd.canvas;
+        let Some(drawn) = c.drawn.clone() else {
+            return;
+        };
+        let mut css: Vec<String> = Vec::new();
+        // .rz-viewer:not(.is-grid) .rz-grid { display: none }
+        if !grid {
+            css.push(".rz-grid { display: none; }".into());
+        }
+        if let Some((t, col)) = &c.focus
+            && let Some(f) = drawn.focus(t, col.as_deref())
+        {
+            css.push(drawn.focus_css(&f, crate::erd_details::Ink::accent_hex(c.dark)));
+        }
+        if let Some(f) = &c.find {
+            css.push(drawn.find_css(&f.hits, f.idx, c.dark));
+        }
+        let css = css.join(" ");
+        if c.css == css {
+            return;
+        }
+        c.css = css.clone();
         c.focus_gen += 1;
         let generation = c.focus_gen;
-        let css = target.and_then(|(t, col)| {
-            let f = drawn.focus(&t, col.as_deref())?;
-            Some(drawn.focus_css(&f, crate::erd_details::Ink::accent_hex(c.dark)))
-        });
-        let Some(css) = css else {
+        if css.is_empty() {
             c.focus_task = None;
             if let Some(p) = c.plain.clone() {
                 c.tree = Some(p);
                 c.raster.stale = true;
             }
             return;
-        };
+        }
         c.focus_task = Some(cx.spawn(async move |this, cx| {
             let tree = cx
                 .background_executor()
@@ -828,7 +900,7 @@ impl Spike {
                         c.tree = Some(Arc::new(t));
                         c.raster.stale = true;
                     }
-                    Err(e) => eprintln!("ERD 초점: {e}"),
+                    Err(e) => eprintln!("ERD 칠하기: {e}"),
                 }
                 cx.notify();
             });
@@ -907,6 +979,9 @@ impl Spike {
                 self.erd_settle(cx);
             }
         }
+        // 찾기를 새 그림에 다시(찾는 중이면 초점을 다시 걷는다)
+        self.erd_run_find(false, cx);
+        self.erd_restyle(cx);
         match self.erd.canvas.after_draw.take() {
             Some(AfterDraw::Open(t)) => self.erd_open_table(&t, false, cx),
             Some(AfterDraw::Pick(t, col)) => self.erd_pick(&t, &col, cx),
@@ -949,9 +1024,12 @@ impl Spike {
         }
     }
 
-    /// Esc — 안쪽부터: 정보창, 그다음 패널
+    /// Esc — 안쪽부터: [보기] 판, 정보창, 그다음 패널
     pub(crate) fn erd_escape(&mut self, cx: &mut Context<Self>) -> bool {
         let c = &mut self.erd.canvas;
+        if std::mem::take(&mut c.view_open) {
+            return true;
+        }
         if c.popped.take().is_some() {
             self.erd_settle(cx);
             return true;
@@ -968,6 +1046,132 @@ impl Spike {
         c.inspected = None;
         c.popped = None;
         self.erd_focus(None, cx);
+    }
+
+    /// ⌘F — 찾기 바를 열거나(이미 열렸으면 글자를 고르고) 입력칸에 포커스
+    pub(crate) fn erd_open_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.erd_current().is_none() {
+            return;
+        }
+        if let Some(f) = &self.erd.canvas.find {
+            f.input.update(cx, |s, cx| {
+                s.select_all(window, cx);
+                s.focus(window, cx);
+            });
+            return;
+        }
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(t("erd.canvas.findPh")));
+        cx.subscribe_in(
+            &input,
+            window,
+            |this, input, ev: &InputEvent, _, cx| match ev {
+                InputEvent::Change => {
+                    let q = input.read(cx).value().to_string();
+                    let Some(f) = this.erd.canvas.find.as_mut() else {
+                        return;
+                    };
+                    // Enter 뒤에도 값이 그대로인 Change 가 온다 — 검색어가 바뀔 때만
+                    if f.query == q {
+                        return;
+                    }
+                    f.query = q;
+                    this.erd_run_find(true, cx);
+                    cx.notify();
+                }
+                InputEvent::PressEnter { shift, .. } => {
+                    this.erd_find_step(if *shift { -1 } else { 1 }, false, cx);
+                    cx.notify();
+                }
+                _ => {}
+            },
+        )
+        .detach();
+        input.update(cx, |s, cx| s.focus(window, cx));
+        self.erd.canvas.find = Some(ErdFind {
+            input,
+            query: String::new(),
+            hits: Vec::new(),
+            idx: 0,
+            lifted: false,
+        });
+    }
+
+    /// 다시 찾는다 — move 면 첫 결과로 간다(움직임 없이: 키보드 동작). 찾는 동안은 초점 흐림을 걷고, 비우면 되돌린다
+    pub(crate) fn erd_run_find(&mut self, move_: bool, cx: &mut Context<Self>) {
+        let c = &mut self.erd.canvas;
+        let (Some(drawn), Some(f)) = (c.drawn.clone(), c.find.as_mut()) else {
+            return;
+        };
+        f.hits = drawn.find(&f.query);
+        f.idx = 0;
+        let first = f.hits.first().copied();
+        let term = !f.query.trim().is_empty();
+        if term {
+            f.lifted = true;
+            c.focus = None;
+        } else if f.lifted {
+            f.lifted = false;
+            self.erd_restore_focus();
+        }
+        if let (Some(h), true) = (first, move_) {
+            self.erd.canvas.reveal_hit(h, false);
+        }
+        self.erd_restyle(cx);
+    }
+
+    /// 다음, 이전 — 찾는 사이 표를 눌러 다시 흐려졌을 수 있어 다시 걷는다
+    fn erd_find_step(&mut self, delta: i64, animate: bool, cx: &mut Context<Self>) {
+        let c = &mut self.erd.canvas;
+        let Some(f) = c.find.as_mut() else {
+            return;
+        };
+        let n = f.hits.len() as i64;
+        if n == 0 {
+            return;
+        }
+        f.idx = ((f.idx as i64 + delta).rem_euclid(n)) as usize;
+        f.lifted = true;
+        let h = f.hits[f.idx];
+        c.focus = None;
+        c.reveal_hit(h, animate);
+        self.erd_restyle(cx);
+    }
+
+    pub(crate) fn erd_close_find(&mut self, cx: &mut Context<Self>) {
+        if let Some(f) = self.erd.canvas.find.take()
+            && f.lifted
+        {
+            self.erd_restore_focus();
+        }
+        self.erd_restyle(cx);
+    }
+
+    /// 패널과 정보창이 가리키는 것으로 초점을 되돌린다(칠하기는 부른 쪽이)
+    fn erd_restore_focus(&mut self) {
+        let c = &self.erd.canvas;
+        let drawn = c.drawn.clone();
+        let card = |t: &str| drawn.as_ref().and_then(|d| d.card(t));
+        let target = match &c.popped {
+            Some((t, col)) if card(t).is_some_and(|k| k.rows.iter().any(|r| &r.column == col)) => {
+                Some((t.clone(), Some(col.clone())))
+            }
+            _ => c
+                .inspected
+                .clone()
+                .filter(|t| card(t).is_some())
+                .map(|t| (t, None)),
+        };
+        self.erd.canvas.focus = target;
+    }
+
+    /// [보기] 판 — 보기를 바꾸면 기억하고 다시 그린다
+    fn set_erd_view(&mut self, f: impl FnOnce(&mut ViewPrefs), cx: &mut Context<Self>) {
+        let before = self.erd.view.grid;
+        f(&mut self.erd.view);
+        self.erd.view.save(&self.db);
+        if self.erd.view.grid != before {
+            self.erd_restyle(cx);
+        }
     }
 
     /// 트리에서 표를 골랐다 — 그림이 이 스키마의 것이면 바로, 아니면 그린 다음에(그림에 없는 표도 패널은 연다)
@@ -1569,16 +1773,6 @@ impl Spike {
                     Over::Body(_) => {}
                 }
             }
-        } else if c.error.is_none() {
-            stage = stage.child(
-                div()
-                    .p(px(30.))
-                    .flex()
-                    .justify_center()
-                    .text_size(px(13.))
-                    .text_color(k.text_3)
-                    .child(t("diagrams.canvas.rendering")),
-            );
         }
         let stage = stage
             .on_scroll(cx.listener(|this, e: &ScrollEvent, _, cx| {
@@ -1654,7 +1848,8 @@ impl Spike {
                 .rounded(px(9.))
                 .border_1()
                 .border_color(k.glass_edge)
-                .bg(crate::note_ai_view::glass(k.glass_fill))
+                .bg(k.surface.opacity(0.96))
+                .child(glass_layer(k, 9.))
                 .shadow(k.glass_shadow(false))
                 .occlude()
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -1685,11 +1880,14 @@ impl Spike {
         // 패널이 열리면 오른쪽 아래 조작은 패널 왼쪽으로 비켜서고, 남은 폭이 좁으면 배경 고르기는 견본만, 더 좁으면 숨는다
         let covered = c.covered();
         let free = c.view().0 - covered;
+        let sep = || div().w(px(1.)).h(px(16.)).mx(px(3.)).bg(k.border_strong);
+        let grid = self.erd.view.grid;
         let zoom = float()
             .right(px(covered + 10.))
             .bottom(px(10.))
             .child(
                 btn("erd-fit", false)
+                    .tooltip(tip(t("erd.canvas.fit")))
                     .child(icon("fit-screen", 16.).text_color(k.text_2))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.erd.canvas.fit(true);
@@ -1698,6 +1896,7 @@ impl Spike {
             )
             .child(
                 btn("erd-zoom-out", false)
+                    .tooltip(tip(t("erd.canvas.zoomOut")))
                     .child(icon("zoom-out", 16.).text_color(k.text_2))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.erd.canvas.zoom_by(0.8, None, true);
@@ -1707,6 +1906,7 @@ impl Spike {
             .child(
                 btn("erd-pct", false)
                     .min_w(px(48.))
+                    .tooltip(tip(t("erd.canvas.actualSize")))
                     .child(format!("{}%", c.pct()))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.erd.canvas.actual_size();
@@ -1715,9 +1915,20 @@ impl Spike {
             )
             .child(
                 btn("erd-zoom-in", false)
+                    .tooltip(tip(t("erd.canvas.zoomIn")))
                     .child(icon("zoom-in", 16.).text_color(k.text_2))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.erd.canvas.zoom_by(1.25, None, true);
+                        cx.notify();
+                    })),
+            )
+            .child(sep())
+            .child(
+                btn("erd-grid", grid)
+                    .tooltip(tip(t("erd.canvas.grid")))
+                    .child(icon("grid", 15.).text_color(if grid { k.surface } else { k.text_2 }))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.set_erd_view(|v| v.grid = !v.grid, cx);
                         cx.notify();
                     })),
             );
@@ -1727,23 +1938,16 @@ impl Spike {
             .left(px(10.))
             .bottom(px(10.))
             .children(STAGES.map(|s| {
-                let swatch = match s {
-                    "aurora" => (0x22c7a9, 0x5a5ff0),
-                    "silk" => (0xd9893a, 0x5b2c7a),
-                    _ => (0x0e5e70, 0x9fe7f2),
-                };
                 btn(&format!("erd-stage-{s}"), cur == s)
-                    .child(div().size(px(14.)).rounded_full().bg(linear_gradient(
-                        135.,
-                        linear_color_stop(rgb(swatch.0), 0.),
-                        linear_color_stop(rgb(swatch.1), 1.),
-                    )))
+                    .tooltip(tip(t(&format!("erd.canvas.stage.{s}"))))
+                    .children(stage_swatch(s).map(|i| img(i).w(px(14.)).h(px(10.)).flex_none()))
                     .when(labels, |d| d.child(t(&format!("erd.canvas.stage.{s}"))))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.set_erd_stage(s);
                         cx.notify();
                     }))
             }));
+        let busy = c.pending.is_some() || (c.tree.is_none() && c.error.is_none());
         div()
             .relative()
             .flex_1()
@@ -1751,10 +1955,538 @@ impl Spike {
             .flex()
             .flex_col()
             .child(stage)
+            .child(self.erd_view_float(k, cx))
             .child(zoom)
             .when(free >= 350., |d| d.child(stages))
+            .children(self.erd_find_bar(covered, k, cx))
+            .when(busy, |d| {
+                d.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            div()
+                                .tag("erd-status")
+                                .flex()
+                                .items_center()
+                                .gap(px(10.))
+                                .px(px(14.))
+                                .py(px(10.))
+                                .border_1()
+                                .border_color(k.glass_edge)
+                                .rounded(px(8.))
+                                .bg(k.surface.opacity(0.96))
+                                .child(glass_layer(k, 8.))
+                                .shadow(k.glass_shadow(false))
+                                .text_size(px(12.5))
+                                .text_color(k.text_2)
+                                .child(crate::spinner::spinner(k, cx.reduce_motion()))
+                                .child(t("erd.canvas.laying")),
+                        ),
+                )
+            })
             .children(self.erd_pop(k, window, cx))
+            .children(self.erd_view_panel(k, cx))
             .children(self.erd_panel(covered, k, window, cx))
+    }
+
+    /// 좌상단 [보기] — 지금 보기(행, 방향, 뺀 항목 수)를 요약해 보이고, 누르면 판을 연다
+    fn erd_view_float(&self, k: &Tokens, cx: &mut Context<Self>) -> Div {
+        let v = &self.erd.view;
+        let open = self.erd.canvas.view_open;
+        let shown = CARD_PARTS.len() - v.hide.len();
+        let summary = [
+            Some(t(columns_key(v.columns))),
+            Some(t(direction_key(v.direction))),
+            (shown < CARD_PARTS.len()).then(|| {
+                t_with(
+                    "erd.canvas.partsCount",
+                    &[
+                        ("n", &shown.to_string()),
+                        ("total", &CARD_PARTS.len().to_string()),
+                    ],
+                )
+            }),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(", ");
+        let bounds = self.erd.canvas.view_bounds.clone();
+        let (hov, t1) = (k.text_mix(0.07), k.text);
+        div()
+            .absolute()
+            .top(px(10.))
+            .left(px(10.))
+            .p(px(3.))
+            .rounded(px(9.))
+            .border_1()
+            .border_color(k.glass_edge)
+            .bg(k.surface.opacity(0.96))
+            .child(glass_layer(k, 9.))
+            .shadow(k.glass_shadow(false))
+            .occlude()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .child(
+                canvas(move |b, _, _| bounds.set(b), |_, _, _, _| {})
+                    .absolute()
+                    .inset_0(),
+            )
+            .child(
+                div()
+                    .id("erd-view")
+                    .tag("erd-view")
+                    .h(px(28.))
+                    .px(px(8.))
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .rounded(px(4.))
+                    .text_size(px(11.5))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .whitespace_nowrap()
+                    .cursor_pointer()
+                    .when(open, |d| d.bg(k.text).text_color(k.surface))
+                    .when(!open, |d| {
+                        d.text_color(k.text_2)
+                            .hover(move |s| s.bg(hov).text_color(t1))
+                    })
+                    .child(t("erd.canvas.view"))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::MEDIUM)
+                            .when(open, |d| d.opacity(0.6))
+                            .when(!open, |d| d.text_color(k.text_3))
+                            .child(summary),
+                    )
+                    .child(icon("chevron-down", 14.).text_color(if open {
+                        k.surface
+                    } else {
+                        k.text_2
+                    }))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        let c = &mut this.erd.canvas;
+                        c.view_open = !c.view_open;
+                        cx.notify();
+                    })),
+            )
+    }
+
+    /// [보기] 판 — 행, 항목(resin 의 견본 행), 그리기. 드롭다운이라 바깥을 누르면 닫힌다(DESIGN §8 의 예외)
+    fn erd_view_panel(&self, k: &Tokens, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
+        let c = &self.erd.canvas;
+        if !c.view_open {
+            return None;
+        }
+        let v = self.erd.view.clone();
+        let ink = crate::erd_details::Ink::of(k);
+        let (hov, t1) = (k.text_mix(0.07), k.text);
+        let pill = |id: String, on: bool| {
+            div()
+                .id(SharedString::from(id.clone()))
+                .tag(&id)
+                .min_w(px(28.))
+                .h(px(28.))
+                .px(px(8.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(4.))
+                .text_size(px(11.5))
+                .font_weight(FontWeight::SEMIBOLD)
+                .whitespace_nowrap()
+                .cursor_pointer()
+                .when(on, |d| d.bg(k.text).text_color(k.surface))
+                .when(!on, |d| {
+                    d.text_color(k.text_2)
+                        .hover(move |s| s.bg(hov).text_color(t1))
+                })
+        };
+        let title = |label: String, note: Option<String>| {
+            div()
+                .flex()
+                .justify_between()
+                .items_baseline()
+                .gap(px(16.))
+                .pt(px(12.))
+                .px(px(2.))
+                .pb(px(6.))
+                .text_size(px(11.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(k.text_3)
+                .child(label)
+                .children(note.map(|n| div().font_weight(FontWeight::NORMAL).child(n)))
+        };
+        let sep = || div().w(px(1.)).h(px(16.)).mx(px(3.)).bg(k.border_strong);
+        let rows = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(px(2.))
+            .children(
+                [
+                    (Columns::All, "all"),
+                    (Columns::Keys, "keys"),
+                    (Columns::None, "none"),
+                ]
+                .map(|(col, n)| {
+                    pill(format!("erd-view-rows-{n}"), v.columns == col)
+                        .tooltip(tip(t(&format!("erd.canvas.columns.{n}Hint"))))
+                        .child(t(&format!("erd.canvas.columns.{n}")))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.set_erd_view(|v| v.columns = col, cx);
+                            cx.notify();
+                        }))
+                }),
+            );
+        // 견본 행 — 카드의 순서(키, 이름, 나머지). 이름은 늘 남아 단추가 아니다
+        let locked = v.columns == Columns::None;
+        let part = |p: CardPart| {
+            let hidden = v.hide.contains(&p);
+            let (cap, val): (&str, Div) = match p {
+                CardPart::Keys => (
+                    "Key",
+                    div()
+                        .font_family(crate::markdown::MONO)
+                        .text_size(px(9.5))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(ink.fk)
+                        .child("FK"),
+                ),
+                CardPart::Tags => (
+                    "Tags",
+                    div()
+                        .font_family(crate::markdown::MONO)
+                        .text_size(px(9.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(ink.faint)
+                        .child("IX"),
+                ),
+                CardPart::Descriptions => (
+                    "Description",
+                    div()
+                        .text_size(px(12.))
+                        .text_color(ink.muted)
+                        .child("Customer"),
+                ),
+                CardPart::Types => (
+                    "Type",
+                    div()
+                        .font_family(crate::markdown::MONO)
+                        .text_size(px(11.5))
+                        .text_color(ink.muted)
+                        .child("bigint"),
+                ),
+                CardPart::Nulls => (
+                    "Null",
+                    div()
+                        .px(px(5.))
+                        .border_1()
+                        .border_color(ink.rule)
+                        .rounded(px(3.))
+                        .bg(ink.code)
+                        .font_family(crate::markdown::MONO)
+                        .text_size(px(9.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .line_height(px(16.))
+                        .text_color(ink.muted)
+                        .child("NULL"),
+                ),
+            };
+            let what = match p {
+                CardPart::Keys => "the key labels",
+                CardPart::Tags => "the tags",
+                CardPart::Descriptions => "the descriptions",
+                CardPart::Types => "the types",
+                CardPart::Nulls => "NULL",
+            };
+            let name = serde_json::to_value(p)
+                .ok()
+                .and_then(|x| x.as_str().map(str::to_string))
+                .unwrap_or_default();
+            let active = ink.active_line;
+            div()
+                .id(SharedString::from(format!("erd-part-{name}")))
+                .tag(&format!("erd-part-{name}"))
+                .flex()
+                .flex_col()
+                .justify_between()
+                .items_start()
+                .gap(px(6.))
+                .px(px(8.))
+                .pt(px(6.))
+                .pb(px(7.))
+                .rounded(px(6.))
+                .when(!locked, |d| d.cursor_pointer().hover(move |s| s.bg(active)))
+                .tooltip(tip(format!(
+                    "{} {what}",
+                    if hidden { "Show" } else { "Leave out" }
+                )))
+                .child(div().text_size(px(10.)).text_color(ink.faint).child(cap))
+                .child(val.line_height(px(18.)).when(hidden, |d| d.opacity(0.2)))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    if this.erd.view.columns == Columns::None {
+                        return;
+                    }
+                    this.set_erd_view(
+                        |v| {
+                            v.hide = CARD_PARTS
+                                .iter()
+                                .copied()
+                                .filter(|x| (*x == p) != v.hide.contains(x))
+                                .collect()
+                        },
+                        cx,
+                    );
+                    cx.notify();
+                }))
+        };
+        let name = div()
+            .flex()
+            .flex_col()
+            .justify_between()
+            .items_start()
+            .gap(px(6.))
+            .px(px(8.))
+            .pt(px(6.))
+            .pb(px(7.))
+            .child(
+                div()
+                    .text_size(px(10.))
+                    .text_color(ink.faint)
+                    .child("Column"),
+            )
+            .child(
+                div()
+                    .text_size(px(12.5))
+                    .line_height(px(18.))
+                    .text_color(ink.ink)
+                    .child("customer_id"),
+            );
+        let parts = div()
+            .tag("erd-view-parts")
+            .flex()
+            .items_stretch()
+            .p(px(4.))
+            .border_1()
+            .border_color(ink.rule)
+            .rounded(px(8.))
+            .when(locked, |d| d.opacity(0.45))
+            .child(part(CardPart::Keys))
+            .child(name)
+            .children(
+                CARD_PARTS
+                    .iter()
+                    .copied()
+                    .filter(|p| *p != CardPart::Keys)
+                    .map(part),
+            );
+        let dirs = [(Direction::Down, "down"), (Direction::Right, "right")].map(|(d, n)| {
+            pill(format!("erd-view-dir-{n}"), v.direction == d)
+                .tooltip(tip(t(&format!("erd.canvas.direction.{n}Hint"))))
+                .child(t(&format!("erd.canvas.direction.{n}")))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.set_erd_view(|v| v.direction = d, cx);
+                    cx.notify();
+                }))
+        });
+        let edges = [(Edges::Angular, "angular"), (Edges::Curved, "curved")].map(|(e, n)| {
+            pill(format!("erd-view-edges-{n}"), v.edges == e)
+                .child(t(&format!("erd.canvas.edges.{n}")))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.set_erd_view(|v| v.edges = e, cx);
+                    cx.notify();
+                }))
+        });
+        let audit = pill("erd-view-audit".into(), v.audit == AuditView::Expand)
+            .tooltip(tip(t("erd.canvas.auditHint")))
+            .child(t("erd.canvas.audit"))
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.set_erd_view(
+                    |v| {
+                        v.audit = if v.audit == AuditView::Expand {
+                            AuditView::Collapse
+                        } else {
+                            AuditView::Expand
+                        }
+                    },
+                    cx,
+                );
+                cx.notify();
+            }));
+        let bounds = c.view_bounds.clone();
+        Some(
+            div()
+                .id("erd-view-panel")
+                .tag("erd-view-panel")
+                .absolute()
+                .top(px(48.))
+                .left(px(10.))
+                .max_w(px((c.view().0 - 20.).max(0.)))
+                .pt(px(4.))
+                .px(px(12.))
+                .pb(px(12.))
+                .rounded(px(6.))
+                .border_1()
+                .border_color(k.glass_edge)
+                .bg(k.surface.opacity(0.96))
+                .child(glass_layer(k, 6.))
+                .shadow(k.glass_shadow(false))
+                .occlude()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_mouse_down_out(cx.listener(move |this, e: &MouseDownEvent, _, cx| {
+                    // [보기] 단추는 스스로 여닫는다
+                    if bounds.get().contains(&e.position) {
+                        return;
+                    }
+                    this.erd.canvas.view_open = false;
+                    cx.notify();
+                }))
+                .child(title(t("erd.canvas.rows"), None))
+                .child(rows)
+                .child(title(
+                    t("erd.canvas.parts"),
+                    Some(t(if locked {
+                        "erd.canvas.partsLocked"
+                    } else {
+                        "erd.canvas.partsHint"
+                    })),
+                ))
+                .child(parts)
+                .child(title(t("erd.canvas.drawing"), None))
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap(px(2.))
+                        .children(dirs)
+                        .child(sep())
+                        .children(edges)
+                        .child(sep())
+                        .child(audit),
+                ),
+        )
+    }
+
+    /// ⌘F 찾기 바(.page-find.erd-find) — 오른쪽 위, 패널이 열리면 패널 왼쪽으로. [보기] 와 부딪히면 한 줄 내려간다
+    fn erd_find_bar(&self, covered: f32, k: &Tokens, cx: &mut Context<Self>) -> Option<Div> {
+        let c = &self.erd.canvas;
+        let f = c.find.as_ref()?;
+        let count = f.hits.len();
+        let label = if count > 0 {
+            format!("{}/{count}", f.idx + 1)
+        } else if !f.query.trim().is_empty() {
+            "0".into()
+        } else {
+            String::new()
+        };
+        let o = c.viewport.get().origin.x;
+        let vb = c.view_bounds.get();
+        let tl_right = f32::from(vb.origin.x + vb.size.width - o);
+        let free = c.view().0 - covered;
+        let low = tl_right + 8. > free - 10. - c.find_w.get();
+        let nav = |id: &'static str, name: &'static str, enabled: bool| {
+            let (bg, fg) = (k.surface_2, k.text_2);
+            div()
+                .id(id)
+                .tag(id)
+                .group(id)
+                .flex()
+                .p(px(3.))
+                .rounded(px(5.))
+                .when(!enabled, |d| d.opacity(0.5))
+                .when(enabled, |d| d.cursor_pointer().hover(move |s| s.bg(bg)))
+                .child(
+                    icon(name, 14.)
+                        .text_color(k.text_3)
+                        .group_hover(id, move |s| s.text_color(fg)),
+                )
+        };
+        let w = c.find_w.clone();
+        Some(
+            div()
+                .absolute()
+                .top(px(if low { 54. } else { 10. }))
+                .right(px(covered + 10.))
+                .max_w(px((free - 20.).max(0.)))
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .px(px(8.))
+                .py(px(5.))
+                .rounded(px(9.))
+                .border_1()
+                .border_color(k.glass_edge)
+                .bg(k.surface.opacity(0.96))
+                .child(glass_layer(k, 9.))
+                .shadow(k.glass_shadow(false))
+                .occlude()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+                    // 정보창과 패널을 닫는 Esc 까지 가지 않게
+                    if e.keystroke.key == "escape" {
+                        this.erd_close_find(cx);
+                        cx.stop_propagation();
+                        cx.notify();
+                    }
+                }))
+                .child(
+                    canvas(
+                        move |b, _, _| w.set(f32::from(b.size.width)),
+                        |_, _, _, _| {},
+                    )
+                    .absolute()
+                    .inset_0(),
+                )
+                .child(icon("search", 14.).text_color(k.text_3))
+                .child(
+                    div()
+                        .tag("erd-find-input")
+                        .w(px(200.))
+                        .min_w_0()
+                        .flex_shrink(1.)
+                        .text_size(px(13.))
+                        .child(Input::new(&f.input).appearance(false).px_0()),
+                )
+                .child(
+                    div()
+                        .tag("erd-find-count")
+                        .min_w(px(34.))
+                        .flex()
+                        .justify_end()
+                        .text_size(px(11.5))
+                        .text_color(k.text_3)
+                        .child(label),
+                )
+                .child(
+                    nav("erd-find-prev", "chevron-left", count > 0)
+                        .tooltip(tip(t("common.find.prev")))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.erd_find_step(-1, true, cx);
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    nav("erd-find-next", "chevron-right", count > 0)
+                        .tooltip(tip(t("common.find.next")))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.erd_find_step(1, true, cx);
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    nav("erd-find-close", "x", true)
+                        .tooltip(tip(t("common.close")))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.erd_close_find(cx);
+                            cx.notify();
+                        })),
+                ),
+        )
     }
 
     /// 컬럼 정보창 — 그 행 아래(자리가 없으면 위)에 붙는 작은 카드. 행이 안 보이면 숨는다
@@ -1987,6 +2719,116 @@ impl Spike {
                 .into_any_element(),
         )
     }
+}
+
+/// 떠 있는 유리의 결(--glass-fill) — 웹은 바탕 86% 에 뒤 흐림이라 뒤의 글이 안 읽힌다. GPUI 엔 흐림이 없어
+/// menu.rs 처럼 바탕을 96% 로 올리고 그 위에 결을 깐다(맨 앞 자식으로)
+fn glass_layer(k: &Tokens, radius: f32) -> Div {
+    div()
+        .absolute()
+        .inset_0()
+        .rounded(px(radius))
+        .bg(crate::note_ai_view::glass(k.glass_fill))
+}
+
+fn columns_key(c: Columns) -> &'static str {
+    match c {
+        Columns::All => "erd.canvas.columns.all",
+        Columns::Keys => "erd.canvas.columns.keys",
+        Columns::None => "erd.canvas.columns.none",
+    }
+}
+
+fn direction_key(d: Direction) -> &'static str {
+    match d {
+        Direction::Down => "erd.canvas.direction.down",
+        Direction::Right => "erd.canvas.direction.right",
+    }
+}
+
+/// 배경 견본(.erd-swatch-*) — 14x10, 모서리 2, 안쪽 회색 테. CSS 그라디언트를 같은 기하로 SVG 에 옮겨 한 번 굽는다
+fn stage_swatch(stage: &str) -> Option<Arc<Image>> {
+    thread_local! {
+        static CACHE: std::cell::RefCell<HashMap<String, Arc<Image>>> = Default::default();
+    }
+    if let Some(i) = CACHE.with(|c| c.borrow().get(stage).cloned()) {
+        return Some(i);
+    }
+    // 각도 a 의 선형 그라디언트: 중심을 지나고 길이는 |w sin a| + |h cos a|
+    let line = |deg: f32| {
+        let a = deg.to_radians();
+        let (dx, dy) = (a.sin(), -a.cos());
+        let half = (14. * a.sin().abs() + 10. * a.cos().abs()) / 2.;
+        (
+            7. - dx * half,
+            5. - dy * half,
+            7. + dx * half,
+            5. + dy * half,
+        )
+    };
+    let lin = |id: &str, deg: f32, stops: &str| {
+        let (x1, y1, x2, y2) = line(deg);
+        format!(
+            "<linearGradient id='{id}' gradientUnits='userSpaceOnUse' x1='{x1}' y1='{y1}' x2='{x2}' y2='{y2}'>{stops}</linearGradient>"
+        )
+    };
+    let stop = |o: f32, c: &str| format!("<stop offset='{o}' stop-color='{c}'/>");
+    let (defs, fills) = match stage {
+        "aurora" => (
+            lin(
+                "a",
+                180.,
+                &[
+                    stop(0., "#05060c"),
+                    stop(0.45, "#5a5ff0"),
+                    stop(0.75, "#22c7a9"),
+                    stop(1., "#05060c"),
+                ]
+                .concat(),
+            ),
+            vec!["url(#a)"],
+        ),
+        "silk" => (
+            lin(
+                "a",
+                135.,
+                &[
+                    stop(0., "#0a0708"),
+                    stop(0.4, "#5b2c7a"),
+                    stop(0.75, "#d9893a"),
+                    stop(1., "#f1b6c4"),
+                ]
+                .concat(),
+            ),
+            vec!["url(#a)"],
+        ),
+        _ => {
+            // radial-gradient(circle at 35% 30%, #9fe7f2 0, transparent 35%) 위에 linear-gradient(160deg, #0e5e70, #031018)
+            let (cx_, cy_) = (14_f32 * 0.35, 10_f32 * 0.3);
+            let r = ((14. - cx_).powi(2) + (10. - cy_).powi(2)).sqrt();
+            (
+                lin(
+                    "a",
+                    160.,
+                    &[stop(0., "#0e5e70"), stop(1., "#031018")].concat(),
+                ) + &format!(
+                    "<radialGradient id='b' gradientUnits='userSpaceOnUse' cx='{cx_}' cy='{cy_}' r='{r}'><stop offset='0' stop-color='#9fe7f2'/><stop offset='0.35' stop-color='#9fe7f2' stop-opacity='0'/></radialGradient>"
+                ),
+                vec!["url(#a)", "url(#b)"],
+            )
+        }
+    };
+    let rects: String = fills
+        .iter()
+        .map(|f| format!("<rect width='14' height='10' rx='2' fill='{f}'/>"))
+        .collect();
+    let svg = format!(
+        "<svg xmlns='http://www.w3.org/2000/svg' width='14' height='10' viewBox='0 0 14 10'><defs>{defs}</defs>{rects}<rect x='0.5' y='0.5' width='13' height='9' rx='1.5' fill='none' stroke='rgb(128,128,128)' stroke-opacity='0.4'/></svg>"
+    );
+    let tree = crate::figure::parse(&svg, "#000").ok()?;
+    let image = crate::figure::raster(&tree, (0., 0., 14., 10.), 4.).ok()?;
+    CACHE.with(|c| c.borrow_mut().insert(stage.to_string(), image.clone()));
+    Some(image)
 }
 
 /// 표 패널 폭(amber.erd.panel) — 360 보다 작거나 없으면 560

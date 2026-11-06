@@ -2561,8 +2561,8 @@ fn closing_the_erd_modal_asks_and_stop_drops_a_late_result(cx: &mut TestAppConte
     click(&mut ui, "dgm-ai");
     ui.simulate_input("CREATE TABLE a (id BIGINT PRIMARY KEY);");
     click(&mut ui, "dgm-ai-run");
-    // 글자가 흐르기 시작하면 중단 — 늦게 온 결과가 화면을 덮지 않는다
-    for _ in 0..20 {
+    // 글자가 흐르기 시작하면 중단 — 늦게 온 결과가 화면을 덮지 않는다(시험이 몰리면 가짜 CLI 가 늦게 뜬다)
+    for _ in 0..80 {
         std::thread::sleep(std::time::Duration::from_millis(100));
         ui.executor()
             .advance_clock(std::time::Duration::from_millis(150));
@@ -2915,4 +2915,102 @@ fn tapping_the_erd_opens_the_table_panel_and_column_popover(cx: &mut TestAppCont
         .parse()
         .unwrap();
     assert_eq!(kept, w, "놓을 때 기억한다");
+}
+
+#[gpui_kit::test]
+fn the_erd_view_menu_grid_and_find(cx: &mut TestAppContext) {
+    let db = seeded("erd-view", &[]);
+    seed_erd(&db);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.erd");
+    click(&mut ui, "erd-c1");
+    click(&mut ui, "erd-c1/svc_shop");
+    assert!(erd_canvas(&mut ui).0);
+    let saved = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    let view = || amber_gpui::prefs::get(&saved, "amber.erd.view").unwrap_or_default();
+    // [보기] — 행을 키만으로 바꾸면 다시 그리고 기억한다
+    click(&mut ui, "erd-view");
+    assert!(ui.debug_bounds("erd-view-panel").is_some());
+    click(&mut ui, "erd-view-rows-keys");
+    erd_canvas(&mut ui);
+    ui.update(|_, cx| assert!(spike().read(cx).erd.canvas.key.contains("Keys")));
+    assert!(view().contains("\"keys\""));
+    // 항목 — 누른 부분을 빼고, 이름만 보기에서는 잠긴다
+    click(&mut ui, "erd-part-types");
+    assert!(view().contains("\"types\""));
+    click(&mut ui, "erd-view-rows-none");
+    click(&mut ui, "erd-part-keys");
+    assert!(!view().contains("\"keys\",") && view().contains("\"hide\":[\"types\"]"));
+    click(&mut ui, "erd-view-rows-all");
+    click(&mut ui, "erd-part-types");
+    assert!(view().contains("\"hide\":[]"));
+    // 방향, 선, 감사
+    click(&mut ui, "erd-view-dir-right");
+    click(&mut ui, "erd-view-edges-curved");
+    click(&mut ui, "erd-view-audit");
+    let v = view();
+    assert!(
+        v.contains("\"right\"") && v.contains("\"curved\"") && v.contains("\"expand\""),
+        "{v}"
+    );
+    // Esc 는 판부터 닫는다
+    ui.simulate_keystrokes("escape");
+    assert!(ui.debug_bounds("erd-view-panel").is_none());
+    // 바깥을 누르면 닫힌다
+    click(&mut ui, "erd-view");
+    let stage = bounds(&mut ui, "erd-canvas");
+    ui.simulate_click(
+        stage.origin + point(px(4.), stage.size.height - px(4.)),
+        Modifiers::none(),
+    );
+    assert!(ui.debug_bounds("erd-view-panel").is_none());
+    click(&mut ui, "erd-view");
+    click(&mut ui, "erd-view-dir-down");
+    ui.simulate_keystrokes("escape");
+    // 격자를 끄면 그림에 CSS 를 얹는다
+    erd_canvas(&mut ui);
+    click(&mut ui, "erd-grid");
+    erd_canvas(&mut ui);
+    ui.update(|_, cx| {
+        let c = &spike().read(cx).erd.canvas;
+        assert!(!std::sync::Arc::ptr_eq(
+            c.tree.as_ref().unwrap(),
+            &c.plain_tree().unwrap()
+        ));
+    });
+    assert!(view().contains("\"grid\":false"));
+    click(&mut ui, "erd-grid");
+    // ⌘F — 표 이름(users)과 컬럼 이름(orders.user_id)에서, Enter 로 다음
+    ui.simulate_keystrokes("cmd-f");
+    ui.simulate_input("user");
+    erd_canvas(&mut ui);
+    let hits = ui.update(|_, cx| {
+        let f = spike()
+            .read(cx)
+            .erd
+            .canvas
+            .find
+            .as_ref()
+            .map(|f| (f.hits.len(), f.idx));
+        f.unwrap()
+    });
+    assert_eq!(hits, (2, 0));
+    ui.simulate_keystrokes("enter");
+    ui.update(|_, cx| assert_eq!(spike().read(cx).erd.canvas.find.as_ref().unwrap().idx, 1));
+    // 찾는 동안 표 패널을 열어도 — 닫으면 패널의 초점으로 돌아온다
+    click(&mut ui, "erd-c1/svc_shop/orders");
+    click(&mut ui, "erd-find-next");
+    ui.update(|_, cx| {
+        assert_eq!(
+            spike().read(cx).erd.canvas.focus_target(),
+            None,
+            "찾는 동안 흐림을 걷는다"
+        )
+    });
+    click(&mut ui, "erd-find-close");
+    ui.update(|_, cx| {
+        let c = &spike().read(cx).erd.canvas;
+        assert!(c.find.is_none());
+        assert_eq!(c.focus_target(), Some(("orders".to_string(), None)));
+    });
 }
