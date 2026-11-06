@@ -11,7 +11,7 @@ import { join } from "node:path";
 
 const nm = process.argv[2] ?? new URL("../../node_modules", import.meta.url).pathname;
 const examples = process.argv[3] ?? new URL("../../../resin/examples", import.meta.url).pathname;
-const { compile, toSvg } = await import(join(nm, "@jhzlo/resin/dist/src/index.js"));
+const { compile, neighbors, toSvg } = await import(join(nm, "@jhzlo/resin/dist/src/index.js"));
 const ELK = (await import(join(nm, "elkjs/lib/elk.bundled.js"))).default;
 const elk = new ELK();
 
@@ -46,3 +46,38 @@ for (const [file, source] of sources) {
 }
 writeFileSync(new URL("../tests/resin_elk.json", import.meta.url), JSON.stringify(cases, null, 1) + "\n");
 console.log(`${cases.length} cases, ${cases.reduce((n, c) => n + c.layouts.length, 0)} layouts`);
+
+// 컴파일 — resin 자체 시험 파일의 문자열(맞는 것도 틀린 것도)을 전부 넣어 진단과 모델을 남긴다. 어떤 입력이든 같아야 한다.
+// 문자열은 TypeScript 로 파일을 읽어 구문 나무에서 꺼낸다 — 정규식이나 토큰만 훑으면 주석 속 백틱, 정규식 리터럴에서 어긋난다
+const ts = (await import(join(nm, "typescript/lib/typescript.js"))).default;
+const srcDir = join(examples, "../src");
+const literals = new Set(sources.map(([, s]) => s));
+for (const f of ["lexer", "parser", "checker", "model", "resolution"].map((n) => join(srcDir, `${n}.test.ts`))) {
+  const file = ts.createSourceFile(f, readFileSync(f, "utf8"), ts.ScriptTarget.Latest, false);
+  const walk = (node) => {
+    if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.text.length > 0) literals.add(node.text);
+    ts.forEachChild(node, walk);
+  };
+  walk(file);
+}
+// 시험 파일에 없는 길 — 복합 FK, 남은 파서 갈래, 감사 목록의 기본 키, UTF-16 자리(이모지 뒤 열)
+for (const extra of [
+  "table a {\n  x int pk\n  y int pk\n}\ntable b {\n  id int pk\n  ax int\n  ay bigint\n  foreign(ax, ay) -> a(x, y) as fk_ab\n}\n",
+  "table a {\n  x int pk\n  y int pk\n}\ntable b {\n  ax int\n  foreign(ax) -> a(x)\n  foreign(ax, ax) -> a(x, y)\n  foreign(ax, ay) -> a(x)\n}\n",
+  "table b {\n  ax int\n  foreign(ax, ay) => a(x, y)\n}\n",
+  "external table e {\n  id int pk\n  foreign(a, b) -> e(id, id)\n}\n",
+  "service s1 {\n  table a {\n    x int pk\n    y int pk\n  }\n}\nservice s2 {\n  table b {\n    ax int\n    ay int\n    foreign(ax, ay) -> s1.a(x, y)\n    foreign(ax, ay) ~> s1.a(x, y)\n    unique(ax, ay)\n  }\n}\n",
+  "table a {\n  id int pk\n  name varchar\n} audit envers(id, name)\n",
+  "table a {\n  id int pk as nope\n  e varchar enum()\n  t `quoted` \n  u int uk as\n}\ntable b {\n  unique()\n}\n",
+  "table a {\n  id int pk \"🙂 emoji\" junk\n  `ok` int\n  name varchar(32, x)\n  ref int -> a.id.x.y\n}\n",
+  "table a { id int pk }\n",
+  "service s { }\ntable s.a {\n  id int pk\n}\n",
+]) literals.add(extra);
+const compiled = [...literals].map((source) => {
+  const { model, diagnostics } = compile(source);
+  // 이웃 — 첫 표에서 한 걸음, 두 걸음
+  const near = model && model.tables.length > 1 ? [1, 2].map((steps) => ({ table: model.tables[0].name, steps, model: neighbors(model, model.tables[0].name, steps) })) : [];
+  return { source, model, diagnostics, near };
+});
+writeFileSync(new URL("../tests/resin_compile.json", import.meta.url), JSON.stringify(compiled, null, 1) + "\n");
+console.log(`${compiled.length} sources, ${compiled.filter((c) => c.model).length} compiled`);

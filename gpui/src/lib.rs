@@ -14,6 +14,7 @@ pub mod migrate;
 pub mod note_ai_text;
 pub mod prefs;
 pub mod report;
+pub mod resin;
 pub mod timetable;
 pub mod todos;
 pub mod tree;
