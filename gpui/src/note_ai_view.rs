@@ -966,49 +966,14 @@ impl Spike {
         cx: &mut Context<Self>,
     ) -> Div {
         let tab = |id: &'static str, label: String, v: AiView| {
-            let active = view == v;
-            let hover = glass(k.glass_fill);
-            div()
-                .id(id)
-                .tag(id)
-                .px(px(12.))
-                .py(px(5.))
-                .rounded(px(4.))
-                .text_size(px(13.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .cursor_pointer()
-                .when(active, |d| {
-                    d.bg(k.glass_raise)
-                        .text_color(k.text)
-                        .shadow(vec![BoxShadow {
-                            color: k.shadow_sm,
-                            offset: point(px(0.), px(1.)),
-                            blur_radius: px(2.),
-                            spread_radius: px(0.),
-                            inset: false,
-                        }])
-                })
-                .when(!active, |d| {
-                    let t2 = k.text;
-                    d.text_color(k.text_2)
-                        .hover(move |s| s.bg(hover).text_color(t2))
-                })
-                .child(label)
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(m) = this.notes.ai_modal.as_mut() {
-                        m.view = v;
-                    }
-                    cx.notify();
-                }))
+            seg_tab(id, label, view == v, k).on_click(cx.listener(move |this, _, _, cx| {
+                if let Some(m) = this.notes.ai_modal.as_mut() {
+                    m.view = v;
+                }
+                cx.notify();
+            }))
         };
-        let segmented = div()
-            .flex()
-            .gap(px(2.))
-            .p(px(3.))
-            .rounded(px(7.))
-            .border_1()
-            .border_color(k.border)
-            .bg(k.surface_2)
+        let segmented = segmented(k)
             .when(has_existing, |d| {
                 d.child(tab("ai-tab-diff", t("notes.ai.tabDiff"), AiView::Diff))
             })
@@ -1325,6 +1290,49 @@ impl Spike {
 }
 
 /// DiffView — 요약(+n −m 줄)과 줄 단위 변경점. 긴 무변경 구간은 접혀 있다
+/// .segmented — 결과 보기 탭 묶음
+pub(crate) fn segmented(k: &Tokens) -> Div {
+    div()
+        .flex()
+        .gap(px(2.))
+        .p(px(3.))
+        .rounded(px(7.))
+        .border_1()
+        .border_color(k.border)
+        .bg(k.surface_2)
+}
+
+/// .segmented .tab — 고른 탭은 떠 있는 유리
+pub(crate) fn seg_tab(id: &'static str, label: String, active: bool, k: &Tokens) -> Stateful<Div> {
+    let hover = glass(k.glass_fill);
+    div()
+        .id(id)
+        .tag(id)
+        .px(px(12.))
+        .py(px(5.))
+        .rounded(px(4.))
+        .text_size(px(13.))
+        .font_weight(FontWeight::SEMIBOLD)
+        .cursor_pointer()
+        .when(active, |d| {
+            d.bg(k.glass_raise)
+                .text_color(k.text)
+                .shadow(vec![BoxShadow {
+                    color: k.shadow_sm,
+                    offset: point(px(0.), px(1.)),
+                    blur_radius: px(2.),
+                    spread_radius: px(0.),
+                    inset: false,
+                }])
+        })
+        .when(!active, |d| {
+            let t2 = k.text;
+            d.text_color(k.text_2)
+                .hover(move |s| s.bg(hover).text_color(t2))
+        })
+        .child(label)
+}
+
 pub(crate) fn diff_view(d: &(Vec<Row>, usize, usize), k: &Tokens) -> Div {
     let (rows, add, del) = d;
     let summary = div()

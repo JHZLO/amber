@@ -2,6 +2,7 @@
 // 무엇을 지우는지 이름을 굵게 말하고, 되돌릴 수 없다고 적는다. 바깥을 눌러도 닫히지 않는다(경고 창).
 
 use amber_gpui::i18n::t;
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
 use crate::assets::icon;
@@ -20,10 +21,37 @@ pub fn shell(
     shell_split(k, max_w, title, body, Vec::new(), buttons, on_close)
 }
 
+/// .modal.fixed-h — 단계가 바뀌어도 판 키가 그대로(min(620px, 86%)). 본문이 남은 높이를 채운다
+pub fn shell_fixed(
+    k: &Tokens,
+    max_w: f32,
+    title: String,
+    body: AnyElement,
+    left: Vec<Stateful<Div>>,
+    buttons: Vec<Stateful<Div>>,
+    on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> Div {
+    shell_with(k, max_w, Some(620.), title, body, left, buttons, on_close)
+}
+
 /// 바닥 줄이 왼쪽 묶음 | 빈칸 | 오른쪽 묶음(.modal-foot 의 spacer). 본문은 넘치면 스크롤(.modal-body), 판은 창의 86% 까지
 pub fn shell_split(
     k: &Tokens,
     max_w: f32,
+    title: String,
+    body: AnyElement,
+    left: Vec<Stateful<Div>>,
+    buttons: Vec<Stateful<Div>>,
+    on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> Div {
+    shell_with(k, max_w, None, title, body, left, buttons, on_close)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn shell_with(
+    k: &Tokens,
+    max_w: f32,
+    fixed_h: Option<f32>,
     title: String,
     body: AnyElement,
     left: Vec<Stateful<Div>>,
@@ -51,6 +79,7 @@ pub fn shell_split(
                 .relative()
                 .w_full()
                 .max_w(px(max_w))
+                .when_some(fixed_h, |d, h| d.h(px(h)))
                 .max_h(relative(0.86))
                 .flex()
                 .flex_col()

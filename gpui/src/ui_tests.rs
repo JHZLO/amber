@@ -2415,3 +2415,277 @@ fn canvas_keys_do_not_eat_typing_in_the_source(cx: &mut TestAppContext) {
         "'/' 로 찾기"
     );
 }
+
+fn dgm_ai_step(ui: &mut VisualTestContext) -> Option<crate::diagram_ai::Step> {
+    ui.update(|_, cx| spike().read(cx).diagrams.ai.as_ref().map(|a| a.step))
+}
+
+/// DDL → ERD 실행이 끝날 때까지(실제 시간)
+fn wait_dgm_ai(ui: &mut VisualTestContext) {
+    for _ in 0..80 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        ui.executor()
+            .advance_clock(std::time::Duration::from_millis(150));
+        ui.run_until_parked();
+        if dgm_ai_step(ui) != Some(crate::diagram_ai::Step::Loading) {
+            return;
+        }
+    }
+    panic!("변환이 끝나지 않았다");
+}
+
+const ERD_REPLY: &str =
+    "```mermaid\nerDiagram\n  USER ||--o{ ORDER : places\n  ORDER ||--|{ ITEM : contains\n```";
+
+#[gpui_kit::test]
+fn ddl_to_erd_converts_previews_and_applies_a_draft(cx: &mut TestAppContext) {
+    use crate::diagram_ai::{Step, View};
+    let db = seeded("dgm-ai", &[]);
+    let before = "erDiagram\n  USER ||--o{ ORDER : places\n";
+    vault_diagram(&db, "erd.mmd", before);
+    let dir = db.parent().unwrap().to_path_buf();
+    let bin = fake_claude_stream(&dir, &[], ERD_REPLY, 0);
+    connect_fake(&db, &bin);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    click(&mut ui, "dtree-erd.mmd");
+    canvas_state(&mut ui);
+    click(&mut ui, "dgm-ai");
+    assert_eq!(dgm_ai_step(&mut ui), Some(Step::Prompt));
+    // 20자 미만이면 막혀 있다
+    click(&mut ui, "dgm-ai-run");
+    assert_eq!(dgm_ai_step(&mut ui), Some(Step::Prompt));
+    // 모달이 캔버스를 덮고 있으니 '-' 는 DDL 칸 글자다
+    let stage = bounds(&mut ui, "dgm-canvas");
+    ui.simulate_mouse_move(stage.center(), None, Modifiers::none());
+    ui.simulate_keystrokes("-");
+    ui.simulate_input(" CREATE TABLE item (id BIGINT PRIMARY KEY);");
+    ui.run_until_parked();
+    assert_eq!(canvas_state(&mut ui).1, 1., "캔버스는 받지 않았다");
+    // 판 키가 고정이라 빠른 지시는 본문을 굴려야 보인다(지금 앱도 같다) — DDL 이름표 위에서 굴린다
+    let ddl = bounds(&mut ui, "dgm-ai-ddl");
+    ui.simulate_event(ScrollEvent {
+        position: point(ddl.center().x, ddl.origin.y - px(10.)),
+        delta: ScrollDelta::Pixels(point(px(0.), px(-400.))),
+        ..Default::default()
+    });
+    ui.run_until_parked();
+    click(&mut ui, "dgm-ai-chip-4");
+    ui.update(|_, cx| {
+        assert_eq!(
+            spike().read(cx).diagrams.ai.as_ref().unwrap().chosen,
+            vec![4]
+        );
+    });
+    click(&mut ui, "dgm-ai-run");
+    assert_eq!(dgm_ai_step(&mut ui), Some(Step::Loading));
+    wait_dgm_ai(&mut ui);
+    assert_eq!(dgm_ai_step(&mut ui), Some(Step::Preview));
+    let sent = std::fs::read_to_string(dir.join("fake-claude.in")).unwrap();
+    assert!(sent.contains("[스키마 DDL]\n- CREATE TABLE item"), "{sent}");
+    assert!(
+        sent.contains("[현재 다이어그램 (Mermaid)]\nerDiagram"),
+        "이어 붙일 기준"
+    );
+    assert!(
+        sent.contains(&amber_gpui::i18n::t("diagrams.ai.preset.append")),
+        "빠른 지시: {sent}"
+    );
+    ui.update(|_, cx| {
+        let a = spike().read(cx).diagrams.ai.as_ref().unwrap();
+        assert_eq!(a.view, View::Diagram);
+        assert!(
+            a.result.starts_with("erDiagram") && a.result.contains("ITEM"),
+            "펜스를 벗겼다"
+        );
+    });
+    assert!(ui.debug_bounds("dgm-ai-preview").is_some(), "그림");
+    click(&mut ui, "dgm-ai-tab-diff");
+    assert!(
+        ui.debug_bounds("dgm-ai-tab-diff").is_some(),
+        "기존 그림이 있어 변경점 탭"
+    );
+    // 소스 탭에서 고친 글이 적용된다
+    click(&mut ui, "dgm-ai-tab-source");
+    ui.update(|window, cx| {
+        let src = spike()
+            .read(cx)
+            .diagrams
+            .ai
+            .as_ref()
+            .unwrap()
+            .source
+            .clone()
+            .unwrap();
+        src.update(cx, |s, cx| {
+            let v = format!("{}\n  ITEM ||--o{{ TAG : has", s.value());
+            s.set_value(v, window, cx);
+        });
+    });
+    ui.run_until_parked();
+    click(&mut ui, "dgm-ai-apply");
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        assert!(s.diagrams.ai.is_none(), "닫혔다");
+        let e = s.diagrams.edit.as_ref().expect("편집 초안으로");
+        let v = e.state.read(cx).value();
+        assert!(v.contains("ITEM") && v.ends_with("TAG : has"), "{v:?}");
+        assert!(e.dirty);
+        assert!(
+            s.diagrams.canvas.chart.ends_with("TAG : has"),
+            "캔버스도 초안"
+        );
+    });
+    assert_eq!(
+        read_diagram(&db, "erd.mmd"),
+        before,
+        "파일은 ⌘S 전까지 그대로"
+    );
+}
+
+#[gpui_kit::test]
+fn closing_the_erd_modal_asks_and_stop_drops_a_late_result(cx: &mut TestAppContext) {
+    use crate::diagram_ai::Step;
+    let db = seeded("dgm-ai-close", &[]);
+    vault_diagram(&db, "erd.mmd", "erDiagram\n  A ||--o{ B : has\n");
+    let dir = db.parent().unwrap().to_path_buf();
+    let bin = fake_claude_stream(&dir, &[], ERD_REPLY, 2);
+    connect_fake(&db, &bin);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    click(&mut ui, "dtree-erd.mmd");
+    // 아무것도 없으면 묻지 않고 닫힌다
+    click(&mut ui, "dgm-ai");
+    click(&mut ui, "dgm-ai-cancel");
+    assert_eq!(dgm_ai_step(&mut ui), None);
+    click(&mut ui, "dgm-ai");
+    ui.simulate_input("CREATE TABLE a (id BIGINT PRIMARY KEY);");
+    click(&mut ui, "dgm-ai-run");
+    // 글자가 흐르기 시작하면 중단 — 늦게 온 결과가 화면을 덮지 않는다
+    for _ in 0..20 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        ui.executor()
+            .advance_clock(std::time::Duration::from_millis(150));
+        ui.run_until_parked();
+        if ui.update(|_, cx| {
+            spike()
+                .read(cx)
+                .diagrams
+                .ai
+                .as_ref()
+                .is_some_and(|a| !a.stream.is_empty())
+        }) {
+            break;
+        }
+    }
+    assert!(ui.debug_bounds("dgm-ai-stream").is_some(), "흐르는 글");
+    click(&mut ui, "dgm-ai-stop");
+    assert_eq!(dgm_ai_step(&mut ui), Some(Step::Prompt));
+    for _ in 0..25 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        ui.executor()
+            .advance_clock(std::time::Duration::from_millis(150));
+        ui.run_until_parked();
+    }
+    assert_eq!(dgm_ai_step(&mut ui), Some(Step::Prompt), "버린 실행");
+    // 다시 돌려 결과를 받은 뒤 닫으면 묻는다
+    let bin = fake_claude_stream(&dir, &[], ERD_REPLY, 0);
+    connect_fake(&db, &bin);
+    click(&mut ui, "dgm-ai-run");
+    wait_dgm_ai(&mut ui);
+    assert_eq!(dgm_ai_step(&mut ui), Some(Step::Preview));
+    click(&mut ui, "dgm-ai-close");
+    assert!(ui.debug_bounds("dgm-ai-keep").is_some(), "버릴지 묻는다");
+    click(&mut ui, "dgm-ai-keep");
+    assert_eq!(dgm_ai_step(&mut ui), Some(Step::Preview), "계속 보기");
+    click(&mut ui, "dgm-ai-close");
+    click(&mut ui, "dgm-ai-discard");
+    assert_eq!(dgm_ai_step(&mut ui), None);
+    ui.update(|_, cx| {
+        assert!(
+            spike().read(cx).diagrams.edit.is_none(),
+            "초안이 생기지 않았다"
+        )
+    });
+}
+
+fn zoom_pct(ui: &mut VisualTestContext) -> Option<u32> {
+    ui.update(|_, cx| spike().read(cx).mmd_zoom.as_ref().map(|z| z.pct()))
+}
+
+#[gpui_kit::test]
+fn a_note_mermaid_figure_opens_the_zoom_viewer(cx: &mut TestAppContext) {
+    let db = seeded("mmd-zoom", &[]);
+    vault_note(
+        &db,
+        "M.md",
+        "# M\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\n```mermaid\nflowchart LR\n  A -->\n```\n",
+    );
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-M.md");
+    assert!(
+        ui.debug_bounds("mmd-fail").is_some(),
+        "깨진 그림은 원문으로"
+    );
+    click(&mut ui, "mmd-card");
+    ui.update(|window, _| window.refresh());
+    ui.run_until_parked();
+    // 작은 그림은 판의 90% 가 120% 를 넘어 120% 로 맞춘다
+    assert_eq!(zoom_pct(&mut ui), Some(120));
+    click(&mut ui, "mmd-zoom-out");
+    assert_eq!(zoom_pct(&mut ui), Some(100));
+    click(&mut ui, "mmd-zoom-in");
+    click(&mut ui, "mmd-zoom-in");
+    assert_eq!(zoom_pct(&mut ui), Some(120), "120% 까지");
+    // 휠 — 아래로 굴리면 1/1.1
+    let stage = bounds(&mut ui, "mmd-zoom-canvas");
+    ui.simulate_event(ScrollEvent {
+        position: stage.center(),
+        delta: ScrollDelta::Pixels(point(px(0.), px(-3.))),
+        ..Default::default()
+    });
+    ui.run_until_parked();
+    assert_eq!(zoom_pct(&mut ui), Some(109));
+    // 끌어 옮기기
+    drag_points(
+        &mut ui,
+        stage.center(),
+        point(stage.center().x + px(30.), stage.center().y),
+        Modifiers::none(),
+    );
+    ui.update(|_, cx| {
+        let t = spike().read(cx).mmd_zoom.as_ref().unwrap().t;
+        assert!((t.0 - 30.).abs() < 0.5, "{t:?}");
+    });
+    click(&mut ui, "mmd-zoom-fit");
+    ui.update(|_, cx| assert_eq!(spike().read(cx).mmd_zoom.as_ref().unwrap().t, (0., 0.)));
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert_eq!(zoom_pct(&mut ui), None, "Esc 로 닫힌다");
+}
+
+#[gpui_kit::test]
+fn the_erd_preview_zooms_above_the_modal(cx: &mut TestAppContext) {
+    let db = seeded("dgm-ai-zoom", &[]);
+    vault_diagram(&db, "erd.mmd", "erDiagram\n  A ||--o{ B : has\n");
+    let dir = db.parent().unwrap().to_path_buf();
+    let bin = fake_claude_stream(&dir, &[], ERD_REPLY, 0);
+    connect_fake(&db, &bin);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    click(&mut ui, "dtree-erd.mmd");
+    click(&mut ui, "dgm-ai");
+    ui.simulate_input("CREATE TABLE a (id BIGINT PRIMARY KEY);");
+    click(&mut ui, "dgm-ai-run");
+    wait_dgm_ai(&mut ui);
+    click(&mut ui, "dgm-ai-preview");
+    assert!(zoom_pct(&mut ui).is_some(), "뷰어");
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert_eq!(zoom_pct(&mut ui), None);
+    assert!(
+        ui.update(|_, cx| spike().read(cx).diagrams.ai.is_some()),
+        "모달은 그대로"
+    );
+}

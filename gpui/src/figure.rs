@@ -8,10 +8,13 @@ use resvg::{tiny_skia, usvg};
 
 const SCALE: f32 = 2.0;
 
+#[derive(Clone)]
 pub struct Figure {
     pub image: Arc<Image>,
     pub width: f32,
     pub height: f32,
+    /// 확대 뷰어가 더 큰 배율로 다시 굽는다
+    pub tree: Arc<usvg::Tree>,
 }
 
 fn fonts() -> Arc<usvg::fontdb::Database> {
@@ -69,6 +72,7 @@ pub fn svg(source: &str, text: &str) -> Result<Figure, String> {
         image: raster(&tree, (0., 0., size.width(), size.height()), SCALE)?,
         width: size.width(),
         height: size.height(),
+        tree: Arc::new(tree),
     })
 }
 

@@ -37,6 +37,11 @@ pub enum Block {
         light: bool,
     },
     Broken(SharedString),
+    /// 그리지 못한 mermaid — 오류 한 줄과 원문(지금 앱 .mermaid-fail)
+    MermaidFail {
+        msg: String,
+        src: String,
+    },
     /// `<details>` 카드 — key 는 판 안의 자리("3", 안쪽은 "3/1"), meta 는 '문단 1, 코드 1'
     Toggle {
         key: String,
@@ -107,10 +112,10 @@ fn blocks_of(src: &str, text_hex: &str, prefix: &str, cx: &mut App) -> Vec<Block
                 |e| Block::Broken(format!("svg: {e}").into()),
                 |fig| Block::Figure { fig, light: false },
             ),
-            note::Segment::Mermaid(src) => figure::mermaid(&src).map_or_else(
-                |e| Block::Broken(format!("mermaid: {e}").into()),
-                |fig| Block::Figure { fig, light: true },
-            ),
+            note::Segment::Mermaid(src) => match figure::mermaid(&src) {
+                Ok(fig) => Block::Figure { fig, light: true },
+                Err(msg) => Block::MermaidFail { msg, src },
+            },
             note::Segment::Toggle {
                 summary,
                 open,
@@ -769,6 +774,13 @@ impl Spike {
                     })
                     .into_any_element()
             }
+            // mermaid 는 누르면 확대되는 흰 카드
+            Block::Figure { fig, light: true } => self
+                .mermaid_card(("mmd-fig", id as usize), fig, FIGURE_MAX - 30., k, cx)
+                .into_any_element(),
+            Block::MermaidFail { msg, src } => self
+                .mermaid_fail(&id.to_string(), msg, src, k, cx)
+                .into_any_element(),
             Block::Figure { fig, light } => div()
                 .my(px(8.))
                 .p_4()

@@ -507,7 +507,7 @@ fn new_key() -> String {
 }
 
 /// 연결 설정 — (모델, CLI 경로, 공급자, 출력 언어). 연결이 없으면 None
-fn ai_args(
+pub(crate) fn ai_args(
     db: &amber_gpui::db::Db,
 ) -> Option<(Option<String>, Option<String>, Option<String>, String)> {
     let c = amber_gpui::ai_config::load_config(db)

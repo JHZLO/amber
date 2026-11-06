@@ -772,6 +772,58 @@ fn diagrams(s: &mut Shots) {
             cx.notify();
         })
         .unwrap();
+    // DDL → ERD — 지시 화면, 결과(다이어그램 탭), 결과 그림의 확대 뷰어
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.open_diagram_ai(window, cx);
+            if let Some(a) = sp.diagrams.ai.as_mut() {
+                a.ddl.update(cx, |st, cx| {
+                    st.set_value(
+                        "CREATE TABLE order_item (\n  id BIGINT NOT NULL AUTO_INCREMENT,\n  order_id BIGINT NOT NULL COMMENT 'ORDER.id',\n  PRIMARY KEY (id)\n);",
+                        window,
+                        cx,
+                    )
+                });
+                a.chosen = vec![4];
+            }
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("dgm-ai");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            let result = "erDiagram\n  USER ||--o{ ORDER : places\n  ORDER ||--|{ ORDER_ITEM : contains\n  ORDER_ITEM {\n    bigint id PK\n    bigint order_id FK\n  }".to_string();
+            if let Some(a) = sp.diagrams.ai.as_mut() {
+                a.result = result.clone();
+                a.step = crate::diagram_ai::Step::Preview;
+            }
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("dgm-ai-preview");
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            let fig = sp
+                .diagrams
+                .ai
+                .as_ref()
+                .and_then(|a| crate::figure::mermaid(&a.result).ok())
+                .expect("결과 그림");
+            sp.open_mmd_zoom(&fig, window, cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("mmd-zoom");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.mmd_zoom = None;
+            sp.diagrams.ai = None;
+            cx.notify();
+        })
+        .unwrap();
     s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.section = crate::Section::Notes;

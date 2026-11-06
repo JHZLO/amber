@@ -40,6 +40,8 @@ pub struct DiagramsState {
     pub edit: Option<DiagramEdit>,
     /// 캔버스(확대, 이동, 마지막 정상 렌더) — diagram_canvas.rs
     pub canvas: crate::diagram_canvas::Canvas,
+    /// DDL → ERD 모달 — diagram_ai.rs
+    pub ai: Option<crate::diagram_ai::DgmAi>,
 }
 
 impl std::ops::Deref for DiagramsState {
@@ -349,12 +351,19 @@ impl Spike {
                     ),
             )
             .child(div().flex_1())
-            // DDL → ERD(AI), 편집은 D3c/D3e 에서
-            .child(
-                button("dgm-ai", k, false, true)
-                    .child(icon("sparkles", 14.).text_color(k.text_3))
-                    .child("DDL \u{2192} ERD"),
-            )
+            // DDL → ERD(AI) — 연결이 없거나 못 읽은 파일이면 막힌다
+            .child({
+                let on = ok && self.ai_connected();
+                button("dgm-ai", k, false, !on)
+                    .child(icon("sparkles", 14.).text_color(if on { k.text_2 } else { k.text_3 }))
+                    .child("DDL \u{2192} ERD")
+                    .when(on, |d| {
+                        d.on_click(cx.listener(|this, _, window, cx| {
+                            this.open_diagram_ai(window, cx);
+                            cx.notify();
+                        }))
+                    })
+            })
             .children(if d.edit.is_some() {
                 vec![
                     primary_button("dgm-save", k, false)

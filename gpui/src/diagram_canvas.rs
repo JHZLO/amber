@@ -235,6 +235,7 @@ pub struct Canvas {
     pub pan: Point<Pixels>,
     /// 판의 자리(창 좌표)와 화면 배율 — 그린 뒤 잰다
     pub viewport: Rc<Cell<Bounds<Pixels>>>,
+    hitbox: Rc<std::cell::RefCell<Option<Hitbox>>>,
     pub dpr: Rc<Cell<f32>>,
     /// 다음 그림에서 맞춘다(새 그림, 전체 화면 전환)
     pub fit_pending: bool,
@@ -279,6 +280,7 @@ impl Default for Canvas {
             zoom: 1.,
             pan: Point::default(),
             viewport: Rc::default(),
+            hitbox: Rc::default(),
             dpr: Rc::new(Cell::new(1.)),
             fit_pending: false,
             fitted_view: (0., 0.),
@@ -612,9 +614,15 @@ impl Canvas {
         self.pan = point(px((v.0 - size.0 * s) / 2.), px((v.1 - size.1 * s) / 2.));
     }
 
-    /// 손이 그림 위에 있다 — 키를 칠 때 잰다. on_hover 는 다시 그린 뒤 제자리에서도 false 로 바뀌는 일이 있어 쓰지 않는다
-    pub fn pointer_in(&self, mouse: Point<Pixels>) -> bool {
-        self.tree.is_some() && self.viewport.get().contains(&mouse)
+    /// 손이 그림 위에 있다(.dgm-canvas-wrap 의 hover). 모달이 덮고 있으면 아니다.
+    /// hover 이벤트는 쓰지 않는다 — GPUI 는 마지막 입력이 키보드면 is_hovered 를 false 로 돌려 키 하나 뒤에 꺼진다
+    pub fn pointer_in(&self, window: &Window) -> bool {
+        self.tree.is_some()
+            && self
+                .hitbox
+                .borrow()
+                .as_ref()
+                .is_some_and(|h| h.is_hovered_at(window.mouse_position(), window))
     }
 
     pub fn pct(&self) -> u32 {
@@ -733,16 +741,12 @@ impl Spike {
         self.diagrams.canvas.grab = None;
     }
 
-    /// 원문 칸이나 찾기 칸에서 치는 중 — 캔버스 단축키는 글자를 먹으면 안 된다
+    /// 입력칸(원문, 찾기, 모달)에서 치는 중 — 캔버스 단축키는 글자를 먹으면 안 된다(웹은 INPUT/TEXTAREA 의 키를 건너뛴다).
+    /// 뿌리나 트리 판이 아닌 곳에 포커스가 있으면 입력칸이다
     pub(crate) fn diagram_typing(&self, window: &Window, cx: &App) -> bool {
-        let d = &self.diagrams;
-        d.edit
-            .as_ref()
-            .is_some_and(|e| e.state.read(cx).focus_handle(cx).is_focused(window))
-            || d.canvas
-                .search
-                .as_ref()
-                .is_some_and(|f| f.input.read(cx).focus_handle(cx).is_focused(window))
+        window
+            .focused(cx)
+            .is_some_and(|f| f != self.focus && f != self.tree_focus && f != self.dtree_focus)
     }
 
     /// 찾기 바를 연다 — ⌘F 는 글자를 골라 둔 채(다시 치면 바로 바뀐다), '/' 와 단추는 커서만
@@ -895,14 +899,14 @@ impl Spike {
     }
 
     /// 캔버스에 손이 올라가 있을 때의 단축키(+ - 1 0), Esc 는 전체 화면부터 닫는다. 받았으면 true
-    pub(crate) fn canvas_key(&mut self, key: &str, mouse: Point<Pixels>) -> bool {
+    pub(crate) fn canvas_key(&mut self, key: &str, window: &Window) -> bool {
         let c = &mut self.diagrams.canvas;
         if key == "escape" && c.fullscreen {
             c.fullscreen = false;
             c.fit_pending = true;
             return true;
         }
-        if !c.pointer_in(mouse) {
+        if !c.pointer_in(window) {
             return false;
         }
         match key {
@@ -919,7 +923,7 @@ impl Spike {
     /// 캔버스(.dgm-canvas-wrap) — 그림 층 둘, 오른쪽 위 화면 조작, 왼쪽 아래 배치 엔진, 아래 오류 줄
     pub(crate) fn diagram_canvas(&self, k: &Tokens, cx: &mut Context<Self>) -> Div {
         let c = &self.diagrams.canvas;
-        let (viewport, dpr) = (c.viewport.clone(), c.dpr.clone());
+        let (viewport, dpr, hitbox) = (c.viewport.clone(), c.dpr.clone(), c.hitbox.clone());
         let scale = c.scale();
         let layer = |img_: Arc<Image>, x: f32, y: f32, w: f32, h: f32| {
             img(img_)
@@ -947,6 +951,8 @@ impl Spike {
                         let changed = viewport.get() != b;
                         viewport.set(b);
                         dpr.set(window.scale_factor());
+                        *hitbox.borrow_mut() =
+                            Some(window.insert_hitbox(b, HitboxBehavior::Normal));
                         // 처음 잰 판이면 다음 그림에서 맞춘다
                         if changed {
                             window.request_animation_frame();
