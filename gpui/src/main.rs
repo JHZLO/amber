@@ -13,6 +13,7 @@ mod diagrams_view;
 mod dialog;
 mod drawer;
 mod erd_details;
+mod erd_overview;
 mod erd_view;
 mod figure;
 mod highlight;
@@ -726,6 +727,7 @@ impl Render for Spike {
                 }
                 // ERD — Esc 는 안쪽부터([보기] 판, 정보창, 그다음 패널), ⌘F 는 그린 표와 컬럼에서 찾기
                 if this.section == Section::Erd
+                    && !this.erd.overview
                     && e.keystroke.key == "escape"
                     && this.erd_escape(cx)
                 {
@@ -734,6 +736,7 @@ impl Render for Spike {
                     return;
                 }
                 if this.section == Section::Erd
+                    && !this.erd.overview
                     && m.platform
                     && !m.alt
                     && !m.shift

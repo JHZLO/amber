@@ -537,6 +537,10 @@ pub struct ErdState {
     pub canvas: ErdCanvas,
     pub width: f32,
     pub error: Option<String>,
+    /// [개요] 보기 — 캔버스는 그대로 두고(시점을 잃지 않게) 몸통만 바꾼다
+    pub overview: bool,
+    pub ov_input: Option<Entity<InputState>>,
+    pub ov_query: String,
 }
 
 fn conn_path(c: &DbConnection) -> String {
@@ -1164,6 +1168,23 @@ impl Spike {
         self.erd.canvas.focus = target;
     }
 
+    /// [개요] 로 — 캔버스가 안 보이니 찾기와 [보기] 판은 닫는다
+    pub(crate) fn erd_show_overview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.erd.overview = true;
+        self.erd.canvas.view_open = false;
+        self.erd_close_find(cx);
+        self.erd_overview_input(window, cx);
+    }
+
+    /// 개요의 테이블 행 — ERD 보기로 돌아가 그 표의 패널을 연다
+    pub(crate) fn erd_pick_from_overview(&mut self, table: &str, cx: &mut Context<Self>) {
+        let Some((ulid, schema)) = self.erd.selected.clone() else {
+            return;
+        };
+        self.erd.overview = false;
+        self.erd_reveal_table(&ulid, &schema, table, cx);
+    }
+
     /// [보기] 판 — 보기를 바꾸면 기억하고 다시 그린다
     fn set_erd_view(&mut self, f: impl FnOnce(&mut ViewPrefs), cx: &mut Context<Self>) {
         let before = self.erd.view.grid;
@@ -1628,8 +1649,38 @@ impl Spike {
                             })
                             .child(chip(env_label(&conn.env), conn.env == "prod")),
                     ),
+            )
+            .child(div().flex_1())
+            .child(
+                crate::note_ai_view::segmented(k)
+                    .mr(px(4.))
+                    .child(
+                        crate::note_ai_view::seg_tab(
+                            "erd-mode-erd",
+                            t("erd.mode.erd"),
+                            !self.erd.overview,
+                            k,
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.erd.overview = false;
+                            cx.notify();
+                        })),
+                    )
+                    .child(
+                        crate::note_ai_view::seg_tab(
+                            "erd-mode-overview",
+                            t("erd.mode.overview"),
+                            self.erd.overview,
+                            k,
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.erd_show_overview(window, cx);
+                            cx.notify();
+                        })),
+                    ),
             );
         let body: AnyElement = match &snap {
+            _ if self.erd.overview => self.erd_overview(snap.as_deref(), k, cx),
             Some(_) => self.erd_canvas(k, window, cx).into_any_element(),
             None => div()
                 .flex_1()
@@ -2840,7 +2891,7 @@ pub fn panel_width(db: &amber_gpui::db::Db) -> f32 {
 }
 
 /// 지금 앱 formatHeaderTime — 'YYYY-MM-DD HH:mm'(내 시간대)
-fn header_time(ms: i64) -> String {
+pub(crate) fn header_time(ms: i64) -> String {
     use chrono::TimeZone;
     chrono::Local
         .timestamp_millis_opt(ms)

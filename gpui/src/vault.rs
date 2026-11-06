@@ -105,7 +105,7 @@ fn utf16(s: &str) -> Vec<u16> {
 }
 
 /// localeCompare(…, "ko") — ICU 한국어 정렬
-fn ko_compare(a: &str, b: &str) -> Ordering {
+pub fn ko_compare(a: &str, b: &str) -> Ordering {
     static KO: OnceLock<CollatorBorrowed<'static>> = OnceLock::new();
     KO.get_or_init(|| {
         let ko: icu_locale_core::Locale = "ko".parse().expect("ko");

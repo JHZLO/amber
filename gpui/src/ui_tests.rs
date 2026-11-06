@@ -3014,3 +3014,30 @@ fn the_erd_view_menu_grid_and_find(cx: &mut TestAppContext) {
         assert_eq!(c.focus_target(), Some(("orders".to_string(), None)));
     });
 }
+
+#[gpui_kit::test]
+fn the_erd_overview_lists_tables_and_opens_one_in_the_erd(cx: &mut TestAppContext) {
+    let db = seeded("erd-overview", &[]);
+    seed_erd(&db);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.erd");
+    click(&mut ui, "erd-c1");
+    click(&mut ui, "erd-c1/svc_shop");
+    assert!(erd_canvas(&mut ui).0);
+    click(&mut ui, "erd-mode-overview");
+    assert!(ui.debug_bounds("erd-overview").is_some());
+    assert!(ui.debug_bounds("erd-canvas").is_none(), "캔버스 대신 개요");
+    assert!(
+        ui.debug_bounds("erd-ov-orders").is_some() && ui.debug_bounds("erd-ov-users").is_some()
+    );
+    // 찾기 — 컬럼 코멘트까지(이메일)
+    click(&mut ui, "erd-ov-search");
+    ui.simulate_input("이메일");
+    ui.run_until_parked();
+    assert!(ui.debug_bounds("erd-ov-orders").is_none());
+    assert!(ui.debug_bounds("erd-ov-users").is_some());
+    // 행을 누르면 ERD 보기로 돌아가 그 표의 패널
+    click(&mut ui, "erd-ov-users");
+    assert!(ui.debug_bounds("erd-canvas").is_some());
+    assert_eq!(erd_state(&mut ui).0.as_deref(), Some("users"));
+}

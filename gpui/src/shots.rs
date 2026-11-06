@@ -948,6 +948,21 @@ fn erd(s: &mut Shots) {
             cx.notify();
         })
         .unwrap();
+    // [개요] — 통계, 테이블 목록, 참조 통계
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.erd_show_overview(window, cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("erd-overview");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.erd.overview = false;
+            cx.notify();
+        })
+        .unwrap();
     s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.section = crate::Section::Notes;
