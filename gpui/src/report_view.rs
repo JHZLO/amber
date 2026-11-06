@@ -128,8 +128,6 @@ pub struct Panel {
     pub saved: bool,
     pub op_error: Option<String>,
     pub edit: Option<ReportEdit>,
-    /// 설정을 열어 달라 — 연결이 없거나 첫 설정을 안 했다(설정 모달이 받는다)
-    pub want_settings: bool,
     pub stack: Stack,
 }
 
@@ -386,8 +384,7 @@ impl Spike {
             return;
         }
         if crate::note_ai::ai_args(&self.db).is_none() {
-            self.reports.panel.want_settings = true;
-            cx.notify();
+            self.open_settings(cx);
             return;
         }
         let week = key.strip_prefix("w:").map(str::to_string);
@@ -401,8 +398,7 @@ impl Spike {
             }
             let rc = report::load_report_config(&self.db).unwrap_or_default();
             if rc["onboarded"].as_bool() != Some(true) {
-                self.reports.panel.want_settings = true;
-                cx.notify();
+                self.open_settings(cx);
                 return;
             }
         }
@@ -417,6 +413,19 @@ impl Spike {
                 self.start_report(&date, cx);
             }
         }
+    }
+
+    /// Esc — 묻는 창이 있으면 닫는다(초안 버리기는 '계속 편집'), 실패 알림이면 실행을 비운다
+    pub(crate) fn report_escape(&mut self) -> bool {
+        if self.reports.panel.ask.take().is_some() {
+            return true;
+        }
+        let key = self.report_key();
+        if self.report_shown(&key).4.is_some() {
+            self.reports.runs.clear(&key);
+            return true;
+        }
+        false
     }
 
     fn report_remove(&mut self, cx: &mut Context<Self>) {

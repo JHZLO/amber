@@ -3690,3 +3690,160 @@ fn the_weekly_report_is_built_from_that_weeks_daily_reports(cx: &mut TestAppCont
     // 일간 점은 주간 실행을 세지 않는다
     ui.update(|_, cx| assert!(spike().read(cx).reports.runs.running_dates().is_empty()));
 }
+
+fn report_cfg(db: &PathBuf) -> serde_json::Value {
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    amber_gpui::report::load_report_config(&d).unwrap()
+}
+
+/// 설정 › 데일리 리포트 — 칸이 보이면 첫 게이트가 열리고, 바꾸는 즉시 저장된다(가짜 감지라 사용자의 gh, claude 에 닿지 않는다)
+#[gpui_kit::test]
+fn report_settings_save_on_every_change(cx: &mut TestAppContext) {
+    use crate::report_probe::{Account, Fake, GhState, Server, Tools};
+    let db = seeded("report-settings", &[]);
+    let dir = db.parent().unwrap().to_path_buf();
+    connect_fake(&db, &fake_claude(&dir, "x"));
+    assert_eq!(report_cfg(&db)["onboarded"], false);
+    let mut ui = open(cx, &db);
+    ui.update(|_, cx| {
+        spike().update(cx, |s, _| {
+            s.settings.probe = std::rc::Rc::new(Fake {
+                tools: Tools {
+                    gh: Some(("/opt/homebrew/bin/gh".into(), "gh version 2.83.0".into())),
+                    claude_sessions: true,
+                    codex_sessions: false,
+                },
+                accounts: vec![
+                    Account {
+                        login: "me".into(),
+                        active: true,
+                    },
+                    Account {
+                        login: "work".into(),
+                        active: false,
+                    },
+                ],
+                gh: GhState {
+                    ok: true,
+                    login: Some("me".into()),
+                    ..GhState::default()
+                },
+                servers: vec![
+                    Server {
+                        name: "slack".into(),
+                        connected: true,
+                        status: "connected".into(),
+                        transport: "http".into(),
+                    },
+                    Server {
+                        name: "notion".into(),
+                        connected: false,
+                        status: "needs_auth".into(),
+                        transport: "http".into(),
+                    },
+                ],
+            })
+        })
+    });
+    click(&mut ui, "app.rail.settings");
+    assert!(ui.debug_bounds("set-tab-ai").is_some(), "열면 AI 칸부터");
+    click(&mut ui, "set-tab-report");
+    assert!(ui.debug_bounds("rep-settings").is_some());
+    assert_eq!(
+        report_cfg(&db)["onboarded"],
+        true,
+        "이 칸을 보면 첫 게이트가 열린다"
+    );
+    assert!(ui.debug_bounds("rep-status-github").is_some());
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        let r = s.settings.rep.as_ref().unwrap();
+        assert_eq!(
+            r.gh.as_ref().map(|g| g.ok),
+            Some(true),
+            "감지 → 계정 → 준비 상태"
+        );
+        assert_eq!(r.accounts.as_ref().map(Vec::len), Some(2));
+        assert_eq!(r.mcp.as_ref().map(Vec::len), Some(2));
+    });
+    // 감지한 서버 목록은 캐시에 남는다(다음에 열 때 바로 보인다)
+    {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        let cache = amber_gpui::report::load_mcp_cache(&d).unwrap();
+        assert_eq!(cache[0]["name"], "slack");
+    }
+    // GitHub 끄기 → 순위가 AI 세션으로
+    click(&mut ui, "rep-on-github");
+    let c = report_cfg(&db);
+    assert_eq!(c["sources"][0]["id"], "github");
+    assert_eq!(c["sources"][0]["enabled"], false);
+    // AI 세션 펼쳐 Codex 끄기
+    click(&mut ui, "rep-expand-ai_sessions");
+    click(&mut ui, "rep-sess-codex");
+    assert_eq!(report_cfg(&db)["sessionsCodex"], false);
+    // 연결된 서버만 고를 수 있다
+    click(&mut ui, "rep-mcp-1");
+    assert_eq!(report_cfg(&db)["mcpPicked"], serde_json::json!([]));
+    click(&mut ui, "rep-mcp-0");
+    assert_eq!(report_cfg(&db)["mcpPicked"], serde_json::json!(["slack"]));
+    // 주간 이름 — 판 맨 아래라 굴려서 보이게 한다
+    let pane = bounds(&mut ui, "set-pane");
+    ui.simulate_event(ScrollEvent {
+        position: pane.center(),
+        delta: ScrollDelta::Pixels(point(px(0.), px(-3000.))),
+        ..Default::default()
+    });
+    ui.run_until_parked();
+    click(&mut ui, "rep-name");
+    ui.simulate_input("Jun");
+    ui.run_until_parked();
+    assert_eq!(report_cfg(&db)["displayName"], "Jun");
+    // Esc 로 닫는다
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert!(ui.debug_bounds("rep-settings").is_none());
+}
+
+#[gpui_kit::test]
+fn dragging_a_source_row_changes_its_rank(cx: &mut TestAppContext) {
+    let db = seeded("report-rank", &[]);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.settings");
+    click(&mut ui, "set-tab-report");
+    let gh = bounds(&mut ui, "rep-src-github");
+    let sess = bounds(&mut ui, "rep-src-ai_sessions");
+    let grip = bounds(&mut ui, "rep-grip-github").center();
+    ui.simulate_mouse_down(grip, MouseButton::Left, Modifiers::none());
+    ui.run_until_parked();
+    ui.simulate_mouse_move(
+        point(grip.x, sess.center().y),
+        Some(MouseButton::Left),
+        Modifiers::none(),
+    );
+    ui.run_until_parked();
+    ui.simulate_mouse_up(
+        point(grip.x, sess.center().y),
+        MouseButton::Left,
+        Modifiers::none(),
+    );
+    ui.run_until_parked();
+    let c = report_cfg(&db);
+    assert_eq!(
+        c["sources"][0]["id"], "ai_sessions",
+        "끌어 놓으면 순서가 바뀌고 저장된다"
+    );
+    assert_eq!(c["sources"][1]["id"], "github");
+    assert!(gh.top() < sess.top());
+}
+
+#[gpui_kit::test]
+fn generating_without_an_ai_connection_opens_settings(cx: &mut TestAppContext) {
+    let db = seeded("report-gate", &[("x", None)]);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "report-generate");
+    assert!(
+        ui.debug_bounds("set-tab-ai").is_some(),
+        "연결이 없으면 설정부터"
+    );
+    ui.update(|_, cx| assert!(spike().read(cx).reports.runs.get(DATE).is_none()));
+}

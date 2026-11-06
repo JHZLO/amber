@@ -306,6 +306,7 @@ pub fn run(dir: &str) {
     note_ai(&mut s);
     diagrams(&mut s);
     erd(&mut s);
+    settings(&mut s);
     for (name, level) in [
         ("cal-month", crate::calendar::Level::Month),
         ("cal-year", crate::calendar::Level::Year),
@@ -1326,5 +1327,118 @@ fn reports(s: &mut Shots) {
             sp.go_date(DATE.into());
             cx.notify();
         })
+        .unwrap();
+}
+
+/// 설정 › 데일리 리포트 — 가짜 감지(gh 붙음, 계정 둘, 세션 폴더, MCP 서버 둘), GitHub 펼침, 그다음 gh 로그인이 풀린 안내
+fn settings(s: &mut Shots) {
+    use crate::report_probe::{Account, Fake, GhState, Server, Tools};
+    let fake = |gh: GhState| Fake {
+        tools: Tools {
+            gh: Some((
+                "/opt/homebrew/bin/gh".into(),
+                "gh version 2.83.0 (2026-10-01)".into(),
+            )),
+            claude_sessions: true,
+            codex_sessions: false,
+        },
+        accounts: vec![
+            Account {
+                login: "jhzlo".into(),
+                active: true,
+            },
+            Account {
+                login: "work-account".into(),
+                active: false,
+            },
+        ],
+        gh,
+        servers: vec![
+            Server {
+                name: "plugin:Slack:slack".into(),
+                connected: true,
+                status: "connected".into(),
+                transport: "http".into(),
+            },
+            Server {
+                name: "plugin:Notion:notion".into(),
+                connected: false,
+                status: "needs_auth".into(),
+                transport: "http".into(),
+            },
+        ],
+    };
+    let ok = GhState {
+        ok: true,
+        path: Some("/opt/homebrew/bin/gh".into()),
+        version: Some("gh version 2.83.0 (2026-10-01)".into()),
+        login: Some("jhzlo".into()),
+        ..GhState::default()
+    };
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            // MCP 절은 claude 연결일 때만 — 찍기 데이터 폴더의 가짜 경로(실행하지 않는다)
+            let _ =
+                amber_gpui::ai_config::connect_provider(&sp.db, "claude", "/usr/bin/true", None);
+            sp.settings.probe = std::rc::Rc::new(fake(ok.clone()));
+            sp.open_settings(cx);
+        })
+        .unwrap();
+    s.settle();
+    s.shot("settings-0-ai");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.settings.tab = crate::settings_view::Tab::Report;
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            if let Some(r) = sp.settings.rep.as_mut() {
+                r.expanded = Some("github".into());
+                r.cfg.mcp_picked = vec!["plugin:Slack:slack".into()];
+            }
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("settings-1-report");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            if let Some(r) = sp.settings.rep.as_mut() {
+                r.expanded = Some("ai_sessions".into());
+            }
+            sp.settings.pane.set_offset(point(px(0.), px(-1e6)));
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("settings-1b-report-bottom");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.settings.probe = std::rc::Rc::new(fake(GhState {
+                ok: false,
+                code: Some("GH_AUTH".into()),
+                ..ok.clone()
+            }));
+            sp.close_settings(cx);
+            sp.open_settings(cx);
+            sp.settings.tab = crate::settings_view::Tab::Report;
+        })
+        .unwrap();
+    s.settle();
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            if let Some(r) = sp.settings.rep.as_mut() {
+                r.expanded = Some("github".into());
+            }
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("settings-2-gh-guide");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| sp.close_settings(cx))
         .unwrap();
 }

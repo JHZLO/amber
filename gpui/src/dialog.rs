@@ -31,7 +31,38 @@ pub fn shell_fixed(
     buttons: Vec<Stateful<Div>>,
     on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Div {
-    shell_with(k, max_w, Some(620.), title, body, left, buttons, on_close)
+    shell_with(
+        k,
+        max_w,
+        Some(620.),
+        false,
+        title,
+        body,
+        left,
+        buttons,
+        on_close,
+    )
+}
+
+/// .modal.settings — 넓게(980) 열고 키를 고정(min(700px, 88%)). 본문은 여백 없이 가로로(왼쪽 목록 | 판), 판이 제 안에서 구른다
+pub fn shell_settings(
+    k: &Tokens,
+    title: String,
+    body: AnyElement,
+    buttons: Vec<Stateful<Div>>,
+    on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> Div {
+    shell_with(
+        k,
+        980.,
+        Some(700.),
+        true,
+        title,
+        body,
+        Vec::new(),
+        buttons,
+        on_close,
+    )
 }
 
 /// 바닥 줄이 왼쪽 묶음 | 빈칸 | 오른쪽 묶음(.modal-foot 의 spacer). 본문은 넘치면 스크롤(.modal-body), 판은 창의 86% 까지
@@ -44,7 +75,7 @@ pub fn shell_split(
     buttons: Vec<Stateful<Div>>,
     on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Div {
-    shell_with(k, max_w, None, title, body, left, buttons, on_close)
+    shell_with(k, max_w, None, false, title, body, left, buttons, on_close)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -52,6 +83,7 @@ fn shell_with(
     k: &Tokens,
     max_w: f32,
     fixed_h: Option<f32>,
+    bare: bool,
     title: String,
     body: AnyElement,
     left: Vec<Stateful<Div>>,
@@ -80,7 +112,7 @@ fn shell_with(
                 .w_full()
                 .max_w(px(max_w))
                 .when_some(fixed_h, |d, h| d.h(px(h)))
-                .max_h(relative(0.86))
+                .max_h(relative(if bare { 0.88 } else { 0.86 }))
                 .flex()
                 .flex_col()
                 .rounded(px(12.))
@@ -127,7 +159,17 @@ fn shell_with(
                                 .on_click(on_close),
                         ),
                 )
-                .child(
+                .child(if bare {
+                    div()
+                        .id("modal-body")
+                        .flex_1()
+                        .min_h_0()
+                        .flex()
+                        .overflow_hidden()
+                        .text_size(px(14.))
+                        .line_height(relative(1.6))
+                        .child(body)
+                } else {
                     div()
                         .id("modal-body")
                         .flex_1()
@@ -136,8 +178,8 @@ fn shell_with(
                         .p(px(20.))
                         .text_size(px(14.))
                         .line_height(relative(1.6))
-                        .child(body),
-                )
+                        .child(body)
+                })
                 .child(
                     div()
                         .flex()

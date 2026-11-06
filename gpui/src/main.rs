@@ -36,10 +36,13 @@ mod note_watch;
 mod notes_view;
 mod pane;
 mod raster;
+mod report_probe;
 mod report_run;
+mod report_settings;
 mod report_view;
 mod root_picker;
 mod row_drag;
+mod settings_view;
 #[cfg(feature = "shots")]
 mod shots;
 mod spinner;
@@ -117,6 +120,8 @@ struct Spike {
     notes: notes_view::NotesState,
     /// 리포트 생성 실행(날짜마다, 주간은 w: 접두)과 레일 완료 점
     reports: report_run::Reports,
+    /// 설정 모달(열렸나, 칸, 리포트 칸 상태, gh/claude 확인)
+    settings: settings_view::SettingsUi,
     scroll: ScrollHandle,
     section: Section,
     /// 앱 표식(책상 스탠드). 스탠드 색이 테마를 따르므로 테마별로 굽는다
@@ -279,6 +284,7 @@ impl Spike {
             confirm: None,
             input,
             reports: report_run::Reports::default(),
+            settings: settings_view::SettingsUi::default(),
             notes: notes_view::NotesState {
                 ui: vault_pane::TreeUi {
                     width: notes_w,
@@ -532,6 +538,7 @@ impl Render for Spike {
             self.reports.rail_done = false;
         }
         self.prepare_report(cx);
+        self.prepare_settings(window, cx);
         if !cx.has_active_drag() {
             self.diagrams.canvas.grab = None;
             if self.row_drag.is_some() {
@@ -607,6 +614,7 @@ impl Render for Spike {
             (None, None, None)
         };
         let report_modal = self.report_modal(&k, cx);
+        let settings_modal = self.settings_modal(&k, cx);
         let (erd_modal, erd_confirm) = if self.section == Section::Erd {
             (
                 self.erd_conn_view(&k, window, cx),
@@ -748,6 +756,24 @@ impl Render for Spike {
                         cx.notify();
                         return;
                     }
+                }
+                // 설정 모달 — Esc 는 닫기(열린 고르기 판이 먼저)
+                if this.settings.open && e.keystroke.key == "escape" {
+                    if !this.close_settings_menu() {
+                        this.close_settings(cx);
+                    }
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
+                // 리포트 확인 창, 실패 알림 — Esc 는 닫기
+                if this.section == Section::Todo
+                    && e.keystroke.key == "escape"
+                    && this.report_escape()
+                {
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
                 }
                 // ERD 확인 창(끊기, 옛 ERD 정리) — Esc 는 닫기
                 if this.section == Section::Erd
@@ -952,6 +978,7 @@ impl Render for Spike {
             .children(erd_modal)
             .children(erd_confirm)
             .children(report_modal)
+            .children(settings_modal)
             .children(span_modal)
             .children(match self.section {
                 Section::Diagrams => {
@@ -1117,12 +1144,15 @@ impl Spike {
                     }))
             }))
             .child(div().flex_1())
-            .child(item(
-                "app.rail.settings",
-                t("app.rail.settings"),
-                "settings",
-                false,
-            ))
+            .child(
+                item(
+                    "app.rail.settings",
+                    t("app.rail.settings"),
+                    "settings",
+                    false,
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.open_settings(cx))),
+            )
     }
 }
 
