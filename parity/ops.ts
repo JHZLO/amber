@@ -11,6 +11,7 @@ import * as aiActivity from "../src/lib/aiActivity";
 import * as aiInstruction from "../src/lib/aiInstruction";
 import * as aiWait from "../src/lib/aiWait";
 import * as comments from "../src/lib/comments";
+import * as noteConcepts from "../src/lib/noteConcepts";
 import * as config from "../src/lib/config";
 import * as date from "../src/lib/date";
 import * as db from "../src/lib/db";
@@ -60,6 +61,7 @@ export const MODULES = [
   "ttLayout",
   "treeFind",
   "comments",
+  "noteConcepts",
   "config",
   "noteAnchor",
   "mdSections",
@@ -202,6 +204,10 @@ export const OPS: Record<string, Op> = {
   "config.saveConfig": config.saveConfig,
 
   // 노트 인라인 질문의 사이드카 — 못 읽은 파일을 빈 목록으로 뭉개지 않는다(덮으면 문답이 사라진다)
+  "noteConcepts.conceptsPathFor": noteConcepts.conceptsPathFor,
+  "noteConcepts.loadNoteConcepts": noteConcepts.loadNoteConcepts,
+  "noteConcepts.addNoteConcept": noteConcepts.addNoteConcept,
+  "noteConcepts.removeNoteConcept": noteConcepts.removeNoteConcept,
   "comments.commentsPathFor": comments.commentsPathFor,
   "comments.readComments": comments.readComments,
   "comments.loadComments": comments.loadComments,

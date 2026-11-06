@@ -1,0 +1,53 @@
+{
+  "format": 1,
+  "name": "noteConcepts/files",
+  "tz": "Asia/Seoul",
+  "start": 1793836800000,
+  "seed": [
+    {
+      "path": "vault/notes/A.md",
+      "text": "# A\n"
+    },
+    {
+      "path": "vault/notes/A.concepts.json",
+      "text": "{\"version\":1,\"links\":[{\"conceptId\":1,\"title\":\"WAL\",\"anchor\":\"로그\",\"createdAt\":1},{\"conceptId\":\"2\",\"title\":\"x\"},\"junk\",{\"conceptId\":3.5,\"title\":\"half\",\"anchor\":\"\",\"createdAt\":2,\"extra\":{\"keep\":true}}]}"
+    },
+    {
+      "path": "vault/notes/B.md",
+      "text": "# B\n"
+    },
+    {
+      "path": "vault/notes/B.concepts.json",
+      "text": "{ broken"
+    },
+    {
+      "path": "vault/notes/C.MD",
+      "text": "# C\n"
+    },
+    {
+      "path": "vault/notes/D/E.md",
+      "text": "# E\n"
+    }
+  ],
+  "final": "ed40c3976fecac683a249609a96b3310c1e6510b37922f8a870e6d95965c2fd1",
+  "steps": [
+    {"op":"noteConcepts.conceptsPathFor","args":["a.md"],"at":1793836800000,"ok":true,"result":"a.concepts.json","changes":{}},
+    {"op":"noteConcepts.conceptsPathFor","args":["a.MD"],"at":1793836801000,"ok":true,"result":"a.concepts.json","changes":{}},
+    {"op":"noteConcepts.conceptsPathFor","args":["x/y.md"],"at":1793836802000,"ok":true,"result":"x/y.concepts.json","changes":{}},
+    {"op":"noteConcepts.conceptsPathFor","args":["noext"],"at":1793836803000,"ok":true,"result":"noext.concepts.json","changes":{}},
+    {"op":"noteConcepts.conceptsPathFor","args":["z.md.md"],"at":1793836804000,"ok":true,"result":"z.md.concepts.json","changes":{}},
+    {"op":"noteConcepts.loadNoteConcepts","args":["A.md"],"at":1793836805000,"ok":true,"result":[{"conceptId":1,"title":"WAL","anchor":"로그","createdAt":1},{"conceptId":3.5,"title":"half","anchor":"","createdAt":2,"extra":{"keep":true}}],"changes":{}},
+    {"op":"noteConcepts.loadNoteConcepts","args":["B.md"],"at":1793836806000,"ok":true,"result":[],"changes":{}},
+    {"op":"noteConcepts.loadNoteConcepts","args":["missing.md"],"at":1793836807000,"ok":true,"result":[],"changes":{}},
+    {"op":"noteConcepts.addNoteConcept","args":["A.md",{"conceptId":1,"title":"WAL 다시","anchor":"앵커","createdAt":9}],"at":1793836808000,"ok":true,"result":null,"changes":{"__files":{"added":[],"removed":[],"changed":[{"before":{"path":"vault/notes/A.concepts.json","kind":"file","text":"{\"version\":1,\"links\":[{\"conceptId\":1,\"title\":\"WAL\",\"anchor\":\"로그\",\"createdAt\":1},{\"conceptId\":\"2\",\"title\":\"x\"},\"junk\",{\"conceptId\":3.5,\"title\":\"half\",\"anchor\":\"\",\"createdAt\":2,\"extra\":{\"keep\":true}}]}"},"after":{"path":"vault/notes/A.concepts.json","kind":"file","text":"{\n \"version\": 1,\n \"links\": [\n  {\n   \"conceptId\": 3.5,\n   \"title\": \"half\",\n   \"anchor\": \"\",\n   \"createdAt\": 2,\n   \"extra\": {\n    \"keep\": true\n   }\n  },\n  {\n   \"conceptId\": 1,\n   \"title\": \"WAL 다시\",\n   \"anchor\": \"앵커\",\n   \"createdAt\": 9\n  }\n ]\n}"}}]}}},
+    {"op":"noteConcepts.loadNoteConcepts","args":["A.md"],"at":1793836809000,"ok":true,"result":[{"conceptId":3.5,"title":"half","anchor":"","createdAt":2,"extra":{"keep":true}},{"conceptId":1,"title":"WAL 다시","anchor":"앵커","createdAt":9}],"changes":{}},
+    {"op":"noteConcepts.addNoteConcept","args":["B.md",{"conceptId":7,"title":"새","anchor":"앵커","createdAt":9}],"at":1793836810000,"ok":true,"result":null,"changes":{"__files":{"added":[],"removed":[],"changed":[{"before":{"path":"vault/notes/B.concepts.json","kind":"file","text":"{ broken"},"after":{"path":"vault/notes/B.concepts.json","kind":"file","text":"{\n \"version\": 1,\n \"links\": [\n  {\n   \"conceptId\": 7,\n   \"title\": \"새\",\n   \"anchor\": \"앵커\",\n   \"createdAt\": 9\n  }\n ]\n}"}}]}}},
+    {"op":"noteConcepts.addNoteConcept","args":["C.MD",{"conceptId":8,"title":"대문자","anchor":"앵커","createdAt":9}],"at":1793836811000,"ok":true,"result":null,"changes":{"__files":{"added":[{"path":"vault/notes/C.concepts.json","kind":"file","text":"{\n \"version\": 1,\n \"links\": [\n  {\n   \"conceptId\": 8,\n   \"title\": \"대문자\",\n   \"anchor\": \"앵커\",\n   \"createdAt\": 9\n  }\n ]\n}"}],"removed":[],"changed":[]}}},
+    {"op":"noteConcepts.addNoteConcept","args":["D/E.md",{"conceptId":9,"title":"폴더","anchor":"앵커","createdAt":9}],"at":1793836812000,"ok":true,"result":null,"changes":{"__files":{"added":[{"path":"vault/notes/D/E.concepts.json","kind":"file","text":"{\n \"version\": 1,\n \"links\": [\n  {\n   \"conceptId\": 9,\n   \"title\": \"폴더\",\n   \"anchor\": \"앵커\",\n   \"createdAt\": 9\n  }\n ]\n}"}],"removed":[],"changed":[]}}},
+    {"op":"noteConcepts.removeNoteConcept","args":["A.md",3.5],"at":1793836813000,"ok":true,"result":null,"changes":{"__files":{"added":[],"removed":[],"changed":[{"before":{"path":"vault/notes/A.concepts.json","kind":"file","text":"{\n \"version\": 1,\n \"links\": [\n  {\n   \"conceptId\": 3.5,\n   \"title\": \"half\",\n   \"anchor\": \"\",\n   \"createdAt\": 2,\n   \"extra\": {\n    \"keep\": true\n   }\n  },\n  {\n   \"conceptId\": 1,\n   \"title\": \"WAL 다시\",\n   \"anchor\": \"앵커\",\n   \"createdAt\": 9\n  }\n ]\n}"},"after":{"path":"vault/notes/A.concepts.json","kind":"file","text":"{\n \"version\": 1,\n \"links\": [\n  {\n   \"conceptId\": 1,\n   \"title\": \"WAL 다시\",\n   \"anchor\": \"앵커\",\n   \"createdAt\": 9\n  }\n ]\n}"}}]}}},
+    {"op":"noteConcepts.removeNoteConcept","args":["A.md",99],"at":1793836814000,"ok":true,"result":null,"changes":{}},
+    {"op":"noteConcepts.removeNoteConcept","args":["A.md",1],"at":1793836815000,"ok":true,"result":null,"changes":{"__files":{"added":[],"removed":[{"path":"vault/notes/A.concepts.json","kind":"file","text":"{\n \"version\": 1,\n \"links\": [\n  {\n   \"conceptId\": 1,\n   \"title\": \"WAL 다시\",\n   \"anchor\": \"앵커\",\n   \"createdAt\": 9\n  }\n ]\n}"}],"changed":[]}}},
+    {"op":"noteConcepts.loadNoteConcepts","args":["A.md"],"at":1793836816000,"ok":true,"result":[],"changes":{}},
+    {"op":"noteConcepts.removeNoteConcept","args":["missing.md",1],"at":1793836817000,"ok":true,"result":null,"changes":{}}
+  ]
+}

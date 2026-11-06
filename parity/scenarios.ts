@@ -1444,6 +1444,46 @@ const treeFindSweep: Scenario = {
 };
 
 /** 노트 질문 사이드카 — 정상, 깨진 JSON, comments 가 배열이 아님, 후속 문답 형태 검사, 비우면 파일을 지운다 */
+/** 노트 → 개념 역참조 사이드카 — 깨진 파일, 숫자가 아닌 conceptId, 같은 개념 갈아 끼우기(맨 뒤로), 다 빼면 파일째 지우기 */
+const noteConceptFiles: Scenario = {
+  name: "noteConcepts/files",
+  seed: [
+    { path: "vault/notes/A.md", text: "# A\n" },
+    {
+      path: "vault/notes/A.concepts.json",
+      text: JSON.stringify({ version: 1, links: [
+        { conceptId: 1, title: "WAL", anchor: "로그", createdAt: 1 },
+        { conceptId: "2", title: "x" },
+        "junk",
+        { conceptId: 3.5, title: "half", anchor: "", createdAt: 2, extra: { keep: true } },
+      ] }),
+    },
+    { path: "vault/notes/B.md", text: "# B\n" },
+    { path: "vault/notes/B.concepts.json", text: "{ broken" },
+    { path: "vault/notes/C.MD", text: "# C\n" },
+    { path: "vault/notes/D/E.md", text: "# E\n" },
+  ],
+  plan() {
+    const link = (conceptId: number, title: string) => ({ conceptId, title, anchor: "앵커", createdAt: 9 });
+    return [
+      ...["a.md", "a.MD", "x/y.md", "noext", "z.md.md"].map((p) => s("noteConcepts.conceptsPathFor", p)),
+      s("noteConcepts.loadNoteConcepts", "A.md"),
+      s("noteConcepts.loadNoteConcepts", "B.md"),
+      s("noteConcepts.loadNoteConcepts", "missing.md"),
+      s("noteConcepts.addNoteConcept", "A.md", link(1, "WAL 다시")),
+      s("noteConcepts.loadNoteConcepts", "A.md"),
+      s("noteConcepts.addNoteConcept", "B.md", link(7, "새")),
+      s("noteConcepts.addNoteConcept", "C.MD", link(8, "대문자")),
+      s("noteConcepts.addNoteConcept", "D/E.md", link(9, "폴더")),
+      s("noteConcepts.removeNoteConcept", "A.md", 3.5),
+      s("noteConcepts.removeNoteConcept", "A.md", 99),
+      s("noteConcepts.removeNoteConcept", "A.md", 1),
+      s("noteConcepts.loadNoteConcepts", "A.md"),
+      s("noteConcepts.removeNoteConcept", "missing.md", 1),
+    ];
+  },
+};
+
 const commentFiles: Scenario = {
   name: "comments/files",
   seed: [
@@ -1565,6 +1605,7 @@ export const SCENARIOS: Scenario[] = [
   reportPure,
   dbconnPure,
   commentFiles,
+  noteConceptFiles,
   aiConfig,
   aiConfigGemini,
   conceptNotes,
