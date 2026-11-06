@@ -4019,9 +4019,16 @@ fn ai_augment_previews_then_applies_the_new_note(cx: &mut TestAppContext) {
     );
     assert_eq!(r["tags"], serde_json::json!(["db", "wal"]));
     assert_eq!(r["confidence"], 2, "확신은 보강이 건드리지 않는다");
+    // 파일은 앞머리(id)를 달고 저장된다 — 읽기는 앞머리를 뗀 본문
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
     assert_eq!(
-        std::fs::read_to_string(dir.join("vault/concepts/01JW/index.md")).unwrap(),
+        amber_gpui::vault::read_concept_note(&d, "concepts/01JW/index.md").unwrap(),
         "# WAL\n\nmore detail"
+    );
+    assert!(
+        std::fs::read_to_string(dir.join("vault/concepts/01JW/index.md"))
+            .unwrap()
+            .starts_with("---\nid: 01JW\n---")
     );
     assert!(ui.debug_bounds("augment-apply").is_none());
 }
