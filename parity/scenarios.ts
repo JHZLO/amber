@@ -1120,6 +1120,33 @@ const diagramGraphPure: Scenario = {
   },
 };
 
+// DB 연결의 순수 판정 — 설정 목록과 ERD 트리가 같이 쓴다
+const dbconnPure: Scenario = {
+  name: "dbconn/pure",
+  plan() {
+    const conn = (o: Record<string, unknown> = {}) => ({
+      id: 1, ulid: "01JCONN", name: "운영 DB", kind: "mysql", env: "prod", host: "127.0.0.1", port: 3306, username: "u", tls: "preferred",
+      credential_command: "", folder_path: "운영 DB", schemas: [
+        { name: "svc_a", label: "", enabled: true }, { name: "svc_b", label: "B", enabled: false, starred: true },
+        { name: "svc_c", label: "", enabled: true, audit: false, starred: true },
+      ], last_sync_at: null, last_error: null, created_at: 0, updated_at: 0, ...o,
+    });
+    const steps: Step[] = [];
+    for (const p of [{ name: "a", label: "", enabled: true }, { name: "a", label: "", enabled: true, audit: false }, { name: "a", label: "", enabled: true, audit: true }])
+      steps.push(s("dbconn.prefAudit", p));
+    steps.push(s("dbconn.schemaFolder", conn(), "svc_a"), s("dbconn.enabledSchemas", conn()), s("dbconn.profileOf", conn({ credential_command: "aws x" })));
+    for (const [snap, now] of [[null, 0], [{ synced_at: 1000 }, 1000 + 600000], [{ synced_at: 1000 }, 1001 + 600000]] as const)
+      steps.push(s("dbconn.isStale", snap, now));
+    for (const e of ["dev", "staging", "prod", "x"]) steps.push(s("dbconn.envLabel", e));
+    for (const c of [conn(), conn({ last_sync_at: 5 }), conn({ last_sync_at: 0 }), conn({ last_error: "KEYCHAIN_MISSING", last_sync_at: 5 }), conn({ last_error: "DB_REFUSED" }), conn({ last_error: "" })])
+      steps.push(s("dbconn.connStatus", c));
+    for (const st of ["connected", "failed", "needsPassword", "never"]) steps.push(s("dbconn.connStatusLabel", st), s("dbconn.connStatusDot", st));
+    for (const n of ["  운영 DB  ", "a/b\\c:d", "...hidden", "", "   ", "x".repeat(100), "😀".repeat(50), "\u0085a\u0085", "\ufeffb"])
+      steps.push(s("dbconn.folderNameFor", n));
+    return steps;
+  },
+};
+
 // ERD 생성 — 스냅샷(information_schema 꼴)을 손으로 지어 추론 규칙마다 한 번은 지나게 한다(erdGen.test.ts 의 갈래)
 const erdGenPure: Scenario = {
   name: "erdGen/pure",
@@ -1345,6 +1372,7 @@ export const SCENARIOS: Scenario[] = [
   noteAiPure,
   diagramGraphPure,
   erdGenPure,
+  dbconnPure,
   commentFiles,
   aiConfig,
   aiConfigGemini,

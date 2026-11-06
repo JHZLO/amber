@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "name": "dbconn/pure",
+  "tz": "Asia/Seoul",
+  "start": 1793836800000,
+  "seed": [],
+  "final": "e0e5849900b8bc9e23d07a4f5f4fca3555cd2409f094f7b0e4c130c434304650",
+  "steps": [
+    {"op":"dbconn.prefAudit","args":[{"name":"a","label":"","enabled":true}],"at":1793836800000,"ok":true,"result":true,"changes":{}},
+    {"op":"dbconn.prefAudit","args":[{"name":"a","label":"","enabled":true,"audit":false}],"at":1793836801000,"ok":true,"result":false,"changes":{}},
+    {"op":"dbconn.prefAudit","args":[{"name":"a","label":"","enabled":true,"audit":true}],"at":1793836802000,"ok":true,"result":true,"changes":{}},
+    {"op":"dbconn.schemaFolder","args":[{"id":1,"ulid":"01JCONN","name":"운영 DB","kind":"mysql","env":"prod","host":"127.0.0.1","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"운영 DB","schemas":[{"name":"svc_a","label":"","enabled":true},{"name":"svc_b","label":"B","enabled":false,"starred":true},{"name":"svc_c","label":"","enabled":true,"audit":false,"starred":true}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0},"svc_a"],"at":1793836803000,"ok":true,"result":"운영 DB/svc_a","changes":{}},
+    {"op":"dbconn.enabledSchemas","args":[{"id":1,"ulid":"01JCONN","name":"운영 DB","kind":"mysql","env":"prod","host":"127.0.0.1","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"운영 DB","schemas":[{"name":"svc_a","label":"","enabled":true},{"name":"svc_b","label":"B","enabled":false,"starred":true},{"name":"svc_c","label":"","enabled":true,"audit":false,"starred":true}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0}],"at":1793836804000,"ok":true,"result":[{"name":"svc_a","label":"","enabled":true},{"name":"svc_c","label":"","enabled":true,"audit":false,"starred":true}],"changes":{}},
+    {"op":"dbconn.profileOf","args":[{"id":1,"ulid":"01JCONN","name":"운영 DB","kind":"mysql","env":"prod","host":"127.0.0.1","port":3306,"username":"u","tls":"preferred","credential_command":"aws x","folder_path":"운영 DB","schemas":[{"name":"svc_a","label":"","enabled":true},{"name":"svc_b","label":"B","enabled":false,"starred":true},{"name":"svc_c","label":"","enabled":true,"audit":false,"starred":true}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0}],"at":1793836805000,"ok":true,"result":{"ulid":"01JCONN","kind":"mysql","host":"127.0.0.1","port":3306,"username":"u","tls":"preferred","credential_command":"aws x"},"changes":{}},
+    {"op":"dbconn.isStale","args":[null,0],"at":1793836806000,"ok":true,"result":true,"changes":{}},
+    {"op":"dbconn.isStale","args":[{"synced_at":1000},601000],"at":1793836807000,"ok":true,"result":false,"changes":{}},
+    {"op":"dbconn.isStale","args":[{"synced_at":1000},601001],"at":1793836808000,"ok":true,"result":true,"changes":{}},
+    {"op":"dbconn.envLabel","args":["dev"],"at":1793836809000,"ok":true,"result":"개발","changes":{}},
+    {"op":"dbconn.envLabel","args":["staging"],"at":1793836810000,"ok":true,"result":"스테이징","changes":{}},
+    {"op":"dbconn.envLabel","args":["prod"],"at":1793836811000,"ok":true,"result":"운영","changes":{}},
+    {"op":"dbconn.envLabel","args":["x"],"at":1793836812000,"ok":true,"result":"개발","changes":{}},
+    {"op":"dbconn.connStatus","args":[{"id":1,"ulid":"01JCONN","name":"운영 DB","kind":"mysql","env":"prod","host":"127.0.0.1","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"운영 DB","schemas":[{"name":"svc_a","label":"","enabled":true},{"name":"svc_b","label":"B","enabled":false,"starred":true},{"name":"svc_c","label":"","enabled":true,"audit":false,"starred":true}],"last_sync_at":null,"last_error":null,"created_at":0,"updated_at":0}],"at":1793836813000,"ok":true,"result":"never","changes":{}},
+    {"op":"dbconn.connStatus","args":[{"id":1,"ulid":"01JCONN","name":"운영 DB","kind":"mysql","env":"prod","host":"127.0.0.1","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"운영 DB","schemas":[{"name":"svc_a","label":"","enabled":true},{"name":"svc_b","label":"B","enabled":false,"starred":true},{"name":"svc_c","label":"","enabled":true,"audit":false,"starred":true}],"last_sync_at":5,"last_error":null,"created_at":0,"updated_at":0}],"at":1793836814000,"ok":true,"result":"connected","changes":{}},
+    {"op":"dbconn.connStatus","args":[{"id":1,"ulid":"01JCONN","name":"운영 DB","kind":"mysql","env":"prod","host":"127.0.0.1","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"운영 DB","schemas":[{"name":"svc_a","label":"","enabled":true},{"name":"svc_b","label":"B","enabled":false,"starred":true},{"name":"svc_c","label":"","enabled":true,"audit":false,"starred":true}],"last_sync_at":0,"last_error":null,"created_at":0,"updated_at":0}],"at":1793836815000,"ok":true,"result":"never","changes":{}},
+    {"op":"dbconn.connStatus","args":[{"id":1,"ulid":"01JCONN","name":"운영 DB","kind":"mysql","env":"prod","host":"127.0.0.1","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"운영 DB","schemas":[{"name":"svc_a","label":"","enabled":true},{"name":"svc_b","label":"B","enabled":false,"starred":true},{"name":"svc_c","label":"","enabled":true,"audit":false,"starred":true}],"last_sync_at":5,"last_error":"KEYCHAIN_MISSING","created_at":0,"updated_at":0}],"at":1793836816000,"ok":true,"result":"needsPassword","changes":{}},
+    {"op":"dbconn.connStatus","args":[{"id":1,"ulid":"01JCONN","name":"운영 DB","kind":"mysql","env":"prod","host":"127.0.0.1","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"운영 DB","schemas":[{"name":"svc_a","label":"","enabled":true},{"name":"svc_b","label":"B","enabled":false,"starred":true},{"name":"svc_c","label":"","enabled":true,"audit":false,"starred":true}],"last_sync_at":null,"last_error":"DB_REFUSED","created_at":0,"updated_at":0}],"at":1793836817000,"ok":true,"result":"failed","changes":{}},
+    {"op":"dbconn.connStatus","args":[{"id":1,"ulid":"01JCONN","name":"운영 DB","kind":"mysql","env":"prod","host":"127.0.0.1","port":3306,"username":"u","tls":"preferred","credential_command":"","folder_path":"운영 DB","schemas":[{"name":"svc_a","label":"","enabled":true},{"name":"svc_b","label":"B","enabled":false,"starred":true},{"name":"svc_c","label":"","enabled":true,"audit":false,"starred":true}],"last_sync_at":null,"last_error":"","created_at":0,"updated_at":0}],"at":1793836818000,"ok":true,"result":"never","changes":{}},
+    {"op":"dbconn.connStatusLabel","args":["connected"],"at":1793836819000,"ok":true,"result":"연결됨","changes":{}},
+    {"op":"dbconn.connStatusDot","args":["connected"],"at":1793836820000,"ok":true,"result":"ok","changes":{}},
+    {"op":"dbconn.connStatusLabel","args":["failed"],"at":1793836821000,"ok":true,"result":"연결 안 됨","changes":{}},
+    {"op":"dbconn.connStatusDot","args":["failed"],"at":1793836822000,"ok":true,"result":"bad","changes":{}},
+    {"op":"dbconn.connStatusLabel","args":["needsPassword"],"at":1793836823000,"ok":true,"result":"비밀번호 필요","changes":{}},
+    {"op":"dbconn.connStatusDot","args":["needsPassword"],"at":1793836824000,"ok":true,"result":"warn","changes":{}},
+    {"op":"dbconn.connStatusLabel","args":["never"],"at":1793836825000,"ok":true,"result":"동기화 전","changes":{}},
+    {"op":"dbconn.connStatusDot","args":["never"],"at":1793836826000,"ok":true,"result":"","changes":{}},
+    {"op":"dbconn.folderNameFor","args":["  운영 DB  "],"at":1793836827000,"ok":true,"result":"운영 DB","changes":{}},
+    {"op":"dbconn.folderNameFor","args":["a/b\\c:d"],"at":1793836828000,"ok":true,"result":"a-b-c-d","changes":{}},
+    {"op":"dbconn.folderNameFor","args":["...hidden"],"at":1793836829000,"ok":true,"result":"hidden","changes":{}},
+    {"op":"dbconn.folderNameFor","args":[""],"at":1793836830000,"ok":true,"result":"db","changes":{}},
+    {"op":"dbconn.folderNameFor","args":["   "],"at":1793836831000,"ok":true,"result":"db","changes":{}},
+    {"op":"dbconn.folderNameFor","args":["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],"at":1793836832000,"ok":true,"result":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx","changes":{}},
+    {"op":"dbconn.folderNameFor","args":["😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"],"at":1793836833000,"ok":true,"result":"😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀","changes":{}},
+    {"op":"dbconn.folderNameFor","args":["a"],"at":1793836834000,"ok":true,"result":"a","changes":{}},
+    {"op":"dbconn.folderNameFor","args":["﻿b"],"at":1793836835000,"ok":true,"result":"b","changes":{}}
+  ]
+}

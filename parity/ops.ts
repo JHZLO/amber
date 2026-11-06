@@ -208,6 +208,18 @@ export const OPS: Record<string, Op> = {
   "aiWait.waitLine": aiWait.waitLine,
 
   // 다이어그램 포커스 모드와 ER 컬럼 판 — 렌더된 SVG 의 data-id, 컬럼 라벨을 읽는 규칙
+  // DB 연결의 순수 판정 — 설정 목록과 ERD 트리가 같이 쓴다
+  "dbconn.prefAudit": dbconn.prefAudit,
+  "dbconn.profileOf": dbconn.profileOf,
+  "dbconn.schemaFolder": dbconn.schemaFolder,
+  "dbconn.isStale": dbconn.isStale,
+  "dbconn.enabledSchemas": dbconn.enabledSchemas,
+  "dbconn.envLabel": dbconn.envLabel,
+  "dbconn.connStatus": dbconn.connStatus,
+  "dbconn.connStatusLabel": dbconn.connStatusLabel,
+  "dbconn.connStatusDot": dbconn.connStatusDot,
+  "dbconn.folderNameFor": dbconn.folderNameFor,
+
   // ERD 탭 — 스냅샷 → resin 원문(사내 추론 + resin fromSchema)
   "erdGen.generateErd": erdGen.generateErd,
   "erdGen.inferReferences": erdGen.inferReferences,
@@ -347,17 +359,7 @@ export const PURE = new Set([
   "report.mcpSourcesFrom",
   "report.reportPathFor",
   "report.weeklyReportPathFor",
-  "dbconn.prefAudit",
-  "dbconn.profileOf",
-  "dbconn.schemaFolder",
   "dbconn.snapshotPath",
-  "dbconn.isStale",
-  "dbconn.enabledSchemas",
-  "dbconn.envLabel",
-  "dbconn.connStatus",
-  "dbconn.connStatusLabel",
-  "dbconn.connStatusDot",
-  "dbconn.folderNameFor",
   "vacations.isVacationKind",
   "vacations.vacationLabel",
   "notes.noteDirPath",
