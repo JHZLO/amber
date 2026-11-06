@@ -74,6 +74,9 @@ pub struct SettingsUi {
     pub db_delete: Option<amber_gpui::dbconn::DbConnection>,
     pub db_password: Option<crate::settings_db::DbPassword>,
     pub db_error: Option<String>,
+    /// 바닥 줄 — 백업 중, 결과(성공?, 글). 결과는 칸과 무관하게 판 맨 위에 남는다
+    pub backing_up: bool,
+    pub backup_result: Option<(bool, String)>,
     pub theme_anchor: std::rc::Rc<std::cell::Cell<Bounds<Pixels>>>,
     pub lang_anchor: std::rc::Rc<std::cell::Cell<Bounds<Pixels>>>,
 }
@@ -99,6 +102,8 @@ impl Default for SettingsUi {
             db_delete: None,
             db_password: None,
             db_error: None,
+            backing_up: false,
+            backup_result: None,
             theme_anchor: Default::default(),
             lang_anchor: Default::default(),
         }
@@ -111,6 +116,7 @@ impl Spike {
         self.settings.tab = Tab::Ai;
         self.settings.rep = None;
         self.settings.ai = None;
+        self.settings.backup_result = None;
         cx.notify();
     }
 
@@ -204,6 +210,21 @@ impl Spike {
             .pt(px(18.))
             .px(px(22.))
             .pb(px(22.))
+            .when_some(self.settings.backup_result.clone(), |d, (ok, msg)| {
+                d.child(
+                    crate::note_ai_view::note_box(
+                        if ok {
+                            crate::note_ai_view::Note::Ok
+                        } else {
+                            crate::note_ai_view::Note::Error
+                        },
+                        k,
+                    )
+                    .mb(px(12.))
+                    .tag("set-backup-result")
+                    .child(msg),
+                )
+            })
             .when(cur == Tab::Ai, |d| d.child(self.settings_ai_tab(k, cx)))
             .when(cur == Tab::Prompts, |d| d.child(self.prompts_tab(k, cx)))
             .when(cur == Tab::Databases, |d| {
@@ -214,10 +235,30 @@ impl Spike {
                 d.child(self.appearance_tab(k, cx))
             });
         let body = div().size_full().flex().child(nav).child(pane);
+        let busy = self.settings.backing_up;
         Some(crate::dialog::shell_settings(
             k,
             t("settings.title"),
             body.into_any_element(),
+            vec![
+                button("set-open-folder", k, false, false)
+                    .child(t("settings.openDataFolder"))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        // 시험은 Finder 를 열지 않는다
+                        if !cfg!(test) {
+                            cx.open_with_system(&this.db.data_dir());
+                        }
+                    })),
+                button("set-backup", k, false, busy)
+                    .child(t(if busy {
+                        "settings.backup.busy"
+                    } else {
+                        "settings.backup"
+                    }))
+                    .when(!busy, |b| {
+                        b.on_click(cx.listener(|this, _, _, cx| this.pick_backup_folder(cx)))
+                    }),
+            ],
             vec![
                 button("set-close", k, false, false)
                     .child(t("common.close"))
@@ -528,5 +569,81 @@ impl Spike {
             ],
             cancel(),
         ))
+    }
+}
+
+impl Spike {
+    /// 백업 — 폴더를 고르면 그 안에 amber-backup-<시각>/ 을 만든다(작업 폴더를 바꿨으면 그 폴더도 함께)
+    fn pick_backup_folder(&mut self, cx: &mut Context<Self>) {
+        let rx = cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some(t("settings.backup.pickTitle").into()),
+        });
+        cx.spawn(async move |this, cx| {
+            let Ok(Ok(Some(paths))) = rx.await else {
+                return;
+            };
+            let Some(dir) = paths.into_iter().next() else {
+                return;
+            };
+            let _ = this.update(cx, |s, cx| {
+                s.run_backup(dir.to_string_lossy().into_owned(), cx)
+            });
+        })
+        .detach();
+    }
+
+    pub(crate) fn run_backup(&mut self, dest: String, cx: &mut Context<Self>) {
+        if self.settings.backing_up {
+            return;
+        }
+        self.settings.backing_up = true;
+        self.settings.backup_result = None;
+        // 기본 보관함이 아닌 작업 폴더 — vault/ 밖에 있어 따로 넘겨야 백업에 담긴다
+        let mut extra = Vec::new();
+        for (section, cfg) in [
+            ("notes", &amber_gpui::vault::NOTES),
+            ("diagrams", &amber_gpui::vault::DIAGRAMS),
+        ] {
+            let root = amber_gpui::vault::Tree::new(&self.db, cfg).full("");
+            if root != cfg.root {
+                extra.push((section.to_string(), root));
+            }
+        }
+        let tz = -chrono::Local::now().offset().local_minus_utc() / 60;
+        let rx = crate::ai::spawn(amber_core::files::create_backup(
+            self.db.at("amber.db"),
+            self.db.data_dir(),
+            dest,
+            tz,
+            Some(extra),
+        ));
+        cx.spawn(async move |this, cx| {
+            let ex = cx.background_executor().clone();
+            let r = crate::ai::wait(rx, ex).await;
+            let _ = this.update(cx, |s, cx| {
+                s.settings.backing_up = false;
+                s.settings.backup_result = r.map(|r| match r {
+                    Ok(out) => (
+                        true,
+                        amber_gpui::i18n::t_with("settings.backup.done", &[("path", &out)]),
+                    ),
+                    Err(e) => (
+                        false,
+                        amber_gpui::i18n::t_with(
+                            "settings.backup.fail",
+                            &[("err", &crate::ai::err_text(&e))],
+                        ),
+                    ),
+                });
+                // 판을 맨 위로 — 아래로 굴려 둔 채면 결과를 못 보고 지나친다
+                s.settings.pane.set_offset(point(px(0.), px(0.)));
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
     }
 }

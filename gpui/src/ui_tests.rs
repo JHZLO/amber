@@ -4550,3 +4550,40 @@ fn the_databases_tab_lists_connections_and_deletes_them(cx: &mut TestAppContext)
     let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
     assert!(amber_gpui::dbconn::list_connections(&d).unwrap().is_empty());
 }
+
+#[gpui_kit::test]
+fn backup_writes_a_timestamped_copy_and_reports_it(cx: &mut TestAppContext) {
+    let db = seeded("settings-backup", &[("x", None)]);
+    vault_note(&db, "A.md", "# A\n");
+    // 데이터 폴더 안은 거절한다 — 옆 폴더로
+    let dest = std::env::temp_dir().join(format!("amber-ui-backup-dest-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dest);
+    std::fs::create_dir_all(&dest).unwrap();
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.settings");
+    assert!(ui.debug_bounds("set-backup").is_some());
+    let d = dest.to_string_lossy().into_owned();
+    ui.update(|_, cx| spike().update(cx, |s, cx| s.run_backup(d, cx)));
+    for _ in 0..100 {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        ui.executor()
+            .advance_clock(std::time::Duration::from_millis(60));
+        ui.run_until_parked();
+        if !ui.update(|_, cx| spike().read(cx).settings.backing_up) {
+            break;
+        }
+    }
+    let (ok, msg) = ui
+        .update(|_, cx| spike().read(cx).settings.backup_result.clone())
+        .unwrap();
+    assert!(ok, "{msg}");
+    let made: Vec<_> = std::fs::read_dir(&dest).unwrap().flatten().collect();
+    assert_eq!(made.len(), 1);
+    let name = made[0].file_name().to_string_lossy().into_owned();
+    assert!(name.starts_with("amber-backup-"), "{name}");
+    assert!(made[0].path().join("vault/notes/A.md").exists());
+    assert!(
+        ui.debug_bounds("set-backup-result").is_some(),
+        "판 맨 위에 결과"
+    );
+}

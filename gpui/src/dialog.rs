@@ -49,6 +49,7 @@ pub fn shell_settings(
     k: &Tokens,
     title: String,
     body: AnyElement,
+    left: Vec<Stateful<Div>>,
     buttons: Vec<Stateful<Div>>,
     on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Div {
@@ -59,7 +60,7 @@ pub fn shell_settings(
         true,
         title,
         body,
-        Vec::new(),
+        left,
         buttons,
         on_close,
     )
