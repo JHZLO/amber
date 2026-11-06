@@ -2689,3 +2689,116 @@ fn the_erd_preview_zooms_above_the_modal(cx: &mut TestAppContext) {
         "모달은 그대로"
     );
 }
+
+/// DB 연결 하나와 그 스키마의 스냅샷 — ERD 탭은 스냅샷만 보고 그린다(DB 에 붙지 않는다)
+fn seed_erd(db: &PathBuf) {
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    amber_gpui::dbconn::create_connection(
+        &d,
+        &amber_gpui::dbconn::ConnectionInput {
+            name: "Local DB".into(),
+            kind: "mysql".into(),
+            env: "prod".into(),
+            host: "127.0.0.1".into(),
+            port: 3306.,
+            username: "u".into(),
+            tls: "preferred".into(),
+            credential_command: String::new(),
+            folder_path: "Local DB".into(),
+            schemas: serde_json::json!([
+                {"name": "svc_shop", "label": "Shop", "enabled": true, "starred": true},
+                {"name": "svc_empty", "label": "", "enabled": true},
+                {"name": "svc_off", "label": "", "enabled": false},
+            ]),
+        },
+    )
+    .unwrap();
+    let col = |name: &str, ty: &str, key: &str, comment: &str| {
+        serde_json::json!({"name": name, "data_type": ty, "column_type": ty, "nullable": false, "key": key,
+            "default_value": null, "extra": "", "comment": comment})
+    };
+    let snap = serde_json::json!({
+        "amber": 1, "connection": "x", "schema": "svc_shop", "server": "MySQL 8.0.36", "synced_at": 0, "fingerprint": "f1",
+        "tables": [
+            {"name": "orders", "comment": "주문", "rows_estimate": null,
+             "columns": [col("id", "bigint", "PRI", ""), col("user_id", "bigint", "MUL", "")],
+             "indexes": [], "foreign_keys": [], "checks": []},
+            {"name": "users", "comment": "", "rows_estimate": null,
+             "columns": [col("id", "bigint", "PRI", ""), col("email", "varchar", "UNI", "이메일")],
+             "indexes": [], "foreign_keys": [], "checks": []},
+        ]
+    });
+    let path = db.parent().unwrap().join("vault/erd/Local DB/svc_shop");
+    std::fs::create_dir_all(&path).unwrap();
+    std::fs::write(path.join("schema.json"), snap.to_string()).unwrap();
+}
+
+fn erd_canvas(ui: &mut VisualTestContext) -> (bool, f32, (f32, f32)) {
+    for _ in 0..3 {
+        ui.update(|window, _| window.refresh());
+        ui.run_until_parked();
+    }
+    ui.update(|_, cx| {
+        let c = &spike().read(cx).erd.canvas;
+        (c.raster.full.is_some(), c.scale, (c.x, c.y))
+    })
+}
+
+#[gpui_kit::test]
+fn the_erd_tab_lists_schemas_and_draws_the_snapshot(cx: &mut TestAppContext) {
+    let db = seeded("erd-tab", &[]);
+    seed_erd(&db);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.erd");
+    // 연결을 펼치면 켜 둔 스키마만, 별표가 맨 위
+    let conn = ui.update(|_, cx| spike().read(cx).erd.connections.as_ref().unwrap()[0].id);
+    assert_eq!(conn, 1, "새 DB 의 첫 연결 — 시험 이름은 c1");
+    click(&mut ui, "erd-c1");
+    assert!(ui.debug_bounds("erd-c1/svc_shop").is_some());
+    assert!(ui.debug_bounds("erd-c1/svc_off").is_none(), "꺼 둔 스키마");
+    // 스냅샷이 없는 스키마는 안내만
+    click(&mut ui, "erd-c1/svc_empty");
+    ui.run_until_parked();
+    assert!(ui.update(|_, cx| spike().read(cx).erd.canvas.tree.is_none()));
+    // 스냅샷이 있으면 그린다 — 표 행도 펼쳐진다
+    click(&mut ui, "erd-c1/svc_shop");
+    let (baked, scale, _) = erd_canvas(&mut ui);
+    assert!(baked, "그렸다");
+    assert!(scale > 0. && scale <= 1.25);
+    assert!(ui.debug_bounds("erd-c1/svc_shop/orders").is_some());
+    let saved = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    assert!(
+        amber_gpui::prefs::get(&saved, "amber.erd.selected")
+            .unwrap()
+            .contains("svc_shop"),
+        "고른 스키마를 기억한다"
+    );
+    // 확대 — 단추는 1.25배, 100% 는 실제 크기, 맞춤은 처음으로
+    click(&mut ui, "erd-zoom-in");
+    assert!((erd_canvas(&mut ui).1 - scale * 1.25).abs() < 1e-3);
+    click(&mut ui, "erd-pct");
+    assert_eq!(erd_canvas(&mut ui).1, 1.);
+    click(&mut ui, "erd-fit");
+    assert_eq!(erd_canvas(&mut ui).1, scale);
+    // 휠 — 포인터 자리를 붙잡고
+    let stage = bounds(&mut ui, "erd-canvas");
+    ui.simulate_event(ScrollEvent {
+        position: stage.center(),
+        delta: ScrollDelta::Pixels(point(px(0.), px(50.))),
+        ..Default::default()
+    });
+    ui.run_until_parked();
+    assert!(
+        (erd_canvas(&mut ui).1 - scale * (50f32 * 0.0018).exp()).abs() < 1e-3,
+        "위로 굴리면 커진다"
+    );
+    // 배경을 바꾸면 다시 그리고 기억한다
+    click(&mut ui, "erd-stage-silk");
+    erd_canvas(&mut ui);
+    ui.update(|_, cx| assert!(spike().read(cx).erd.canvas.key.contains("silk-")));
+    assert!(
+        amber_gpui::prefs::get(&saved, "amber.erd.view")
+            .unwrap()
+            .contains("\"silk\"")
+    );
+}

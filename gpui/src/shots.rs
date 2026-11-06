@@ -113,6 +113,48 @@ against the Rust one. See [the steps](#2).\n\n> [!NOTE]\n> Fixtures live in `par
     ] {
         amber_gpui::blocks::create_block(&db, DATE, s, e, title, None).unwrap();
     }
+    // ERD — 데모 연결 하나와 상점 스키마 스냅샷(실제 업무 스키마는 쓰지 않는다)
+    amber_gpui::dbconn::create_connection(
+        &db,
+        &amber_gpui::dbconn::ConnectionInput {
+            name: "Demo DB".into(),
+            kind: "mysql".into(),
+            env: "dev".into(),
+            host: "127.0.0.1".into(),
+            port: 3306.,
+            username: "demo".into(),
+            tls: "preferred".into(),
+            credential_command: String::new(),
+            folder_path: "Demo DB".into(),
+            schemas: serde_json::json!([{"name": "shop", "label": "Shop", "enabled": true, "starred": true}]),
+        },
+    )
+    .unwrap();
+    let col = |name: &str, ty: &str, ct: &str, key: &str, nullable: bool, comment: &str| {
+        serde_json::json!({"name": name, "data_type": ty, "column_type": ct, "nullable": nullable, "key": key,
+            "default_value": null, "extra": "", "comment": comment})
+    };
+    let table = |name: &str,
+                 comment: &str,
+                 columns: Vec<serde_json::Value>,
+                 fks: serde_json::Value| {
+        serde_json::json!({"name": name, "comment": comment, "rows_estimate": null, "columns": columns,
+            "indexes": [], "foreign_keys": fks, "checks": []})
+    };
+    let fk = |name: &str, col: &str, to: &str| serde_json::json!({"name": name, "columns": [col], "ref_schema": "shop", "ref_table": to, "ref_columns": ["id"]});
+    let snap = serde_json::json!({
+        "amber": 1, "connection": "demo", "schema": "shop", "server": "MySQL 8.0.36", "synced_at": 1_793_000_000_000i64, "fingerprint": "demo",
+        "tables": [
+            table("users", "People who sign in", vec![col("id", "bigint", "bigint", "PRI", false, ""), col("email", "varchar", "varchar(255)", "UNI", false, "Sign-in email"), col("name", "varchar", "varchar(64)", "", true, "")], serde_json::json!([])),
+            table("orders", "Customer orders", vec![col("id", "bigint", "bigint", "PRI", false, ""), col("user_id", "bigint", "bigint", "MUL", false, ""), col("status", "varchar", "enum('PENDING','PAID','CANCELED')", "", false, ""), col("created_at", "datetime", "datetime", "", false, "")], serde_json::json!([fk("fk_order_user", "user_id", "users")])),
+            table("order_items", "Order lines", vec![col("id", "bigint", "bigint", "PRI", false, ""), col("order_id", "bigint", "bigint", "MUL", false, ""), col("product_id", "bigint", "bigint", "MUL", false, ""), col("quantity", "int", "int", "", false, "")], serde_json::json!([fk("fk_item_order", "order_id", "orders"), fk("fk_item_product", "product_id", "products")])),
+            table("products", "Catalog", vec![col("id", "bigint", "bigint", "PRI", false, ""), col("name", "varchar", "varchar(120)", "", false, ""), col("price", "decimal", "decimal(12,2)", "", false, "")], serde_json::json!([])),
+            table("payments", "", vec![col("id", "bigint", "bigint", "PRI", false, ""), col("order_id", "bigint", "bigint", "UNI", false, "One payment per order"), col("amount", "decimal", "decimal(12,2)", "", false, "")], serde_json::json!([fk("fk_payment_order", "order_id", "orders")])),
+        ]
+    });
+    let erd = dir.join("vault/erd/Demo DB/shop");
+    std::fs::create_dir_all(&erd).unwrap();
+    std::fs::write(erd.join("schema.json"), snap.to_string()).unwrap();
     db_path.to_str().unwrap().to_string()
 }
 
@@ -250,6 +292,7 @@ pub fn run(dir: &str) {
     comments(&mut s);
     note_ai(&mut s);
     diagrams(&mut s);
+    erd(&mut s);
     for (name, level) in [
         ("cal-month", crate::calendar::Level::Month),
         ("cal-year", crate::calendar::Level::Year),
@@ -824,6 +867,28 @@ fn diagrams(s: &mut Shots) {
             cx.notify();
         })
         .unwrap();
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.section = crate::Section::Notes;
+            cx.notify();
+        })
+        .unwrap();
+}
+
+/// ERD 탭 — 데모 스키마를 고르고(오로라 정지 그림)
+fn erd(s: &mut Shots) {
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.section = crate::Section::Erd;
+            sp.load_erd();
+            let ulid = sp.erd.connections.as_ref().unwrap()[0].ulid.clone();
+            sp.open_erd_schema(&ulid, "shop");
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.settle();
+    s.shot("erd-open");
     s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.section = crate::Section::Notes;

@@ -114,6 +114,8 @@ impl Spike {
             &mut self.notes.width
         } else if key == crate::vault_pane::Which::Diagrams.pane().key {
             &mut self.diagrams.width
+        } else if key == crate::erd_view::LIST_PANE.key {
+            &mut self.erd.width
         } else {
             &mut self.cal_w
         }

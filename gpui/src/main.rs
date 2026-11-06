@@ -12,6 +12,7 @@ mod diagram_canvas;
 mod diagrams_view;
 mod dialog;
 mod drawer;
+mod erd_view;
 mod figure;
 mod highlight;
 mod markdown;
@@ -140,6 +141,8 @@ struct Spike {
     /// 다이어그램 탭 트리의 포커스(⌘F 가 트리 찾기로)
     dtree_focus: FocusHandle,
     diagrams: diagrams_view::DiagramsState,
+    /// ERD 탭 — 연결, 스냅샷, 캔버스(erd_view.rs)
+    erd: erd_view::ErdState,
     /// mermaid 그림 확대 뷰어 — 노트 그림, 다이어그램 AI 미리보기에서 연다
     mmd_zoom: Option<mermaid_zoom::MmdZoom>,
     started: Instant,
@@ -241,6 +244,10 @@ impl Spike {
             list_w(vault_pane::Which::Notes),
             list_w(vault_pane::Which::Diagrams),
         );
+        let erd_w = amber_gpui::prefs::get(&db, erd_view::LIST_PANE.key)
+            .and_then(|v| v.parse::<f32>().ok())
+            .filter(|v| (erd_view::LIST_PANE.min..=erd_view::LIST_PANE.max).contains(v))
+            .unwrap_or(notes_view::LIST_DEFAULT);
         let mut this = Spike {
             db,
             date,
@@ -296,6 +303,10 @@ impl Spike {
                 ..Default::default()
             },
             mmd_zoom: None,
+            erd: erd_view::ErdState {
+                width: erd_w,
+                ..Default::default()
+            },
             started,
             first_frame: false,
         };
@@ -485,6 +496,9 @@ impl Render for Spike {
         if self.section == Section::Diagrams {
             self.prepare_diagram_canvas(cx);
         }
+        if self.section == Section::Erd {
+            self.prepare_erd(cx);
+        }
         // 질문/후속 입력칸, AI 작성 입력칸과 적용한 초안 — 창이 있어야 만들어진다
         self.apply_cmt_rebuild(window, cx);
         self.apply_ai_pending(window, cx);
@@ -553,6 +567,7 @@ impl Render for Spike {
                 .into_any_element(),
             Section::Notes => self.notes_body(body_w, &k, cx).into_any_element(),
             Section::Diagrams => self.diagrams_body(body_w, &k, cx).into_any_element(),
+            Section::Erd => self.erd_body(body_w, &k, cx).into_any_element(),
             // 아직 옮기지 않은 탭 — 체크리스트(D)에서 하나씩
             _ => div().into_any_element(),
         };
@@ -759,6 +774,17 @@ impl Render for Spike {
             ))
             .on_drop(cx.listener(|this, _: &diagram_canvas::CanvasGrab, _, cx| {
                 this.canvas_drop();
+                cx.notify();
+            }))
+            .on_drag_move::<erd_view::ErdGrab>(cx.listener(
+                |this, e: &DragMoveEvent<erd_view::ErdGrab>, _, cx| {
+                    if this.erd_pan_to(e.event.position) {
+                        cx.notify();
+                    }
+                },
+            ))
+            .on_drop(cx.listener(|this, _: &erd_view::ErdGrab, _, cx| {
+                this.erd_drop();
                 cx.notify();
             }))
             .on_drag_move::<mermaid_zoom::ZoomGrab>(cx.listener(
