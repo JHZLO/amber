@@ -76,6 +76,8 @@ pub struct ConceptsUi {
     pub pending: Option<Box<dyn FnOnce(&mut Spike, &mut Context<Spike>)>>,
     /// AI 보강 창
     pub augment: Option<crate::concept_augment::Augment>,
+    /// 새 개념 추가 창
+    pub add: Option<crate::concept_add::AddConcept>,
 }
 
 impl ConceptsUi {
@@ -125,6 +127,7 @@ impl ConceptsUi {
             detail: None,
             pending: None,
             augment: None,
+            add: None,
         }
     }
 
@@ -197,7 +200,7 @@ impl Spike {
     }
 
     /// 머리 줄의 개념 탭 몫 — 검색 칸(최대 440), 빈칸, [+ 추가]
-    pub(crate) fn concepts_topbar(&self, k: &Tokens, _cx: &mut Context<Self>) -> Vec<AnyElement> {
+    pub(crate) fn concepts_topbar(&self, k: &Tokens, cx: &mut Context<Self>) -> Vec<AnyElement> {
         vec![
             div()
                 .relative()
@@ -235,6 +238,7 @@ impl Spike {
                 .text_size(px(13.))
                 .child(icon("plus", 15.).text_color(k.text))
                 .child(t("app.add"))
+                .on_click(cx.listener(|this, _, window, cx| this.open_add_concept(window, cx)))
                 .into_any_element(),
         ]
     }
@@ -403,26 +407,30 @@ impl Spike {
             );
         }
         if c.ready && c.list.is_empty() && c.load_error.is_none() {
-            list = list.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .gap(px(12.))
-                    .p(px(40.))
-                    .text_size(px(14.))
-                    .text_color(k.text_3)
-                    .child(t(if c.status == "learning" {
-                        "app.empty.learning"
-                    } else {
-                        "app.empty.noResults"
-                    }))
-                    .child(
-                        primary_button("concept-add-first", k, false)
-                            .child(icon("plus", 14.).text_color(k.text))
-                            .child(t("app.empty.addFirst")),
-                    ),
-            );
+            list =
+                list.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .gap(px(12.))
+                        .p(px(40.))
+                        .text_size(px(14.))
+                        .text_color(k.text_3)
+                        .child(t(if c.status == "learning" {
+                            "app.empty.learning"
+                        } else {
+                            "app.empty.noResults"
+                        }))
+                        .child(
+                            primary_button("concept-add-first", k, false)
+                                .child(icon("plus", 14.).text_color(k.text))
+                                .child(t("app.empty.addFirst"))
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.open_add_concept(window, cx)
+                                })),
+                        ),
+                );
         }
         for r in &c.list {
             list = list.child(self.concept_row(r, k, cx));

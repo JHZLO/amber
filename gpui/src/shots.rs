@@ -1493,4 +1493,15 @@ fn concepts(s: &mut Shots) {
         .unwrap();
     s.settle();
     s.shot("concepts-1-all-db");
+    s.window
+        .update(&mut s.cx, |sp, window, cx| sp.open_add_concept(window, cx))
+        .unwrap();
+    s.settle();
+    s.shot("concepts-2-add");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.concepts.add = None;
+            cx.notify();
+        })
+        .unwrap();
 }

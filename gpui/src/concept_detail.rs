@@ -276,6 +276,9 @@ impl Spike {
 
     /// Esc — 안쪽 창부터 닫는다. 닫은 게 있으면 true
     pub(crate) fn concept_escape(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.add_concept_escape(cx) {
+            return true;
+        }
         if let Some(a) = self.concepts.augment.as_mut() {
             if a.confirm_close {
                 a.confirm_close = false;

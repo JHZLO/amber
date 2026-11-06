@@ -161,6 +161,7 @@ impl Spike {
         a.step = Step::Loading;
         a.seq += 1;
         let seq = a.seq;
+        self.focus.focus(window, cx);
         let s = |k: &str| {
             r.get(k)
                 .and_then(Json::as_str)

@@ -6,6 +6,7 @@
 mod ai;
 mod assets;
 mod calendar;
+mod concept_add;
 mod concept_augment;
 mod concept_detail;
 mod concepts_view;
@@ -637,6 +638,7 @@ impl Render for Spike {
             self.concept_delete_modal(&k, cx),
             self.concept_unsaved_modal(&k, cx),
             self.augment_modal(&k, cx),
+            self.add_concept_modal(&k, cx),
         ];
         let (erd_modal, erd_confirm) = if self.section == Section::Erd {
             (

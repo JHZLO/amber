@@ -4032,3 +4032,124 @@ fn ai_augment_previews_then_applies_the_new_note(cx: &mut TestAppContext) {
     );
     assert!(ui.debug_bounds("augment-apply").is_none());
 }
+
+fn concepts_of(db: &PathBuf) -> Vec<serde_json::Map<String, serde_json::Value>> {
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    d.select("SELECT * FROM concepts ORDER BY id", &[]).unwrap()
+}
+
+#[gpui_kit::test]
+fn adding_a_concept_by_hand_saves_the_row_then_the_note(cx: &mut TestAppContext) {
+    let db = seeded("concept-add", &[]);
+    let dir = db.parent().unwrap().to_path_buf();
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.til");
+    click(&mut ui, "concept-add");
+    ui.simulate_input("short");
+    ui.run_until_parked();
+    assert!(ui.debug_bounds("add-generate").is_some());
+    click(&mut ui, "add-manual");
+    // 제목, 요약이 비면 막는다
+    click(&mut ui, "add-save");
+    assert!(concepts_of(&db).is_empty());
+    click(&mut ui, "add-title");
+    ui.simulate_input("Backpressure");
+    click(&mut ui, "add-summary");
+    ui.simulate_input("slow the producer");
+    click(&mut ui, "add-tags");
+    ui.simulate_input("kafka, #streams");
+    click(&mut ui, "add-conf-2");
+    click(&mut ui, "add-body");
+    ui.simulate_input("# Backpressure");
+    click(&mut ui, "add-save");
+    let rows = concepts_of(&db);
+    assert_eq!(rows.len(), 1);
+    let r = &rows[0];
+    assert_eq!(r["title"], "Backpressure");
+    assert_eq!(
+        (r["status"].clone(), r["confidence"].clone()),
+        ("learning".into(), 2.into())
+    );
+    assert_eq!(r["source"], "short");
+    assert_eq!(r["source_kind"], "paste");
+    let ulid = r["ulid"].as_str().unwrap();
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    assert_eq!(
+        amber_gpui::vault::read_concept_note(&d, r["detail_path"].as_str().unwrap()).unwrap(),
+        "# Backpressure"
+    );
+    assert!(dir.join(format!("vault/concepts/{ulid}/index.md")).exists());
+    let tags = amber_gpui::concepts::get_concept(&d, r["id"].as_i64().unwrap())
+        .unwrap()
+        .unwrap();
+    assert_eq!(tags["tags"], serde_json::json!(["kafka", "streams"]));
+    assert!(ui.debug_bounds("add-save").is_none(), "저장하면 닫힌다");
+    ui.update(|_, cx| assert_eq!(spike().read(cx).concepts.list.len(), 1));
+}
+
+#[gpui_kit::test]
+fn adding_a_concept_with_ai_fills_the_review(cx: &mut TestAppContext) {
+    let db = seeded("concept-add-ai", &[]);
+    let dir = db.parent().unwrap().to_path_buf();
+    let note = serde_json::json!({
+        "title": "MVCC",
+        "summary": "snapshots for readers",
+        "detail_markdown": "# MVCC",
+        "tags": ["db"],
+        "confidence_suggestion": 1,
+        "source_excerpt": null
+    })
+    .to_string();
+    let quoted = serde_json::to_string(&note).unwrap();
+    connect_fake(&db, &fake_claude(&dir, &quoted[1..quoted.len() - 1]));
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.til");
+    click(&mut ui, "concept-add");
+    ui.simulate_input("Q: what is MVCC? A: readers get a snapshot of the rows");
+    ui.run_until_parked();
+    click(&mut ui, "add-generate");
+    for _ in 0..200 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        ui.executor()
+            .advance_clock(std::time::Duration::from_millis(100));
+        ui.run_until_parked();
+        let done = ui.update(|_, cx| {
+            spike()
+                .read(cx)
+                .concepts
+                .add
+                .as_ref()
+                .is_some_and(|a| a.step == crate::concept_add::Step::Preview)
+        });
+        if done {
+            break;
+        }
+    }
+    let title = ui.update(|_, cx| {
+        let s = spike().read(cx);
+        s.concepts
+            .add
+            .as_ref()
+            .unwrap()
+            .title
+            .read(cx)
+            .value()
+            .to_string()
+    });
+    assert_eq!(title, "MVCC");
+    // 결과가 떠 있으면 닫기 전에 묻는다
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert!(ui.debug_bounds("add-keep").is_some());
+    click(&mut ui, "add-keep");
+    click(&mut ui, "add-save");
+    assert_eq!(concepts_of(&db)[0]["summary"], "snapshots for readers");
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    assert_eq!(
+        amber_gpui::concepts::get_setting(&d, "default_instruction")
+            .unwrap()
+            .as_deref(),
+        Some(""),
+        "지시문은 다음 추가의 기본값으로 남는다"
+    );
+}
