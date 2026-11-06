@@ -1,0 +1,51 @@
+{
+  "format": 1,
+  "name": "report/files",
+  "tz": "Asia/Seoul",
+  "start": 1793836800000,
+  "seed": [
+    {
+      "path": "vault/reports/2026-03-02.md",
+      "text": "# 월\n- 한 일\n"
+    },
+    {
+      "path": "vault/reports/2026-03-04.md",
+      "text": "  \n"
+    },
+    {
+      "path": "vault/reports/2026-03-08.md",
+      "text": "일요일\n"
+    },
+    {
+      "path": "vault/reports/2026-03-01-week.md",
+      "text": "옛 키 주간\n"
+    }
+  ],
+  "final": "a0cf48763680a0098c23b416fdeb7f7e0f6e8bd50e01d81742fc4b536f21dcef",
+  "steps": [
+    {"op":"report.readReportFile","args":["2026-03-02"],"at":1793836800000,"ok":true,"result":"# 월\n- 한 일\n","changes":{}},
+    {"op":"report.readReportFile","args":["2026-03-03"],"at":1793836801000,"ok":true,"result":null,"changes":{}},
+    {"op":"report.loadWeekSources","args":["2026-03-02"],"at":1793836802000,"ok":true,"result":[{"date":"2026-03-02","weekday":"월","body":"# 월\n- 한 일\n"},{"date":"2026-03-03","weekday":"화","body":null},{"date":"2026-03-04","weekday":"수","body":"  \n"},{"date":"2026-03-05","weekday":"목","body":null},{"date":"2026-03-06","weekday":"금","body":null},{"date":"2026-03-07","weekday":"토","body":null},{"date":"2026-03-08","weekday":"일","body":"일요일\n"}],"changes":{}},
+    {"op":"report.writeReportFile","args":["2026-03-03","# 화\n"],"at":1793836803000,"ok":true,"result":"reports/2026-03-03.md","changes":{"__files":{"added":[{"path":"vault/reports/2026-03-03.md","kind":"file","text":"# 화\n"}],"removed":[],"changed":[]}}},
+    {"op":"report.writeReportFile","args":["2026-03-02","덮어쓰기\n"],"at":1793836804000,"ok":true,"result":"reports/2026-03-02.md","changes":{"__files":{"added":[],"removed":[],"changed":[{"before":{"path":"vault/reports/2026-03-02.md","kind":"file","text":"# 월\n- 한 일\n"},"after":{"path":"vault/reports/2026-03-02.md","kind":"file","text":"덮어쓰기\n"}}]}}},
+    {"op":"report.readReportFile","args":["2026-03-02"],"at":1793836805000,"ok":true,"result":"덮어쓰기\n","changes":{}},
+    {"op":"report.loadWeekSources","args":["2026-03-02"],"at":1793836806000,"ok":true,"result":[{"date":"2026-03-02","weekday":"월","body":"덮어쓰기\n"},{"date":"2026-03-03","weekday":"화","body":"# 화\n"},{"date":"2026-03-04","weekday":"수","body":"  \n"},{"date":"2026-03-05","weekday":"목","body":null},{"date":"2026-03-06","weekday":"금","body":null},{"date":"2026-03-07","weekday":"토","body":null},{"date":"2026-03-08","weekday":"일","body":"일요일\n"}],"changes":{}},
+    {"op":"report.loadWeekSources","args":["2026-02-25"],"at":1793836807000,"ok":true,"result":[{"date":"2026-02-25","weekday":"수","body":null},{"date":"2026-02-26","weekday":"목","body":null},{"date":"2026-02-27","weekday":"금","body":null},{"date":"2026-02-28","weekday":"토","body":null},{"date":"2026-03-01","weekday":"일","body":null},{"date":"2026-03-02","weekday":"월","body":"덮어쓰기\n"},{"date":"2026-03-03","weekday":"화","body":"# 화\n"}],"changes":{}},
+    {"op":"report.upsertReport","args":[{"date":"2026-03-02","filePath":"reports/2026-03-02.md","sourcesJson":"[]","provider":"claude","model":"m","durationMs":5}],"at":1793836808000,"ok":true,"result":null,"changes":{"daily_reports":{"added":[{"id":1,"report_date":"2026-03-02","file_path":"reports/2026-03-02.md","sources_json":"[]","provider":"claude","model":"m","duration_ms":5,"created_at":1793836808000,"updated_at":1793836808000}],"removed":[],"changed":[]},"sqlite_sequence":{"added":[{"name":"daily_reports","seq":1}],"removed":[],"changed":[]}}},
+    {"op":"report.deleteReport","args":["2026-03-02"],"at":1793836809000,"ok":true,"result":null,"changes":{"__files":{"added":[{"path":".trash","kind":"dir"},{"path":".trash/1","kind":"dir"},{"path":".trash/1/2026-03-02.md","kind":"file","text":"덮어쓰기\n"}],"removed":[{"path":"vault/reports/2026-03-02.md","kind":"file","text":"덮어쓰기\n"}],"changed":[]},"daily_reports":{"added":[],"removed":[{"id":1,"report_date":"2026-03-02","file_path":"reports/2026-03-02.md","sources_json":"[]","provider":"claude","model":"m","duration_ms":5,"created_at":1793836808000,"updated_at":1793836808000}],"changed":[]}}},
+    {"op":"report.getReport","args":["2026-03-02"],"at":1793836810000,"ok":true,"result":null,"changes":{}},
+    {"op":"report.deleteReport","args":["2026-03-09"],"at":1793836811000,"ok":true,"result":null,"changes":{}},
+    {"op":"report.deleteReport","args":["2026-03-03"],"at":1793836812000,"ok":true,"result":null,"changes":{"__files":{"added":[{"path":".trash/2","kind":"dir"},{"path":".trash/2/2026-03-03.md","kind":"file","text":"# 화\n"}],"removed":[{"path":"vault/reports/2026-03-03.md","kind":"file","text":"# 화\n"}],"changed":[]}}},
+    {"op":"report.readWeeklyReportFile","args":["2026-03-02"],"at":1793836813000,"ok":true,"result":null,"changes":{}},
+    {"op":"report.writeWeeklyReportFile","args":["2026-03-02","주간\n"],"at":1793836814000,"ok":true,"result":"reports/2026-03-02-week.md","changes":{"__files":{"added":[{"path":"vault/reports/2026-03-02-week.md","kind":"file","text":"주간\n"}],"removed":[],"changed":[]}}},
+    {"op":"report.readWeeklyReportFile","args":["2026-03-02"],"at":1793836815000,"ok":true,"result":"주간\n","changes":{}},
+    {"op":"report.readWeeklyReportFile","args":["2026-03-02",""],"at":1793836816000,"ok":true,"result":"주간\n","changes":{}},
+    {"op":"report.readWeeklyReportFile","args":["2026-03-09","reports/2026-03-01-week.md"],"at":1793836817000,"ok":true,"result":"옛 키 주간\n","changes":{}},
+    {"op":"report.readWeeklyReportFile","args":["2026-03-09","reports/없음.md"],"at":1793836818000,"ok":true,"result":null,"changes":{}},
+    {"op":"report.upsertWeeklyReport","args":[{"weekStart":"2026-03-09","filePath":"reports/2026-03-01-week.md","sourcesJson":"[]","provider":null,"model":null,"durationMs":null}],"at":1793836819000,"ok":true,"result":null,"changes":{"sqlite_sequence":{"added":[{"name":"weekly_reports","seq":1}],"removed":[],"changed":[]},"weekly_reports":{"added":[{"id":1,"week_start":"2026-03-09","file_path":"reports/2026-03-01-week.md","sources_json":"[]","provider":null,"model":null,"duration_ms":null,"created_at":1793836819000,"updated_at":1793836819000}],"removed":[],"changed":[]}}},
+    {"op":"report.deleteWeeklyReport","args":["2026-03-09"],"at":1793836820000,"ok":true,"result":null,"changes":{"__files":{"added":[{"path":".trash/3","kind":"dir"},{"path":".trash/3/2026-03-01-week.md","kind":"file","text":"옛 키 주간\n"}],"removed":[{"path":"vault/reports/2026-03-01-week.md","kind":"file","text":"옛 키 주간\n"}],"changed":[]},"weekly_reports":{"added":[],"removed":[{"id":1,"week_start":"2026-03-09","file_path":"reports/2026-03-01-week.md","sources_json":"[]","provider":null,"model":null,"duration_ms":null,"created_at":1793836819000,"updated_at":1793836819000}],"changed":[]}}},
+    {"op":"report.getWeeklyReport","args":["2026-03-09"],"at":1793836821000,"ok":true,"result":null,"changes":{}},
+    {"op":"report.deleteWeeklyReport","args":["2026-03-02"],"at":1793836822000,"ok":true,"result":null,"changes":{"__files":{"added":[{"path":".trash/4","kind":"dir"},{"path":".trash/4/2026-03-02-week.md","kind":"file","text":"주간\n"}],"removed":[{"path":"vault/reports/2026-03-02-week.md","kind":"file","text":"주간\n"}],"changed":[]}}},
+    {"op":"report.deleteWeeklyReport","args":["2026-03-16"],"at":1793836823000,"ok":true,"result":null,"changes":{}}
+  ]
+}

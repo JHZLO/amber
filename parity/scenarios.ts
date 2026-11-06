@@ -864,6 +864,61 @@ const erdMigrateFiles: Scenario = {
   },
 };
 
+/** 리포트 본문 파일 — 쓰기(폴더 만들기, 덮기), 읽기, 행과 함께 휴지통, 주간은 행에 적힌 옛 키 경로, 주 재료 7일 */
+const reportFiles: Scenario = {
+  name: "report/files",
+  seed: [
+    { path: "vault/reports/2026-03-02.md", text: "# 월\n- 한 일\n" },
+    { path: "vault/reports/2026-03-04.md", text: "  \n" },
+    { path: "vault/reports/2026-03-08.md", text: "일요일\n" },
+    { path: "vault/reports/2026-03-01-week.md", text: "옛 키 주간\n" },
+  ],
+  plan() {
+    const row = (date: string, filePath: string) => ({ date, filePath, sourcesJson: "[]", provider: "claude", model: "m", durationMs: 5 });
+    const wrow = (weekStart: string, filePath: string) => ({ weekStart, filePath, sourcesJson: "[]", provider: null, model: null, durationMs: null });
+    return [
+      s("report.readReportFile", "2026-03-02"),
+      s("report.readReportFile", "2026-03-03"),
+      s("report.loadWeekSources", "2026-03-02"),
+      s("report.writeReportFile", "2026-03-03", "# 화\n"),
+      s("report.writeReportFile", "2026-03-02", "덮어쓰기\n"),
+      s("report.readReportFile", "2026-03-02"),
+      s("report.loadWeekSources", "2026-03-02"),
+      s("report.loadWeekSources", "2026-02-25"),
+      s("report.upsertReport", row("2026-03-02", "reports/2026-03-02.md")),
+      s("report.deleteReport", "2026-03-02"),
+      s("report.getReport", "2026-03-02"),
+      s("report.deleteReport", "2026-03-09"),
+      s("report.deleteReport", "2026-03-03"),
+      s("report.readWeeklyReportFile", "2026-03-02"),
+      s("report.writeWeeklyReportFile", "2026-03-02", "주간\n"),
+      s("report.readWeeklyReportFile", "2026-03-02"),
+      s("report.readWeeklyReportFile", "2026-03-02", ""),
+      s("report.readWeeklyReportFile", "2026-03-09", "reports/2026-03-01-week.md"),
+      s("report.readWeeklyReportFile", "2026-03-09", "reports/없음.md"),
+      s("report.upsertWeeklyReport", wrow("2026-03-09", "reports/2026-03-01-week.md")),
+      s("report.deleteWeeklyReport", "2026-03-09"),
+      s("report.getWeeklyReport", "2026-03-09"),
+      s("report.deleteWeeklyReport", "2026-03-02"),
+      s("report.deleteWeeklyReport", "2026-03-16"),
+    ];
+  },
+};
+
+/** 리포트 폴더가 아직 없을 때 — 첫 쓰기가 폴더를 만든다 */
+const reportFilesFresh: Scenario = {
+  name: "report/files-fresh",
+  plan() {
+    return [
+      s("report.readReportFile", "2026-01-05"),
+      s("report.loadWeekSources", "2026-01-05"),
+      s("report.writeReportFile", "2026-01-05", "첫 리포트\n"),
+      s("report.writeWeeklyReportFile", "2026-01-05", "첫 주간\n"),
+      s("report.loadWeekSources", "2026-01-05"),
+    ];
+  },
+};
+
 /** 날짜 계산 훑기 — 월 경계, 윤년, 연 경계, 주 시작, 달력 격자, 공휴일(대체공휴일, 음력 표 밖 연도) */
 const dates: Scenario = {
   name: "dates/sweep",
@@ -1484,6 +1539,8 @@ export const SCENARIOS: Scenario[] = [
   erdGenPure,
   schemaSnapshotPure,
   erdMigrateFiles,
+  reportFiles,
+  reportFilesFresh,
   dbconnPure,
   commentFiles,
   aiConfig,
