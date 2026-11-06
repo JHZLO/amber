@@ -17,9 +17,9 @@ use objc2_core_video::{
 };
 use objc2_foundation::NSString;
 use objc2_metal::{
-    MTLBlendFactor, MTLBlitCommandEncoder, MTLClearColor, MTLCommandBuffer, MTLCommandEncoder,
-    MTLCommandQueue, MTLCompileOptions, MTLCreateSystemDefaultDevice, MTLDevice, MTLLibrary,
-    MTLLoadAction, MTLPixelFormat, MTLPrimitiveType, MTLRenderCommandEncoder,
+    MTLBlendFactor, MTLBlitCommandEncoder, MTLBuffer, MTLClearColor, MTLCommandBuffer,
+    MTLCommandEncoder, MTLCommandQueue, MTLCompileOptions, MTLCreateSystemDefaultDevice, MTLDevice,
+    MTLLibrary, MTLLoadAction, MTLPixelFormat, MTLPrimitiveType, MTLRenderCommandEncoder,
     MTLRenderPassDescriptor, MTLRenderPipelineDescriptor, MTLRenderPipelineState,
     MTLResourceOptions, MTLStorageMode, MTLStoreAction, MTLTexture, MTLTextureDescriptor,
     MTLTextureUsage,
@@ -275,15 +275,7 @@ impl Renderer {
 
     /// 한 프레임을 그려 판을 돌려준다
     pub fn render(&mut self, f: &Frame) -> Result<CFRetained<CVPixelBuffer>, String> {
-        let (w, h) = (f.size.0.max(1.), f.size.1.max(1.));
-        let dpr = f.dpr.clamp(1., 2.);
-        // 장치 픽셀 — 4:2:0 이라 짝수로
-        let even = |v: f32| (((v * dpr).round() as usize).max(2) + 1) & !1;
-        let color_size = (even(w), even(h));
-        let stage_size = (
-            (w / 2.).ceil().max(1.) as usize,
-            (h / 2.).ceil().max(1.) as usize,
-        );
+        let (w, h, dpr, color_size, stage_size) = sizes(f);
         let (stage, color) = self.sized(stage_size, color_size)?;
         let pool = &self.pool.as_ref().unwrap().1;
         let mut out: *mut CVPixelBuffer = std::ptr::null_mut();
@@ -320,6 +312,37 @@ impl Renderer {
         )?;
 
         let cmd = self.queue.commandBuffer().ok_or("명령 버퍼")?;
+        self.encode_color(&cmd, f, &stage, &color, (w, h, dpr))?;
+
+        // 4. YCbCr 두 판
+        draw_screen(
+            &cmd,
+            &luma,
+            &self.luma_pipe,
+            Some(&color),
+            (NonNull::dangling(), 0),
+        )?;
+        draw_screen(
+            &cmd,
+            &chroma,
+            &self.chroma_pipe,
+            Some(&color),
+            (NonNull::dangling(), 0),
+        )?;
+        cmd.commit();
+        cmd.waitUntilCompleted();
+        Ok(buffer)
+    }
+
+    /// 1~3(무대, 화면, 유리)을 color 에 — 판으로 옮기기 전의 RGB
+    fn encode_color(
+        &self,
+        cmd: &ProtocolObject<dyn MTLCommandBuffer>,
+        f: &Frame,
+        stage: &Tex,
+        color: &Tex,
+        (w, h, dpr): (f32, f32, f32),
+    ) -> Result<(), String> {
         let (x, y, scale) = f.view;
         let s = f.stage;
         let g = f.glass;
@@ -426,26 +449,56 @@ impl Renderer {
             }
         }
         enc.endEncoding();
+        Ok(())
+    }
 
-        // 4. YCbCr 두 판
-        draw_screen(
-            &cmd,
-            &luma,
-            &self.luma_pipe,
-            Some(&color),
-            (NonNull::dangling(), 0),
-        )?;
-        draw_screen(
-            &cmd,
-            &chroma,
-            &self.chroma_pipe,
-            Some(&color),
-            (NonNull::dangling(), 0),
-        )?;
+    /// 판으로 옮기기 전의 RGBA(장치 픽셀, 위에서 아래로) — WebGL 판과 견주는 시험이 읽는다
+    pub fn render_rgba(&mut self, f: &Frame) -> Result<(usize, usize, Vec<u8>), String> {
+        let (w, h, dpr, color_size, stage_size) = sizes(f);
+        let (stage, color) = self.sized(stage_size, color_size)?;
+        let cmd = self.queue.commandBuffer().ok_or("명령 버퍼")?;
+        self.encode_color(&cmd, f, &stage, &color, (w, h, dpr))?;
+        let (cw, ch) = color_size;
+        let row = cw * 4;
+        let buf = self
+            .device
+            .newBufferWithLength_options(row * ch, MTLResourceOptions::StorageModeShared)
+            .ok_or("읽기 버퍼")?;
+        let blit = cmd.blitCommandEncoder().ok_or("블릿")?;
+        // SAFETY: 크기와 자리가 텍스처와 버퍼 안이다
+        unsafe {
+            blit.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage(
+                &color,
+                0,
+                0,
+                objc2_metal::MTLOrigin { x: 0, y: 0, z: 0 },
+                objc2_metal::MTLSize { width: cw, height: ch, depth: 1 },
+                &buf,
+                0,
+                row,
+                row * ch,
+            );
+        }
+        blit.endEncoding();
         cmd.commit();
         cmd.waitUntilCompleted();
-        Ok(buffer)
+        // SAFETY: 끝까지 기다렸고 버퍼는 공유 메모리다
+        let bytes =
+            unsafe { std::slice::from_raw_parts(buf.contents().as_ptr() as *const u8, row * ch) };
+        Ok((cw, ch, bytes.to_vec()))
     }
+}
+
+/// 판 크기 — CSS 픽셀, dpr, 색 판(장치 픽셀, 4:2:0 이라 짝수), 무대(반 크기)
+fn sizes(f: &Frame) -> (f32, f32, f32, (usize, usize), (usize, usize)) {
+    let (w, h) = (f.size.0.max(1.), f.size.1.max(1.));
+    let dpr = f.dpr.clamp(1., 2.);
+    let even = |v: f32| (((v * dpr).round() as usize).max(2) + 1) & !1;
+    let stage = (
+        (w / 2.).ceil().max(1.) as usize,
+        (h / 2.).ceil().max(1.) as usize,
+    );
+    (w, h, dpr, (even(w), even(h)), stage)
 }
 
 fn bytes<T>(v: &T) -> (NonNull<c_void>, usize) {
@@ -769,5 +822,133 @@ mod tests {
             );
         }
         assert!(amber_gpui::resin::svg::live_of("graphite").is_none());
+    }
+
+    /// resin 의 WebGL 판(tools/glass-ref.mjs 가 브라우저에서 그린 8x8 칸 평균)과 견준다 — 룩 값도, 그림도
+    #[test]
+    fn matches_webgl_reference() {
+        use serde_json::Value;
+        let frames: Vec<Value> =
+            serde_json::from_str(include_str!("../tests/glass_ref.json")).unwrap();
+        let num = |v: &Value| v.as_f64().unwrap() as f32;
+        let nums = |v: &Value| v.as_array().unwrap().iter().map(num).collect::<Vec<_>>();
+        let hex = |s: &str| {
+            let n = u32::from_str_radix(s.trim_start_matches('#'), 16).unwrap();
+            [n >> 16, (n >> 8) & 255, n & 255].map(|c| c as f32 / 255.)
+        };
+        let ink = |v: &Value| (hex(v[0].as_str().unwrap()), num(&v[1]));
+        let mut r = Renderer::new().expect("Metal");
+        let mut report = Vec::new();
+        for f in &frames {
+            let look = f["look"].as_str().unwrap();
+            let (stage, glass) = amber_gpui::resin::svg::live_of(look).unwrap();
+            // 룩 값이 resin 의 stageOf/glassOf 와 같다
+            let (s, g) = (&f["stage"], &f["glass"]);
+            assert_eq!(stage.base, hex(s["base"].as_str().unwrap()), "{look} base");
+            for i in 0..3 {
+                assert_eq!(stage.colors[i], ink(&s["colors"][i]), "{look} colors");
+                assert_eq!(
+                    stage.spots[i].to_vec(),
+                    nums(&s["spots"][i]),
+                    "{look} spots"
+                );
+            }
+            let l = &s["light"];
+            assert_eq!(
+                stage.light,
+                (hex(l[0].as_str().unwrap()), num(&l[1]), num(&l[2])),
+                "{look} light"
+            );
+            assert_eq!(stage.grid, ink(&s["grid"]), "{look} grid");
+            assert_eq!(stage.stars, s["stars"].as_array().map(|_| ink(&s["stars"])));
+            assert_eq!(
+                (stage.grain, stage.vignette),
+                (num(&s["grain"]), num(&s["vignette"]))
+            );
+            assert_eq!(
+                (glass.frost, glass.lens),
+                (num(&g["frost"]), num(&g["lens"])),
+                "{look} frost"
+            );
+            for k in ["veil", "tint", "rim", "shadow"] {
+                let have = match k {
+                    "veil" => glass.veil,
+                    "tint" => glass.tint,
+                    "rim" => glass.rim,
+                    _ => glass.shadow,
+                };
+                assert_eq!(have, ink(&g[k]), "{look} {k}");
+            }
+
+            let size = nums(&f["size"]);
+            let view = nums(&f["view"]);
+            let light = nums(&f["light"]);
+            let mut ripples = [[0.; 4]; RIPPLES];
+            for (i, rp) in f["ripples"].as_array().unwrap().iter().enumerate() {
+                let rp = nums(rp);
+                ripples[i] = [rp[0], rp[1], rp[2], 1.];
+            }
+            let cards: Vec<[f32; 5]> = f["cards"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|c| nums(c).try_into().unwrap())
+                .collect();
+            let (w, h, px) = r
+                .render_rgba(&Frame {
+                    size: (size[0], size[1]),
+                    dpr: 1.,
+                    time: num(&f["time"]),
+                    view: (view[0], view[1], view[2]),
+                    stage: &stage,
+                    glass: &glass,
+                    light: [light[0], light[1], light[2], stage.light.2],
+                    ripples,
+                    grid: f["grid"].as_bool().unwrap(),
+                    cards: &cards,
+                })
+                .expect(look);
+            assert_eq!((w, h), (size[0] as usize, size[1] as usize));
+            let want: Vec<f32> = f["blocks"]
+                .as_str()
+                .unwrap()
+                .as_bytes()
+                .chunks(2)
+                .map(|c| u8::from_str_radix(std::str::from_utf8(c).unwrap(), 16).unwrap() as f32)
+                .collect();
+            const B: usize = 8;
+            let (mut worst, mut sum, mut n) = (0f32, 0f32, 0usize);
+            let mut at = (0, 0, 0);
+            for by in 0..h / B {
+                for bx in 0..w / B {
+                    for c in 0..3 {
+                        let mut acc = 0u32;
+                        for yy in 0..B {
+                            for xx in 0..B {
+                                acc += px[((by * B + yy) * w + bx * B + xx) * 4 + c] as u32;
+                            }
+                        }
+                        let have = acc as f32 / (B * B) as f32;
+                        let d = (have - want[(by * (w / B) + bx) * 3 + c]).abs();
+                        if d > worst {
+                            (worst, at) = (d, (bx, by, c));
+                        }
+                        sum += d;
+                        n += 1;
+                    }
+                }
+            }
+            report.push((look, sum / n as f32, worst, at));
+        }
+        for (look, mean, worst, at) in &report {
+            eprintln!("{look:14} mean {mean:5.2}  worst {worst:5.1} at {at:?}");
+        }
+        for (look, mean, worst, _) in &report {
+            // 기준 칸은 정수로 반올림돼 있다 — 0.5 안팎이면 같은 그림이다
+            assert!(
+                *mean < 0.5 && *worst < 2.,
+                "{look}: mean {mean}, worst {worst}"
+            );
+        }
     }
 }
