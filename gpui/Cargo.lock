@@ -208,6 +208,7 @@ dependencies = [
  "pulldown-cmark",
  "regex",
  "resvg 0.45.1",
+ "roxmltree 0.20.0",
  "rusqlite",
  "serde",
  "serde_json",

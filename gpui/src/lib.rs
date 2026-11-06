@@ -5,6 +5,7 @@ pub mod concepts;
 pub mod dates;
 pub mod db;
 pub mod dbconn;
+pub mod diagram_graph;
 pub mod i18n;
 pub mod line_diff;
 pub mod mermaid;
@@ -177,6 +178,11 @@ pub const OPS: &[&str] = &[
     "aiActivity.shortTarget",
     "aiActivity.describeActivity",
     "aiWait.waitLine",
+    "diagramGraph.splitOptionalType",
+    "diagramGraph.nullFlagOf",
+    "diagramGraph.nullabilityFlag",
+    "diagramGraph.parseEdgeEndpoints",
+    "diagramGraph.neighborsOf",
 ];
 
 pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
@@ -368,6 +374,7 @@ fn call_files(db: &Db, op: &str, a: &Args) -> Result<Json, String> {
         _ => vault::call_pure(op, a.0)
             .or_else(|| tree_find::call(op, a.0))
             .or_else(|| note_ai_text::call(op, a.0))
+            .or_else(|| diagram_graph::call(op, a.0))
             .or_else(|| dates::call(op, a.0, db.now()))
             .or_else(|| tree::call(op, a.0))
             .or_else(|| timetable::call(op, a.0, db.now()))
