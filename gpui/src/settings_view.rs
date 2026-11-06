@@ -67,6 +67,9 @@ pub struct SettingsUi {
     pub theme_open: bool,
     pub lang_open: bool,
     pub lang_pending: Option<&'static str>,
+    /// 프롬프트 칸 — 집중 편집기(열려 있으면 설정 판 대신 뜬다)와 지우기 확인(id, 이름)
+    pub prompt_edit: Option<crate::settings_prompts::PromptEdit>,
+    pub prompt_del: Option<(String, String)>,
     pub theme_anchor: std::rc::Rc<std::cell::Cell<Bounds<Pixels>>>,
     pub lang_anchor: std::rc::Rc<std::cell::Cell<Bounds<Pixels>>>,
 }
@@ -87,6 +90,8 @@ impl Default for SettingsUi {
             theme_open: false,
             lang_open: false,
             lang_pending: None,
+            prompt_edit: None,
+            prompt_del: None,
             theme_anchor: Default::default(),
             lang_anchor: Default::default(),
         }
@@ -106,6 +111,8 @@ impl Spike {
         self.settings.open = false;
         self.settings.rep = None;
         self.settings.ai = None;
+        self.settings.prompt_edit = None;
+        self.settings.prompt_del = None;
         cx.notify();
     }
 
@@ -123,6 +130,9 @@ impl Spike {
     pub(crate) fn settings_modal(&self, k: &Tokens, cx: &mut Context<Self>) -> Option<Div> {
         if !self.settings.open {
             return None;
+        }
+        if let Some(e) = self.settings.prompt_edit.as_ref() {
+            return Some(self.prompt_editor(e, k, cx));
         }
         let cur = self.settings.tab;
         let (hover_fill, hover_edge, hover_shadow) =
@@ -185,6 +195,7 @@ impl Spike {
             .px(px(22.))
             .pb(px(22.))
             .when(cur == Tab::Ai, |d| d.child(self.settings_ai_tab(k, cx)))
+            .when(cur == Tab::Prompts, |d| d.child(self.prompts_tab(k, cx)))
             .when(cur == Tab::Report, |d| d.child(self.report_settings(k, cx)))
             .when(cur == Tab::Appearance, |d| {
                 d.child(self.appearance_tab(k, cx))

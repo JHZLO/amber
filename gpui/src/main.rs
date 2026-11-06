@@ -48,6 +48,7 @@ mod root_picker;
 mod row_drag;
 mod search_view;
 mod settings_ai;
+mod settings_prompts;
 mod settings_view;
 #[cfg(feature = "shots")]
 mod shots;
@@ -660,6 +661,7 @@ impl Render for Spike {
         let settings_ai_menu = self.settings_ai_menus(&k, cx);
         let appearance_menu = self.appearance_menu(&k, cx);
         let lang_confirm = self.lang_confirm_modal(&k, cx);
+        let prompt_del = self.prompt_delete_modal(&k, cx);
         let settings_unsaved = self.settings_unsaved_modal(&k, cx);
         let search_modal = self.search_modal(&k, cx);
         let concept_sort = self.concept_sort_menu(&k, cx);
@@ -843,7 +845,10 @@ impl Render for Spike {
                 }
                 // 설정 모달 — Esc 는 닫기(열린 고르기 판이 먼저)
                 if this.settings.open && e.keystroke.key == "escape" {
-                    if this.settings.lang_pending.take().is_some()
+                    if this.settings.prompt_del.take().is_some() {
+                    } else if this.settings.prompt_edit.is_some() {
+                        this.prompt_cancel(window, cx);
+                    } else if this.settings.lang_pending.take().is_some()
                         || std::mem::take(&mut this.settings.theme_open)
                         || std::mem::take(&mut this.settings.lang_open)
                     {
@@ -1090,6 +1095,7 @@ impl Render for Spike {
             .children(settings_unsaved)
             .children(appearance_menu)
             .children(lang_confirm)
+            .children(prompt_del)
             .children(search_modal)
             .children(concept_sort)
             .children(concept_modals.into_iter().flatten())

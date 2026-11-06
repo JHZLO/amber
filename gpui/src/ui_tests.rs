@@ -4430,3 +4430,57 @@ fn the_appearance_tab_applies_theme_now_and_asks_before_language(cx: &mut TestAp
         Some(other)
     );
 }
+
+#[gpui_kit::test]
+fn saved_prompts_are_added_edited_and_deleted(cx: &mut TestAppContext) {
+    let db = seeded("settings-prompts", &[]);
+    let mut ui = open(cx, &db);
+    let saved = |db: &PathBuf| {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        crate::note_ai_view::load_prompts(&d)
+    };
+    click(&mut ui, "app.rail.settings");
+    click(&mut ui, "set-tab-prompts");
+    click(&mut ui, "set-prompt-new");
+    assert!(
+        ui.debug_bounds("set-tab-ai").is_none(),
+        "집중 편집기는 목록 없이"
+    );
+    click(&mut ui, "set-prompt-text");
+    ui.simulate_input("Add concrete code examples to every section");
+    click(&mut ui, "set-prompt-save");
+    let list = saved(&db);
+    assert_eq!(list.len(), 1);
+    assert_eq!(
+        list[0].label, "Add concrete code exampl",
+        "이름이 비면 지시문 앞 24자"
+    );
+    assert!(ui.debug_bounds("set-prompt-0").is_some());
+    // 편집 — 이름을 준다
+    click(&mut ui, "set-prompt-0");
+    click(&mut ui, "set-prompt-name");
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_input("Examples");
+    click(&mut ui, "set-prompt-save");
+    assert_eq!(saved(&db)[0].label, "Examples");
+    // Esc 는 편집기만 닫는다
+    click(&mut ui, "set-prompt-new");
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert!(
+        ui.debug_bounds("set-tab-prompts").is_some(),
+        "설정으로 돌아온다"
+    );
+    // 지우기 — 확인
+    ui.update(|_, cx| {
+        spike().update(cx, |s, cx| {
+            let id = crate::note_ai_view::load_prompts(&s.db)[0].id.clone();
+            s.settings.prompt_del = Some((id, "Examples".into()));
+            cx.notify();
+        })
+    });
+    ui.run_until_parked();
+    assert!(saved(&db).len() == 1, "묻기 전엔 그대로");
+    click(&mut ui, "confirm-delete");
+    assert!(saved(&db).is_empty());
+}
