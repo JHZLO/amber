@@ -8,6 +8,7 @@ pub mod dbconn;
 pub mod diagram_graph;
 pub mod elk;
 pub mod erd_gen;
+pub mod erd_migrate;
 pub mod i18n;
 pub mod line_diff;
 pub mod mermaid;
@@ -195,6 +196,10 @@ pub const OPS: &[&str] = &[
     "erdGen.generateErd",
     "erdGen.inferReferences",
     "erdGen.commonTablePrefix",
+    "erdMigrate.isGeneratedErd",
+    "erdMigrate.copyLegacySnapshots",
+    "erdMigrate.findLegacyErds",
+    "erdMigrate.trashLegacyErds",
     "schemaSnapshot.fingerprintOf",
     "schemaSnapshot.finalizeSnapshot",
     "schemaSnapshot.parseSnapshot",
@@ -347,6 +352,9 @@ fn call_files(db: &Db, op: &str, a: &Args) -> Result<Json, String> {
         return r;
     }
     if let Some(r) = ai_config::call(db, op, a.0) {
+        return r;
+    }
+    if let Some(r) = erd_migrate::call(db, op, a.0) {
         return r;
     }
     use vault::{DIAGRAMS, ERD, Tree};
