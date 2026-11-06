@@ -3893,3 +3893,135 @@ fn the_concept_tab_filters_by_status_tag_and_search(cx: &mut TestAppContext) {
     click(&mut ui, "concept-row-2");
     ui.update(|_, cx| assert_eq!(spike().read(cx).concepts.selected, Some(2)));
 }
+
+/// 개념 하나(본문 파일 포함) — (db, 데이터 폴더)
+fn concept_db(name: &str) -> (PathBuf, PathBuf) {
+    let db = seeded(name, &[]);
+    let dir = db.parent().unwrap().to_path_buf();
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    d.execute(
+        "INSERT INTO concepts (ulid, title, summary, detail_path, status, confidence, source, source_kind) VALUES ('01JW', 'Write-ahead log', 'log first', 'concepts/01JW/index.md', 'learning', 2, '{\"noteRel\":\"A.md\",\"anchor\":\"log\"}', 'file')",
+        &[],
+    )
+    .unwrap();
+    amber_gpui::concepts::set_concept_tags(&d, 1, &["db".into()]).unwrap();
+    amber_gpui::vault::write_concept_note(&d, "01JW", "# WAL\n\nbody\n").unwrap();
+    vault_note(&db, "A.md", "# A\n\nlog\n");
+    amber_gpui::note_concepts::add_note_concept(
+        &d,
+        "A.md",
+        &serde_json::json!({ "conceptId": 1, "title": "WAL", "anchor": "log", "createdAt": 1 }),
+    )
+    .unwrap();
+    (db, dir)
+}
+
+fn concept_row(db: &PathBuf) -> Option<serde_json::Map<String, serde_json::Value>> {
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    amber_gpui::concepts::get_concept(&d, 1).unwrap()
+}
+
+#[gpui_kit::test]
+fn the_concept_detail_edits_status_confidence_and_deletes(cx: &mut TestAppContext) {
+    let (db, dir) = concept_db("concept-detail");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.til");
+    click(&mut ui, "concept-row-1");
+    assert!(
+        ui.debug_bounds("concept-body").is_some(),
+        "본문 파일을 읽는다"
+    );
+    click(&mut ui, "concept-conf-up");
+    assert_eq!(concept_row(&db).unwrap()["confidence"], 3);
+    assert!(ui.debug_bounds("concept-conf-up").is_some());
+    click(&mut ui, "concept-status");
+    assert_eq!(concept_row(&db).unwrap()["status"], "learned");
+    // 학습 중 탭에서 빠졌다 — 전체에서 다시 고른다
+    click(&mut ui, "concept-tab-all");
+    click(&mut ui, "concept-row-1");
+    // 편집 → 저장: 파일 먼저, 그다음 제목/요약/태그
+    click(&mut ui, "concept-edit");
+    click(&mut ui, "concept-edit-tags");
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_input("#db, storage");
+    click(&mut ui, "concept-save");
+    let r = concept_row(&db).unwrap();
+    assert_eq!(r["tags"], serde_json::json!(["db", "storage"]));
+    assert!(
+        ui.debug_bounds("concept-edit-tags").is_none(),
+        "저장하면 보기로"
+    );
+    // 고친 게 있으면 다른 줄로 가기 전에 묻는다
+    click(&mut ui, "concept-edit");
+    click(&mut ui, "concept-edit-title");
+    ui.simulate_input("!");
+    ui.run_until_parked();
+    click(&mut ui, "concept-tab-learning");
+    assert!(
+        ui.debug_bounds("concept-unsaved-keep").is_some(),
+        "초안 가드"
+    );
+    click(&mut ui, "concept-unsaved-keep");
+    assert!(ui.debug_bounds("concept-edit-title").is_some(), "계속 편집");
+    click(&mut ui, "concept-cancel");
+    // 지우기 — 확인 → 노트 쪽 역참조, 본문 폴더, 행
+    click(&mut ui, "concept-delete");
+    click(&mut ui, "concept-delete-confirm");
+    assert!(concept_row(&db).is_none());
+    assert!(!dir.join("vault/concepts/01JW").exists());
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    assert!(amber_gpui::note_concepts::load_note_concepts(&d, "A.md").is_empty());
+    ui.update(|_, cx| assert_eq!(spike().read(cx).concepts.selected, None));
+}
+
+#[gpui_kit::test]
+fn ai_augment_previews_then_applies_the_new_note(cx: &mut TestAppContext) {
+    let (db, dir) = concept_db("concept-augment");
+    let note = serde_json::json!({
+        "title": "WAL",
+        "summary": "append first",
+        "detail_markdown": "# WAL\n\nmore detail",
+        "tags": ["db", "wal"],
+        "confidence_suggestion": 2,
+        "source_excerpt": null
+    })
+    .to_string();
+    let quoted = serde_json::to_string(&note).unwrap();
+    let bin = fake_claude(&dir, &quoted[1..quoted.len() - 1]);
+    connect_fake(&db, &bin);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.til");
+    click(&mut ui, "concept-row-1");
+    click(&mut ui, "concept-augment");
+    ui.simulate_input("add examples");
+    click(&mut ui, "augment-chip-0");
+    click(&mut ui, "augment-run");
+    for _ in 0..80 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        ui.executor()
+            .advance_clock(std::time::Duration::from_millis(100));
+        ui.run_until_parked();
+        if ui.debug_bounds("augment-apply").is_some() {
+            break;
+        }
+    }
+    assert!(
+        ui.debug_bounds("augment-preview").is_some(),
+        "결과 미리보기"
+    );
+    let sent = std::fs::read_to_string(dir.join("fake-claude.in")).unwrap();
+    assert!(sent.contains("add examples"), "{sent}");
+    click(&mut ui, "augment-apply");
+    let r = concept_row(&db).unwrap();
+    assert_eq!(
+        (r["title"].clone(), r["summary"].clone()),
+        ("WAL".into(), "append first".into())
+    );
+    assert_eq!(r["tags"], serde_json::json!(["db", "wal"]));
+    assert_eq!(r["confidence"], 2, "확신은 보강이 건드리지 않는다");
+    assert_eq!(
+        std::fs::read_to_string(dir.join("vault/concepts/01JW/index.md")).unwrap(),
+        "# WAL\n\nmore detail"
+    );
+    assert!(ui.debug_bounds("augment-apply").is_none());
+}

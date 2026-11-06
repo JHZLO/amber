@@ -222,11 +222,15 @@ pub(crate) fn time_ago(ms: i64, now: i64) -> String {
     if d < 30 {
         return t_with("common.timeago.days", &[("d", &d.to_string())]);
     }
+    locale_date(ms)
+}
+
+/// toLocaleDateString — ko "2026. 11. 5.", en "11/5/2026"
+pub(crate) fn locale_date(ms: i64) -> String {
+    use chrono::Datelike;
     let date = chrono::DateTime::from_timestamp_millis(ms)
         .map(|d| d.with_timezone(&chrono::Local).date_naive())
         .unwrap_or_default();
-    // toLocaleDateString — ko "2026. 11. 5.", en "11/5/2026"
-    use chrono::Datelike;
     if amber_gpui::i18n::is_ko() {
         format!("{}. {}. {}.", date.year(), date.month(), date.day())
     } else {

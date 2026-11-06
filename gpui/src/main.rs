@@ -6,6 +6,8 @@
 mod ai;
 mod assets;
 mod calendar;
+mod concept_augment;
+mod concept_detail;
 mod concepts_view;
 mod day_card;
 mod diagram_ai;
@@ -549,6 +551,9 @@ impl Render for Spike {
             self.reports.rail_done = false;
         }
         self.prepare_report(cx);
+        if self.section == Section::Til {
+            self.prepare_concept_detail(cx);
+        }
         self.prepare_settings(window, cx);
         if !cx.has_active_drag() {
             self.diagrams.canvas.grab = None;
@@ -628,6 +633,11 @@ impl Render for Spike {
         let report_modal = self.report_modal(&k, cx);
         let settings_modal = self.settings_modal(&k, cx);
         let concept_sort = self.concept_sort_menu(&k, cx);
+        let concept_modals = [
+            self.concept_delete_modal(&k, cx),
+            self.concept_unsaved_modal(&k, cx),
+            self.augment_modal(&k, cx),
+        ];
         let (erd_modal, erd_confirm) = if self.section == Section::Erd {
             (
                 self.erd_conn_view(&k, window, cx),
@@ -775,6 +785,15 @@ impl Render for Spike {
                     if !this.close_settings_menu() {
                         this.close_settings(cx);
                     }
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
+                // 개념 — 지우기 확인, 초안 확인, AI 보강(결과가 있으면 묻는다) 순으로 Esc
+                if this.section == Section::Til
+                    && e.keystroke.key == "escape"
+                    && this.concept_escape(cx)
+                {
                     cx.stop_propagation();
                     cx.notify();
                     return;
@@ -997,6 +1016,7 @@ impl Render for Spike {
             .children(report_modal)
             .children(settings_modal)
             .children(concept_sort)
+            .children(concept_modals.into_iter().flatten())
             .children(span_modal)
             .children(match self.section {
                 Section::Diagrams => {

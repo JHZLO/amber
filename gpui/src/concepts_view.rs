@@ -70,10 +70,17 @@ pub struct ConceptsUi {
     pub sort_anchor: Rc<Cell<Bounds<Pixels>>>,
     pub list_scroll: ScrollHandle,
     debounce: Option<Task<()>>,
+    /// 고른 개념의 본문과 편집 상태
+    pub detail: Option<crate::concept_detail::DetailState>,
+    /// 초안이 있는데 다른 곳으로 가려 했다 — '계속 편집 / 버리고 이동'을 묻는 동안 미뤄 둔 이동
+    pub pending: Option<Box<dyn FnOnce(&mut Spike, &mut Context<Spike>)>>,
+    /// AI 보강 창
+    pub augment: Option<crate::concept_augment::Augment>,
 }
 
 impl ConceptsUi {
     pub fn new(width: f32, window: &mut Window, cx: &mut Context<Spike>) -> Self {
+        let _ = width;
         let search_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(t("app.search.placeholder")));
         cx.subscribe_in(&search_input, window, |this, s, ev: &InputEvent, _, cx| {
@@ -85,6 +92,10 @@ impl ConceptsUi {
                         .timer(Duration::from_millis(200))
                         .await;
                     let _ = this.update(cx, |s, cx| {
+                        // 편집 중엔 거르기를 미룬다 — 저장/취소로 초안이 사라지면 그때 반영
+                        if s.concepts.detail.as_ref().is_some_and(|d| d.dirty) {
+                            return;
+                        }
                         s.concepts.search = v;
                         s.reload_concepts();
                         cx.notify();
@@ -111,6 +122,9 @@ impl ConceptsUi {
             sort_anchor: Rc::default(),
             list_scroll: ScrollHandle::new(),
             debounce: None,
+            detail: None,
+            pending: None,
+            augment: None,
         }
     }
 
@@ -183,7 +197,7 @@ impl Spike {
     }
 
     /// 머리 줄의 개념 탭 몫 — 검색 칸(최대 440), 빈칸, [+ 추가]
-    pub(crate) fn concepts_topbar(&self, k: &Tokens, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    pub(crate) fn concepts_topbar(&self, k: &Tokens, _cx: &mut Context<Self>) -> Vec<AnyElement> {
         vec![
             div()
                 .relative()
@@ -282,7 +296,9 @@ impl Spike {
                             .text_color(k.text_2)
                             .child(count(id).to_string()),
                     )
-                    .on_click(cx.listener(move |this, _, _, cx| this.set_concept_status(id, cx)))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.concept_guard(cx, move |s, cx| s.set_concept_status(id, cx))
+                    }))
             }));
         let sort_label = SORTS
             .iter()
@@ -446,7 +462,7 @@ impl Spike {
                             .pl(px(4.))
                             .child(
                                 card(div().size_full().overflow_hidden())
-                                    .child(self.concept_detail(k, cx)),
+                                    .child(self.concept_detail_view(k, cx)),
                             ),
                     ),
             )
@@ -528,21 +544,61 @@ impl Spike {
                     .children(tags.iter().take(3).map(|t| chip(k).child(format!("#{t}")))),
             )
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.concepts.selected = Some(id);
-                cx.notify();
+                this.concept_guard(cx, move |s, cx| {
+                    s.concepts.selected = Some(id);
+                    cx.notify();
+                })
             }))
     }
 
-    /// 오른쪽 상세 — 고른 개념(D6b) 또는 빈 안내
-    fn concept_detail(&self, k: &Tokens, _cx: &mut Context<Self>) -> Div {
-        div()
-            .size_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .text_size(px(14.))
-            .text_color(k.text_3)
-            .child(t("app.empty.selectConcept"))
+    /// 초안이 있으면 확인 창으로 미루고, 없으면 그대로(지금 앱 App.tsx 의 guard)
+    pub(crate) fn concept_guard(
+        &mut self,
+        cx: &mut Context<Self>,
+        run: impl FnOnce(&mut Spike, &mut Context<Spike>) + 'static,
+    ) {
+        if self.concepts.detail.as_ref().is_some_and(|d| d.dirty) {
+            self.concepts.pending = Some(Box::new(run));
+            cx.notify();
+        } else {
+            run(self, cx);
+        }
+    }
+
+    pub(crate) fn concept_unsaved_modal(&self, k: &Tokens, cx: &mut Context<Self>) -> Option<Div> {
+        if self.section != crate::Section::Til || self.concepts.pending.is_none() {
+            return None;
+        }
+        let keep = || {
+            cx.listener(|this, _, _, cx| {
+                this.concepts.pending = None;
+                cx.notify();
+            })
+        };
+        Some(crate::dialog::shell(
+            k,
+            440.,
+            t("common.unsaved.title"),
+            div().child(t("common.unsaved.body")).into_any_element(),
+            vec![
+                crate::day_card::button("concept-unsaved-keep", k, false, false)
+                    .child(t("common.unsaved.keep"))
+                    .on_click(keep()),
+                crate::day_card::danger_button("concept-unsaved-discard", k)
+                    .child(t("common.unsaved.discard"))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(d) = this.concepts.detail.as_mut() {
+                            d.edit = None;
+                            d.dirty = false;
+                        }
+                        if let Some(run) = this.concepts.pending.take() {
+                            run(this, cx);
+                        }
+                        cx.notify();
+                    })),
+            ],
+            keep(),
+        ))
     }
 
     pub(crate) fn concept_sort_menu(&self, k: &Tokens, cx: &mut Context<Self>) -> Option<Deferred> {
@@ -584,7 +640,7 @@ impl Spike {
 }
 
 /// .chip — 유리 칩
-fn chip(k: &Tokens) -> Div {
+pub(crate) fn chip(k: &Tokens) -> Div {
     div()
         .flex()
         .items_center()
@@ -614,7 +670,7 @@ fn tag_chip(k: &Tokens, name: &str, on: bool) -> Div {
 }
 
 /// 확신 점 셋 — 찬 만큼 글자색으로 채운다
-fn confidence_dots(k: &Tokens, value: i64) -> Div {
+pub(crate) fn confidence_dots(k: &Tokens, value: i64) -> Div {
     div()
         .flex_none()
         .flex()
@@ -632,7 +688,7 @@ fn confidence_dots(k: &Tokens, value: i64) -> Div {
 }
 
 /// .badge — 상태(학습 중 = 아웃라인, 배움 = 채움)
-fn status_badge(k: &Tokens, status: &str) -> Div {
+pub(crate) fn status_badge(k: &Tokens, status: &str) -> Div {
     let learned = status == "learned";
     div()
         .text_size(px(11.))
