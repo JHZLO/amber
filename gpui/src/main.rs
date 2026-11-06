@@ -12,6 +12,7 @@ mod diagram_canvas;
 mod diagrams_view;
 mod dialog;
 mod drawer;
+mod erd_conn;
 mod erd_details;
 mod erd_overview;
 mod erd_sync;
@@ -595,6 +596,11 @@ impl Render for Spike {
         } else {
             (None, None, None)
         };
+        let erd_modal = if self.section == Section::Erd {
+            self.erd_conn_view(&k, window, cx)
+        } else {
+            None
+        };
         let (ai_modal, span_modal) = if self.section == Section::Notes {
             (self.ai_modal_view(&k, cx), self.span_modal_view(&k, cx))
         } else {
@@ -728,6 +734,20 @@ impl Render for Spike {
                         cx.notify();
                         return;
                     }
+                }
+                // ERD 연결 모달 — Esc 는 위의 확인부터, 그다음 모달
+                if this.section == Section::Erd
+                    && e.keystroke.key == "escape"
+                    && let Some(m) = this.erd.conn.as_mut()
+                {
+                    if m.prod_confirm {
+                        m.prod_confirm = false;
+                    } else if !m.busy {
+                        this.close_conn_modal(window, cx);
+                    }
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
                 }
                 // ERD — Esc 는 안쪽부터([보기] 판, 정보창, 그다음 패널), ⌘F 는 그린 표와 컬럼에서 찾기
                 if this.section == Section::Erd
@@ -893,6 +913,7 @@ impl Render for Spike {
             .children(dgm_full)
             .children(dgm_prompt)
             .children(dgm_ai)
+            .children(erd_modal)
             .children(span_modal)
             .children(match self.section {
                 Section::Diagrams => {

@@ -317,6 +317,30 @@ impl Spike {
         self.erd_auto_sync(cx);
     }
 
+    /// 연결 삭제(deleteConnection) — 키체인 항목, 행, 스냅샷 폴더(휴지통). 키체인을 못 지우면 멈춘다.
+    /// 한 번도 동기화하지 않은 연결은 폴더가 없다(폴더 실패는 넘긴다)
+    pub(crate) fn erd_delete_connection(
+        &mut self,
+        conn: &DbConnection,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<(), AiError>> {
+        let rx = self.erd_db().secret_delete(conn.ulid.clone());
+        let conn = conn.clone();
+        cx.spawn(async move |this, cx| {
+            let r = crate::ai::wait(rx, cx.background_executor().clone())
+                .await
+                .unwrap_or_else(|| Err(AiError::new("", "dropped")));
+            r?;
+            this.update(cx, |s, _| {
+                amber_gpui::dbconn::delete_connection_row(&s.db, conn.id)
+                    .map_err(|e| AiError::new("", e.to_string()))?;
+                let _ = s.erd_tree_files().delete_entry(&conn.folder_path);
+                Ok(())
+            })
+            .unwrap_or_else(|_| Err(AiError::new("", "dropped")))
+        })
+    }
+
     /// 즐겨찾기 — 트리 순서가 바로 바뀌도록 화면 상태를 먼저 고치고 저장한다. 그 뒤 행을 다시 읽는다
     pub(crate) fn erd_toggle_star(&mut self, conn_id: i64, schema: &str) {
         let Some(list) = self.erd.connections.as_mut() else {

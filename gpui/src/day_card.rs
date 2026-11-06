@@ -194,8 +194,8 @@ pub fn danger_button(id: impl Into<SharedString>, k: &Tokens) -> Stateful<Div> {
         .hover(move |s| s.bg(soft).border_color(danger))
 }
 
-/// 둥근 체크 — 끝낸 일은 강조 유리 필에 체크 표시(.checkbox)
-fn checkbox(
+/// 둥근 체크 — 끝낸 일은 강조 유리 필에 체크 표시(.checkbox). ui.tsx 의 Checkbox 도 같은 모양
+pub(crate) fn checkbox(
     id: impl Into<SharedString>,
     k: &Tokens,
     checked: bool,

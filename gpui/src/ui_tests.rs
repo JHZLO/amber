@@ -3257,3 +3257,133 @@ fn syncing_an_erd_schema_writes_the_snapshot_and_shows_what_changed(cx: &mut Tes
     });
     assert_eq!(order, ["svc_empty", "svc_shop"], "별표가 둘 다면 이름순");
 }
+
+/// 연결 확인의 답 — 스키마 이름과 표 수
+fn probe(schemas: &[(&str, i64)]) -> amber_core::dbconn::DbTestResult {
+    amber_core::dbconn::DbTestResult {
+        server: "MySQL 8.0.36".into(),
+        latency_ms: 12,
+        schemas: schemas
+            .iter()
+            .map(|(name, tables)| amber_core::dbconn::SchemaInfo {
+                name: name.to_string(),
+                tables: *tables,
+                error: None,
+            })
+            .collect(),
+    }
+}
+
+#[gpui_kit::test]
+fn the_erd_connection_modal_tests_saves_and_edits(cx: &mut TestAppContext) {
+    let db = seeded("erd-conn", &[]);
+    let mut ui = open(cx, &db);
+    let mut fake = FakeDb::new(|_| Err(amber_core::ai::AiError::new("DB_REFUSED", "")));
+    fake.test = Box::new(|profile, password, _| {
+        // 새 연결은 입력한 비밀번호로, 편집에서 안 바꿨으면 None(키체인에서 읽는다)
+        assert_eq!(profile.username, "reader");
+        assert!(password.is_none_or(|p| p == "pw"));
+        Ok(probe(&[("svc_a", 3), ("svc_b", 0)]))
+    });
+    let secrets = fake.secrets.clone();
+    plug_db(&mut ui, fake);
+    click(&mut ui, "app.rail.erd");
+    // 연결이 없으면 빈 화면의 [DB 연결] — 모달은 이름 칸에서 시작한다
+    click(&mut ui, "erd-connect");
+    ui.simulate_input("Shop DB");
+    click(&mut ui, "erd-conn-user");
+    ui.simulate_input("reader");
+    click(&mut ui, "erd-conn-password");
+    ui.simulate_input("pw");
+    let state = |ui: &mut VisualTestContext| {
+        ui.update(|_, cx| {
+            let m = spike().read(cx).erd.conn.as_ref().map(|m| {
+                (
+                    m.step,
+                    m.test.is_some(),
+                    m.prefs
+                        .iter()
+                        .map(|p| (p.name.clone(), p.enabled))
+                        .collect::<Vec<_>>(),
+                )
+            });
+            m
+        })
+    };
+    // [다음] 은 연결 확인이 된 뒤에만 — 표가 있는 스키마만 켜 둔다
+    click(&mut ui, "erd-conn-test-run");
+    let (step, tested, prefs) = state(&mut ui).unwrap();
+    assert_eq!(step, crate::erd_conn::Step::Form);
+    assert!(tested);
+    assert_eq!(
+        prefs,
+        [("svc_a".to_string(), true), ("svc_b".to_string(), false)]
+    );
+    // 접속 정보를 고치면 확인을 버린다
+    click(&mut ui, "erd-conn-host");
+    ui.simulate_input("x");
+    assert!(!state(&mut ui).unwrap().1, "다시 확인하게 한다");
+    ui.simulate_keystrokes("backspace");
+    ui.simulate_keystrokes("enter");
+    assert!(state(&mut ui).unwrap().1, "Enter = 확인");
+    click(&mut ui, "erd-conn-next");
+    assert_eq!(state(&mut ui).unwrap().0, crate::erd_conn::Step::Schemas);
+    click(&mut ui, "erd-conn-schema-svc_b");
+    click(&mut ui, "erd-conn-save");
+    erd_canvas(&mut ui);
+    assert!(state(&mut ui).is_none(), "저장하면 닫힌다");
+    let saved = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    let row = amber_gpui::dbconn::get_connection(&saved, 1)
+        .unwrap()
+        .unwrap();
+    assert_eq!(row["name"], "Shop DB");
+    assert_eq!(row["username"], "reader");
+    assert_eq!(
+        row["folder_path"],
+        amber_gpui::dbconn::folder_name_for("Shop DB")
+    );
+    let enabled: Vec<bool> = row["schemas"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["enabled"].as_bool().unwrap())
+        .collect();
+    assert_eq!(enabled, [true, true]);
+    assert_eq!(
+        secrets.borrow().clone(),
+        [(
+            row["ulid"].as_str().unwrap().to_string(),
+            Some("pw".to_string())
+        )],
+        "비밀번호는 키체인으로만"
+    );
+    // 편집 — 비밀번호는 "키체인에 저장됨", 이름만 고쳐 저장하면 키체인은 건드리지 않는다
+    click(&mut ui, "erd-edit-c1");
+    assert!(ui.debug_bounds("erd-conn-change-pw").is_some());
+    click(&mut ui, "erd-conn-name");
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_input("Shop");
+    click(&mut ui, "erd-conn-save");
+    erd_canvas(&mut ui);
+    let row = amber_gpui::dbconn::get_connection(&saved, 1)
+        .unwrap()
+        .unwrap();
+    assert_eq!(row["name"], "Shop");
+    assert_eq!(secrets.borrow().len(), 1);
+    // 운영 연결을 새로 더하면 [다음] 에서 한 번 묻는다
+    click(&mut ui, "erd-add-conn");
+    ui.simulate_input("Prod");
+    click(&mut ui, "erd-conn-env");
+    click(&mut ui, "erd-conn-menu-2");
+    click(&mut ui, "erd-conn-user");
+    ui.simulate_input("reader");
+    click(&mut ui, "erd-conn-password");
+    ui.simulate_input("pw");
+    click(&mut ui, "erd-conn-test-run");
+    click(&mut ui, "erd-conn-next");
+    assert!(ui.debug_bounds("erd-prod-ok").is_some());
+    click(&mut ui, "erd-prod-ok");
+    assert_eq!(state(&mut ui).unwrap().0, crate::erd_conn::Step::Schemas);
+    ui.simulate_keystrokes("escape");
+    assert!(state(&mut ui).is_none(), "Esc 로 닫는다");
+}

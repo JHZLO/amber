@@ -960,6 +960,65 @@ fn erd(s: &mut Shots) {
             cx.notify();
         })
         .unwrap();
+    // DB 연결 모달 — 편집(키체인에 저장됨), 연결 확인 실패(찍기는 DB 가 없다), 스키마 고르기
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            let c = sp.erd.connections.as_ref().unwrap()[0].clone();
+            sp.open_conn_modal(Some(c), window, cx);
+            sp.conn_run_test(cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.settle();
+    s.shot("erd-conn-form");
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            if let Some(m) = sp.erd.conn.as_mut() {
+                m.test_error = None;
+                m.test = Some(amber_core::dbconn::DbTestResult {
+                    server: "MySQL 8.0.36".into(),
+                    latency_ms: 14,
+                    schemas: [("analytics", 0), ("shop", 5), ("shop_archive", 12)]
+                        .iter()
+                        .map(|(n, t)| amber_core::dbconn::SchemaInfo {
+                            name: n.to_string(),
+                            tables: *t,
+                            error: None,
+                        })
+                        .collect(),
+                });
+                m.prefs = vec![
+                    amber_gpui::dbconn::DbSchemaPref {
+                        name: "analytics".into(),
+                        label: String::new(),
+                        enabled: false,
+                        audit: None,
+                        starred: None,
+                    },
+                    sp.erd.connections.as_ref().unwrap()[0].schemas[0].clone(),
+                    amber_gpui::dbconn::DbSchemaPref {
+                        name: "shop_archive".into(),
+                        label: String::new(),
+                        enabled: false,
+                        audit: None,
+                        starred: None,
+                    },
+                ];
+            }
+            sp.conn_enter_schemas(window, cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.settle();
+    s.shot("erd-conn-schemas");
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.close_conn_modal(window, cx);
+            cx.notify();
+        })
+        .unwrap();
     // [개요] — 통계, 테이블 목록, 참조 통계
     s.window
         .update(&mut s.cx, |sp, window, cx| {

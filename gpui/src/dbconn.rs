@@ -172,6 +172,12 @@ pub fn update_connection(db: &Db, id: i64, patch: &ConnectionPatch) -> Result<()
 }
 
 /// 동기화 결과 기록. 성공이면 시각 갱신 + 에러 지움, 실패면 코드만 남긴다(문장은 화면이 만든다)
+/// deleteConnection 의 행 지우기 — 키체인과 스냅샷 폴더는 부르는 쪽이 같이 치운다
+pub fn delete_connection_row(db: &Db, id: i64) -> Result<()> {
+    db.execute("DELETE FROM db_connections WHERE id = ?1", &[int(id)])
+        .map(|_| ())
+}
+
 pub fn mark_sync(db: &Db, id: i64, error_code: Option<&str>) -> Result<()> {
     let now = Value::Real(db.now() as f64);
     match error_code.filter(|c| !c.is_empty()) {

@@ -552,6 +552,8 @@ pub struct ErdState {
     pub attempted: HashSet<String>,
     /// DB 와 키체인 — None 이면 amber-core. 시험과 찍기는 가짜를 꽂는다
     pub db: Option<Rc<dyn crate::erd_sync::DbBackend>>,
+    /// DB 연결 모달(새 연결, 편집)
+    pub conn: Option<crate::erd_conn::ConnModal>,
 }
 
 /// 트리를 찾기로 거른 모양 — 남길 경로(없으면 다), 임시로 펼칠 경로, 칠할 검색어, 지금 것
@@ -1440,6 +1442,24 @@ impl Spike {
                         this.start_tree_find(crate::note_find::FindIn::Erd, window, cx);
                         cx.notify();
                     })),
+            )
+            .child(
+                div()
+                    .id("erd-add-conn")
+                    .tag("erd-add-conn")
+                    .size(px(24.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(6.))
+                    .cursor_pointer()
+                    .hover(move |s| s.bg(bg).text_color(text))
+                    .tooltip(tip(t("erd.db.tooltip.add")))
+                    .child(icon("plus", 14.).text_color(k.text_2))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.open_conn_modal(None, window, cx);
+                        cx.notify();
+                    })),
             );
         let view = self.erd_tree_view();
         let count = self.tree_find_matches(crate::note_find::FindIn::Erd).len();
@@ -1447,9 +1467,22 @@ impl Spike {
             None => div().into_any_element(),
             Some(list) if list.is_empty() => div()
                 .p(px(14.))
+                .flex()
+                .flex_col()
+                .items_start()
+                .gap(px(10.))
                 .text_size(px(12.5))
                 .text_color(k.text_3)
                 .child(t("erd.empty.noConnection"))
+                .child(
+                    crate::day_card::primary_button("erd-connect", k, false)
+                        .child(icon("database", 14.).text_color(k.surface))
+                        .child(t("erd.empty.connect"))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.open_conn_modal(None, window, cx);
+                            cx.notify();
+                        })),
+                )
                 .into_any_element(),
             Some(_) if view.kept.as_ref().is_some_and(|k| k.is_empty()) => div()
                 .px(px(14.))
@@ -1660,25 +1693,45 @@ impl Spike {
                 )
                 .child({
                     let c = c.clone();
-                    crate::note_names::row_actions(k).child(
-                        crate::note_names::row_act(
-                            format!("erd-sync-all-{path}"),
-                            "refresh",
-                            false,
-                            k,
+                    let edit = c.clone();
+                    crate::note_names::row_actions(k)
+                        .child(
+                            crate::note_names::row_act(
+                                format!("erd-sync-all-{path}"),
+                                "refresh",
+                                false,
+                                k,
+                            )
+                            .tooltip(tip(t("erd.db.tree.syncAll")))
+                            .when(progress.is_some(), |d| d.opacity(0.45))
+                            .when(progress.is_none(), |d| {
+                                d.on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    let todo = enabled_schemas(&c)
+                                        .iter()
+                                        .map(|p| p.name.clone())
+                                        .collect();
+                                    this.erd_sync_many(&c, todo, cx).detach();
+                                    cx.notify();
+                                }))
+                            }),
                         )
-                        .tooltip(tip(t("erd.db.tree.syncAll")))
-                        .when(progress.is_some(), |d| d.opacity(0.45))
-                        .when(progress.is_none(), |d| {
-                            d.on_click(cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                let todo =
-                                    enabled_schemas(&c).iter().map(|p| p.name.clone()).collect();
-                                this.erd_sync_many(&c, todo, cx).detach();
-                                cx.notify();
-                            }))
-                        }),
-                    )
+                        .child(
+                            crate::note_names::row_act(
+                                format!("erd-edit-{path}"),
+                                "settings",
+                                false,
+                                k,
+                            )
+                            .tooltip(tip(t("erd.db.tree.edit")))
+                            .on_click(cx.listener(
+                                move |this, _, window, cx| {
+                                    cx.stop_propagation();
+                                    this.open_conn_modal(Some(edit.clone()), window, cx);
+                                    cx.notify();
+                                },
+                            )),
+                        )
                 })
                 .on_click(cx.listener(move |this, _, _, cx| {
                     if !this.erd.expanded.remove(&p) {
@@ -1932,6 +1985,17 @@ impl Spike {
                             "erd.empty.pick"
                         })),
                 )
+                .when(none, |d| {
+                    d.child(
+                        crate::day_card::primary_button("erd-connect-detail", k, false)
+                            .child(icon("database", 14.).text_color(k.surface))
+                            .child(t("erd.empty.connect"))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.open_conn_modal(None, window, cx);
+                                cx.notify();
+                            })),
+                    )
+                })
                 .into_any_element();
         };
         let folder = schema_folder(conn, &pref.name);
