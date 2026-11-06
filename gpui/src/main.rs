@@ -46,6 +46,7 @@ mod report_settings;
 mod report_view;
 mod root_picker;
 mod row_drag;
+mod search_view;
 mod settings_view;
 #[cfg(feature = "shots")]
 mod shots;
@@ -128,6 +129,8 @@ struct Spike {
     concepts: concepts_view::ConceptsUi,
     /// 리포트 생성 실행(날짜마다, 주간은 w: 접두)과 레일 완료 점
     reports: report_run::Reports,
+    /// 빠른 검색(⌘K, ⌘P)
+    search: Option<search_view::QuickSearch>,
     /// 설정 모달(열렸나, 칸, 리포트 칸 상태, gh/claude 확인)
     settings: settings_view::SettingsUi,
     scroll: ScrollHandle,
@@ -300,6 +303,7 @@ impl Spike {
             input,
             reports: report_run::Reports::default(),
             settings: settings_view::SettingsUi::default(),
+            search: None,
             concepts,
             notes: notes_view::NotesState {
                 ui: vault_pane::TreeUi {
@@ -652,6 +656,7 @@ impl Render for Spike {
         };
         let report_modal = self.report_modal(&k, cx);
         let settings_modal = self.settings_modal(&k, cx);
+        let search_modal = self.search_modal(&k, cx);
         let concept_sort = self.concept_sort_menu(&k, cx);
         let concept_modals = [
             self.concept_delete_modal(&k, cx),
@@ -798,6 +803,36 @@ impl Render for Spike {
                     if !m.platform && !m.control && this.canvas_key(key, window) {
                         cx.stop_propagation();
                         cx.notify();
+                        return;
+                    }
+                }
+                // 빠른 검색 — Esc 는 닫기
+                if this.search.is_some() && e.keystroke.key == "escape" {
+                    this.close_search(window, cx);
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
+                // 전역 — ⌘K/⌘P 빠른 검색, ⌘, 설정, ⌘1~5 탭(모달이 떠 있으면 양보한다)
+                if m.platform && !m.alt && !m.shift && !m.control && !this.shielded() {
+                    let key = e.keystroke.key.as_str();
+                    if key == "k" || key == "p" {
+                        this.open_search(window, cx);
+                        cx.stop_propagation();
+                        return;
+                    }
+                    if key == "," {
+                        this.open_settings(cx);
+                        cx.stop_propagation();
+                        return;
+                    }
+                    if let Some(i) = key
+                        .parse::<usize>()
+                        .ok()
+                        .filter(|i| (1..=RAIL.len()).contains(i))
+                    {
+                        this.switch_section(RAIL[i - 1].0, cx);
+                        cx.stop_propagation();
                         return;
                     }
                 }
@@ -1042,6 +1077,7 @@ impl Render for Spike {
             .children(erd_confirm)
             .children(report_modal)
             .children(settings_modal)
+            .children(search_modal)
             .children(concept_sort)
             .children(concept_modals.into_iter().flatten())
             .children(span_modal)
@@ -1070,6 +1106,51 @@ impl Spike {
             }
             None => cx.open_url(url),
         })
+    }
+
+    /// 작업공간 탭을 바꾼다 — 레일, ⌘1~5, 빠른 검색, 노트↔개념 이동이 같이 쓴다
+    pub(crate) fn switch_section(&mut self, section: Section, cx: &mut Context<Self>) {
+        let id = RAIL.iter().find(|r| r.0 == section).map_or("til", |r| r.1);
+        self.section = section;
+        amber_gpui::prefs::set(&self.db, "til.section", id);
+        // 탭에 들어올 때마다 트리를 다시 읽는다(Finder, git, 다른 편집기가 바꾼 것)
+        if section == Section::Notes {
+            self.reload_notes();
+        }
+        if section == Section::Diagrams {
+            self.reload_tree(vault_pane::Which::Diagrams);
+        }
+        if section == Section::Erd {
+            self.erd_enter(cx);
+        }
+        if section == Section::Til {
+            self.reload_concepts();
+        }
+        cx.notify();
+    }
+
+    /// 모달이 떠 있나 — 전역 단축키(⌘K, ⌘P, ⌘,, ⌘1~5)는 그때 양보한다(안 보이는 화면이 뒤에서 바뀌지 않게)
+    pub(crate) fn shielded(&self) -> bool {
+        let c = &self.concepts;
+        self.confirm.is_some()
+            || self.mmd_zoom.is_some()
+            || self.settings.open
+            || self.search.is_some()
+            || c.add.is_some()
+            || c.augment.is_some()
+            || c.pending.is_some()
+            || c.detail.as_ref().is_some_and(|d| d.confirm_delete)
+            || self.reports.panel.ask.is_some()
+            || self.notes.ai_modal.is_some()
+            || self.notes.span_modal.is_some()
+            || self.notes.prompt.is_some()
+            || self.notes.names.is_some()
+            || self.diagrams.prompt.is_some()
+            || self.diagrams.ai.is_some()
+            || self.diagrams.names.is_some()
+            || self.erd.conn.is_some()
+            || self.erd.confirm_disconnect.is_some()
+            || self.erd.confirm_legacy
     }
 
     /// .rail — 68px, 표식 + 작업공간 탭 + (아래로 밀린) 설정. 선을 긋지 않는다: 판과 같은 바닥이다
@@ -1193,22 +1274,8 @@ impl Spike {
                 item(key, t(key), icon_name, self.section == section)
                     .children(rail_dot(section, k))
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.section = section;
-                        amber_gpui::prefs::set(&this.db, "til.section", id);
-                        // 탭에 들어올 때마다 트리를 다시 읽는다(Finder, git, 다른 편집기가 바꾼 것)
-                        if section == Section::Notes {
-                            this.reload_notes();
-                        }
-                        if section == Section::Diagrams {
-                            this.reload_tree(vault_pane::Which::Diagrams);
-                        }
-                        if section == Section::Erd {
-                            this.erd_enter(cx);
-                        }
-                        if section == Section::Til {
-                            this.reload_concepts();
-                        }
-                        cx.notify();
+                        let _ = id;
+                        this.switch_section(section, cx);
                     }))
             }))
             .child(div().flex_1())

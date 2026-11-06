@@ -1504,4 +1504,21 @@ fn concepts(s: &mut Shots) {
             cx.notify();
         })
         .unwrap();
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.open_search(window, cx);
+            let hits = crate::search_view::run_search(&sp.db, "log");
+            if let Some(qs) = sp.search.as_mut() {
+                // 코드로 넣은 값은 Change 를 내지 않는다 — 결과를 바로 채운다
+                qs.input.update(cx, |st, cx| st.set_value("log", window, cx));
+                qs.hits = hits;
+            }
+        })
+        .unwrap();
+    s.settle();
+    s.settle();
+    s.shot("search-0");
+    s.window
+        .update(&mut s.cx, |sp, window, cx| sp.close_search(window, cx))
+        .unwrap();
 }

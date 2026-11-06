@@ -4233,3 +4233,63 @@ fn promoting_a_note_selection_makes_a_linked_concept(cx: &mut TestAppContext) {
         "출처 노트 단추"
     );
 }
+
+#[gpui_kit::test]
+fn quick_search_finds_across_kinds_and_shortcuts_switch_tabs(cx: &mut TestAppContext) {
+    let db = seeded("quick-search", &[]);
+    vault_note(&db, "Eng/Log.md", "# Log\n\nwrite-ahead log\n");
+    {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        d.execute(
+            "INSERT INTO concepts (ulid, title, summary, detail_path) VALUES ('01J', 'Write-ahead log', 's', 'concepts/01J/index.md')",
+            &[],
+        )
+        .unwrap();
+    }
+    let mut ui = open(cx, &db);
+    // ⌘2 = 개념, ⌘, = 설정(모달이 떠 있으면 탭 단축키는 양보)
+    ui.simulate_keystrokes("cmd-2");
+    ui.update(|_, cx| assert!(spike().read(cx).section == crate::Section::Til));
+    ui.simulate_keystrokes("cmd-,");
+    assert!(ui.debug_bounds("set-tab-ai").is_some());
+    ui.simulate_keystrokes("cmd-1");
+    ui.update(|_, cx| {
+        assert!(
+            spike().read(cx).section == crate::Section::Til,
+            "모달 중엔 양보"
+        )
+    });
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    // ⌘K — 개념이 먼저, 노트가 다음
+    ui.simulate_keystrokes("cmd-k");
+    assert!(ui.debug_bounds("search-input").is_some());
+    ui.simulate_input("log");
+    ui.executor()
+        .advance_clock(std::time::Duration::from_millis(250));
+    ui.run_until_parked();
+    assert!(ui.debug_bounds("search-hit-1").is_some());
+    ui.simulate_keystrokes("down");
+    ui.update(|_, cx| assert_eq!(spike().read(cx).search.as_ref().unwrap().idx, 1));
+    ui.simulate_keystrokes("enter");
+    ui.run_until_parked();
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        assert!(s.search.is_none());
+        assert!(s.section == crate::Section::Notes);
+        assert_eq!(s.notes.selected.as_deref(), Some("Eng/Log.md"));
+    });
+    // 다시 ⌘P → 개념을 누르면 개념 탭에서 그 개념
+    ui.simulate_keystrokes("cmd-p");
+    ui.update(|_, cx| assert!(spike().read(cx).search.is_some(), "⌘P 가 열린다"));
+    ui.simulate_input("write");
+    ui.executor()
+        .advance_clock(std::time::Duration::from_millis(250));
+    ui.run_until_parked();
+    click(&mut ui, "search-hit-0");
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        assert!(s.section == crate::Section::Til);
+        assert_eq!(s.concepts.selected, Some(1));
+    });
+}
