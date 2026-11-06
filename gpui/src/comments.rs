@@ -73,7 +73,7 @@ pub fn mutate_comments(
 }
 
 /// JSON.stringify(v, null, 1) — 한 칸 들여쓰기
-fn stringify_1(v: &Json) -> String {
+pub(crate) fn stringify_1(v: &Json) -> String {
     let mut buf = Vec::new();
     let fmt = serde_json::ser::PrettyFormatter::with_indent(b" ");
     let mut ser = serde_json::Serializer::with_formatter(&mut buf, fmt);
