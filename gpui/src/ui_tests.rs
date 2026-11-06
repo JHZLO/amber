@@ -3041,3 +3041,47 @@ fn the_erd_overview_lists_tables_and_opens_one_in_the_erd(cx: &mut TestAppContex
     assert!(ui.debug_bounds("erd-canvas").is_some());
     assert_eq!(erd_state(&mut ui).0.as_deref(), Some("users"));
 }
+
+#[gpui_kit::test]
+fn finding_in_the_erd_tree_filters_and_opens_a_table(cx: &mut TestAppContext) {
+    let db = seeded("erd-tree-find", &[]);
+    seed_erd(&db);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.erd");
+    // 접힌 연결 안의 표까지 찾고, 조상은 임시로 펼친다
+    assert!(
+        ui.debug_bounds("erd-c1/svc_shop").is_none(),
+        "처음엔 접혀 있다"
+    );
+    click(&mut ui, "erd-tree-find");
+    ui.simulate_input("user");
+    ui.run_until_parked();
+    assert!(ui.debug_bounds("erd-c1/svc_shop/users").is_some());
+    assert!(
+        ui.debug_bounds("erd-c1/svc_shop/orders").is_none(),
+        "안 맞은 표는 숨긴다"
+    );
+    // Enter — 표를 열고 찾기를 닫는다
+    ui.simulate_keystrokes("enter");
+    assert!(erd_canvas(&mut ui).0);
+    assert_eq!(erd_state(&mut ui).0.as_deref(), Some("users"));
+    ui.update(|_, cx| assert!(spike().read(cx).erd.tree_find.is_none()));
+    // 임시로 펼친 것은 걷힌다 — 웹도 표를 열 때 연결만 펼친다
+    assert!(ui.debug_bounds("erd-c1/svc_shop").is_some());
+    assert!(ui.debug_bounds("erd-c1/svc_shop/orders").is_none());
+    // ⌘F — 트리에 포커스가 있으면 트리 찾기, 캔버스를 눌렀으면 캔버스 찾기
+    click(&mut ui, "erd-c1/svc_shop");
+    ui.simulate_keystrokes("cmd-f");
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        assert!(s.erd.tree_find.is_some() && s.erd.canvas.find.is_none());
+    });
+    ui.simulate_keystrokes("escape");
+    let stage = bounds(&mut ui, "erd-canvas");
+    ui.simulate_click(stage.origin + point(px(4.), px(4.)), Modifiers::none());
+    ui.simulate_keystrokes("cmd-f");
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        assert!(s.erd.tree_find.is_none() && s.erd.canvas.find.is_some());
+    });
+}

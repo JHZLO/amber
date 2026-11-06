@@ -144,6 +144,8 @@ struct Spike {
     tree_focus: FocusHandle,
     /// 다이어그램 탭 트리의 포커스(⌘F 가 트리 찾기로)
     dtree_focus: FocusHandle,
+    /// ERD 트리 판 — 여기에 포커스가 있으면 ⌘F 가 트리 찾기로 간다
+    etree_focus: FocusHandle,
     diagrams: diagrams_view::DiagramsState,
     /// ERD 탭 — 연결, 스냅샷, 캔버스(erd_view.rs)
     erd: erd_view::ErdState,
@@ -300,6 +302,7 @@ impl Spike {
             focus: cx.focus_handle(),
             tree_focus: cx.focus_handle(),
             dtree_focus: cx.focus_handle(),
+            etree_focus: cx.focus_handle(),
             diagrams: diagrams_view::DiagramsState {
                 ui: vault_pane::TreeUi {
                     width: diagrams_w,

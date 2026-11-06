@@ -20,14 +20,51 @@ pub struct TreeFindState {
     pub idx: usize,
 }
 
+/// 어느 트리의 찾기인가 — 보관함 트리(노트, 다이어그램) 또는 ERD 트리(연결, 스키마, 표). 줄과 동작은 같다
+#[derive(Clone, Copy, PartialEq)]
+pub enum FindIn {
+    Tree(Which),
+    Erd,
+}
+
+impl From<Which> for FindIn {
+    fn from(w: Which) -> Self {
+        FindIn::Tree(w)
+    }
+}
+
+impl FindIn {
+    fn tag(self, base: &str) -> String {
+        match self {
+            FindIn::Tree(w) => w.tag(base),
+            FindIn::Erd => format!("erd-{base}"),
+        }
+    }
+}
+
 impl Spike {
+    fn find_of(&self, w: FindIn) -> Option<&TreeFindState> {
+        match w {
+            FindIn::Tree(w) => self.ui(w).find.as_ref(),
+            FindIn::Erd => self.erd.tree_find.as_ref(),
+        }
+    }
+
+    fn find_slot(&mut self, w: FindIn) -> &mut Option<TreeFindState> {
+        match w {
+            FindIn::Tree(w) => &mut self.ui_mut(w).find,
+            FindIn::Erd => &mut self.erd.tree_find,
+        }
+    }
+
     pub(crate) fn start_tree_find(
         &mut self,
-        w: Which,
+        w: impl Into<FindIn>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(f) = self.ui(w).find.as_ref() {
+        let w = w.into();
+        if let Some(f) = self.find_of(w) {
             // 이미 열려 있으면 글자를 고른 채 다시 잡는다
             f.input.update(cx, |s, cx| s.focus(window, cx));
             return;
@@ -40,7 +77,7 @@ impl Spike {
                 InputEvent::Change => {
                     let q = input.read(cx).value().to_string();
                     // Enter 뒤에도 값이 그대로인 Change 가 온다 — 검색어가 바뀔 때만 처음으로
-                    if let Some(f) = this.ui_mut(w).find.as_mut()
+                    if let Some(f) = this.find_slot(w).as_mut()
                         && f.query != q
                     {
                         f.query = q;
@@ -57,24 +94,31 @@ impl Spike {
         )
         .detach();
         input.update(cx, |s, cx| s.focus(window, cx));
-        self.ui_mut(w).find = Some(TreeFindState {
+        *self.find_slot(w) = Some(TreeFindState {
             input,
             query: String::new(),
             idx: 0,
         });
     }
 
-    fn tree_find_matches(&self, w: Which) -> Vec<tree_find::Match> {
-        let ui = self.ui(w);
-        match (ui.find.as_ref(), ui.tree.as_ref()) {
-            (Some(f), Some(tree)) => tree_find::filter_tree(tree, &f.query).matches,
-            _ => Vec::new(),
+    pub(crate) fn tree_find_matches(&self, w: FindIn) -> Vec<tree_find::Match> {
+        let Some(f) = self.find_of(w) else {
+            return Vec::new();
+        };
+        match w {
+            FindIn::Tree(w) => self
+                .ui(w)
+                .tree
+                .as_ref()
+                .map(|tree| tree_find::filter_tree(tree, &f.query).matches)
+                .unwrap_or_default(),
+            FindIn::Erd => tree_find::filter_tree(&self.erd_nodes(), &f.query).matches,
         }
     }
 
-    fn tree_find_step(&mut self, w: Which, delta: i64) {
+    fn tree_find_step(&mut self, w: FindIn, delta: i64) {
         let n = self.tree_find_matches(w).len() as i64;
-        if let Some(f) = self.ui_mut(w).find.as_mut()
+        if let Some(f) = self.find_slot(w).as_mut()
             && n > 0
         {
             f.idx = (f.idx as i64 + delta).rem_euclid(n) as usize;
@@ -82,10 +126,17 @@ impl Spike {
     }
 
     /// Enter — 폴더면 펼치기만(찾기는 그대로), 파일이면 열고 찾기를 닫는다
-    fn tree_find_open(&mut self, w: Which, cx: &mut Context<Self>) {
-        let idx = self.ui(w).find.as_ref().map_or(0, |f| f.idx);
+    fn tree_find_open(&mut self, w: FindIn, cx: &mut Context<Self>) {
+        let idx = self.find_of(w).map_or(0, |f| f.idx);
         let Some((path, is_dir)) = self.tree_find_matches(w).get(idx).cloned() else {
             return;
+        };
+        let w = match w {
+            FindIn::Tree(w) => w,
+            FindIn::Erd => {
+                self.erd_find_pick(&path, is_dir, cx);
+                return;
+            }
         };
         if is_dir {
             let ui = self.ui_mut(w);
@@ -100,12 +151,13 @@ impl Spike {
     /// 찾기 줄(.page-find.tree-find) — 돋보기, 입력, 몇 번째/몇 개, 이전, 다음, 닫기
     pub(crate) fn tree_find_bar(
         &self,
-        w: Which,
+        w: impl Into<FindIn>,
         count: usize,
         k: &Tokens,
         cx: &mut Context<Self>,
     ) -> Option<Div> {
-        let f = self.ui(w).find.as_ref()?;
+        let w = w.into();
+        let f = self.find_of(w)?;
         let nav = |id: &'static str, name: &'static str, enabled: bool| {
             let (bg, fg) = (k.surface_2, k.text_2);
             let id = SharedString::from(w.tag(id));
@@ -148,7 +200,7 @@ impl Spike {
                 ))
                 .on_key_down(cx.listener(move |this, e: &KeyDownEvent, _, cx| {
                     match e.keystroke.key.as_str() {
-                        "escape" => this.ui_mut(w).find = None,
+                        "escape" => *this.find_slot(w) = None,
                         "down" => this.tree_find_step(w, 1),
                         "up" => this.tree_find_step(w, -1),
                         _ => return,
@@ -193,7 +245,7 @@ impl Spike {
                 )
                 .child(nav("tree-find-close", "x", true).on_click(cx.listener(
                     move |this, _, _, cx| {
-                        this.ui_mut(w).find = None;
+                        *this.find_slot(w) = None;
                         cx.notify();
                     },
                 ))),

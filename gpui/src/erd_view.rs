@@ -541,6 +541,23 @@ pub struct ErdState {
     pub overview: bool,
     pub ov_input: Option<Entity<InputState>>,
     pub ov_query: String,
+    /// 트리에서 찾기(⌘F, 트리에 포커스가 있을 때)
+    pub tree_find: Option<crate::note_find::TreeFindState>,
+}
+
+/// 트리를 찾기로 거른 모양 — 남길 경로(없으면 다), 임시로 펼칠 경로, 칠할 검색어, 지금 것
+#[derive(Default)]
+struct TreeView {
+    kept: Option<HashSet<String>>,
+    expand: HashSet<String>,
+    query: Option<String>,
+    current: Option<String>,
+}
+
+impl TreeView {
+    fn keeps(&self, path: &str) -> bool {
+        self.kept.as_ref().is_none_or(|k| k.contains(path))
+    }
 }
 
 fn conn_path(c: &DbConnection) -> String {
@@ -551,6 +568,26 @@ fn schema_path(c: &DbConnection, schema: &str) -> String {
 }
 fn is_audit(name: &str) -> bool {
     name.ends_with("_aud") || name == "revinfo"
+}
+/// 즐겨찾기 스키마는 제 연결 안에서 맨 위로
+fn sorted_schemas(c: &DbConnection) -> Vec<&DbSchemaPref> {
+    let mut prefs = enabled_schemas(c);
+    prefs.sort_by(|a, b| {
+        (b.starred == Some(true))
+            .cmp(&(a.starred == Some(true)))
+            .then_with(|| cmp(&a.name, &b.name))
+    });
+    prefs
+}
+/// 도메인 표 먼저, 감사 표는 뒤로
+fn sorted_tables(snap: &SchemaSnapshot) -> Vec<&amber_gpui::erd_gen::SnapshotTable> {
+    let mut tables: Vec<_> = snap.tables.iter().collect();
+    tables.sort_by(|a, b| {
+        is_audit(&a.name)
+            .cmp(&is_audit(&b.name))
+            .then_with(|| cmp(&a.name, &b.name))
+    });
+    tables
 }
 fn cmp(a: &str, b: &str) -> std::cmp::Ordering {
     a.encode_utf16().cmp(b.encode_utf16())
@@ -1168,6 +1205,106 @@ impl Spike {
         self.erd.canvas.focus = target;
     }
 
+    /// 트리 — 연결 → 스키마(별표 먼저) → 표(감사 표는 뒤로). 찾기가 이 모양을 거른다
+    pub(crate) fn erd_nodes(&self) -> Vec<amber_gpui::vault::Node> {
+        use amber_gpui::vault::Node;
+        let Some(list) = &self.erd.connections else {
+            return Vec::new();
+        };
+        list.iter()
+            .map(|c| Node {
+                name: c.name.clone(),
+                path: conn_path(c),
+                is_dir: true,
+                children: Some(
+                    sorted_schemas(c)
+                        .into_iter()
+                        .map(|p| Node {
+                            name: p.name.clone(),
+                            path: schema_path(c, &p.name),
+                            is_dir: true,
+                            children: Some(
+                                self.erd
+                                    .snaps
+                                    .get(&schema_folder(c, &p.name))
+                                    .cloned()
+                                    .flatten()
+                                    .map(|snap| {
+                                        sorted_tables(&snap)
+                                            .into_iter()
+                                            .map(|tb| Node {
+                                                name: tb.name.clone(),
+                                                path: format!(
+                                                    "{}/{}",
+                                                    schema_path(c, &p.name),
+                                                    tb.name
+                                                ),
+                                                is_dir: false,
+                                                children: None,
+                                            })
+                                            .collect()
+                                    })
+                                    .unwrap_or_default(),
+                            ),
+                        })
+                        .collect(),
+                ),
+            })
+            .collect()
+    }
+
+    /// 찾기의 Enter — 연결, 스키마는 펼치고(스키마면 그 ERD 도 연다) 찾기는 그대로, 표면 그 표를 열고 찾기를 닫는다
+    pub(crate) fn erd_find_pick(&mut self, path: &str, is_dir: bool, cx: &mut Context<Self>) {
+        let mut parts = path.splitn(3, '/');
+        let (Some(conn), schema, table) = (parts.next(), parts.next(), parts.next()) else {
+            return;
+        };
+        let Some(c) = self
+            .erd
+            .connections
+            .as_ref()
+            .and_then(|l| l.iter().find(|c| conn_path(c) == conn))
+            .cloned()
+        else {
+            return;
+        };
+        if is_dir {
+            self.erd.expanded.insert(path.to_string());
+            if let Some(schema) = schema {
+                self.open_erd_schema(&c.ulid, schema);
+            }
+            return;
+        }
+        if let (Some(schema), Some(table)) = (schema, table) {
+            self.erd.overview = false;
+            self.erd_reveal_table(&c.ulid, schema, table, cx);
+        }
+        self.erd.tree_find = None;
+    }
+
+    /// 찾기가 열려 있으면 트리를 거른다
+    fn erd_tree_view(&self) -> TreeView {
+        let Some(f) = &self.erd.tree_find else {
+            return TreeView::default();
+        };
+        let found = amber_gpui::tree_find::filter_tree(&self.erd_nodes(), &f.query);
+        let active = !f.query.trim().is_empty();
+        let mut kept = HashSet::new();
+        fn walk(n: &[amber_gpui::vault::Node], kept: &mut HashSet<String>) {
+            for x in n {
+                kept.insert(x.path.clone());
+                walk(x.children.as_deref().unwrap_or_default(), kept);
+            }
+        }
+        walk(&found.nodes, &mut kept);
+        TreeView {
+            kept: active.then_some(kept),
+            expand: found.expand.into_iter().collect(),
+            query: active.then(|| f.query.clone()),
+            current: found.matches.get(f.idx).map(|m| m.0.clone()),
+        }
+    }
+
     /// [개요] 로 — 캔버스가 안 보이니 찾기와 [보기] 판은 닫는다
     pub(crate) fn erd_show_overview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.erd.overview = true;
@@ -1245,6 +1382,7 @@ impl Spike {
     }
 
     fn erd_tree(&self, width: f32, body_w: f32, k: &Tokens, cx: &mut Context<Self>) -> Div {
+        let (bg, text) = (k.surface_2, k.text);
         let head = div()
             .flex()
             .items_center()
@@ -1258,7 +1396,27 @@ impl Spike {
                     .font_weight(FontWeight::BOLD)
                     .text_color(k.text)
                     .child(t("erd.tree.title")),
+            )
+            .child(
+                div()
+                    .id("erd-tree-find")
+                    .tag("erd-tree-find")
+                    .size(px(24.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(6.))
+                    .cursor_pointer()
+                    .hover(move |s| s.bg(bg).text_color(text))
+                    .tooltip(tip(t("common.find.treeTip")))
+                    .child(icon("search", 14.).text_color(k.text_2))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.start_tree_find(crate::note_find::FindIn::Erd, window, cx);
+                        cx.notify();
+                    })),
             );
+        let view = self.erd_tree_view();
+        let count = self.tree_find_matches(crate::note_find::FindIn::Erd).len();
         let body: AnyElement = match &self.erd.connections {
             None => div().into_any_element(),
             Some(list) if list.is_empty() => div()
@@ -1267,6 +1425,13 @@ impl Spike {
                 .text_color(k.text_3)
                 .child(t("erd.empty.noConnection"))
                 .into_any_element(),
+            Some(_) if view.kept.as_ref().is_some_and(|k| k.is_empty()) => div()
+                .px(px(14.))
+                .py(px(10.))
+                .text_size(px(12.5))
+                .text_color(k.text_3)
+                .child(t("common.find.treeEmpty"))
+                .into_any_element(),
             Some(list) => div()
                 .id("erd-tree")
                 .flex_1()
@@ -1274,9 +1439,14 @@ impl Spike {
                 .overflow_y_scroll()
                 .px(px(6.))
                 .pb(px(8.))
-                .children(list.iter().flat_map(|c| self.erd_conn_rows(c, k, cx)))
+                .children(
+                    list.iter()
+                        .filter(|c| view.keeps(&conn_path(c)))
+                        .flat_map(|c| self.erd_conn_rows(c, &view, k, cx)),
+                )
                 .into_any_element(),
         };
+        let focus = self.etree_focus.clone();
         div()
             .relative()
             .w(px(width))
@@ -1287,7 +1457,9 @@ impl Spike {
             .pl(px(8.))
             .pr(px(4.))
             .child(
+                // 트리 판 — 누르면 포커스를 가져가 그 뒤의 ⌘F 가 트리 찾기로 온다(캔버스의 ⌘F 와 안 겹치게)
                 div()
+                    .track_focus(&focus)
                     .size_full()
                     .flex()
                     .flex_col()
@@ -1297,7 +1469,30 @@ impl Spike {
                     .rounded(px(12.))
                     .bg(crate::note_ai_view::glass(k.glass_fill))
                     .shadow(k.glass_shadow(false))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _, window, cx| {
+                            let f = this.etree_focus.clone();
+                            if !f.contains_focused(window, cx) {
+                                f.focus(window, cx);
+                            }
+                        }),
+                    )
+                    .on_mouse_down_out(cx.listener(|this, _, window, cx| {
+                        if this.etree_focus.is_focused(window) {
+                            this.focus.focus(window, cx);
+                        }
+                    }))
+                    .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
+                        let m = &e.keystroke.modifiers;
+                        if m.platform && !m.alt && e.keystroke.key == "f" {
+                            this.start_tree_find(crate::note_find::FindIn::Erd, window, cx);
+                            cx.stop_propagation();
+                            cx.notify();
+                        }
+                    }))
                     .child(head)
+                    .children(self.tree_find_bar(crate::note_find::FindIn::Erd, count, k, cx))
                     .child(body),
             )
             .child(self.pane_resizer(LIST_PANE, width, body_w, k, cx))
@@ -1347,11 +1542,13 @@ impl Spike {
     fn erd_conn_rows(
         &self,
         c: &DbConnection,
+        view: &TreeView,
         k: &Tokens,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let path = conn_path(c);
-        let open = self.erd.expanded.contains(&path);
+        let open = self.erd.expanded.contains(&path) || view.expand.contains(&path);
+        let current = view.current.as_deref() == Some(path.as_str());
         let dot = conn_status_dot(conn_status(c));
         let dot_color = match dot {
             "ok" => k.success,
@@ -1364,6 +1561,9 @@ impl Spike {
             Self::erd_row(format!("erd-{path}"), 0, false, k)
                 .text_color(k.text)
                 .font_weight(FontWeight::SEMIBOLD)
+                .when(current, |d| {
+                    d.shadow(vec![Tokens::ring(k.border_strong, 1.)])
+                })
                 .child(
                     icon(
                         if open {
@@ -1383,7 +1583,12 @@ impl Spike {
                         .overflow_hidden()
                         .whitespace_nowrap()
                         .text_ellipsis()
-                        .child(c.name.clone()),
+                        .child(crate::note_find::label(
+                            &c.name,
+                            view.query.as_deref(),
+                            current,
+                            k,
+                        )),
                 )
                 .child(
                     div()
@@ -1414,15 +1619,10 @@ impl Spike {
         if !open {
             return out;
         }
-        let mut prefs = enabled_schemas(c);
-        // 즐겨찾기 스키마는 제 연결 안에서 맨 위로
-        prefs.sort_by(|a, b| {
-            (b.starred == Some(true))
-                .cmp(&(a.starred == Some(true)))
-                .then_with(|| cmp(&a.name, &b.name))
-        });
-        for p in prefs {
-            out.extend(self.erd_schema_rows(c, p, k, cx));
+        for p in sorted_schemas(c) {
+            if view.keeps(&schema_path(c, &p.name)) {
+                out.extend(self.erd_schema_rows(c, p, view, k, cx));
+            }
         }
         out
     }
@@ -1431,11 +1631,13 @@ impl Spike {
         &self,
         c: &DbConnection,
         p: &DbSchemaPref,
+        view: &TreeView,
         k: &Tokens,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let path = schema_path(c, &p.name);
-        let open = self.erd.expanded.contains(&path);
+        let open = self.erd.expanded.contains(&path) || view.expand.contains(&path);
+        let current = view.current.as_deref() == Some(path.as_str());
         let folder = schema_folder(c, &p.name);
         let snap = self.erd.snaps.get(&folder).cloned().flatten();
         let selected = self.erd.selected.as_ref() == Some(&(c.ulid.clone(), p.name.clone()));
@@ -1445,6 +1647,9 @@ impl Spike {
             Self::erd_row(format!("erd-{path}"), 1, selected, k)
                 .text_color(k.text)
                 .font_weight(FontWeight::SEMIBOLD)
+                .when(current && !selected, |d| {
+                    d.shadow(vec![Tokens::ring(k.border_strong, 1.)])
+                })
                 .child(
                     div()
                         .id(SharedString::from(format!("erd-caret-{path}")))
@@ -1474,7 +1679,12 @@ impl Spike {
                         .overflow_hidden()
                         .whitespace_nowrap()
                         .text_ellipsis()
-                        .child(p.name.clone()),
+                        .child(crate::note_find::label(
+                            &p.name,
+                            view.query.as_deref(),
+                            current,
+                            k,
+                        )),
                 )
                 .when(!p.label.is_empty(), |d| {
                     d.child(
@@ -1519,18 +1729,19 @@ impl Spike {
         let Some(snap) = snap else {
             return out;
         };
-        // 도메인 표 먼저, 감사 표는 뒤로
-        let mut tables: Vec<&amber_gpui::erd_gen::SnapshotTable> = snap.tables.iter().collect();
-        tables.sort_by(|a, b| {
-            is_audit(&a.name)
-                .cmp(&is_audit(&b.name))
-                .then_with(|| cmp(&a.name, &b.name))
-        });
-        for tb in tables {
+        for tb in sorted_tables(&snap) {
+            let leaf = format!("{path}/{}", tb.name);
+            if !view.keeps(&leaf) {
+                continue;
+            }
+            let current = view.current.as_deref() == Some(leaf.as_str());
             let (ulid, name) = (c.ulid.clone(), p.name.clone());
             out.push(
-                Self::erd_row(format!("erd-{path}/{}", tb.name), 2, false, k)
+                Self::erd_row(format!("erd-{leaf}"), 2, false, k)
                     .text_color(k.text_2)
+                    .when(current, |d| {
+                        d.shadow(vec![Tokens::ring(k.border_strong, 1.)])
+                    })
                     .child(div().w(px(13.)))
                     .child(
                         div()
@@ -1538,7 +1749,12 @@ impl Spike {
                             .overflow_hidden()
                             .whitespace_nowrap()
                             .text_ellipsis()
-                            .child(tb.name.clone()),
+                            .child(crate::note_find::label(
+                                &tb.name,
+                                view.query.as_deref(),
+                                current,
+                                k,
+                            )),
                     )
                     .when(!tb.comment.is_empty(), |d| {
                         d.child(
