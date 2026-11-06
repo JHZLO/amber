@@ -1236,9 +1236,9 @@ fn fake_claude(dir: &std::path::Path, answer: &str) -> PathBuf {
     bin
 }
 
-/// AI 는 진짜 스레드(tokio)에서 돈다 — 답이 올 때까지 실제 시간을 기다린다
+/// AI 는 진짜 스레드(tokio)에서 돈다 — 답이 올 때까지 실제 시간을 기다린다(다른 시험이 함께 돌면 느려져 10초까지)
 fn wait_answer(ui: &mut VisualTestContext) {
-    for _ in 0..50 {
+    for _ in 0..100 {
         std::thread::sleep(std::time::Duration::from_millis(100));
         ui.executor()
             .advance_clock(std::time::Duration::from_millis(100));
@@ -1874,7 +1874,7 @@ fn canvas_state(ui: &mut VisualTestContext) -> (f32, f32, (f32, f32), bool, bool
             c.base,
             c.zoom,
             (f32::from(c.pan.x), f32::from(c.pan.y)),
-            c.full.is_some(),
+            c.raster.full.is_some(),
             c.fullscreen,
         )
     })
@@ -2154,7 +2154,7 @@ fn selecting_an_er_node_shows_its_card_columns_and_focus(cx: &mut TestAppContext
     canvas_state(&mut ui);
     ui.update(|_, cx| {
         let c = &spike().read(cx).diagrams.canvas;
-        assert!(c.full.is_some(), "흐린 그림을 구웠다");
+        assert!(c.raster.full.is_some(), "흐린 그림을 구웠다");
         let st = c.graph.as_ref().unwrap();
         let tree = c.tree.as_ref().unwrap();
         let op = |name: &str| {

@@ -29,6 +29,7 @@ mod note_span_ai;
 mod note_watch;
 mod notes_view;
 mod pane;
+mod raster;
 mod root_picker;
 mod row_drag;
 #[cfg(feature = "shots")]

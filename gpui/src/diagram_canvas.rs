@@ -29,10 +29,6 @@ const MIN_ZOOM: f32 = 0.1;
 const MAX_ZOOM: f32 = 20.;
 /// svg-pan-zoom 의 zoomScaleSensitivity — 단추 한 번 1.4배, 더블클릭 1.8배
 const SENS: f32 = 0.4;
-/// 전체 그림을 굽는 한 변의 상한(픽셀)
-const FULL_MAX_PX: f32 = 4096.;
-/// 선명하게 다시 구울 때 보이는 곳 둘레에 더 굽는 몫(판 한 변의 비율)
-const MARGIN: f32 = 0.5;
 
 /// 판에 맞추는 배율과 가운데 자리 — svg-pan-zoom 의 fit(contain) + center
 pub fn fit(view: (f32, f32), size: (f32, f32)) -> (f32, (f32, f32)) {
@@ -45,22 +41,6 @@ pub fn fit(view: (f32, f32), size: (f32, f32)) -> (f32, (f32, f32)) {
 pub fn zoom_at(pan: (f32, f32), old: f32, new: f32, p: (f32, f32)) -> (f32, f32) {
     let r = new / old;
     (p.0 - (p.0 - pan.0) * r, p.1 - (p.1 - pan.1) * r)
-}
-
-/// 보이는 곳(그림 좌표)에 둘레를 더하고 그림 경계로 자른 구간 (x, y, w, h)
-pub fn visible_region(
-    view: (f32, f32),
-    pan: (f32, f32),
-    scale: f32,
-    size: (f32, f32),
-) -> (f32, f32, f32, f32) {
-    let (vx, vy) = (-pan.0 / scale, -pan.1 / scale);
-    let (vw, vh) = (view.0 / scale, view.1 / scale);
-    let x0 = (vx - vw * MARGIN).max(0.);
-    let y0 = (vy - vh * MARGIN).max(0.);
-    let x1 = (vx + vw * (1. + MARGIN)).min(size.0);
-    let y1 = (vy + vh * (1. + MARGIN)).min(size.1);
-    (x0, y0, (x1 - x0).max(0.), (y1 - y0).max(0.))
 }
 
 /// 그림 좌표의 점 p 를 품은 노드 중 가장 작은 것 — 안쪽 상자를 누르면 그 상자다
@@ -241,12 +221,8 @@ pub struct Canvas {
     pub fit_pending: bool,
     /// 맞춘 때의 판 크기 — 판이 바뀌면 다시 맞춘다
     fitted_view: (f32, f32),
-    /// 전체(낮은 해상도)와 보이는 곳(선명하게: 구간, 배율)
-    pub full: Option<Arc<Image>>,
-    full_scale: f32,
-    pub sharp: Option<((f32, f32, f32, f32), f32, Arc<Image>)>,
-    raster_gen: u64,
-    raster_task: Option<Task<()>>,
+    /// 굽기(전체 + 보이는 곳 선명하게) — raster.rs
+    pub raster: crate::raster::Raster,
     /// 누른 자리와 그때의 그림 자리 — 끌기가 시작되면 grab 으로 옮긴다(누른 뒤 끌기 전에 다시 그려져도 남게)
     pub press: Option<(Point<Pixels>, Point<Pixels>)>,
     /// 끄는 중(창 밖에서 놓으면 render 가 지운다)
@@ -266,8 +242,6 @@ pub struct Canvas {
     pub search: Option<DgmSearch>,
     /// 지금 트리가 css 를 얹어 읽은 것인지(포커스, 찾기)
     styled: bool,
-    /// 트리가 바뀌어(포커스) 구운 그림이 낡았다 — 새로 구울 때까지 옛 그림을 그대로 둔다
-    stale: bool,
 }
 
 impl Default for Canvas {
@@ -284,11 +258,7 @@ impl Default for Canvas {
             dpr: Rc::new(Cell::new(1.)),
             fit_pending: false,
             fitted_view: (0., 0.),
-            full: None,
-            full_scale: 0.,
-            sharp: None,
-            raster_gen: 0,
-            raster_task: None,
+            raster: Default::default(),
             press: None,
             grab: None,
             fullscreen: false,
@@ -301,7 +271,6 @@ impl Default for Canvas {
             down: None,
             search: None,
             styled: false,
-            stale: false,
         }
     }
 }
@@ -342,15 +311,13 @@ impl Canvas {
                 self.graph = Some(Arc::new(st));
                 self.tree = Some(Arc::new(tree));
                 self.error = None;
-                self.full = None;
-                self.sharp = None;
+                self.raster.reset();
                 self.fit_pending = true;
                 // 그릴 때마다 선택은 처음으로(지금 앱도 렌더마다 판을 새로 만든다)
                 self.sel = None;
                 self.show_cols = false;
                 self.copied = false;
                 self.styled = false;
-                self.stale = false;
                 // 찾기가 열려 있으면 새 그림에서 다시 찾는다
                 if let Some(f) = self.search.as_mut() {
                     f.hits = search_hits(&self.graph.as_ref().unwrap().labels, &f.query);
@@ -441,7 +408,7 @@ impl Canvas {
             Ok(tree) => {
                 self.tree = Some(Arc::new(tree));
                 self.styled = styled;
-                self.stale = true;
+                self.raster.stale = true;
             }
             Err(e) => eprintln!("다이어그램 칠하기: {e}"),
         }
@@ -600,8 +567,8 @@ impl Canvas {
         self.fit_pending = false;
         self.fitted_view = v;
         // 전체 그림의 해상도가 맞춘 배율에 달려 있다
-        self.full = None;
-        self.sharp = None;
+        self.raster.full = None;
+        self.raster.sharp = None;
     }
 
     /// 100% — 처음 맞춘 배율로 되돌리고 가운데로
@@ -641,7 +608,7 @@ impl Spike {
         self.schedule_raster(cx);
     }
 
-    /// 전체 그림이 없으면 굽고, 확대가 전체 해상도를 넘으면 보이는 곳을 선명하게 — 120ms 멈춘 뒤에
+    /// 굽기를 건다(raster.rs) — 전체는 맞춘 배율로
     fn schedule_raster(&mut self, cx: &mut Context<Self>) {
         let c = &mut self.diagrams.canvas;
         let (Some(tree), Some(size)) = (c.tree.clone(), c.size()) else {
@@ -650,70 +617,21 @@ impl Spike {
         if c.base <= 0. || c.fit_pending {
             return;
         }
-        let dpr = c.dpr.get().max(1.);
-        let want = c.scale() * dpr;
-        let need_full = c.full.is_none() || c.stale;
-        // 전체 해상도로 충분하면 선명 층은 필요 없다
-        let need_sharp = !need_full
-            && want > c.full_scale * 1.05
-            && match &c.sharp {
-                None => true,
-                Some((region, scale, _)) => {
-                    let vis = visible_region(c.view(), c.pan_f(), c.scale(), size);
-                    let inside = vis.0 >= region.0 - 0.5
-                        && vis.1 >= region.1 - 0.5
-                        && vis.0 + vis.2 <= region.0 + region.2 + 0.5
-                        && vis.1 + vis.3 <= region.1 + region.3 + 0.5;
-                    // 보이는 곳이 구운 곳을 벗어났거나 배율이 크게 달라졌다
-                    (*scale - want).abs() / want > 0.2 || !inside
-                }
-            };
-        if !need_full && !need_sharp {
-            return;
-        }
-        c.raster_gen += 1;
-        let generation = c.raster_gen;
-        let full_scale = (c.base * dpr)
-            .min(FULL_MAX_PX / size.0.max(size.1))
-            .max(0.05);
-        let region = visible_region(c.view(), c.pan_f(), c.scale(), size);
-        let task = cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(Duration::from_millis(if need_full { 0 } else { 120 }))
-                .await;
-            let ex = cx.background_executor().clone();
-            let out = ex
-                .spawn(async move {
-                    if need_full {
-                        crate::figure::raster(&tree, (0., 0., size.0, size.1), full_scale)
-                            .map(|i| (true, region, full_scale, i))
-                    } else {
-                        crate::figure::raster(&tree, region, want).map(|i| (false, region, want, i))
-                    }
-                })
-                .await;
-            let _ = this.update(cx, |s, cx| {
-                let c = &mut s.diagrams.canvas;
-                if c.raster_gen != generation {
-                    return;
-                }
-                match out {
-                    Ok((true, _, scale, img)) => {
-                        c.full = Some(img);
-                        c.full_scale = scale;
-                        // 낡은 선명 층이 새 그림을 덮지 않게
-                        if c.stale {
-                            c.stale = false;
-                            c.sharp = None;
-                        }
-                    }
-                    Ok((false, region, scale, img)) => c.sharp = Some((region, scale, img)),
-                    Err(e) => eprintln!("다이어그램 굽기: {e}"),
-                }
-                cx.notify();
-            });
-        });
-        self.diagrams.canvas.raster_task = Some(task);
+        let g = crate::raster::Geometry {
+            size,
+            scale: c.scale(),
+            pan: c.pan_f(),
+            view: c.view(),
+            dpr: c.dpr.get(),
+            full_base: c.base,
+        };
+        crate::raster::schedule(
+            &mut c.raster,
+            tree,
+            g,
+            |s| &mut s.diagrams.canvas.raster,
+            cx,
+        );
     }
 
     /// 휠 — 커서 자리를 붙잡고 확대/축소(svg-pan-zoom 처럼 1.4 의 거듭제곱)
@@ -925,14 +843,6 @@ impl Spike {
         let c = &self.diagrams.canvas;
         let (viewport, dpr, hitbox) = (c.viewport.clone(), c.dpr.clone(), c.hitbox.clone());
         let scale = c.scale();
-        let layer = |img_: Arc<Image>, x: f32, y: f32, w: f32, h: f32| {
-            img(img_)
-                .absolute()
-                .left(px(x))
-                .top(px(y))
-                .w(px(w))
-                .h(px(h))
-        };
         let mut stage = div()
             .id("dgm-canvas")
             .tag("dgm-canvas")
@@ -966,18 +876,7 @@ impl Spike {
         if let (Some(tree), false) = (&c.tree, c.fit_pending) {
             let (w, h) = (tree.size().width(), tree.size().height());
             let (px0, py0) = (f32::from(c.pan.x), f32::from(c.pan.y));
-            if let Some(full) = &c.full {
-                stage = stage.child(layer(full.clone(), px0, py0, w * scale, h * scale));
-            }
-            if let Some(((rx, ry, rw, rh), _, sharp)) = &c.sharp {
-                stage = stage.child(layer(
-                    sharp.clone(),
-                    px0 + rx * scale,
-                    py0 + ry * scale,
-                    rw * scale,
-                    rh * scale,
-                ));
-            }
+            stage = stage.children(c.raster.layers((w, h), (px0, py0), scale));
             // 찾기 결과가 든 노드 상자(.dgm-hit-box) — 지금 것은 한 단계 굵게
             for ((x, y, w, h), cur) in c.hit_boxes() {
                 let width = if cur { 3.5 } else { 2. };
@@ -1613,7 +1512,7 @@ impl Spike {
 
 #[cfg(test)]
 mod tests {
-    use super::{fit, focus_css, hit_css, hit_node, search_hits, visible_region, zoom_at};
+    use super::{fit, focus_css, hit_css, hit_node, search_hits, zoom_at};
     use amber_gpui::diagram_graph::read_structure;
     use resvg::usvg;
 
@@ -1809,17 +1708,5 @@ mod tests {
         let before = ((p.0 - pan.0) / old, (p.1 - pan.1) / old);
         let after = ((p.0 - n.0) / new, (p.1 - n.1) / new);
         assert_eq!(before, after);
-    }
-
-    #[test]
-    fn visible_region_is_clipped_to_the_figure() {
-        // 100% 에서 다 보이면 그림 전체
-        assert_eq!(
-            visible_region((400., 400.), (0., 0.), 1., (400., 400.)),
-            (0., 0., 400., 400.)
-        );
-        // 4배로 왼쪽 위만 보이면 그 둘레만
-        let r = visible_region((400., 400.), (0., 0.), 4., (400., 400.));
-        assert_eq!(r, (0., 0., 150., 150.));
     }
 }
