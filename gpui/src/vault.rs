@@ -96,7 +96,7 @@ fn js_ws(c: char) -> bool {
     (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}'
 }
 
-pub(crate) fn js_trim(s: &str) -> &str {
+pub fn js_trim(s: &str) -> &str {
     s.trim_matches(js_ws)
 }
 

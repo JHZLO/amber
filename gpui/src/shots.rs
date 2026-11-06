@@ -300,6 +300,7 @@ pub fn run(dir: &str) {
         MouseButton::Left,
         Modifiers::none(),
     );
+    reports(&mut s);
     notes(&mut s);
     comments(&mut s);
     note_ai(&mut s);
@@ -1113,4 +1114,217 @@ fn timetable(s: &mut Shots) {
     s.shot("tt-4-moving");
     s.cx.simulate_mouse_up(w, up, MouseButton::Left, Modifiers::none());
     s.shot("tt-5-moved");
+}
+
+/// 할 일 탭의 리포트 카드 — 완성(마크다운), 굴려서 할 일 카드를 밀어 올린 묶음, 수집 칩, 흐르는 글, 편집, 주간, 확인 창
+fn reports(s: &mut Shots) {
+    use crate::report_run::{Chip, ChipStatus, End, Live, Phase};
+    use amber_core::report::CollectProgress;
+    use amber_gpui::report;
+    let body = "## 오늘 한 일\n\n- **동등성 하네스**: 리포트 본문 파일을 파일 상태까지 견주게 했다\n  - 일간, 주간 경로와 휴지통\n- 유리 배경을 Metal 로 옮기고 WebGL 기준 프레임과 비교했다\n\n## 내일 할 일\n\n- 리포트 패널을 GPUI 로\n- 설정 모달 뼈대\n\n## 메모\n\n- 카드 묶음: 리포트를 굴리면 할 일 카드가 먼저 밀려 올라간다\n- 다 올라간 뒤에 리포트 안이 구른다\n- 위로 굴리면 리포트가 맨 위에 닿은 뒤 할 일 카드가 내려온다\n- 다 보이는 리포트에서는 할 일을 치우지 않는다\n- 실패한 다시 생성은 직전 리포트를 지킨다\n- 주간은 평문 그대로\n";
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.section = crate::Section::Todo;
+            sp.set_unit(crate::calendar::Unit::Day, window, cx);
+            let rel = report::write_report_file(&sp.db, DATE, body).unwrap();
+            report::upsert_report(
+                &sp.db,
+                &report::ReportRow {
+                    date: DATE.into(),
+                    file_path: rel,
+                    sources_json: r#"[{"id":"github","rank":1,"ok":true,"items":7,"error":null},{"id":"ai_sessions","rank":2,"ok":false,"items":0,"error":"x"},{"id":"slack","rank":3,"ok":true,"items":0,"mcp":true,"error":null}]"#.into(),
+                    provider: Some("claude".into()),
+                    model: Some("claude-opus-5-5".into()),
+                    duration_ms: Some(42_000.),
+                },
+            )
+            .unwrap();
+            sp.reports.panel.loaded_for = None;
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("report-0-done");
+
+    // 리포트 위에서 아래로 굴린다 — 할 일 카드가 먼저 밀려 올라간다
+    let at = s
+        .window
+        .update(&mut s.cx, |sp, _, _| {
+            let b = sp.reports.panel.stack.bounds.get();
+            point(b.center().x, b.bottom() - px(60.))
+        })
+        .unwrap();
+    let w = s.any();
+    for _ in 0..3 {
+        s.cx.simulate_event(
+            w,
+            ScrollEvent {
+                position: at,
+                delta: ScrollDelta::Pixels(point(px(0.), px(-90.))),
+                ..Default::default()
+            },
+        );
+        s.cx.run_until_parked();
+    }
+    s.settle();
+    s.shot("report-1-collapsed");
+
+    // 수집 중(칩) → 흐르는 글 — 스토어에 바로 넣는다(CLI 없이)
+    let prev = amber_gpui::dates::shift_day(DATE, -1);
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.go_date(prev.clone());
+            let chip = |id: &str, status| Chip {
+                id: id.into(),
+                status,
+                items: 0,
+                error: None,
+            };
+            let seq = sp
+                .reports
+                .runs
+                .begin(
+                    &prev,
+                    Phase::Collecting,
+                    vec![
+                        Chip {
+                            items: 4,
+                            ..chip("todos", ChipStatus::Ok)
+                        },
+                        chip("github", ChipStatus::Pending),
+                        chip("ai_sessions", ChipStatus::Pending),
+                        chip("plugin:Slack:slack", ChipStatus::Mcp),
+                    ],
+                )
+                .unwrap();
+            sp.reports.runs.pump(
+                &prev,
+                seq,
+                &Live {
+                    progress: vec![CollectProgress {
+                        id: "github".into(),
+                        ok: true,
+                        items: 12,
+                        error: None,
+                    }],
+                    changed: true,
+                    ..Live::default()
+                },
+                "k",
+            );
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("report-2-collecting");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            let seq = 1;
+            sp.reports.runs.pump(
+                &prev,
+                seq,
+                &Live {
+                    progress: vec![CollectProgress {
+                        id: "ai_sessions".into(),
+                        ok: false,
+                        items: 0,
+                        error: Some("세션 폴더 없음".into()),
+                    }],
+                    stream: "## 오늘 한 일\n\n- 리포트 패널을 옮기는 중\n- 칩과 흐르는 글".into(),
+                    streaming: true,
+                    changed: true,
+                },
+                "k",
+            );
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("report-3-streaming");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.reports.runs.finish(&prev, 1, End::Empty);
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("report-4-empty");
+
+    // 편집 — 원문 | 미리보기
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.go_date(DATE.into());
+            sp.reports.panel.loaded_for = None;
+            sp.prepare_report(cx);
+            sp.report_start_edit(body.into(), window, cx);
+        })
+        .unwrap();
+    s.settle();
+    s.shot("report-5-edit");
+
+    // 다시 생성 확인 창, 실패(직전 리포트는 그대로)
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.reports.panel.edit = None;
+            sp.reports.panel.ask = Some(crate::report_view::Ask::Regen);
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("report-6-regen-ask");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.reports.panel.ask = None;
+            let seq = sp
+                .reports
+                .runs
+                .begin(DATE, Phase::Streaming, Vec::new())
+                .unwrap();
+            sp.reports
+                .runs
+                .finish(DATE, seq, End::Error("사용량 한도에 닿았어요".into()));
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("report-7-failed-kept");
+
+    // 주간 — 재료 칩(이틀 있음), 완성 평문
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.reports.runs.clear(DATE);
+            sp.set_unit(crate::calendar::Unit::Week, window, cx);
+            let week = amber_gpui::dates::week_start_of(DATE);
+            let rel = report::write_weekly_report_file(
+                &sp.db,
+                &week,
+                "이번 주\n  ㄴ 동등성 하네스를 리포트 파일까지 넓혔다\n  ㄴ 유리 배경을 Metal 로\n다음 주\n  ㄴ 설정 모달\n",
+            )
+            .unwrap();
+            report::upsert_weekly_report(
+                &sp.db,
+                &report::ReportRow {
+                    date: week,
+                    file_path: rel,
+                    sources_json: format!(r#"["{}","{DATE}"]"#, amber_gpui::dates::shift_day(DATE, -1)),
+                    provider: Some("claude".into()),
+                    model: Some("claude-opus-5-5".into()),
+                    duration_ms: None,
+                },
+            )
+            .unwrap();
+            sp.reports.panel.loaded_for = None;
+            sp.reports.panel.sources_for = None;
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("report-8-weekly");
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.set_unit(crate::calendar::Unit::Day, window, cx);
+            sp.go_date(DATE.into());
+            cx.notify();
+        })
+        .unwrap();
 }

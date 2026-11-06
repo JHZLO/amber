@@ -378,20 +378,23 @@ impl Spike {
             .rounded(px(12.))
             .bg(glass(k))
             .shadow(k.glass_shadow(false))
-            .child(head);
+            .child(head.flex_shrink_0());
         if !week && self.date <= today && !self.overdue.is_empty() {
-            card = card.child(self.overdue_strip(k, is_today, cx));
+            card = card.child(self.overdue_strip(k, is_today, cx).flex_shrink_0());
         }
-        card.child(quick)
+        card.child(quick.flex_shrink_0())
             .child(
                 div()
                     .id("todo-listing")
                     .flex()
                     .flex_col()
+                    .flex_shrink(1.)
+                    .min_h_0()
                     .mx(px(-16.))
                     .px(px(16.))
                     .pt(px(10.))
                     .overflow_y_scroll()
+                    .track_scroll(&self.reports.panel.stack.list)
                     .on_drag_move::<DragRow>(cx.listener(
                         |this, e: &DragMoveEvent<DragRow>, _, cx| {
                             if this.row_drag_move(e.event.position) {

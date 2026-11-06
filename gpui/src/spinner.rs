@@ -57,3 +57,50 @@ pub fn spinner(k: &Tokens, still: bool) -> impl IntoElement {
     .size(px(SIZE))
     .flex_none()
 }
+
+/// .ai-ring — AI 대기 고리(ui.tsx AiRing): 20px, 2.5px 선, 트랙(surface-3) 위에서 4분의 1 원호(글자색)가 0.9초에 한 바퀴.
+/// 움직임 줄이기면 돌지 않고 숨만 쉰다(완전히 멈추면 '멈춘 화면'으로 읽힌다)
+pub fn ai_ring(k: &Tokens, reduce: bool) -> impl IntoElement {
+    const RING: f32 = 20.;
+    const LINE: f32 = 2.5;
+    const RING_MS: u128 = 900;
+    let (track, ink) = (k.surface_3, k.text);
+    canvas(
+        |_, _, _| {},
+        move |b, _, window, _| {
+            let ms = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0);
+            let r = (RING - LINE) / 2. * 0.9;
+            let c = b.center();
+            let stroke = |from: f32, to: f32| {
+                let at = |a: f32| point(c.x + px(r * a.cos()), c.y + px(r * a.sin()));
+                let mut p = PathBuilder::stroke(px(LINE));
+                p.move_to(at(from));
+                let steps = ((to - from) / (PI / 2.)).ceil().max(1.) as usize;
+                for i in 1..=steps {
+                    let a = from + (to - from) * i as f32 / steps as f32;
+                    p.arc_to(point(px(r), px(r)), px(0.), false, true, at(a));
+                }
+                p.build().ok()
+            };
+            if let Some(p) = stroke(0., 2. * PI) {
+                window.paint_path(p, track);
+            }
+            // 원호 길이 14 / 둘레 56.5 ≈ 0.248 바퀴
+            let (turn, alpha) = if reduce {
+                let x = (ms % 1600) as f32 / 1600.;
+                (0., 0.45 + 0.55 * (1. - (2. * PI * x).cos()) / 2.)
+            } else {
+                ((ms % RING_MS) as f32 / RING_MS as f32 * 2. * PI, 1.)
+            };
+            if let Some(p) = stroke(turn - PI / 2., turn - PI / 2. + 0.248 * 2. * PI) {
+                window.paint_path(p, ink.opacity(alpha));
+            }
+            window.request_animation_frame();
+        },
+    )
+    .size(px(RING))
+    .flex_none()
+}

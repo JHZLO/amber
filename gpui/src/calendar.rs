@@ -74,6 +74,9 @@ impl Spike {
         let today = dates::today_str(chrono::Local::now().timestamp_millis());
         let sel_week = dates::week_start_of(&self.date);
         let YearMonth { year, month } = cal.cursor;
+        // AI 가 그날 리포트를 만드는 중이면 막대가 레일의 생성 중 점과 같은 호흡으로 깜빡인다
+        let generating = self.reports.runs.running_dates();
+        let reduce = cx.reduce_motion();
 
         let segmented = div()
             .flex()
@@ -271,6 +274,7 @@ impl Spike {
                     _ => String::new(),
                 };
                 let count = cal.counts.get(date).copied();
+                let busy = generating.contains(date);
                 // 주 할 일은 일별 진행을 뺏지 않고 그 주 첫 칸에 표식을 더한다(있을 때만)
                 let week_mark = (cal.unit == Unit::Week && dates::week_start_of(date) == *date)
                     .then(|| cal.week_counts.get(date).copied())
@@ -345,44 +349,56 @@ impl Spike {
                                 .child(label),
                         )
                     })
-                    .when_some(count, |d, (done, total)| {
-                        // 다 끝낸 날은 톤을 낮춘다 — 지난 날들이 하얗게 줄지어 서면 오늘보다 눈에 띈다
+                    .when(count.is_some() || busy, |d| {
+                        // 다 끝낸 날은 톤을 낮춘다 — 지난 날들이 하얗게 줄지어 서면 오늘보다 눈에 띈다.
+                        // 리포트를 만드는 날은 할 일이 없어도 빈 막대를 띄워 깜빡인다(어느 날이 도는지 보여야 한다)
+                        let (done, total) = count.unwrap_or_default();
                         let pct = if done > 0 {
                             ((done * 100) as f32 / total as f32).round().max(6.)
                         } else {
                             0.
                         };
-                        let full = done >= total;
-                        d.child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .h(px(3.))
-                                        .rounded(px(2.))
-                                        .bg(k.text_mix(0.12))
-                                        .overflow_hidden()
-                                        .child(
-                                            div()
-                                                .h_full()
-                                                .w(relative(pct / 100.))
-                                                .rounded(px(2.))
-                                                .bg(if full { k.text_3 } else { k.text_2 }),
-                                        ),
-                                )
-                                .when(wide, |d| {
-                                    d.child(
-                                        div()
-                                            .text_size(px(10.5))
-                                            .line_height(px(10.5))
-                                            .text_color(k.text_3)
-                                            .child(format!("{done}/{total}")),
+                        let full = count.is_some() && done >= total;
+                        let bar = div()
+                            .flex_1()
+                            .h(px(3.))
+                            .rounded(px(2.))
+                            .bg(k.text_mix(0.12))
+                            .overflow_hidden()
+                            .child(
+                                div()
+                                    .h_full()
+                                    .w(relative(pct / 100.))
+                                    .rounded(px(2.))
+                                    .bg(if full { k.text_3 } else { k.text_2 }),
+                            );
+                        let bar = if busy && !reduce {
+                            bar.with_animation(
+                                ElementId::Name(format!("cal-gen-{date_owned}").into()),
+                                Animation::new(std::time::Duration::from_millis(1100)).repeat(),
+                                |d, x| {
+                                    d.opacity(
+                                        0.3 + 0.7 * (1. - (std::f32::consts::PI * 2. * x).cos())
+                                            / 2.,
                                     )
-                                }),
-                        )
+                                },
+                            )
+                            .into_any_element()
+                        } else {
+                            bar.into_any_element()
+                        };
+                        d.child(div().flex().items_center().gap(px(6.)).child(bar).when(
+                            wide && count.is_some(),
+                            |d| {
+                                d.child(
+                                    div()
+                                        .text_size(px(10.5))
+                                        .line_height(px(10.5))
+                                        .text_color(k.text_3)
+                                        .child(format!("{done}/{total}")),
+                                )
+                            },
+                        ))
                     })
                     .when_some(week_mark, |d, (done, total)| {
                         let on = done >= total;

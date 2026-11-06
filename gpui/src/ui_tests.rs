@@ -3444,3 +3444,249 @@ fn disconnecting_and_cleaning_up_old_erds(cx: &mut TestAppContext) {
         assert!(s.erd.selected.is_none());
     });
 }
+
+/// 리포트 설정 — 첫 설정을 마친 것으로, 수집 소스(gh, 세션)는 모두 끈다(시험이 바깥에 닿지 않게)
+fn report_ready(db: &PathBuf) {
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    amber_gpui::report::save_report_config(
+        &d,
+        &amber_gpui::report::ReportConfig {
+            onboarded: true,
+            sources: serde_json::json!([
+                { "id": "github", "enabled": false },
+                { "id": "ai_sessions", "enabled": false }
+            ]),
+            github_path: String::new(),
+            github_repos: Vec::new(),
+            github_account: String::new(),
+            sessions_claude: false,
+            sessions_codex: false,
+            mcp_picked: serde_json::json!([]),
+            display_name: String::new(),
+            context: String::new(),
+        },
+    )
+    .unwrap();
+}
+
+/// 그 리포트 실행이 끝날 때까지(실제 시간)
+fn wait_report(ui: &mut VisualTestContext, key: &str) {
+    for _ in 0..100 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        ui.executor()
+            .advance_clock(std::time::Duration::from_millis(150));
+        ui.run_until_parked();
+        if !ui.update(|_, cx| spike().read(cx).reports.runs.running(key)) {
+            return;
+        }
+    }
+    panic!("리포트가 끝나지 않았다");
+}
+
+fn report_phase(ui: &mut VisualTestContext, key: &str) -> Option<crate::report_run::Phase> {
+    ui.update(|_, cx| spike().read(cx).reports.runs.get(key).map(|r| r.phase))
+}
+
+#[gpui_kit::test]
+fn generating_a_daily_report_saves_the_file_and_row_then_edits_with_cmd_s(cx: &mut TestAppContext) {
+    let db = seeded("report-gen", &[("Ship the report panel", None)]);
+    let dir = db.parent().unwrap().to_path_buf();
+    let mut reply = String::from("## 오늘 한 일\n\n");
+    for i in 0..60 {
+        reply.push_str(&format!("- line {i}\n"));
+    }
+    let bin = fake_claude_stream(&dir, &[], &reply, 0);
+    connect_fake(&db, &bin);
+    report_ready(&db);
+    let mut ui = open(cx, &db);
+    assert!(
+        ui.debug_bounds("report").is_some(),
+        "할 일 아래 리포트 카드"
+    );
+    click(&mut ui, "report-generate");
+    wait_report(&mut ui, DATE);
+    assert_eq!(
+        report_phase(&mut ui, DATE),
+        Some(crate::report_run::Phase::Done)
+    );
+    let sent = std::fs::read_to_string(dir.join("fake-claude.in")).unwrap();
+    assert!(
+        sent.contains("Ship the report panel"),
+        "할 일이 재료로: {sent}"
+    );
+    let file = dir.join(format!("vault/reports/{DATE}.md"));
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), reply.trim());
+    {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        let row = amber_gpui::report::get_report(&d, DATE).unwrap().unwrap();
+        assert_eq!(row["provider"], "claude");
+        assert_eq!(row["sources_json"], "[]", "끈 소스는 걷지 않는다");
+        assert_eq!(row["file_path"], format!("reports/{DATE}.md"));
+    }
+    assert!(ui.debug_bounds("report-body").is_some());
+    ui.update(|_, cx| {
+        assert!(
+            !spike().read(cx).reports.rail_done,
+            "보고 있는 탭이라 완료 점 없음"
+        )
+    });
+
+    // 리포트 위에서 아래로 굴리면 할 일 카드가 먼저 밀려 올라간다
+    let at = bounds(&mut ui, "report-scroll").center();
+    ui.simulate_event(ScrollEvent {
+        position: at,
+        delta: ScrollDelta::Pixels(point(px(0.), px(-60.))),
+        ..Default::default()
+    });
+    ui.run_until_parked();
+    let collapse = ui.update(|_, cx| spike().read(cx).reports.panel.stack.collapse);
+    assert_eq!(collapse, 60., "리포트가 커진다");
+    ui.simulate_event(ScrollEvent {
+        position: at,
+        delta: ScrollDelta::Pixels(point(px(0.), px(200.))),
+        ..Default::default()
+    });
+    ui.run_until_parked();
+    let collapse = ui.update(|_, cx| spike().read(cx).reports.panel.stack.collapse);
+    assert_eq!(collapse, 0., "리포트가 맨 위면 할 일 카드가 내려온다");
+
+    // 직접 고쳐 ⌘S — 본문 파일만 다시 쓴다
+    click(&mut ui, "report-edit");
+    assert!(
+        ui.debug_bounds("report-preview").is_some(),
+        "원문 | 미리보기"
+    );
+    assert!(
+        ui.debug_bounds("report-regen").is_none(),
+        "편집 중엔 다시 생성을 감춘다"
+    );
+    ui.simulate_input("EDITED");
+    ui.simulate_keystrokes("cmd-s");
+    ui.run_until_parked();
+    let saved = std::fs::read_to_string(&file).unwrap();
+    assert!(saved.contains("EDITED") && saved != reply.trim(), "{saved}");
+    assert!(ui.debug_bounds("report-saved").is_some());
+    assert!(ui.debug_bounds("report-preview").is_none());
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        assert!(
+            s.reports.runs.get(DATE).is_none(),
+            "저장 뒤로는 파일이 정본"
+        );
+        assert_eq!(s.reports.panel.loaded.as_ref().unwrap().1, saved);
+    });
+}
+
+#[gpui_kit::test]
+fn a_stopped_regeneration_keeps_the_previous_report(cx: &mut TestAppContext) {
+    let db = seeded("report-stop", &[("x", None)]);
+    let dir = db.parent().unwrap().to_path_buf();
+    {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        let rel = amber_gpui::report::write_report_file(&d, DATE, "# OLD\n").unwrap();
+        amber_gpui::report::upsert_report(
+            &d,
+            &amber_gpui::report::ReportRow {
+                date: DATE.into(),
+                file_path: rel,
+                sources_json: "[]".into(),
+                provider: Some("claude".into()),
+                model: Some("m".into()),
+                duration_ms: None,
+            },
+        )
+        .unwrap();
+    }
+    let bin = fake_claude_stream(&dir, &[], "# NEW", 8);
+    connect_fake(&db, &bin);
+    report_ready(&db);
+    let mut ui = open(cx, &db);
+    assert!(ui.debug_bounds("report-body").is_some(), "디스크의 리포트");
+    click(&mut ui, "report-regen");
+    click(&mut ui, "report-ask-regen");
+    // 첫 글 조각이 오길 기다린다('흐름'으로 넘어간 직후엔 글 없이 고리가 돈다)
+    for _ in 0..60 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        ui.executor()
+            .advance_clock(std::time::Duration::from_millis(150));
+        ui.run_until_parked();
+        let streamed = ui.update(|_, cx| {
+            spike()
+                .read(cx)
+                .reports
+                .runs
+                .get(DATE)
+                .is_some_and(|r| !r.stream.is_empty())
+        });
+        if streamed {
+            break;
+        }
+    }
+    assert_eq!(
+        report_phase(&mut ui, DATE),
+        Some(crate::report_run::Phase::Streaming)
+    );
+    assert!(ui.debug_bounds("report-stream").is_some(), "흐르는 글");
+    click(&mut ui, "report-stop");
+    wait_report(&mut ui, DATE);
+    assert_eq!(
+        report_phase(&mut ui, DATE),
+        Some(crate::report_run::Phase::Error)
+    );
+    assert!(
+        ui.debug_bounds("report-failed-close").is_some(),
+        "실패는 모달로"
+    );
+    assert!(
+        ui.debug_bounds("report-body").is_some(),
+        "직전 리포트는 그대로"
+    );
+    click(&mut ui, "report-failed-close");
+    assert_eq!(report_phase(&mut ui, DATE), None);
+    assert!(ui.debug_bounds("report-body").is_some());
+    let file = dir.join(format!("vault/reports/{DATE}.md"));
+    assert_eq!(std::fs::read_to_string(file).unwrap(), "# OLD\n");
+}
+
+#[gpui_kit::test]
+fn the_weekly_report_is_built_from_that_weeks_daily_reports(cx: &mut TestAppContext) {
+    let db = seeded("report-week", &[]);
+    let dir = db.parent().unwrap().to_path_buf();
+    let prev = amber_gpui::dates::shift_day(DATE, -1);
+    {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        amber_gpui::report::write_report_file(&d, &prev, "- wed work\n").unwrap();
+        amber_gpui::report::write_report_file(&d, DATE, "- thu work\n").unwrap();
+    }
+    let bin = fake_claude_stream(&dir, &[], "이번 주\n  ㄴ 둘", 0);
+    connect_fake(&db, &bin);
+    report_ready(&db);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "unit-week");
+    assert!(ui.debug_bounds("report-weekly").is_some());
+    click(&mut ui, "report-generate");
+    let week = amber_gpui::dates::week_start_of(DATE);
+    let key = crate::report_run::weekly_key(&week);
+    wait_report(&mut ui, &key);
+    assert_eq!(
+        report_phase(&mut ui, &key),
+        Some(crate::report_run::Phase::Done)
+    );
+    let sent = std::fs::read_to_string(dir.join("fake-claude.in")).unwrap();
+    assert!(
+        sent.contains("wed work") && sent.contains("thu work"),
+        "{sent}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.join(format!("vault/reports/{week}-week.md"))).unwrap(),
+        "이번 주\n  ㄴ 둘"
+    );
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    let row = amber_gpui::report::get_weekly_report(&d, &week)
+        .unwrap()
+        .unwrap();
+    assert_eq!(row["sources_json"], format!(r#"["{prev}","{DATE}"]"#));
+    assert!(ui.debug_bounds("report-week-body").is_some());
+    // 일간 점은 주간 실행을 세지 않는다
+    ui.update(|_, cx| assert!(spike().read(cx).reports.runs.running_dates().is_empty()));
+}

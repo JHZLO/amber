@@ -36,6 +36,8 @@ mod note_watch;
 mod notes_view;
 mod pane;
 mod raster;
+mod report_run;
+mod report_view;
 mod root_picker;
 mod row_drag;
 #[cfg(feature = "shots")]
@@ -113,6 +115,8 @@ struct Spike {
     input: Entity<InputState>,
     /// 노트 탭: 트리, 펼친 폴더, 고른 노트와 그 본문 덩어리, 판 폭
     notes: notes_view::NotesState,
+    /// 리포트 생성 실행(날짜마다, 주간은 w: 접두)과 레일 완료 점
+    reports: report_run::Reports,
     scroll: ScrollHandle,
     section: Section,
     /// 앱 표식(책상 스탠드). 스탠드 색이 테마를 따르므로 테마별로 굽는다
@@ -274,6 +278,7 @@ impl Spike {
             adding_child: None,
             confirm: None,
             input,
+            reports: report_run::Reports::default(),
             notes: notes_view::NotesState {
                 ui: vault_pane::TreeUi {
                     width: notes_w,
@@ -523,6 +528,10 @@ impl Render for Spike {
         if self.section == Section::Notes {
             self.notes.rail_done = false;
         }
+        if self.section == Section::Todo {
+            self.reports.rail_done = false;
+        }
+        self.prepare_report(cx);
         if !cx.has_active_drag() {
             self.diagrams.canvas.grab = None;
             if self.row_drag.is_some() {
@@ -576,7 +585,7 @@ impl Render for Spike {
                         .pl(px(4.))
                         .flex()
                         .flex_col()
-                        .child(self.day_card(&k, cx)),
+                        .child(self.todo_stack(&k, cx)),
                 )
                 .when(parked, |d| d.child(self.drawer(&k, cx)))
                 .into_any_element(),
@@ -597,6 +606,7 @@ impl Render for Spike {
         } else {
             (None, None, None)
         };
+        let report_modal = self.report_modal(&k, cx);
         let (erd_modal, erd_confirm) = if self.section == Section::Erd {
             (
                 self.erd_conn_view(&k, window, cx),
@@ -817,6 +827,15 @@ impl Render for Spike {
                     this.save_diagram(false, cx);
                     cx.notify();
                 }
+                // ⌘S — 리포트를 고치는 중일 때 저장
+                if this.section == Section::Todo
+                    && this.reports.panel.edit.is_some()
+                    && m.platform
+                    && !m.alt
+                    && e.keystroke.key == "s"
+                {
+                    this.report_save_edit(cx);
+                }
                 // ⌘S — 노트를 고치는 중일 때 저장
                 if this.section == Section::Notes
                     && this.notes.edit.is_some()
@@ -932,6 +951,7 @@ impl Render for Spike {
             .children(dgm_ai)
             .children(erd_modal)
             .children(erd_confirm)
+            .children(report_modal)
             .children(span_modal)
             .children(match self.section {
                 Section::Diagrams => {
@@ -967,20 +987,22 @@ impl Spike {
             self.mark = figure::svg(src, &hex(k.text_2)).ok().map(|f| (k.dark, f));
         }
         // 백그라운드 작업 점 — 도는 중 = 맥동(무채색), 끝났으니 와서 보라 = 초록 점(움직이지 않는다)
-        let notes_busy = self.notes.ai.any_running();
-        let notes_done = self.notes.rail_done;
+        let notes = (self.notes.ai.any_running(), self.notes.rail_done);
+        let todo = (self.reports.runs.any_running(), self.reports.rail_done);
         let reduce = cx.reduce_motion();
         let rail_dot = move |section: Section, k: &Tokens| -> Option<AnyElement> {
-            if section != Section::Notes {
-                return None;
-            }
+            let (busy, done) = match section {
+                Section::Notes => notes,
+                Section::Todo => todo,
+                _ => return None,
+            };
             let dot = div()
                 .absolute()
                 .top(px(7.))
                 .right(px(11.))
                 .size(px(6.))
                 .rounded_full();
-            if notes_busy {
+            if busy {
                 Some(if reduce {
                     dot.bg(k.text).opacity(0.85).into_any_element()
                 } else {
@@ -996,7 +1018,7 @@ impl Spike {
                         )
                         .into_any_element()
                 })
-            } else if notes_done {
+            } else if done {
                 Some(
                     dot.bg(k.success)
                         .shadow(vec![BoxShadow {
@@ -1006,7 +1028,11 @@ impl Spike {
                             spread_radius: px(2.),
                             inset: false,
                         }])
-                        .tag("rail-done")
+                        .tag(if section == Section::Todo {
+                            "rail-done-todo"
+                        } else {
+                            "rail-done"
+                        })
                         .into_any_element(),
                 )
             } else {
