@@ -93,6 +93,10 @@ pub const OPS: &[&str] = &[
     "report.readWeeklyReportFile",
     "report.deleteWeeklyReport",
     "report.loadWeekSources",
+    "report.rankedSources",
+    "report.mcpSourcesFrom",
+    "report.reportPathFor",
+    "report.weeklyReportPathFor",
     "dbconn.listConnections",
     "dbconn.getConnection",
     "dbconn.createConnection",
@@ -346,6 +350,20 @@ pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
             report::delete_weekly_report(db, a.s(0)?).map(|_| Json::Null)
         }
         "report.loadWeekSources" => Ok(json!(report::load_week_sources(db, a.s(0)?))),
+        "report.rankedSources" => Ok(Json::from(
+            report::ranked_sources(&a.de::<Json>(0)?)
+                .into_iter()
+                .map(|(id, rank)| json!({ "id": id, "rank": rank }))
+                .collect::<Vec<_>>(),
+        )),
+        "report.mcpSourcesFrom" => Ok(Json::from(
+            report::mcp_sources_from(&a.de::<Json>(0)?)
+                .into_iter()
+                .map(|(id, rank, server)| json!({ "id": id, "rank": rank, "server": server }))
+                .collect::<Vec<_>>(),
+        )),
+        "report.reportPathFor" => Ok(Json::from(report::report_path_for(a.s(0)?))),
+        "report.weeklyReportPathFor" => Ok(Json::from(report::weekly_report_path_for(a.s(0)?))),
         "dbconn.listConnections" => dbconn::list_connections(db).map(Json::from).map_err(err),
         "dbconn.getConnection" => dbconn::get_connection(db, a.i(0)?)
             .map(|c| c.unwrap_or(Json::Null))

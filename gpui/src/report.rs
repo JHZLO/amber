@@ -238,6 +238,38 @@ pub fn upsert_weekly_report(db: &Db, input: &ReportRow) -> Result<()> {
     upsert(db, "weekly_reports", "week_start", input)
 }
 
+/// 켜 둔 소스만, 배열 순서대로 순위(1..n)
+pub fn ranked_sources(rc: &Json) -> Vec<(String, u8)> {
+    rc["sources"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|s| s["enabled"].as_bool() == Some(true))
+        .enumerate()
+        .map(|(i, s)| {
+            (
+                s["id"].as_str().unwrap_or_default().to_string(),
+                (i + 1) as u8,
+            )
+        })
+        .collect()
+}
+
+/// 켜 둔 MCP 서버 — (id, 순위, 서버). 순위는 내장 소스 뒤에서 잇는다(MCP 는 도구 호출이라 실패할 수 있다)
+pub fn mcp_sources_from(rc: &Json) -> Vec<(String, u8, String)> {
+    let base = ranked_sources(rc).len();
+    rc["mcpPicked"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Json::as_str)
+        .map(crate::vault::js_trim)
+        .filter(|s| !s.is_empty())
+        .enumerate()
+        .map(|(i, s)| (s.to_string(), (base + i + 1) as u8, s.to_string()))
+        .collect()
+}
+
 // ---- vault/reports 파일 (본문 정본, frontmatter 없음) ----
 
 const VAULT: &str = "vault";
