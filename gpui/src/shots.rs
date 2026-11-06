@@ -244,9 +244,7 @@ pub fn run(dir: &str) {
                 cx.new(|cx| Spike::new(db, DATE.into(), None, None, Instant::now(), window, cx));
             // 찍기는 DB 와 키체인에 닿지 않는다 — ERD 동기화는 거절당한다
             view.update(cx, |s, _| {
-                s.erd.fake_introspect = Some(Arc::new(|_| {
-                    Err(amber_core::ai::AiError::new("DB_REFUSED", ""))
-                }))
+                s.erd.db = Some(std::rc::Rc::new(crate::erd_sync::Refuse))
             });
             view
         })

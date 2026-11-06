@@ -71,9 +71,7 @@ fn open_with(cx: &mut TestAppContext, db: &PathBuf, clock: Clock) -> VisualTestC
                 .new(|cx| Spike::new(db, DATE.to_string(), None, None, Instant::now(), window, cx));
             // 시험은 DB 와 키체인에 닿지 않는다 — ERD 동기화는 늘 거절당한다(시험이 바꿔 꽂는다)
             view.update(cx, |s, _| {
-                s.erd.fake_introspect = Some(std::sync::Arc::new(|_| {
-                    Err(amber_core::ai::AiError::new("DB_REFUSED", ""))
-                }))
+                s.erd.db = Some(std::rc::Rc::new(crate::erd_sync::Refuse))
             });
             view
         })
@@ -2752,6 +2750,83 @@ fn erd_canvas(ui: &mut VisualTestContext) -> (bool, f32, (f32, f32)) {
     })
 }
 
+/// 시험용 DB — 스키마마다 읽을 답, 연결 확인의 답을 정하고 키체인에 넣고 뺀 것을 적어 둔다
+struct FakeDb {
+    introspect: Box<
+        dyn Fn(&str) -> Result<amber_gpui::schema_snapshot::RawSnapshot, amber_core::ai::AiError>,
+    >,
+    test: Box<
+        dyn Fn(
+            &amber_core::dbconn::DbProfile,
+            Option<&str>,
+            Option<&[String]>,
+        ) -> Result<amber_core::dbconn::DbTestResult, amber_core::ai::AiError>,
+    >,
+    /// (ulid, Some(비밀번호) = 넣음 | None = 뺌)
+    secrets: std::rc::Rc<std::cell::RefCell<Vec<(String, Option<String>)>>>,
+}
+
+impl FakeDb {
+    fn new(
+        introspect: impl Fn(
+            &str,
+        )
+            -> Result<amber_gpui::schema_snapshot::RawSnapshot, amber_core::ai::AiError>
+        + 'static,
+    ) -> Self {
+        FakeDb {
+            introspect: Box::new(introspect),
+            test: Box::new(|_, _, _| Err(amber_core::ai::AiError::new("DB_REFUSED", ""))),
+            secrets: Default::default(),
+        }
+    }
+}
+
+impl crate::erd_sync::DbBackend for FakeDb {
+    fn introspect(
+        &self,
+        _: amber_core::dbconn::DbProfile,
+        schema: String,
+    ) -> futures::channel::oneshot::Receiver<
+        Result<amber_gpui::schema_snapshot::RawSnapshot, amber_core::ai::AiError>,
+    > {
+        crate::erd_sync::ready((self.introspect)(&schema))
+    }
+    fn test(
+        &self,
+        profile: amber_core::dbconn::DbProfile,
+        password: Option<String>,
+        schemas: Option<Vec<String>>,
+    ) -> futures::channel::oneshot::Receiver<
+        Result<amber_core::dbconn::DbTestResult, amber_core::ai::AiError>,
+    > {
+        crate::erd_sync::ready((self.test)(
+            &profile,
+            password.as_deref(),
+            schemas.as_deref(),
+        ))
+    }
+    fn secret_set(
+        &self,
+        ulid: String,
+        password: String,
+    ) -> futures::channel::oneshot::Receiver<Result<(), amber_core::ai::AiError>> {
+        self.secrets.borrow_mut().push((ulid, Some(password)));
+        crate::erd_sync::ready(Ok(()))
+    }
+    fn secret_delete(
+        &self,
+        ulid: String,
+    ) -> futures::channel::oneshot::Receiver<Result<(), amber_core::ai::AiError>> {
+        self.secrets.borrow_mut().push((ulid, None));
+        crate::erd_sync::ready(Ok(()))
+    }
+}
+
+fn plug_db(ui: &mut VisualTestContext, db: FakeDb) {
+    ui.update(|_, cx| spike().update(cx, |s, _| s.erd.db = Some(std::rc::Rc::new(db))));
+}
+
 /// ERD 그림의 한 자리(표 머리글, 또는 컬럼 행 가운데)가 화면 어디인가
 fn erd_spot(ui: &mut VisualTestContext, table: &str, column: Option<&str>) -> Point<Pixels> {
     ui.update(|_, cx| {
@@ -3096,32 +3171,29 @@ fn syncing_an_erd_schema_writes_the_snapshot_and_shows_what_changed(cx: &mut Tes
     seed_erd(&db);
     let mut ui = open(cx, &db);
     // svc_shop 은 표 하나가 늘었다(coupons), 나머지는 비밀번호가 틀렸다
-    ui.update(|_, cx| {
-        spike().update(cx, |s, _| {
-            s.erd.fake_introspect = Some(std::sync::Arc::new(|schema: &str| {
-                if schema != "svc_shop" {
-                    return Err(amber_core::ai::AiError::new("DB_AUTH", ""));
-                }
-                let col = |name: &str, key: &str| {
-                    serde_json::json!({"name": name, "data_type": "bigint", "column_type": "bigint", "nullable": false,
-                        "key": key, "default_value": null, "extra": "", "comment": ""})
-                };
-                let table = |name: &str, cols: Vec<serde_json::Value>| {
-                    serde_json::json!({"name": name, "comment": "", "rows_estimate": 1200, "columns": cols,
-                        "indexes": [], "foreign_keys": [], "checks": []})
-                };
-                Ok(serde_json::from_value(serde_json::json!({
-                    "connection": "c", "schema": "svc_shop", "server": "MySQL 8.0.36", "synced_at": 1_800_000_000_000i64,
-                    "tables": [
-                        table("orders", vec![col("id", "PRI"), col("user_id", "MUL")]),
-                        table("users", vec![col("id", "PRI"), col("email", "UNI")]),
-                        table("coupons", vec![col("id", "PRI")]),
-                    ]
-                }))
-                .unwrap())
-            }));
-        })
+    let fake = FakeDb::new(|schema| {
+        if schema != "svc_shop" {
+            return Err(amber_core::ai::AiError::new("DB_AUTH", ""));
+        }
+        let col = |name: &str, key: &str| {
+            serde_json::json!({"name": name, "data_type": "bigint", "column_type": "bigint", "nullable": false,
+                "key": key, "default_value": null, "extra": "", "comment": ""})
+        };
+        let table = |name: &str, cols: Vec<serde_json::Value>| {
+            serde_json::json!({"name": name, "comment": "", "rows_estimate": 1200, "columns": cols,
+                "indexes": [], "foreign_keys": [], "checks": []})
+        };
+        Ok(serde_json::from_value(serde_json::json!({
+            "connection": "c", "schema": "svc_shop", "server": "MySQL 8.0.36", "synced_at": 1_800_000_000_000i64,
+            "tables": [
+                table("orders", vec![col("id", "PRI"), col("user_id", "MUL")]),
+                table("users", vec![col("id", "PRI"), col("email", "UNI")]),
+                table("coupons", vec![col("id", "PRI")]),
+            ]
+        }))
+        .unwrap())
     });
+    plug_db(&mut ui, fake);
     // 들어오면 스냅샷이 없는 스키마(svc_empty)를 한 번 채워 본다 — 실패는 연결 행과 띠에
     click(&mut ui, "app.rail.erd");
     erd_canvas(&mut ui);

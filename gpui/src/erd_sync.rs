@@ -1,6 +1,7 @@
 // ERD 동기화 — 지금 앱 ErdView.tsx 의 syncOne, syncMany, autoSyncMissing 과 dbconn.ts 의 syncSchema.
 // DB 를 읽는 건 amber-core 의 db_introspect(tokio 위)다. 여기는 스냅샷 마무리(지문), schema.json 쓰기, 연결 행의
-// 마지막 동기화와 오류, 바뀐 것 띠를 맡는다. 시험은 DB 대신 fake_introspect 를 꽂는다(DB, 키체인에 닿지 않게).
+// 마지막 동기화와 오류, 바뀐 것 띠를 맡는다. DB 와 키체인은 DbBackend 를 거친다 — 앱은 amber-core, 시험과 찍기는
+// 가짜(Refuse 가 기본)를 꽂아 DB, 키체인에 닿지 않는다.
 
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
@@ -8,6 +9,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use amber_core::ai::AiError;
+use amber_core::dbconn::{DbProfile, DbTestResult};
 use amber_gpui::dbconn::{DbConnection, enabled_schemas, schema_folder, snapshot_path};
 use amber_gpui::i18n::t_with;
 use amber_gpui::schema_snapshot::{
@@ -21,10 +23,96 @@ use crate::Spike;
 /// 한 연결의 스키마를 동시에 읽는 수
 const SYNC_WORKERS: usize = 3;
 
-/// DB 대신 스키마 이름으로 RawSnapshot 을 주는 것(시험, 찍기)
-pub type FakeIntrospect = Arc<dyn Fn(&str) -> Result<RawSnapshot, AiError> + Send + Sync>;
+type Rx<T> = oneshot::Receiver<Result<T, AiError>>;
+
+/// DB 와 키체인에 하는 일 전부 — 결과는 tokio 쪽에서 오고 crate::ai::wait 로 기다린다
+pub trait DbBackend {
+    fn introspect(&self, profile: DbProfile, schema: String) -> Rx<RawSnapshot>;
+    fn test(
+        &self,
+        profile: DbProfile,
+        password: Option<String>,
+        schemas: Option<Vec<String>>,
+    ) -> Rx<DbTestResult>;
+    fn secret_set(&self, ulid: String, password: String) -> Rx<()>;
+    fn secret_delete(&self, ulid: String) -> Rx<()>;
+}
+
+/// 앱 — amber-core(MySQL, macOS 키체인)
+pub struct CoreDb;
+
+impl DbBackend for CoreDb {
+    fn introspect(&self, profile: DbProfile, schema: String) -> Rx<RawSnapshot> {
+        let fut = amber_core::dbconn::db_introspect(profile, schema);
+        crate::ai::spawn(async move {
+            // 앱의 형태로(지문은 여기서 붙인다)
+            fut.await.and_then(|raw| {
+                serde_json::to_value(raw)
+                    .and_then(serde_json::from_value::<RawSnapshot>)
+                    .map_err(|e| AiError::new("DB_QUERY", e.to_string()))
+            })
+        })
+    }
+    fn test(
+        &self,
+        profile: DbProfile,
+        password: Option<String>,
+        schemas: Option<Vec<String>>,
+    ) -> Rx<DbTestResult> {
+        crate::ai::spawn(amber_core::dbconn::db_test(profile, password, schemas))
+    }
+    fn secret_set(&self, ulid: String, password: String) -> Rx<()> {
+        crate::ai::spawn(amber_core::dbconn::db_secret_set(ulid, password))
+    }
+    fn secret_delete(&self, ulid: String) -> Rx<()> {
+        crate::ai::spawn(amber_core::dbconn::db_secret_delete(ulid))
+    }
+}
+
+/// 이미 끝난 결과
+pub fn ready<T>(v: Result<T, AiError>) -> Rx<T> {
+    let (tx, rx) = oneshot::channel();
+    let _ = tx.send(v);
+    rx
+}
+
+/// 시험과 찍기의 기본 — 무엇이든 거절한다(DB 가 없다)
+pub struct Refuse;
+
+impl DbBackend for Refuse {
+    fn introspect(&self, _: DbProfile, _: String) -> Rx<RawSnapshot> {
+        ready(Err(AiError::new("DB_REFUSED", "")))
+    }
+    fn test(&self, _: DbProfile, _: Option<String>, _: Option<Vec<String>>) -> Rx<DbTestResult> {
+        ready(Err(AiError::new("DB_REFUSED", "")))
+    }
+    fn secret_set(&self, _: String, _: String) -> Rx<()> {
+        ready(Err(AiError::new("DB_CREDENTIAL", "")))
+    }
+    fn secret_delete(&self, _: String) -> Rx<()> {
+        ready(Ok(()))
+    }
+}
+
+/// 연결 행 → 접속 프로필
+pub fn profile_of(c: &DbConnection) -> DbProfile {
+    DbProfile {
+        ulid: c.ulid.clone(),
+        kind: c.kind.clone(),
+        host: c.host.clone(),
+        port: c.port as u16,
+        username: c.username.clone(),
+        tls: c.tls.clone(),
+        credential_command: c.credential_command.clone(),
+    }
+}
 
 impl Spike {
+    /// 꽂힌 DB(시험, 찍기) 또는 amber-core
+    pub(crate) fn erd_db(&self) -> Rc<dyn DbBackend> {
+        self.erd.db.clone().unwrap_or_else(|| Rc::new(CoreDb))
+    }
+
     fn erd_tree_files(&self) -> amber_gpui::vault::Tree<'_> {
         amber_gpui::vault::Tree::new(&self.db, &amber_gpui::vault::ERD)
     }
@@ -50,33 +138,9 @@ impl Spike {
             .ok()
             .flatten()
             .and_then(|body| parse_snapshot(&body));
-        let rx = match self.erd.fake_introspect.clone() {
-            Some(fake) => {
-                let (tx, rx) = oneshot::channel();
-                let _ = tx.send(fake(schema));
-                rx
-            }
-            None => {
-                let profile = amber_core::dbconn::DbProfile {
-                    ulid: conn.ulid.clone(),
-                    kind: conn.kind.clone(),
-                    host: conn.host.clone(),
-                    port: conn.port as u16,
-                    username: conn.username.clone(),
-                    tls: conn.tls.clone(),
-                    credential_command: conn.credential_command.clone(),
-                };
-                let fut = amber_core::dbconn::db_introspect(profile, schema.to_string());
-                crate::ai::spawn(async move {
-                    // 앱의 형태로(지문은 여기서 붙인다)
-                    fut.await.and_then(|raw| {
-                        serde_json::to_value(raw)
-                            .and_then(serde_json::from_value::<RawSnapshot>)
-                            .map_err(|e| AiError::new("DB_QUERY", e.to_string()))
-                    })
-                })
-            }
-        };
+        let rx = self
+            .erd_db()
+            .introspect(profile_of(conn), schema.to_string());
         let (conn, schema) = (conn.clone(), schema.to_string());
         Some(cx.spawn(async move |this, cx| {
             let r = crate::ai::wait(rx, cx.background_executor().clone()).await;

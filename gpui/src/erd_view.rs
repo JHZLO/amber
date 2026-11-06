@@ -550,7 +550,8 @@ pub struct ErdState {
     pub queued: HashSet<String>,
     pub diffs: HashMap<String, amber_gpui::schema_snapshot::SchemaDiff>,
     pub attempted: HashSet<String>,
-    pub fake_introspect: Option<crate::erd_sync::FakeIntrospect>,
+    /// DB 와 키체인 — None 이면 amber-core. 시험과 찍기는 가짜를 꽂는다
+    pub db: Option<Rc<dyn crate::erd_sync::DbBackend>>,
 }
 
 /// 트리를 찾기로 거른 모양 — 남길 경로(없으면 다), 임시로 펼칠 경로, 칠할 검색어, 지금 것
