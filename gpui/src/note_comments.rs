@@ -653,9 +653,52 @@ impl Spike {
     pub(crate) fn comment_fab(&self, k: &Tokens, cx: &mut Context<Self>) -> Option<Div> {
         let c = &self.notes.cmts;
         let sel = c.sel.clone()?;
-        if c.asking.is_some() || self.notes.edit.is_some() {
+        if self.notes.edit.is_some() {
             return None;
         }
+        // 답을 기다리는 동안엔 새 질문을 열지 않는다 — 개념으로 올리기는 된다
+        let asking = c.asking.is_some();
+        let fab = |id: &'static str| {
+            div()
+                .id(id)
+                .tag(id)
+                .flex()
+                .items_center()
+                .gap(px(5.))
+                .px(px(11.))
+                .py(px(5.))
+                .rounded(px(6.))
+                .border_1()
+                .border_color(k.border_strong)
+                .bg(k.surface)
+                .shadow(k.shadow())
+                .text_size(px(12.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(k.text)
+                .cursor_pointer()
+                .hover(|st| st.bg(k.surface_2))
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        };
+        let promote = {
+            let anchor = sel.anchor.clone();
+            fab("cmt-promote")
+                .tooltip(crate::tip::tip(t("notes.cmt.promoteTip")))
+                .child(icon("layers", 13.).text_color(k.text_3))
+                .child(t("notes.cmt.promote"))
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    let Some(rel) = this.notes.selected.clone() else {
+                        return;
+                    };
+                    this.notes.cmts.sel = None;
+                    let target = crate::concept_add::PromoteTarget {
+                        note_rel: rel,
+                        selection: anchor.clone(),
+                        note_body: this.notes.body.clone(),
+                    };
+                    this.open_promote(target, window, cx);
+                    cx.notify();
+                }))
+        };
         Some(
             div()
                 .absolute()
@@ -663,40 +706,45 @@ impl Spike {
                 // 본문을 굴리면 따라간다
                 .left(sel.at.x + px(6.))
                 .top((sel.at.y + (self.scroll.offset().y - sel.scroll_y) - px(48.)).max(px(8.)))
-                .child(
-                    div()
-                        .id("cmt-fab")
-                        .tag("cmt-fab")
-                        .flex()
-                        .items_center()
-                        .gap(px(5.))
-                        .px(px(11.))
-                        .py(px(5.))
-                        .rounded(px(6.))
-                        .border_1()
-                        .border_color(k.border_strong)
-                        .bg(k.surface)
-                        .shadow(k.shadow())
-                        .text_size(px(12.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(k.text)
-                        .cursor_pointer()
-                        .hover(|st| st.bg(k.surface_2))
-                        .child(icon("message", 13.).text_color(k.text_3))
-                        .child(t("notes.cmt.ask"))
-                        // 누르는 순간 본문 선택이 풀리지 않게 — 앵커는 이미 잡아 두었다
-                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.open_pop(
-                                Pop::Ask {
-                                    anchor: sel.anchor.clone(),
-                                    occurrence: sel.occurrence,
-                                },
-                                cx,
-                            );
-                            cx.notify();
-                        })),
-                ),
+                .flex()
+                .gap(px(4.))
+                .when(!asking, |d| {
+                    d.child(
+                        div()
+                            .id("cmt-fab")
+                            .tag("cmt-fab")
+                            .flex()
+                            .items_center()
+                            .gap(px(5.))
+                            .px(px(11.))
+                            .py(px(5.))
+                            .rounded(px(6.))
+                            .border_1()
+                            .border_color(k.border_strong)
+                            .bg(k.surface)
+                            .shadow(k.shadow())
+                            .text_size(px(12.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(k.text)
+                            .cursor_pointer()
+                            .hover(|st| st.bg(k.surface_2))
+                            .child(icon("message", 13.).text_color(k.text_3))
+                            .child(t("notes.cmt.ask"))
+                            // 누르는 순간 본문 선택이 풀리지 않게 — 앵커는 이미 잡아 두었다
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.open_pop(
+                                    Pop::Ask {
+                                        anchor: sel.anchor.clone(),
+                                        occurrence: sel.occurrence,
+                                    },
+                                    cx,
+                                );
+                                cx.notify();
+                            })),
+                    )
+                })
+                .child(promote),
         )
     }
 

@@ -27,7 +27,17 @@ pub enum Step {
     Preview,
 }
 
+/// 노트에서 올리기 — 드래그한 글과 노트 전체(문맥)
+#[derive(Clone, Debug)]
+pub struct PromoteTarget {
+    pub note_rel: String,
+    pub selection: String,
+    pub note_body: String,
+}
+
 pub struct AddConcept {
+    /// 노트에서 올리는 중이면 그 대상(붙여넣기 단계가 없고, 출처를 남긴다)
+    pub promote: Option<PromoteTarget>,
     pub step: Step,
     pub transcript: Entity<TextareaState>,
     pub instruction: Entity<TextareaState>,
@@ -91,13 +101,62 @@ impl Spike {
             preview: Vec::new(),
             confirm_close: false,
             seq: 0,
+            promote: None,
         });
         cx.notify();
     }
 
+    /// 노트의 선택을 개념으로 — 연결이 있으면 곧장 정리하고, 없으면 선택을 씨앗으로 손으로 쓴다
+    pub(crate) fn open_promote(
+        &mut self,
+        target: PromoteTarget,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_add_concept(window, cx);
+        let connected = crate::note_ai::ai_args(&self.db).is_some();
+        if let Some(a) = self.concepts.add.as_mut() {
+            a.promote = Some(target.clone());
+        }
+        if connected {
+            let input = format!(
+                "[개념으로 만들 부분]\n{}\n\n[출처 노트 전체 (문맥)]\n{}",
+                target.selection, target.note_body
+            );
+            let instruction = "위 [개념으로 만들 부분]을 복습용 개념 카드로 만들어라. 그 부분을 중심 주제로 삼되, \
+[출처 노트 전체]를 문맥으로만 참고해 제목·요약·상세 노트·태그를 작성하라. \
+노트 전체를 요약하지 말고 선택한 개념에 집중하라."
+                .to_string();
+            self.run_generate(input, instruction, false, window, cx);
+        } else {
+            self.promote_seed(window, cx);
+        }
+    }
+
+    /// 선택을 씨앗으로 — 제목은 앞 40자(UTF-16), 본문은 선택 그대로
+    fn promote_seed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(sel) = self
+            .concepts
+            .add
+            .as_ref()
+            .and_then(|a| a.promote.as_ref())
+            .map(|p| p.selection.clone())
+        else {
+            return;
+        };
+        let units: Vec<u16> = sel.encode_utf16().collect();
+        let title = String::from_utf16_lossy(&units[..units.len().min(40)]);
+        self.add_fill(title, String::new(), String::new(), 1, sel, window, cx);
+    }
+
     fn add_request_close(&mut self, cx: &mut Context<Self>) {
         if let Some(a) = self.concepts.add.as_mut() {
-            if matches!(a.step, Step::Loading | Step::Preview) {
+            // 올리기는 늘 묻는다(저장 중에는 닫지 않는다)
+            if a.promote.is_some() {
+                if !a.saving {
+                    a.confirm_close = true;
+                }
+            } else if matches!(a.step, Step::Loading | Step::Preview) {
                 a.confirm_close = true;
             } else {
                 self.concepts.add = None;
@@ -139,31 +198,57 @@ impl Spike {
         a.tags.update(cx, |st, cx| st.set_value(tags, window, cx));
         a.body.update(cx, |st, cx| st.set_value(body, window, cx));
         a.confidence = confidence;
-        a.show_preview = false;
+        // 올리기는 미리보기부터, 추가는 원문부터
+        a.show_preview = a.promote.is_some();
         a.step = Step::Preview;
+        if a.show_preview {
+            let md = a.body.read(cx).value().to_string();
+            let text = crate::hex(Tokens::get(cx).text);
+            let blocks = crate::notes_view::build_blocks(&md, &text, cx).0;
+            if let Some(a) = self.concepts.add.as_mut() {
+                a.preview = blocks;
+            }
+        }
         // 사라진 칸이 포커스를 쥐고 있으면 Esc 가 뿌리에 안 닿는다
         self.focus.focus(window, cx);
     }
 
     fn add_generate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(a) = self.concepts.add.as_ref() else {
+            return;
+        };
+        let transcript = a.transcript.read(cx).value().to_string();
+        let instruction = a.instruction.read(cx).value().to_string();
+        self.run_generate(transcript, instruction, true, window, cx);
+    }
+
+    /// 정리 — remember = 지시문을 다음 추가의 기본값으로 남긴다(붙여넣기 추가만)
+    fn run_generate(
+        &mut self,
+        transcript: String,
+        instruction: String,
+        remember: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some((model, cli, provider, lang)) = crate::note_ai::ai_args(&self.db) else {
             return;
         };
         let Some(a) = self.concepts.add.as_mut() else {
             return;
         };
-        let transcript = a.transcript.read(cx).value().to_string();
-        let instruction = a.instruction.read(cx).value().to_string();
         a.error = None;
         a.step = Step::Loading;
         a.seq += 1;
         let seq = a.seq;
         self.focus.focus(window, cx);
-        let _ = concepts::set_setting(
-            &self.db,
-            "default_instruction",
-            vault::js_trim(&instruction),
-        );
+        if remember {
+            let _ = concepts::set_setting(
+                &self.db,
+                "default_instruction",
+                vault::js_trim(&instruction),
+            );
+        }
         let rx = crate::ai::spawn(core_ai::ai_generate(
             transcript,
             Some(instruction),
@@ -196,9 +281,16 @@ impl Spike {
                         );
                     }
                     Err(e) => {
+                        let promote = s.concepts.add.as_ref().is_some_and(|a| a.promote.is_some());
+                        // 올리기는 실패해도 선택으로 손으로 이어 쓸 수 있게
+                        if promote {
+                            s.promote_seed(window, cx);
+                        }
                         if let Some(a) = s.concepts.add.as_mut() {
                             a.error = Some(crate::ai::err_text(&e));
-                            a.step = Step::Paste;
+                            if !promote {
+                                a.step = Step::Paste;
+                            }
                         }
                     }
                 }
@@ -227,6 +319,22 @@ impl Spike {
             return;
         }
         let id = ulid::Ulid::new().to_string();
+        let promote = a.promote.clone();
+        // 출처 = 작업 폴더 + 노트 경로 + 앵커 — 폴더를 바꾼 뒤 같은 이름의 다른 노트를 조용히 열지 않게
+        let (source, source_kind) = match &promote {
+            Some(p) => (
+                Some(
+                    serde_json::json!({
+                        "root": vault::notes(&self.db).full(""),
+                        "noteRel": p.note_rel,
+                        "anchor": p.selection,
+                    })
+                    .to_string(),
+                ),
+                "file",
+            ),
+            None => ((!transcript.is_empty()).then_some(transcript), "paste"),
+        };
         let input = CreateConceptInput {
             ulid: id.clone(),
             title: vault::js_trim(&title).to_string(),
@@ -234,22 +342,43 @@ impl Spike {
             detail_path: vault::detail_path_for(&id),
             tags: Some(parse_tags(&tags)),
             confidence: Some(a.confidence as f64),
-            source: (!transcript.is_empty()).then_some(transcript),
-            source_kind: Some("paste".into()),
+            source,
+            source_kind: Some(source_kind.into()),
         };
+        let title = vault::js_trim(&title).to_string();
         let res = concepts::create_concept(&self.db, &input)
             .map_err(|e| e.to_string())
             .and_then(|cid| {
                 vault::write_concept_note(&self.db, &id, &body)
-                    .map(|_| ())
+                    .map(|_| cid)
                     .inspect_err(|_| {
                         let _ = concepts::delete_concept(&self.db, cid);
                     })
+            })
+            .and_then(|cid| match &promote {
+                // 노트 쪽 역참조(노트 → 개념)
+                Some(p) => amber_gpui::note_concepts::add_note_concept(
+                    &self.db,
+                    &p.note_rel,
+                    &serde_json::json!({
+                        "conceptId": cid,
+                        "title": title,
+                        "anchor": p.selection,
+                        "createdAt": chrono::Local::now().timestamp_millis(),
+                    }),
+                ),
+                None => Ok(()),
             });
         match res {
             Ok(()) => {
                 self.concepts.add = None;
                 self.reload_concepts();
+                if let Some(p) = promote
+                    && self.notes.selected.as_deref() == Some(p.note_rel.as_str())
+                {
+                    self.notes.made =
+                        amber_gpui::note_concepts::load_note_concepts(&self.db, &p.note_rel);
+                }
             }
             Err(e) => {
                 if let Some(a) = self.concepts.add.as_mut() {
@@ -261,10 +390,12 @@ impl Spike {
     }
 
     pub(crate) fn add_concept_modal(&self, k: &Tokens, cx: &mut Context<Self>) -> Option<Div> {
-        if self.section != crate::Section::Til {
+        let a = self.concepts.add.as_ref()?;
+        // 올리기는 노트 탭에서 뜬다
+        if self.section != crate::Section::Til && a.promote.is_none() {
             return None;
         }
-        let a = self.concepts.add.as_ref()?;
+        let promote = a.promote.is_some();
         if a.confirm_close {
             let running = a.step == Step::Loading;
             let keep = || {
@@ -412,8 +543,16 @@ impl Spike {
             Step::Loading => {
                 body = body.child(crate::note_ai_view::ai_thinking(
                     "add-thinking",
-                    t("concepts.add.thinking"),
-                    Some(t("concepts.add.thinkingHint")),
+                    t(if promote {
+                        "concepts.promote.thinking"
+                    } else {
+                        "concepts.add.thinking"
+                    }),
+                    Some(t(if promote {
+                        "concepts.promote.thinkingHint"
+                    } else {
+                        "concepts.add.thinkingHint"
+                    })),
                     false,
                     k,
                     cx.reduce_motion(),
@@ -437,31 +576,33 @@ impl Spike {
                         t("concepts.field.tags"),
                         input_box(&a.tags, "add-tags").into_any_element(),
                     ))
-                    .child(field(
-                        t("concepts.field.confidence"),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(6.))
-                            .children((1..=3).map(|n| {
-                                let id = SharedString::from(format!("add-conf-{n}"));
-                                let b = if conf == n {
-                                    primary_button(id, k, false)
-                                } else {
-                                    button(id, k, false, false)
-                                };
-                                b.child(n.to_string()).on_click(cx.listener(
-                                    move |this, _, _, cx| {
-                                        if let Some(a) = this.concepts.add.as_mut() {
-                                            a.confidence = n;
-                                        }
-                                        cx.notify();
-                                    },
-                                ))
-                            }))
-                            .child(hint(t("concepts.add.confidenceHint"), k).mt_0().ml(px(6.)))
-                            .into_any_element(),
-                    ))
+                    .when(!promote, |d| {
+                        d.child(field(
+                            t("concepts.field.confidence"),
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(6.))
+                                .children((1..=3).map(|n| {
+                                    let id = SharedString::from(format!("add-conf-{n}"));
+                                    let b = if conf == n {
+                                        primary_button(id, k, false)
+                                    } else {
+                                        button(id, k, false, false)
+                                    };
+                                    b.child(n.to_string()).on_click(cx.listener(
+                                        move |this, _, _, cx| {
+                                            if let Some(a) = this.concepts.add.as_mut() {
+                                                a.confidence = n;
+                                            }
+                                            cx.notify();
+                                        },
+                                    ))
+                                }))
+                                .child(hint(t("concepts.add.confidenceHint"), k).mt_0().ml(px(6.)))
+                                .into_any_element(),
+                        ))
+                    })
                     .child(
                         div()
                             .flex()
@@ -532,6 +673,31 @@ impl Spike {
                             }),
                     );
                 let saving = a.saving;
+                if promote {
+                    return Some(crate::dialog::shell_split(
+                        k,
+                        820.,
+                        t("concepts.promote.title"),
+                        body.into_any_element(),
+                        Vec::new(),
+                        vec![
+                            button("add-cancel", k, false, saving)
+                                .child(t("common.cancel"))
+                                .on_click(cx.listener(|this, _, _, cx| this.add_request_close(cx))),
+                            primary_button("add-save", k, saving)
+                                .child(icon("layers", 15.).text_color(k.text))
+                                .child(t(if saving {
+                                    "concepts.saving"
+                                } else {
+                                    "concepts.promote.save"
+                                }))
+                                .when(!saving, |b| {
+                                    b.on_click(cx.listener(|this, _, _, cx| this.add_save(cx)))
+                                }),
+                        ],
+                        cx.listener(|this, _, _, cx| this.add_request_close(cx)),
+                    ));
+                }
                 (
                     vec![
                         button("add-back", k, false, false)
@@ -564,7 +730,11 @@ impl Spike {
         Some(crate::dialog::shell_split(
             k,
             820.,
-            t("concepts.add.title"),
+            t(if promote {
+                "concepts.promote.title"
+            } else {
+                "concepts.add.title"
+            }),
             body.into_any_element(),
             left,
             buttons,

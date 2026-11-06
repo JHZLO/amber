@@ -624,6 +624,7 @@ impl Spike {
             .rounded(px(12.))
             .child(card)
             .child(report)
+            .children(self.learned_card(k, cx))
             .child(
                 canvas(
                     move |b, _, _| bounds.set(b),
@@ -648,6 +649,65 @@ impl Spike {
                 .left_0()
                 .size_full(),
             )
+    }
+
+    /// 그날 배운 개념 — 누르면 개념 탭에서 연다
+    fn learned_card(&self, k: &Tokens, cx: &mut Context<Self>) -> Option<Div> {
+        if self.learned.is_empty() {
+            return None;
+        }
+        let (hf, he) = (
+            crate::settings_view::glass(k.glass_fill_hover),
+            k.glass_edge_hover,
+        );
+        Some(
+            div()
+                .tag("todo-learned")
+                .flex_shrink_0()
+                .mt(px(GAP))
+                .pt(px(14.))
+                .px(px(16.))
+                .pb(px(16.))
+                .border_1()
+                .border_color(k.glass_edge)
+                .rounded(px(12.))
+                .bg(glass(k))
+                .shadow(k.glass_shadow(false))
+                .child(
+                    div()
+                        .mb(px(10.))
+                        .text_size(px(11.))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(k.text_3)
+                        .child(
+                            t_with(
+                                "todos.learned.label",
+                                &[("n", &self.learned.len().to_string())],
+                            )
+                            .to_uppercase(),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap(px(6.))
+                        .children(self.learned.iter().map(|(id, title)| {
+                            let id = *id;
+                            let (hf, he) = (hf.clone(), he);
+                            chip(k)
+                                .id(SharedString::from(format!("learned-{id}")))
+                                .tag(format!("learned-{id}"))
+                                .cursor_pointer()
+                                .hover(move |s| s.bg(hf).border_color(he))
+                                .tooltip(tip(t("todos.learned.open")))
+                                .child(title.clone())
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.go_to_concept(id, window, cx)
+                                }))
+                        })),
+                ),
+        )
     }
 
     /// 리포트 카드 — 머리 띠(제목 + 동작)는 서고 아래만 카드 안에서 구른다

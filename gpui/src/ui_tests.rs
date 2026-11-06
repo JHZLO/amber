@@ -4153,3 +4153,83 @@ fn adding_a_concept_with_ai_fills_the_review(cx: &mut TestAppContext) {
         "지시문은 다음 추가의 기본값으로 남는다"
     );
 }
+
+#[gpui_kit::test]
+fn promoting_a_note_selection_makes_a_linked_concept(cx: &mut TestAppContext) {
+    let db = seeded("concept-promote", &[]);
+    vault_note(
+        &db,
+        "A.md",
+        "# A\n\nThe quick brown fox jumps over the lazy dog\n",
+    );
+    let dir = db.parent().unwrap().to_path_buf();
+    let note = serde_json::json!({
+        "title": "Quick fox",
+        "summary": "a pangram",
+        "detail_markdown": "# Quick fox",
+        "tags": ["english"],
+        "confidence_suggestion": 1,
+        "source_excerpt": null
+    })
+    .to_string();
+    let quoted = serde_json::to_string(&note).unwrap();
+    connect_fake(&db, &fake_claude(&dir, &quoted[1..quoted.len() - 1]));
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-A.md");
+    let b = bounds(&mut ui, "note-block-0");
+    let y = b.origin.y + b.size.height - px(14.);
+    drag_points(
+        &mut ui,
+        point(b.origin.x + px(2.), y),
+        point(b.origin.x + px(120.), y),
+        Modifiers::none(),
+    );
+    click(&mut ui, "cmt-promote");
+    for _ in 0..200 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        ui.executor()
+            .advance_clock(std::time::Duration::from_millis(100));
+        ui.run_until_parked();
+        let done = ui.update(|_, cx| {
+            spike()
+                .read(cx)
+                .concepts
+                .add
+                .as_ref()
+                .is_some_and(|a| a.step == crate::concept_add::Step::Preview)
+        });
+        if done {
+            break;
+        }
+    }
+    let sent = std::fs::read_to_string(dir.join("fake-claude.in")).unwrap();
+    assert!(sent.contains("[개념으로 만들 부분]\nThe quick"), "{sent}");
+    assert!(sent.contains("[출처 노트 전체 (문맥)]\n# A"), "{sent}");
+    assert!(
+        ui.debug_bounds("add-preview").is_some(),
+        "올리기는 미리보기부터"
+    );
+    click(&mut ui, "add-save");
+    let rows = concepts_of(&db);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["source_kind"], "file");
+    let src: serde_json::Value = serde_json::from_str(rows[0]["source"].as_str().unwrap()).unwrap();
+    assert_eq!(src["root"], "vault/notes");
+    assert_eq!(src["noteRel"], "A.md");
+    assert!(src["anchor"].as_str().unwrap().starts_with("The quick"));
+    // 노트 쪽 역참조와 노트 아래 칩
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    let links = amber_gpui::note_concepts::load_note_concepts(&d, "A.md");
+    assert_eq!(links[0]["title"], "Quick fox");
+    click(&mut ui, "note-made-1");
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        assert!(s.section == crate::Section::Til);
+        assert_eq!((s.concepts.status, s.concepts.selected), ("all", Some(1)));
+    });
+    assert!(
+        ui.debug_bounds("concept-source").is_some(),
+        "출처 노트 단추"
+    );
+}

@@ -227,7 +227,7 @@ fn new_key() -> String {
 }
 
 /// 그날 0시 ~ 다음 날 0시(로컬, ms) — dayRangeMs
-fn day_range_ms(date: &str) -> Option<(i64, i64)> {
+pub(crate) fn day_range_ms(date: &str) -> Option<(i64, i64)> {
     use chrono::TimeZone;
     let d = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
     let at = |d: chrono::NaiveDate| {

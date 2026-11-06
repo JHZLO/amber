@@ -146,6 +146,8 @@ pub struct NotesState {
     /// 목차 — (덩어리 번호, 단계 1~3, 글자). 두 개 이상일 때만 보인다
     pub toc: Vec<(usize, u8, String)>,
     pub mtime: Option<i64>,
+    /// 이 노트에서 만든 개념(사이드카 역참조) — 노트 아래 칩
+    pub made: Vec<serde_json::Value>,
     /// 고른 노트 폴더의 실제 자리 — 본문 그림(`_assets/…`)을 푸는 기준
     pub asset_base: Option<SharedString>,
     /// 편집 중이면 초안과 미리보기, 그리고 떠 있는 확인 창(저장 안 한 변경, 디스크 충돌)
@@ -302,6 +304,7 @@ impl Spike {
                 .into(),
         );
         n.active_dir = dir;
+        n.made = amber_gpui::note_concepts::load_note_concepts(&self.db, rel);
         match vault::notes(&self.db).read_file(rel) {
             Ok(body) => {
                 let text = hex(Tokens::get(cx).text);
@@ -706,6 +709,55 @@ impl Spike {
             .on_mouse_down(MouseButton::Left, press)
             .on_mouse_up(MouseButton::Left, release)
             .children(body);
+        // 이 노트에서 만든 개념 — 누르면 개념 탭에서 그 개념을 연다
+        let made = (!editing && !self.notes.made.is_empty()).then(|| {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap(px(6.))
+                .mt(px(22.))
+                .pt(px(14.))
+                .border_t_1()
+                .border_color(k.border)
+                .tag("note-made")
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(5.))
+                        .mr(px(2.))
+                        .text_size(px(12.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(k.text_2)
+                        .child(icon("layers", 12.).text_color(k.text_3))
+                        .child(t("notes.madeConcepts")),
+                )
+                .children(self.notes.made.iter().filter_map(|c| {
+                    let id = c["conceptId"].as_f64()? as i64;
+                    let title = c["title"].as_str().unwrap_or_default().to_string();
+                    let anchor = c["anchor"].as_str().unwrap_or_default().to_string();
+                    let (hf, he) = (
+                        crate::settings_view::glass(k.glass_fill_hover),
+                        k.glass_edge_hover,
+                    );
+                    Some(
+                        crate::concepts_view::chip(k)
+                            .id(SharedString::from(format!("note-made-{id}")))
+                            .tag(format!("note-made-{id}"))
+                            .cursor_pointer()
+                            .hover(move |s| s.bg(hf).border_color(he))
+                            .tooltip(crate::tip::tip(amber_gpui::i18n::t_with(
+                                "notes.openConcept",
+                                &[("anchor", &anchor)],
+                            )))
+                            .child(title)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.go_to_concept(id, window, cx)
+                            })),
+                    )
+                }))
+        });
         let meta = {
             let mut line = format!("{}/{rel}", self.notes_root_name());
             if let Some(ms) = self.notes.mtime {
@@ -755,6 +807,7 @@ impl Spike {
                     .child(column)
                     .when(show_toc, |d| d.child(self.note_toc(k, cx))),
             )
+            .children(made)
             .when(self.notes.read_error.is_none(), |d| d.child(meta))
     }
 

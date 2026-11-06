@@ -109,6 +109,8 @@ struct Spike {
     week_todos: Vec<Row>,
     overdue: Vec<Row>,
     overdue_open: bool,
+    /// 고른 날 배운 개념(learned_at 이 그날) — 할 일 판 묶음 마지막 장
+    learned: Vec<(i64, String)>,
     parked_n: usize,
     /// 서랍: 열렸는가(amber.todo.parked-open), 탭, 내려놓은 행과 그 조상(묶음 이름을 단다)
     parked_open: bool,
@@ -286,6 +288,7 @@ impl Spike {
             week_todos: Vec::new(),
             overdue: Vec::new(),
             overdue_open: false,
+            learned: Vec::new(),
             parked_n: 0,
             parked_open,
             drawer_tab: drawer::Tab::Suggest,
@@ -406,6 +409,22 @@ impl Spike {
         } else {
             Vec::new()
         };
+        self.learned = report_run::day_range_ms(&self.date)
+            .and_then(|(a, b)| {
+                amber_gpui::concepts::concepts_learned_on(&self.db, a as f64, b as f64).ok()
+            })
+            .unwrap_or_default()
+            .iter()
+            .map(|r| {
+                (
+                    r.get("id").and_then(|v| v.as_i64()).unwrap_or_default(),
+                    r.get("title")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                )
+            })
+            .collect();
         self.parked = todos::list_parked(&self.db).unwrap_or_default();
         self.parked_anc = todos::list_parked_ancestors(&self.db).unwrap_or_default();
         self.parked_n = self.parked.len();
@@ -787,6 +806,12 @@ impl Render for Spike {
                     if !this.close_settings_menu() {
                         this.close_settings(cx);
                     }
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
+                // 개념 추가/올리기 창(노트 탭에서도 뜬다) — Esc 는 확인부터
+                if e.keystroke.key == "escape" && this.add_concept_escape(cx) {
                     cx.stop_propagation();
                     cx.notify();
                     return;

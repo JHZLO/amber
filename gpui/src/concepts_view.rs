@@ -559,6 +559,27 @@ impl Spike {
             }))
     }
 
+    /// 개념 하나로 간다 — 필터에 가려 안 보이는 일 없게 전체 탭, 태그/검색을 비운다(goToConcept)
+    pub(crate) fn go_to_concept(&mut self, id: i64, window: &mut Window, cx: &mut Context<Self>) {
+        let input = self.concepts.search_input.clone();
+        input.update(cx, |st, cx| {
+            if !st.value().is_empty() {
+                st.set_value("", window, cx)
+            }
+        });
+        self.concept_guard(cx, move |s, cx| {
+            s.section = crate::Section::Til;
+            amber_gpui::prefs::set(&s.db, "til.section", "til");
+            let c = &mut s.concepts;
+            c.status = "all";
+            c.active_tags.clear();
+            c.search.clear();
+            c.selected = Some(id);
+            s.reload_concepts();
+            cx.notify();
+        });
+    }
+
     /// 초안이 있으면 확인 창으로 미루고, 없으면 그대로(지금 앱 App.tsx 의 guard)
     pub(crate) fn concept_guard(
         &mut self,
