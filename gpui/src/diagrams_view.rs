@@ -5,12 +5,11 @@ use amber_gpui::i18n::{t, t_with};
 use amber_gpui::vault;
 use gpui_kit::*;
 
+use crate::Spike;
 use crate::assets::icon;
-use crate::day_card::{Tag, button, danger_button, primary_button};
-use crate::figure::Figure;
+use crate::day_card::{button, danger_button, primary_button};
 use crate::theme::Tokens;
 use crate::vault_pane::{TreeUi, Which, tree_of};
-use crate::{Spike, figure};
 
 /// 저장 안 한 변경이 있는데 다른 파일/작업 폴더로 가려 했다, 또는 저장하려는데 디스크가 더 새롭다
 pub enum DiagramPrompt {
@@ -27,8 +26,8 @@ pub struct DiagramsState {
     pub mtime: Option<i64>,
     pub read_error: Option<String>,
     pub prompt: Option<DiagramPrompt>,
-    /// 마지막으로 그린 그림 — 문법 오류면 Err
-    pub figure: Option<Result<Figure, String>>,
+    /// 캔버스(확대, 이동, 마지막 정상 렌더) — diagram_canvas.rs
+    pub canvas: crate::diagram_canvas::Canvas,
 }
 
 impl std::ops::Deref for DiagramsState {
@@ -70,13 +69,19 @@ impl Spike {
         let read = tree.read_file(rel);
         let mtime = tree.mtime(rel);
         let d = &mut self.diagrams;
-        d.selected = Some(rel.to_string());
         let dir = vault::parent_of(rel).to_string();
         d.expanded.extend(vault::ancestor_paths(&dir));
         d.active_dir = dir;
+        // 다른 파일이면 캔버스를 새로(맞춤부터) — 판의 자리는 그대로 쓴다
+        if d.selected.as_deref() != Some(rel) || d.canvas.chart.is_empty() {
+            let viewport = d.canvas.viewport.clone();
+            d.canvas = Default::default();
+            d.canvas.viewport = viewport;
+        }
+        d.selected = Some(rel.to_string());
         match read {
             Ok(body) => {
-                d.figure = Some(figure::mermaid(&body));
+                d.canvas.set_chart(&body);
                 d.body = body;
                 d.mtime = mtime;
                 d.read_error = None;
@@ -84,7 +89,7 @@ impl Spike {
             // 못 읽은 파일을 빈 본문으로 열어 두면 그 빈 초안이 ⌘S 로 원본을 덮는다 — 본문은 비우고 오류만
             Err(e) => {
                 d.body.clear();
-                d.figure = None;
+                d.canvas = Default::default();
                 d.mtime = None;
                 d.read_error = Some(e);
             }
@@ -98,7 +103,7 @@ impl Spike {
         let d = &mut self.diagrams;
         d.selected = None;
         d.body.clear();
-        d.figure = None;
+        d.canvas = Default::default();
         d.mtime = None;
         d.read_error = None;
     }
@@ -115,6 +120,21 @@ impl Spike {
         }
         self.reload_tree(Which::Diagrams);
         r
+    }
+
+    /// 전체 화면 캔버스 — 앱 전체를 덮는다(Esc, 단추로 닫는다)
+    pub(crate) fn diagram_fullscreen(&self, k: &Tokens, cx: &mut Context<Self>) -> Option<Div> {
+        let c = &self.diagrams.canvas;
+        (c.fullscreen && self.diagrams.selected.is_some() && self.diagrams.read_error.is_none())
+            .then(|| {
+                div()
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .flex_col()
+                    .occlude()
+                    .child(self.diagram_canvas(k, cx))
+            })
     }
 
     pub(crate) fn diagrams_body(&self, body_w: f32, k: &Tokens, cx: &mut Context<Self>) -> Div {
@@ -231,29 +251,11 @@ impl Spike {
                 .my(px(10.))
                 .child(msg)
         };
-        let canvas = match (&d.read_error, &d.figure) {
-            (Some(e), _) => {
-                error_note(t_with("diagrams.readError", &[("msg", e)])).into_any_element()
-            }
-            (None, Some(Ok(fig))) => div()
-                .tag("dgm-figure")
-                .flex_1()
-                .min_h_0()
-                .flex()
-                .items_center()
-                .justify_center()
-                .p(px(16.))
-                .child(
-                    img(fig.image.clone())
-                        .max_w_full()
-                        .max_h_full()
-                        .object_fit(ObjectFit::Contain),
-                )
-                .into_any_element(),
-            (None, Some(Err(e))) => {
-                error_note(format!("{}\n{e}", t("diagrams.mmd.failHead"))).into_any_element()
-            }
-            (None, None) => div().flex_1().into_any_element(),
+        // 읽기 화면의 캔버스는 프레임 없이 모서리까지. 전체 화면이면 뿌리 판이 그린다
+        let canvas = match &d.read_error {
+            Some(e) => error_note(t_with("diagrams.readError", &[("msg", e)])).into_any_element(),
+            None if d.canvas.fullscreen => div().flex_1().into_any_element(),
+            None => self.diagram_canvas(k, cx).into_any_element(),
         };
         let mut meta = format!("{}/{rel}", self.root_name(Which::Diagrams));
         if let Some(ms) = d.mtime.filter(|_| ok) {
@@ -271,15 +273,15 @@ impl Spike {
             .flex_col()
             .child(head)
             .child(canvas)
+            // 아래 메타 = 슬림 바(.detail.dgm .detail-meta)
             .child(
                 div()
                     .flex_shrink_0()
-                    .mx(px(14.))
-                    .mt(px(14.))
-                    .mb(px(10.))
-                    .pt(px(12.))
+                    .px(px(14.))
+                    .pt(px(6.))
+                    .pb(px(7.))
                     .border_t_1()
-                    .border_color(k.border)
+                    .border_color(k.glass_edge)
                     .text_size(px(12.))
                     .text_color(k.text_3)
                     .child(meta),

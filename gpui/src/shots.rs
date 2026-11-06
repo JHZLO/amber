@@ -158,6 +158,17 @@ impl Shots {
         )
     }
 
+    /// 다시 그리고 뒤에서 도는 일(굽기 등)이 끝나길 잠깐씩 기다린다
+    fn settle(&mut self) {
+        for _ in 0..6 {
+            let _ = self
+                .window
+                .update(&mut self.cx, |_, window, _| window.refresh());
+            self.cx.run_until_parked();
+            std::thread::sleep(std::time::Duration::from_millis(80));
+        }
+    }
+
     fn mouse(&mut self, p: Point<Pixels>, pressed: bool) {
         let w = self.any();
         let button = pressed.then_some(MouseButton::Left);
@@ -682,7 +693,26 @@ fn diagrams(s: &mut Shots) {
             cx.notify();
         })
         .unwrap();
+    // 판을 잰 다음 그림에서 맞추고, 굽기는 뒤에서 돈다 — 화면 밖 창은 스스로 다시 그리지 않는다
+    s.settle();
     s.shot("dgm-open");
+    // 커서 자리를 붙잡고 2.7배(휠 세 번) — 보이는 곳만 선명하게 다시 굽는다
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            let c = &mut sp.diagrams.canvas;
+            let v = c.viewport.get();
+            c.zoom_by(
+                2.744,
+                (
+                    f32::from(v.size.width) * 0.5,
+                    f32::from(v.size.height) * 0.3,
+                ),
+            );
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("dgm-zoomed");
     s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.section = crate::Section::Notes;

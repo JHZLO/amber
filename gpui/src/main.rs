@@ -7,6 +7,7 @@ mod ai;
 mod assets;
 mod calendar;
 mod day_card;
+mod diagram_canvas;
 mod diagrams_view;
 mod dialog;
 mod drawer;
@@ -220,6 +221,10 @@ impl Spike {
             &amber_gpui::prefs::get(&db, "amber.todo.tt-view").unwrap_or_default(),
         );
         // 지금 앱 usePaneResize: 범위 밖 값은 기본값으로
+        // 배치 엔진은 앱 전체에 하나 — 노트 그림도 이 엔진으로 그린다
+        amber_gpui::mermaid::set_layout(
+            &amber_gpui::prefs::get(&db, "amber.diagram.layout").unwrap_or_default(),
+        );
         let list_w = |w: vault_pane::Which| {
             let p = w.pane();
             amber_gpui::prefs::get(&db, p.key)
@@ -471,6 +476,9 @@ impl Render for Spike {
                 e.dirty = false;
             }
         }
+        if self.section == Section::Diagrams {
+            self.prepare_diagram_canvas(cx);
+        }
         // 질문/후속 입력칸, AI 작성 입력칸과 적용한 초안 — 창이 있어야 만들어진다
         self.apply_cmt_rebuild(window, cx);
         self.apply_ai_pending(window, cx);
@@ -480,6 +488,7 @@ impl Render for Spike {
             self.notes.rail_done = false;
         }
         if !cx.has_active_drag() {
+            self.diagrams.canvas.grab = None;
             if self.row_drag.is_some() {
                 self.drop_row();
             }
@@ -542,6 +551,11 @@ impl Render for Spike {
         };
 
         // AI 작성 모달(실행 상태는 스토어, 이건 보기만)
+        let dgm_full = if self.section == Section::Diagrams {
+            self.diagram_fullscreen(&k, cx)
+        } else {
+            None
+        };
         let (ai_modal, span_modal) = if self.section == Section::Notes {
             (self.ai_modal_view(&k, cx), self.span_modal_view(&k, cx))
         } else {
@@ -648,6 +662,16 @@ impl Render for Spike {
             // ⌥⌘C — 노트 탭에서 지금 노트의 경로 복사(NoteCrumb)
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
                 let m = &e.keystroke.modifiers;
+                // 다이어그램 캔버스 — + - 1 0(손이 올라가 있을 때), Esc(전체 화면)
+                if this.section == Section::Diagrams
+                    && !m.platform
+                    && !m.control
+                    && this.canvas_key(&e.keystroke.key)
+                {
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
                 if this.section == Section::Notes
                     && m.platform
                     && m.alt
@@ -684,6 +708,18 @@ impl Render for Spike {
             }))
             .on_drop(cx.listener(|this, _: &tt_drag::TtGrab, window, cx| {
                 this.tt_drop(window, cx);
+                cx.notify();
+            }))
+            // 다이어그램 캔버스 끌어 옮기기 — 판 밖으로 나가도 따라간다
+            .on_drag_move::<diagram_canvas::CanvasGrab>(cx.listener(
+                |this, e: &DragMoveEvent<diagram_canvas::CanvasGrab>, _, cx| {
+                    if this.canvas_pan_to(e.event.position) {
+                        cx.notify();
+                    }
+                },
+            ))
+            .on_drop(cx.listener(|this, _: &diagram_canvas::CanvasGrab, _, cx| {
+                this.canvas_drop();
                 cx.notify();
             }))
             .on_drag_move::<pane::PaneGrab>(cx.listener(
@@ -732,6 +768,7 @@ impl Render for Spike {
             .children(self.tree_drag_ghost(&k))
             .children(self.comment_fab(&k, cx))
             .children(ai_modal)
+            .children(dgm_full)
             .children(span_modal)
             .children(match self.section {
                 Section::Diagrams => {

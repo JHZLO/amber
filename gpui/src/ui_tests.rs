@@ -1766,9 +1766,9 @@ fn the_diagrams_tree_opens_creates_renames_and_moves(cx: &mut TestAppContext) {
     ui.update(|_, cx| {
         let d = &spike().read(cx).diagrams;
         assert_eq!(d.selected.as_deref(), Some("ERD/order.mmd"));
-        assert!(matches!(d.figure, Some(Ok(_))), "그렸다");
+        assert!(d.canvas.tree.is_some(), "그렸다");
     });
-    assert!(ui.debug_bounds("dgm-figure").is_some());
+    assert!(ui.debug_bounds("dgm-canvas").is_some());
     // 새 다이어그램 — 여러 단 경로, 확장자는 보관함이 붙인다
     click(&mut ui, "dnotes-new-note");
     ui.simulate_input("New/one");
@@ -1859,5 +1859,121 @@ fn diagrams_have_their_own_find_and_work_folder(cx: &mut TestAppContext) {
     assert!(
         ui.debug_bounds("tree-note.md").is_some(),
         "노트 보관함은 그대로"
+    );
+}
+
+fn canvas_state(ui: &mut VisualTestContext) -> (f32, f32, (f32, f32), bool, bool) {
+    // 판을 잰 다음 그림에서 맞추고 굽는다 — 시험 창은 스스로 다시 그리지 않으니 한 번 더 그린다
+    for _ in 0..2 {
+        ui.update(|window, _| window.refresh());
+        ui.run_until_parked();
+    }
+    ui.update(|_, cx| {
+        let c = &spike().read(cx).diagrams.canvas;
+        (
+            c.base,
+            c.zoom,
+            (f32::from(c.pan.x), f32::from(c.pan.y)),
+            c.full.is_some(),
+            c.fullscreen,
+        )
+    })
+}
+
+#[gpui_kit::test]
+fn the_diagram_canvas_fits_zooms_pans_and_goes_fullscreen(cx: &mut TestAppContext) {
+    let db = seeded("dgm-canvas", &[]);
+    vault_diagram(
+        &db,
+        "flow.mmd",
+        "flowchart LR\n  A[Start] --> B[Middle] --> C[End]\n",
+    );
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    click(&mut ui, "dtree-flow.mmd");
+    ui.run_until_parked();
+    let (base, zoom, _, full, _) = canvas_state(&mut ui);
+    assert!(base > 0., "판에 맞췄다");
+    assert_eq!(zoom, 1., "맞춘 크기가 100%");
+    assert!(full, "전체 그림을 구웠다");
+    click(&mut ui, "dgm-zoom-in");
+    assert!((canvas_state(&mut ui).1 - 1.4).abs() < 1e-4);
+    click(&mut ui, "dgm-pct");
+    assert_eq!(canvas_state(&mut ui).1, 1., "배율 단추 = 100%");
+    // 휠 — 커서 자리를 붙잡고
+    let stage = bounds(&mut ui, "dgm-canvas");
+    let at = stage.center();
+    ui.simulate_event(ScrollEvent {
+        position: at,
+        delta: ScrollDelta::Pixels(point(px(0.), px(90.))),
+        ..Default::default()
+    });
+    ui.run_until_parked();
+    let (_, zoom, pan, _, _) = canvas_state(&mut ui);
+    assert!((zoom - 1.4).abs() < 1e-3, "아래로 90px = 1.4배: {zoom}");
+    // 끌어서 옮기기
+    drag_points(
+        &mut ui,
+        at,
+        point(at.x + px(40.), at.y + px(25.)),
+        Modifiers::none(),
+    );
+    let (_, _, pan2, _, _) = canvas_state(&mut ui);
+    assert!(
+        (pan2.0 - pan.0 - 40.).abs() < 0.5 && (pan2.1 - pan.1 - 25.).abs() < 0.5,
+        "{pan:?} → {pan2:?}"
+    );
+    click(&mut ui, "dgm-fit");
+    assert_eq!(canvas_state(&mut ui).1, 1.);
+    // 전체 화면 — 창 전체를 덮고, Esc 로 닫는다
+    click(&mut ui, "dgm-fullscreen");
+    ui.run_until_parked();
+    assert!(canvas_state(&mut ui).4);
+    assert!(
+        bounds(&mut ui, "dgm-canvas").size.width > stage.size.width,
+        "더 넓은 판"
+    );
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert!(!canvas_state(&mut ui).4);
+}
+
+#[gpui_kit::test]
+fn the_layout_engine_is_saved_and_redraws(cx: &mut TestAppContext) {
+    let db = seeded("dgm-layout", &[]);
+    vault_diagram(&db, "flow.mmd", "flowchart LR\n  A --> B\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    click(&mut ui, "dtree-flow.mmd");
+    // 엔진은 프로세스에 하나라 시험끼리 겹친다(다른 시험의 화면도 저마다 설정을 읽어 바꾼다) — 저장된 설정으로 본다
+    let saved = |db: &PathBuf| {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        amber_gpui::prefs::get(&d, "amber.diagram.layout")
+    };
+    click(&mut ui, "dgm-layout-dagre");
+    assert_eq!(saved(&db).as_deref(), Some("dagre"));
+    ui.update(|_, cx| {
+        assert!(
+            spike().read(cx).diagrams.canvas.tree.is_some(),
+            "다시 그렸다"
+        )
+    });
+    click(&mut ui, "dgm-layout-elk");
+    assert_eq!(saved(&db).as_deref(), Some("elk"));
+}
+
+#[gpui_kit::test]
+fn a_broken_diagram_shows_the_error_line(cx: &mut TestAppContext) {
+    let db = seeded("dgm-broken", &[]);
+    vault_diagram(&db, "bad.mmd", "flowchart LR\n  A -->\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    click(&mut ui, "dtree-bad.mmd");
+    assert!(ui.debug_bounds("dgm-error").is_some());
+    click(&mut ui, "dgm-error-copy");
+    assert!(
+        ui.read_from_clipboard()
+            .and_then(|c| c.text())
+            .is_some_and(|t| !t.is_empty())
     );
 }
