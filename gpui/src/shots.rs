@@ -696,6 +696,51 @@ fn diagrams(s: &mut Shots) {
     // 판을 잰 다음 그림에서 맞추고, 굽기는 뒤에서 돈다 — 화면 밖 창은 스스로 다시 그리지 않는다
     s.settle();
     s.shot("dgm-open");
+    // USER 를 골라 이웃(ORDER)만 남기고, 컬럼 패널을 연다
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            let c = &mut sp.diagrams.canvas;
+            let i = c
+                .graph
+                .as_ref()
+                .and_then(|g| g.nodes.iter().position(|n| n.text == "USER"))
+                .expect("USER");
+            c.select(i);
+            c.show_cols = true;
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("dgm-selected");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.diagrams.canvas.deselect();
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    // 찾기 — 'id' 가 든 라벨 둘(USER.id, ORDER.id, ORDER.user_id), 지금 것은 밑줄 + 굵은 상자
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.open_diagram_search(false, window, cx);
+            if let Some(f) = sp.diagrams.canvas.search.as_ref() {
+                f.input.update(cx, |st, cx| st.set_value("id", window, cx));
+            }
+            sp.diagrams.canvas.run_search("id");
+            sp.diagrams.canvas.step_hit(1);
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("dgm-search");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.diagrams.canvas.close_search();
+            sp.diagrams.canvas.fit_now();
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
     // 커서 자리를 붙잡고 2.7배(휠 세 번) — 보이는 곳만 선명하게 다시 굽는다
     s.window
         .update(&mut s.cx, |sp, _, cx| {

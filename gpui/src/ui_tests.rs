@@ -2101,3 +2101,317 @@ fn saving_over_an_outside_edit_asks_to_overwrite_or_reread(cx: &mut TestAppConte
     click(&mut ui, "conflict-overwrite");
     assert!(read_diagram(&db, "a.mmd").starts_with("%% mine\n"));
 }
+
+fn click_node(ui: &mut VisualTestContext, key_text: &str) {
+    canvas_state(ui);
+    let at = ui.update(|_, cx| {
+        let c = &spike().read(cx).diagrams.canvas;
+        let key = c
+            .graph
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .find(|n| n.text == key_text)
+            .unwrap_or_else(|| panic!("{key_text}"))
+            .key
+            .clone();
+        c.node_center(&key).unwrap()
+    });
+    ui.simulate_click(at, Modifiers::none());
+    ui.run_until_parked();
+}
+
+fn selected(ui: &mut VisualTestContext) -> Option<(String, String, i64, usize)> {
+    ui.update(|_, cx| {
+        spike()
+            .read(cx)
+            .diagrams
+            .canvas
+            .sel
+            .as_ref()
+            .map(|s| (s.text.clone(), s.id.clone(), s.line, s.columns.len()))
+    })
+}
+
+const ERD: &str = "erDiagram\n  USER ||--o{ ORDER : places\n  ORDER ||--|{ ITEM : contains\n  PRODUCT ||--o{ ITEM : listed\n  USER {\n    bigint id PK\n    varchar name \"NOT NULL\"\n  }\n";
+
+#[gpui_kit::test]
+fn selecting_an_er_node_shows_its_card_columns_and_focus(cx: &mut TestAppContext) {
+    let db = seeded("dgm-select", &[]);
+    vault_diagram(&db, "erd.mmd", ERD);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    click(&mut ui, "dtree-erd.mmd");
+    click_node(&mut ui, "USER");
+    let (text, id, line, cols) = selected(&mut ui).expect("골랐다");
+    assert_eq!(text, "USER");
+    // id 로는 원문에 없어 이름으로 찾는다 — 처음 나오는 줄
+    assert_eq!((id.as_str(), line, cols), ("entity-USER", 2, 2));
+    assert!(ui.debug_bounds("dgm-node-info").is_some(), "카드");
+    assert!(ui.debug_bounds("dgm-sel-ring").is_some(), "고리");
+    // 포커스 — 다시 구운 그림이 나올 때까지 옛 그림을 둔다
+    canvas_state(&mut ui);
+    ui.update(|_, cx| {
+        let c = &spike().read(cx).diagrams.canvas;
+        assert!(c.full.is_some(), "흐린 그림을 구웠다");
+        let st = c.graph.as_ref().unwrap();
+        let tree = c.tree.as_ref().unwrap();
+        let op = |name: &str| {
+            let n = st.nodes.iter().find(|n| n.text == name).unwrap();
+            match tree.node_by_id(&n.dom_id) {
+                Some(resvg::usvg::Node::Group(g)) => g.opacity().get(),
+                _ => 1.,
+            }
+        };
+        assert_eq!(op("ORDER"), 1.);
+        assert!(op("PRODUCT") < 0.2);
+    });
+    // 컬럼 패널
+    click(&mut ui, "dgm-cols-toggle");
+    assert!(ui.debug_bounds("dgm-cols").is_some());
+    click(&mut ui, "dgm-cols-close");
+    assert!(ui.debug_bounds("dgm-cols").is_none());
+    // 이름 = 복사, 1.5초 뒤 원래대로
+    click(&mut ui, "dgm-node-name");
+    assert_eq!(
+        ui.read_from_clipboard().and_then(|c| c.text()).as_deref(),
+        Some("USER")
+    );
+    ui.update(|_, cx| assert!(spike().read(cx).diagrams.canvas.copied));
+    ui.executor()
+        .advance_clock(std::time::Duration::from_millis(1600));
+    ui.run_until_parked();
+    ui.update(|_, cx| assert!(!spike().read(cx).diagrams.canvas.copied));
+    // 다른 노드를 고르면 그 노드로, 빈 곳을 누르면 풀린다
+    click_node(&mut ui, "PRODUCT");
+    assert_eq!(selected(&mut ui).unwrap().0, "PRODUCT");
+    let stage = bounds(&mut ui, "dgm-canvas");
+    ui.simulate_click(
+        point(stage.origin.x + px(4.), stage.origin.y + px(4.)),
+        Modifiers::none(),
+    );
+    ui.run_until_parked();
+    assert_eq!(selected(&mut ui), None);
+    assert!(ui.debug_bounds("dgm-node-info").is_none());
+    ui.update(|_, cx| {
+        let c = &spike().read(cx).diagrams.canvas;
+        let st = c.graph.as_ref().unwrap();
+        let n = st.nodes.iter().find(|n| n.text == "PRODUCT").unwrap();
+        assert!(
+            matches!(c.tree.as_ref().unwrap().node_by_id(&n.dom_id), Some(resvg::usvg::Node::Group(g)) if g.opacity().get() == 1.),
+            "흐림이 풀렸다"
+        );
+    });
+    // Esc 도 푼다(캔버스에 손이 올라가 있을 때)
+    click_node(&mut ui, "ORDER");
+    ui.simulate_mouse_move(stage.center(), None, Modifiers::none());
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert_eq!(selected(&mut ui), None);
+}
+
+#[gpui_kit::test]
+fn a_dragged_pan_does_not_select(cx: &mut TestAppContext) {
+    let db = seeded("dgm-drag-sel", &[]);
+    vault_diagram(&db, "erd.mmd", ERD);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    click(&mut ui, "dtree-erd.mmd");
+    canvas_state(&mut ui);
+    let at = ui.update(|_, cx| {
+        let c = &spike().read(cx).diagrams.canvas;
+        let key = c.graph.as_ref().unwrap().nodes[0].key.clone();
+        c.node_center(&key).unwrap()
+    });
+    drag_points(
+        &mut ui,
+        at,
+        point(at.x + px(30.), at.y + px(10.)),
+        Modifiers::none(),
+    );
+    assert_eq!(selected(&mut ui), None);
+}
+
+#[gpui_kit::test]
+fn the_line_button_opens_the_editor_on_that_line(cx: &mut TestAppContext) {
+    let db = seeded("dgm-line", &[]);
+    vault_diagram(
+        &db,
+        "flow.mmd",
+        "flowchart LR\n  %% start\n  A[Start] --> B[Middle]\n  B --> C[End]\n",
+    );
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    click(&mut ui, "dtree-flow.mmd");
+    canvas_state(&mut ui);
+    let before = ui.update(|_, cx| spike().read(cx).diagrams.canvas.tree.clone().unwrap());
+    click_node(&mut ui, "Middle");
+    let (text, id, line, cols) = selected(&mut ui).unwrap();
+    assert_eq!(
+        (text.as_str(), id.as_str(), line, cols),
+        ("Middle", "B", 3, 0)
+    );
+    assert!(
+        ui.debug_bounds("dgm-node-id").is_some(),
+        "id 가 이름과 다르면 보인다"
+    );
+    assert!(ui.debug_bounds("dgm-cols-toggle").is_none(), "컬럼이 없다");
+    ui.update(|_, cx| {
+        let after = spike().read(cx).diagrams.canvas.tree.clone().unwrap();
+        assert!(
+            std::sync::Arc::ptr_eq(&before, &after),
+            "흐름도는 연결을 못 읽어 흐리지 않는다(다시 읽지 않는다)"
+        )
+    });
+    click(&mut ui, "dgm-node-line");
+    ui.run_until_parked();
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        let e = s.diagrams.edit.as_ref().expect("편집이 열렸다");
+        assert_eq!(
+            e.state.read(cx).selected_value().as_ref(),
+            "  A[Start] --> B[Middle]"
+        );
+        assert!(
+            s.diagrams.canvas.sel.is_none(),
+            "편집 캔버스로 바뀌며 풀린다"
+        );
+    });
+}
+
+fn search_state(ui: &mut VisualTestContext) -> Option<(usize, usize)> {
+    ui.update(|_, cx| {
+        spike()
+            .read(cx)
+            .diagrams
+            .canvas
+            .search
+            .as_ref()
+            .map(|f| (f.hits.len(), f.idx))
+    })
+}
+
+#[gpui_kit::test]
+fn diagram_search_finds_labels_steps_and_closes(cx: &mut TestAppContext) {
+    let db = seeded("dgm-search", &[]);
+    vault_diagram(&db, "erd.mmd", ERD);
+    vault_diagram(&db, "flow.mmd", "flowchart LR\n  A[Server] --> B[Client]\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    click(&mut ui, "dtree-erd.mmd");
+    canvas_state(&mut ui);
+    // 트리 행을 누른 뒤라 ⌘F 는 트리 찾기다 — 판을 누르면 캔버스 찾기
+    ui.simulate_keystrokes("cmd-f");
+    ui.run_until_parked();
+    assert_eq!(search_state(&mut ui), None, "트리가 먼저 받는다");
+    ui.simulate_keystrokes("escape");
+    let stage = bounds(&mut ui, "dgm-canvas");
+    ui.simulate_click(
+        point(stage.origin.x + px(4.), stage.origin.y + px(4.)),
+        Modifiers::none(),
+    );
+    ui.simulate_keystrokes("cmd-f");
+    ui.run_until_parked();
+    assert_eq!(search_state(&mut ui), Some((0, 0)), "⌘F 로 열린다");
+    ui.simulate_input("er");
+    ui.run_until_parked();
+    // USER, ORDER — 대소문자 무시
+    assert_eq!(search_state(&mut ui), Some((2, 0)));
+    assert!(ui.debug_bounds("dgm-search-count").is_some());
+    assert!(ui.debug_bounds("dgm-hit-box-cur").is_some());
+    assert!(ui.debug_bounds("dgm-hit-box").is_some(), "다른 결과의 상자");
+    // 지금 결과가 판 가운데로
+    let centered = |ui: &mut VisualTestContext| {
+        canvas_state(ui);
+        ui.update(|_, cx| {
+            let c = &spike().read(cx).diagrams.canvas;
+            let st = c.graph.as_ref().unwrap();
+            let f = c.search.as_ref().unwrap();
+            let l = &st.labels[f.hits[f.idx]];
+            let key = l.node.clone().unwrap();
+            let p = c.node_center(&key).unwrap();
+            let v = c.viewport.get();
+            (
+                l.text.clone(),
+                (f32::from(p.y - v.center().y)).abs() < f32::from(v.size.height) / 4.,
+            )
+        })
+    };
+    let (first, mid) = centered(&mut ui);
+    assert!(mid, "가운데 근처");
+    ui.simulate_keystrokes("enter");
+    ui.run_until_parked();
+    assert_eq!(search_state(&mut ui), Some((2, 1)));
+    let (second, mid) = centered(&mut ui);
+    assert_ne!(first, second);
+    assert!(mid);
+    ui.simulate_keystrokes("shift-enter");
+    ui.run_until_parked();
+    assert_eq!(search_state(&mut ui), Some((2, 0)));
+    click(&mut ui, "dgm-search-prev");
+    assert_eq!(search_state(&mut ui), Some((2, 1)), "처음에서 뒤로 = 끝");
+    // 없는 말
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_input("zzz");
+    ui.run_until_parked();
+    assert_eq!(search_state(&mut ui), Some((0, 0)));
+    // Esc 로 닫으면 칠도 풀린다
+    ui.simulate_input("user");
+    ui.run_until_parked();
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert_eq!(search_state(&mut ui), None);
+    assert!(ui.debug_bounds("dgm-hit-box-cur").is_none());
+    // 단추로도 열고 닫는다
+    click(&mut ui, "dgm-search-btn");
+    assert!(search_state(&mut ui).is_some());
+    click(&mut ui, "dgm-search-btn");
+    assert!(search_state(&mut ui).is_none());
+    // 다른 그림을 열어도 찾기 바는 남고, 새 그림에서 다시 찾는다
+    click(&mut ui, "dgm-search-btn");
+    ui.simulate_input("er");
+    ui.run_until_parked();
+    assert_eq!(search_state(&mut ui), Some((2, 0)));
+    click(&mut ui, "dtree-flow.mmd");
+    assert_eq!(search_state(&mut ui), Some((1, 0)), "Server 하나");
+}
+
+#[gpui_kit::test]
+fn canvas_keys_do_not_eat_typing_in_the_source(cx: &mut TestAppContext) {
+    let db = seeded("dgm-typing", &[]);
+    vault_diagram(&db, "a.mmd", "flowchart LR\n  A --> B\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    click(&mut ui, "dtree-a.mmd");
+    click(&mut ui, "dgm-edit");
+    canvas_state(&mut ui);
+    // 원문 칸에 포커스를 둔 채 손은 캔버스 위
+    let stage = bounds(&mut ui, "dgm-canvas");
+    ui.simulate_mouse_move(stage.center(), None, Modifiers::none());
+    ui.simulate_keystrokes("cmd-down");
+    ui.simulate_keystrokes("- 0 /");
+    ui.run_until_parked();
+    let (_, zoom, ..) = canvas_state(&mut ui);
+    assert_eq!(zoom, 1., "캔버스가 받지 않았다");
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        assert!(s.diagrams.canvas.search.is_none());
+        let v = s.diagrams.edit.as_ref().unwrap().state.read(cx).value();
+        assert!(v.ends_with("-0/"), "{v:?}");
+    });
+    // 캔버스를 누르면 원문 칸에서 빠진다 — 이제 캔버스가 받는다
+    ui.simulate_click(
+        point(stage.origin.x + px(4.), stage.origin.y + px(4.)),
+        Modifiers::none(),
+    );
+    ui.simulate_keystrokes("-");
+    ui.run_until_parked();
+    assert!(canvas_state(&mut ui).1 < 1.);
+    ui.simulate_keystrokes("/");
+    ui.run_until_parked();
+    assert!(
+        ui.update(|_, cx| spike().read(cx).diagrams.canvas.search.is_some()),
+        "'/' 로 찾기"
+    );
+}

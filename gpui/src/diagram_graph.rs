@@ -181,6 +181,8 @@ pub struct GLabel {
     pub text: String,
     /// 이 라벨을 품은 노드(키)
     pub node: Option<String>,
+    /// 라벨 안 <use> 가 가리키는 글자 묶음의 id — 글자는 defs 에 있어 라벨 id 로는 닿지 않는다
+    pub refs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -338,10 +340,21 @@ pub fn read_structure(svg: &str) -> Structure {
             })
             .map(str::to_string);
         let dom_id = id_of(l, format!("dgm-l-{i}"));
+        let refs = l
+            .descendants()
+            .filter(|d| d.has_tag_name("use"))
+            .filter_map(|d| {
+                d.attribute("href")
+                    .or_else(|| d.attribute(("http://www.w3.org/1999/xlink", "href")))?
+                    .strip_prefix('#')
+                    .map(str::to_string)
+            })
+            .collect();
         labels.push(GLabel {
             dom_id,
             text: text_of(l, &by_id),
             node: owner,
+            refs,
         });
     }
     let keys: Vec<String> = nodes.iter().map(|n| n.key.clone()).collect();

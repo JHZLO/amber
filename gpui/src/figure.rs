@@ -26,6 +26,11 @@ fn fonts() -> Arc<usvg::fontdb::Database> {
 
 /// `text` 는 currentColor 가 가리킬 글자색 — 노트 그림은 색을 대부분 currentColor 로 받는다
 pub fn parse(source: &str, text: &str) -> Result<usvg::Tree, String> {
+    parse_styled(source, text, None)
+}
+
+/// css 를 얹어 읽는다 — 다이어그램 캔버스의 포커스 흐림, 찾기 칠(!important 라야 그림 안 규칙을 이긴다)
+pub fn parse_styled(source: &str, text: &str, css: Option<String>) -> Result<usvg::Tree, String> {
     // width="100%" 는 브라우저 폭을 따르라는 뜻이라 여기선 viewBox 크기를 쓴다
     let source = source
         .replacen("<svg", &format!("<svg color=\"{text}\""), 1)
@@ -33,6 +38,7 @@ pub fn parse(source: &str, text: &str) -> Result<usvg::Tree, String> {
     let options = usvg::Options {
         fontdb: fonts(),
         font_family: "Apple SD Gothic Neo".into(),
+        style_sheet: css,
         ..Default::default()
     };
     usvg::Tree::from_str(&source, &options).map_err(|e| e.to_string())
@@ -69,9 +75,4 @@ pub fn svg(source: &str, text: &str) -> Result<Figure, String> {
 /// 지금 앱처럼 밝은(neutral) 테마로 그린다 — 흰 판 위에 놓인다
 pub fn mermaid(source: &str) -> Result<Figure, String> {
     svg(&amber_gpui::mermaid::to_svg(source)?, "#333333")
-}
-
-/// 다이어그램 캔버스용 — 굽지 않은 트리(확대할 때마다 보이는 곳만 다시 굽는다)
-pub fn mermaid_tree(source: &str) -> Result<usvg::Tree, String> {
-    parse(&amber_gpui::mermaid::to_svg(source)?, "#333333")
 }

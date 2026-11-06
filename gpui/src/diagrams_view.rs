@@ -92,6 +92,7 @@ impl Spike {
         let body = d.body.clone();
         d.canvas.set_chart(&body);
         d.canvas.fit_pending = true;
+        d.canvas.deselect();
     }
 
     /// ⌘S. force = 디스크가 더 새로운 걸 알고도 덮는다(충돌 창의 '그래도 덮어쓰기')
@@ -119,6 +120,34 @@ impl Spike {
         self.diagrams.edit = None;
         self.open_diagram(&rel, cx);
         self.diagrams.canvas.fit_pending = true;
+        self.diagrams.canvas.deselect();
+    }
+
+    /// 노드 카드의 '라인 N' — 편집 중이 아니면 편집을 열고, 원문 칸에서 그 줄을 골라 둔다(DiagramsView.jumpToLine)
+    pub(crate) fn jump_to_diagram_line(
+        &mut self,
+        line: i64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.diagrams.edit.is_none() {
+            self.start_diagram_edit(window, cx);
+        }
+        let Some(state) = self.diagrams.edit.as_ref().map(|e| e.state.clone()) else {
+            return;
+        };
+        state.update(cx, |s, cx| {
+            let text = s.value().to_string();
+            let mut start = 0;
+            for (i, l) in text.split('\n').enumerate() {
+                if i as i64 + 1 == line {
+                    s.set_selected_range(start..start + l.len(), cx);
+                    break;
+                }
+                start += l.len() + 1;
+            }
+            s.focus(window, cx);
+        });
     }
 
     pub(crate) fn open_diagram(&mut self, rel: &str, _cx: &mut Context<Self>) {
@@ -129,11 +158,13 @@ impl Spike {
         let dir = vault::parent_of(rel).to_string();
         d.expanded.extend(vault::ancestor_paths(&dir));
         d.active_dir = dir;
-        // 다른 파일이면 캔버스를 새로(맞춤부터) — 판의 자리는 그대로 쓴다
+        // 다른 파일이면 캔버스를 새로(맞춤부터) — 판의 자리와 열린 찾기 바는 그대로 쓴다(새 그림에서 다시 찾는다)
         if d.selected.as_deref() != Some(rel) || d.canvas.chart.is_empty() {
             let viewport = d.canvas.viewport.clone();
+            let search = d.canvas.search.take();
             d.canvas = Default::default();
             d.canvas.viewport = viewport;
+            d.canvas.search = search;
         }
         d.selected = Some(rel.to_string());
         match read {
@@ -186,8 +217,9 @@ impl Spike {
         })
         .detach();
         state.update(cx, |s, cx| s.focus(window, cx));
-        // 지금 앱은 읽기/편집 캔버스가 따로라 바꿀 때마다 새로 맞춘다 — 판 폭이 반으로 바뀐다
+        // 지금 앱은 읽기/편집 캔버스가 따로라 바꿀 때마다 새로 맞추고 선택도 풀린다 — 판 폭이 반으로 바뀐다
         self.diagrams.canvas.fit_pending = true;
+        self.diagrams.canvas.deselect();
         self.diagrams.edit = Some(DiagramEdit {
             state,
             dirty: false,

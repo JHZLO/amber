@@ -131,7 +131,7 @@ struct Spike {
     row_bounds: row_drag::RowBounds,
     list_bounds: row_drag::ListBounds,
     /// 창 단축키(⌥⌘C 등)를 받는 뿌리 포커스 — 아무것도 포커스가 없으면 키가 창 뿌리에서 멈춘다
-    focus: FocusHandle,
+    pub(crate) focus: FocusHandle,
     /// 노트 트리 판의 포커스 — 여기 있을 때의 ⌘F 는 트리 찾기
     tree_focus: FocusHandle,
     /// 다이어그램 탭 트리의 포커스(⌘F 가 트리 찾기로)
@@ -662,15 +662,27 @@ impl Render for Spike {
             // ⌥⌘C — 노트 탭에서 지금 노트의 경로 복사(NoteCrumb)
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
                 let m = &e.keystroke.modifiers;
-                // 다이어그램 캔버스 — + - 1 0(손이 올라가 있을 때), Esc(전체 화면)
-                if this.section == Section::Diagrams
-                    && !m.platform
-                    && !m.control
-                    && this.canvas_key(&e.keystroke.key)
-                {
-                    cx.stop_propagation();
-                    cx.notify();
-                    return;
+                // 다이어그램 캔버스 — + - 1 0 /(손이 올라가 있을 때), Esc(전체 화면, 선택), ⌘F(찾기).
+                // 원문 칸이나 찾기 칸에서 치는 글자는 건드리지 않는다
+                if this.section == Section::Diagrams && !this.diagram_typing(window, cx) {
+                    let key = e.keystroke.key.as_str();
+                    let mouse = window.mouse_position();
+                    let find = (m.platform && !m.alt && !m.shift && key == "f")
+                        || (!m.platform
+                            && !m.control
+                            && key == "/"
+                            && this.diagrams.canvas.pointer_in(mouse));
+                    if find {
+                        this.open_diagram_search(m.platform, window, cx);
+                        cx.stop_propagation();
+                        cx.notify();
+                        return;
+                    }
+                    if !m.platform && !m.control && this.canvas_key(key, mouse) {
+                        cx.stop_propagation();
+                        cx.notify();
+                        return;
+                    }
                 }
                 if this.section == Section::Notes
                     && m.platform
