@@ -18,6 +18,7 @@ import * as dbconn from "../src/lib/dbconn";
 import * as diagramGraph from "../src/lib/diagramGraph";
 import * as diagrams from "../src/lib/diagrams";
 import * as erdGen from "../src/lib/erdGen";
+import * as schemaSnapshot from "../src/lib/schemaSnapshot";
 import * as erdStore from "../src/lib/erdStore";
 import * as holidays from "../src/lib/holidays";
 import * as mdSections from "../src/lib/mdSections";
@@ -67,6 +68,7 @@ export const MODULES = [
   "noteAiRun",
   "diagramGraph",
   "erdGen",
+  "schemaSnapshot",
 ] as const;
 
 export const OPS: Record<string, Op> = {
@@ -224,6 +226,11 @@ export const OPS: Record<string, Op> = {
   "erdGen.generateErd": erdGen.generateErd,
   "erdGen.inferReferences": erdGen.inferReferences,
   "erdGen.commonTablePrefix": erdGen.commonTablePrefix,
+  "schemaSnapshot.fingerprintOf": schemaSnapshot.fingerprintOf,
+  "schemaSnapshot.finalizeSnapshot": schemaSnapshot.finalizeSnapshot,
+  "schemaSnapshot.parseSnapshot": schemaSnapshot.parseSnapshot,
+  "schemaSnapshot.diffSnapshots": schemaSnapshot.diffSnapshots,
+  "schemaSnapshot.diffIsEmpty": schemaSnapshot.diffIsEmpty,
 
   "diagramGraph.splitOptionalType": diagramGraph.splitOptionalType,
   "diagramGraph.nullFlagOf": diagramGraph.nullFlagOf,
@@ -351,6 +358,7 @@ export const NOT_COVERED: Record<string, string> = {
   "vaultTree.createVaultTree": "트리를 만드는 함수 — notes, diagrams, erdStore 의 op 로 잰다",
   "date.localDateStr": "Date 객체를 받는다 — 다른 date op 가 모두 거친다",
   "date.parseLocalDate": "Date 객체를 돌려준다 — 다른 date op 가 모두 거친다",
+  "schemaSnapshot.formatHeaderTime": "Date 객체를 받는다(JSON 으로 못 넘긴다) — 표시용 'YYYY-MM-DD HH:mm'",
 };
 
 export const PURE = new Set([

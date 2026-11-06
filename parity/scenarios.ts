@@ -1148,6 +1148,69 @@ const dbconnPure: Scenario = {
 };
 
 // ERD 생성 — 스냅샷(information_schema 꼴)을 손으로 지어 추론 규칙마다 한 번은 지나게 한다(erdGen.test.ts 의 갈래)
+/** 스키마 스냅샷의 순수 연산 — 지문(cyrb53 을 UTF-16 단위로, 이름순 localeCompare, rows_estimate 는 빼고 코멘트는 넣는다),
+ *  마무리, 읽기(깨진 파일은 null), 비교 */
+const schemaSnapshotPure: Scenario = {
+  name: "schemaSnapshot/pure",
+  plan() {
+    const col = (name: string, o: Record<string, unknown> = {}) => ({
+      name, data_type: "bigint", column_type: "bigint", nullable: false, key: "", default_value: null, extra: "", comment: "", ...o,
+    });
+    const tbl = (name: string, columns: ReturnType<typeof col>[], o: Record<string, unknown> = {}) =>
+      ({ name, comment: "", rows_estimate: null as number | null, columns, indexes: [] as unknown[], foreign_keys: [] as unknown[], checks: [] as unknown[], ...o });
+    const base = [
+      tbl("users", [col("id", { key: "PRI", extra: "auto_increment" }), col("email", { data_type: "varchar", column_type: "varchar(255)", key: "UNI", comment: "이메일" })],
+        { comment: "회원", rows_estimate: 1200, indexes: [{ name: "PRIMARY", unique: true, columns: ["id"] }, { name: "uq_email", unique: true, columns: ["email"] }] }),
+      tbl("orders", [col("id", { key: "PRI" }), col("user_id", { key: "MUL" }), col("memo", { data_type: "text", column_type: "text", nullable: true, default_value: "''", comment: 'a "q"\r\n\t\\ 😀 끝' })],
+        { indexes: [{ name: "ix_user", unique: false, columns: ["user_id"] }], foreign_keys: [{ name: "fk_user", columns: ["user_id"], ref_schema: "shop", ref_table: "users", ref_columns: ["id"] }],
+          checks: [{ name: "chk_b", clause: "(`memo` <> '')" }, { name: "chk_a", clause: "(`id` > 0)" }] }),
+      tbl("Order_items", [col("order_id"), col("ID", { key: "PRI" }), col("qty", { data_type: "int", column_type: "int unsigned", default_value: "1" })]),
+      tbl("_audit", [col("rev", { data_type: "int", column_type: "int", key: "PRI" })]),
+      tbl("주문", [col("번호", { key: "PRI" })], { comment: "한글 표" }),
+    ];
+    const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v));
+    const reordered = clone(base).reverse().map((t) => ({ ...t, columns: [...t.columns].reverse(), rows_estimate: 9 }));
+    const commented = clone(base);
+    commented[0].comment = "회원 (바뀜)";
+    const raw = { connection: "01JCONN", schema: "shop", server: "MySQL 8.0.36", synced_at: 1793000000000, tables: base };
+    const snap = (tables: unknown[]) => ({ amber: 1, ...raw, fingerprint: "x", tables });
+    // 비교 — 표 추가/삭제, 컬럼 추가/삭제/변경(타입, 널, 기본값 null 과 " "), 제약 변경, 순서만 바뀐 제약
+    const next = clone(base);
+    next.splice(3, 1);
+    next.push(tbl("coupons", [col("id", { key: "PRI" })]));
+    next[0].columns.push(col("name", { data_type: "varchar", column_type: "varchar(64)" }));
+    next[1].columns = next[1].columns.filter((c) => c.name !== "user_id");
+    next[1].columns[1].nullable = false;
+    next[2].columns[2].default_value = " ";
+    next[0].indexes = [...next[0].indexes].reverse();
+    next[1].checks = [{ name: "chk_a", clause: "(`id` >= 0)" }];
+    return [
+      s("schemaSnapshot.fingerprintOf", base),
+      s("schemaSnapshot.fingerprintOf", reordered),
+      s("schemaSnapshot.fingerprintOf", commented),
+      s("schemaSnapshot.fingerprintOf", []),
+      s("schemaSnapshot.finalizeSnapshot", raw),
+      s("schemaSnapshot.finalizeSnapshot", { ...raw, tables: [] }),
+      ...[
+        JSON.stringify(snap(base)),
+        JSON.stringify({ ...snap(base), amber: 2 }),
+        JSON.stringify({ ...snap(base), schema: 3 }),
+        JSON.stringify({ ...snap(base), tables: {} }),
+        JSON.stringify({ amber: 1, schema: "s", tables: [] }),
+        "{ broken",
+        "null",
+        "[]",
+        "",
+      ].map((text) => s("schemaSnapshot.parseSnapshot", text)),
+      s("schemaSnapshot.diffSnapshots", snap(base), snap(next)),
+      s("schemaSnapshot.diffSnapshots", snap(base), snap(clone(base))),
+      s("schemaSnapshot.diffSnapshots", snap(next), snap(base)),
+      s("schemaSnapshot.diffIsEmpty", { tablesAdded: [], tablesRemoved: [], columnsAdded: [], columnsRemoved: [], columnsChanged: [], constraintTables: [] }),
+      s("schemaSnapshot.diffIsEmpty", { tablesAdded: [], tablesRemoved: [], columnsAdded: [], columnsRemoved: [], columnsChanged: [], constraintTables: ["t"] }),
+    ];
+  },
+};
+
 const erdGenPure: Scenario = {
   name: "erdGen/pure",
   plan() {
@@ -1372,6 +1435,7 @@ export const SCENARIOS: Scenario[] = [
   noteAiPure,
   diagramGraphPure,
   erdGenPure,
+  schemaSnapshotPure,
   dbconnPure,
   commentFiles,
   aiConfig,
@@ -1451,8 +1515,18 @@ export function realErd(dir: string): Scenario {
     name: "real/erd",
     plan() {
       return files.flatMap((f) => {
-        const snapshot = JSON.parse(readFileSync(f, "utf8"));
-        return [s("erdGen.generateErd", snapshot, {}), s("erdGen.generateErd", snapshot, { audit: false })];
+        const text = readFileSync(f, "utf8");
+        const snapshot = JSON.parse(text);
+        // 앱이 남긴 지문을 다시 계산한다 — 파일을 읽어 마무리하면 같은 지문이 나와야 한다
+        const raw = { ...snapshot };
+        delete raw.amber;
+        delete raw.fingerprint;
+        return [
+          s("erdGen.generateErd", snapshot, {}),
+          s("erdGen.generateErd", snapshot, { audit: false }),
+          s("schemaSnapshot.parseSnapshot", text),
+          s("schemaSnapshot.finalizeSnapshot", raw),
+        ];
       });
     },
   };
