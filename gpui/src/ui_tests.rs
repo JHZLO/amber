@@ -3742,6 +3742,7 @@ fn report_settings_save_on_every_change(cx: &mut TestAppContext) {
                         transport: "http".into(),
                     },
                 ],
+                ..Fake::default()
             })
         })
     });
@@ -4292,4 +4293,98 @@ fn quick_search_finds_across_kinds_and_shortcuts_switch_tabs(cx: &mut TestAppCon
         assert!(s.section == crate::Section::Til);
         assert_eq!(s.concepts.selected, Some(1));
     });
+}
+
+fn ai_fake() -> crate::report_probe::Fake {
+    use crate::report_probe::{Auth, Cli, Fake};
+    Fake {
+        clis: vec![
+            Cli {
+                id: "claude".into(),
+                name: "Claude Code".into(),
+                path: "/opt/homebrew/bin/claude".into(),
+                version: "2.1.280 (Claude Code)".into(),
+            },
+            Cli {
+                id: "codex".into(),
+                name: "OpenAI Codex CLI".into(),
+                path: "/opt/homebrew/bin/codex".into(),
+                version: "codex-cli 0.153.4".into(),
+            },
+        ],
+        auth: Some(Auth {
+            supported: true,
+            logged_in: Some(true),
+        }),
+        version: Some("2.1.280".into()),
+        ..Fake::default()
+    }
+}
+
+#[gpui_kit::test]
+fn the_ai_tab_picks_a_cli_and_saves_on_save(cx: &mut TestAppContext) {
+    let db = seeded("settings-ai", &[]);
+    let mut ui = open(cx, &db);
+    ui.update(|_, cx| spike().update(cx, |s, _| s.settings.probe = std::rc::Rc::new(ai_fake())));
+    click(&mut ui, "app.rail.settings");
+    assert!(
+        ui.debug_bounds("set-ai-card-claude").is_some(),
+        "감지한 CLI 카드"
+    );
+    click(&mut ui, "set-ai-card-codex");
+    assert!(
+        ui.debug_bounds("set-ai-login-again").is_some(),
+        "로그인됨 → 다시 로그인"
+    );
+    // 연결 시험
+    click(&mut ui, "set-ai-more");
+    click(&mut ui, "set-ai-test");
+    assert!(ui.debug_bounds("set-ai-test-result").is_some());
+    // 모델 — 고르기 판을 열었다 닫고, '직접 입력…'을 고른 것과 같은 상태로
+    click(&mut ui, "set-ai-model");
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    ui.update(|_, cx| {
+        spike().update(cx, |s, cx| {
+            if let Some(a) = s.settings.ai.as_mut() {
+                assert!(!a.model_open_for_test(), "Esc 는 고르기 판부터 닫는다");
+                a.custom = true;
+                a.model.clear();
+            }
+            cx.notify();
+        })
+    });
+    let pane = bounds(&mut ui, "set-pane");
+    ui.simulate_event(ScrollEvent {
+        position: pane.center(),
+        delta: ScrollDelta::Pixels(point(px(0.), px(-3000.))),
+        ..Default::default()
+    });
+    ui.run_until_parked();
+    click(&mut ui, "set-ai-model-custom");
+    ui.simulate_input("gpt-7");
+    ui.run_until_parked();
+    ui.update(|_, cx| {
+        assert_eq!(
+            spike().read(cx).settings.ai.as_ref().unwrap().model,
+            "gpt-7",
+            "직접 입력"
+        );
+    });
+    // 닫기 — 저장 안 한 변경이 있으면 묻는다
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert!(
+        ui.debug_bounds("set-unsaved-keep").is_some(),
+        "저장 안 한 변경"
+    );
+    click(&mut ui, "set-unsaved-keep");
+    click(&mut ui, "set-save");
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    let c = amber_gpui::ai_config::load_config(&d).unwrap();
+    assert_eq!(c.provider.as_deref(), Some("codex"));
+    assert_eq!(c.cli_path, "/opt/homebrew/bin/codex");
+    assert_eq!(c.model, "gpt-7");
+    assert!(c.onboarded);
+    assert!(ui.debug_bounds("set-tab-ai").is_none(), "저장하면 닫힌다");
 }

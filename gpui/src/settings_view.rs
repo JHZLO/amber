@@ -57,6 +57,8 @@ pub struct SettingsUi {
     pub tab: Tab,
     /// 리포트 칸 — 칸이 처음 보일 때 만든다(입력칸은 창이 있어야 만들어진다), 닫으면 버린다
     pub rep: Option<RepSettings>,
+    /// AI 칸 — 열 때 만든다(바닥 [저장]이 이 칸의 값을 쓴다)
+    pub ai: Option<crate::settings_ai::AiTab>,
     /// gh, claude 확인 — 시험 빌드는 늘 가짜(사용자의 gh, claude 에 닿지 않게)
     pub probe: Rc<dyn ReportProbe>,
     /// 오른쪽 판의 스크롤 — 칸을 바꾸면 맨 위로
@@ -69,6 +71,7 @@ impl Default for SettingsUi {
             open: false,
             tab: Tab::Ai,
             rep: None,
+            ai: None,
             probe: if cfg!(test) {
                 Rc::new(Fake::default())
             } else {
@@ -84,17 +87,22 @@ impl Spike {
         self.settings.open = true;
         self.settings.tab = Tab::Ai;
         self.settings.rep = None;
+        self.settings.ai = None;
         cx.notify();
     }
 
     pub(crate) fn close_settings(&mut self, cx: &mut Context<Self>) {
         self.settings.open = false;
         self.settings.rep = None;
+        self.settings.ai = None;
         cx.notify();
     }
 
     /// 그리기 전에 — 보이는 칸의 상태를 만든다(창이 필요하다)
     pub(crate) fn prepare_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings.open && self.settings.ai.is_none() {
+            self.mount_ai_tab(window, cx);
+        }
         if self.settings.open && self.settings.tab == Tab::Report && self.settings.rep.is_none() {
             self.mount_report_settings(window, cx);
         }
@@ -165,6 +173,7 @@ impl Spike {
             .pt(px(18.))
             .px(px(22.))
             .pb(px(22.))
+            .when(cur == Tab::Ai, |d| d.child(self.settings_ai_tab(k, cx)))
             .when(cur == Tab::Report, |d| d.child(self.report_settings(k, cx)));
         let body = div().size_full().flex().child(nav).child(pane);
         Some(crate::dialog::shell_settings(
@@ -174,9 +183,17 @@ impl Spike {
             vec![
                 button("set-close", k, false, false)
                     .child(t("common.close"))
-                    .on_click(cx.listener(|this, _, _, cx| this.close_settings(cx))),
+                    .on_click(cx.listener(|this, _, _, cx| this.request_close_settings(cx))),
+                {
+                    let testing = self.settings.ai.as_ref().is_some_and(|a| a.testing);
+                    crate::day_card::primary_button("set-save", k, testing)
+                        .child(t("common.save"))
+                        .when(!testing, |b| {
+                            b.on_click(cx.listener(|this, _, _, cx| this.ai_save(cx)))
+                        })
+                },
             ],
-            cx.listener(|this, _, _, cx| this.close_settings(cx)),
+            cx.listener(|this, _, _, cx| this.request_close_settings(cx)),
         ))
     }
 }

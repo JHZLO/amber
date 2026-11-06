@@ -1,4 +1,5 @@
-// 리포트 설정의 바깥 확인 — gh 설치/로그인 계정, AI 세션 폴더, claude 에 등록된 MCP 서버.
+// 설정 칸들의 바깥 확인 — 리포트(gh 설치/로그인 계정, AI 세션 폴더, claude 에 등록된 MCP 서버)와
+// AI 연결(설치된 CLI, 로그인 상태, 연결 시험, Codex 모델 카탈로그).
 // 실제 명령(gh, claude mcp list)을 부르는 것은 Core 뿐이다. 시험과 찍기는 Fake 를 꽂아 사용자의 gh, claude 에 닿지 않는다
 // (ERD 의 DbBackend 와 같은 이유).
 
@@ -61,6 +62,30 @@ impl Server {
     }
 }
 
+/// 설치된 AI CLI
+#[derive(Clone, Debug, PartialEq)]
+pub struct Cli {
+    pub id: String,
+    pub name: String,
+    pub path: String,
+    pub version: String,
+}
+
+/// CLI 로그인 상태 — logged_in None = 확인할 수 없음
+#[derive(Clone, Debug, PartialEq)]
+pub struct Auth {
+    pub supported: bool,
+    pub logged_in: Option<bool>,
+}
+
+/// Codex 카탈로그 한 줄
+#[derive(Clone, Debug, PartialEq)]
+pub struct ModelOption {
+    pub id: String,
+    pub label: String,
+    pub description: String,
+}
+
 pub type Rx<T> = oneshot::Receiver<T>;
 
 pub trait ReportProbe {
@@ -68,6 +93,11 @@ pub trait ReportProbe {
     fn gh_accounts(&self, gh_path: Option<String>) -> Rx<Vec<Account>>;
     fn check_github(&self, path: Option<String>, account: Option<String>) -> Rx<GhState>;
     fn mcp_servers(&self, cli_path: Option<String>) -> Rx<Vec<Server>>;
+    fn ai_clis(&self) -> Rx<Vec<Cli>>;
+    fn auth_status(&self, provider: Option<String>, cli_path: Option<String>) -> Rx<Auth>;
+    /// 연결 시험 — 버전 한 줄 또는 사람이 읽을 오류
+    fn health(&self, cli_path: Option<String>) -> Rx<Result<String, String>>;
+    fn codex_models(&self) -> Rx<Vec<ModelOption>>;
 }
 
 /// 바로 답하는 수신기
@@ -81,6 +111,53 @@ pub fn ready<T>(v: T) -> Rx<T> {
 pub struct Core;
 
 impl ReportProbe for Core {
+    fn ai_clis(&self) -> Rx<Vec<Cli>> {
+        crate::ai::spawn(async {
+            amber_core::detect::detect_ai_clis()
+                .await
+                .into_iter()
+                .map(|c| Cli {
+                    id: c.id,
+                    name: c.name,
+                    path: c.path,
+                    version: c.version,
+                })
+                .collect()
+        })
+    }
+
+    fn auth_status(&self, provider: Option<String>, cli_path: Option<String>) -> Rx<Auth> {
+        crate::ai::spawn(async move {
+            let a = amber_core::auth::ai_auth_status(provider, cli_path).await;
+            Auth {
+                supported: a.supported,
+                logged_in: a.logged_in,
+            }
+        })
+    }
+
+    fn health(&self, cli_path: Option<String>) -> Rx<Result<String, String>> {
+        crate::ai::spawn(async move {
+            amber_core::ai::ai_health(cli_path)
+                .await
+                .map_err(|e| crate::ai::err_text(&e))
+        })
+    }
+
+    fn codex_models(&self) -> Rx<Vec<ModelOption>> {
+        crate::ai::spawn(async {
+            amber_core::detect::codex_models()
+                .await
+                .into_iter()
+                .map(|m| ModelOption {
+                    id: m.id,
+                    label: m.label,
+                    description: m.description,
+                })
+                .collect()
+        })
+    }
+
     fn tools(&self) -> Rx<Tools> {
         crate::ai::spawn(async {
             let t = core::detect_report_tools().await;
@@ -142,9 +219,32 @@ pub struct Fake {
     pub accounts: Vec<Account>,
     pub gh: GhState,
     pub servers: Vec<Server>,
+    pub clis: Vec<Cli>,
+    pub auth: Option<Auth>,
+    pub version: Option<String>,
+    pub codex: Vec<ModelOption>,
 }
 
 impl ReportProbe for Fake {
+    fn ai_clis(&self) -> Rx<Vec<Cli>> {
+        ready(self.clis.clone())
+    }
+
+    fn auth_status(&self, _: Option<String>, _: Option<String>) -> Rx<Auth> {
+        ready(self.auth.clone().unwrap_or(Auth {
+            supported: true,
+            logged_in: None,
+        }))
+    }
+
+    fn health(&self, _: Option<String>) -> Rx<Result<String, String>> {
+        ready(self.version.clone().ok_or_else(|| "not found".to_string()))
+    }
+
+    fn codex_models(&self) -> Rx<Vec<ModelOption>> {
+        ready(self.codex.clone())
+    }
+
     fn tools(&self) -> Rx<Tools> {
         ready(self.tools.clone())
     }

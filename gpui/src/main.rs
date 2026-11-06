@@ -47,6 +47,7 @@ mod report_view;
 mod root_picker;
 mod row_drag;
 mod search_view;
+mod settings_ai;
 mod settings_view;
 #[cfg(feature = "shots")]
 mod shots;
@@ -656,6 +657,8 @@ impl Render for Spike {
         };
         let report_modal = self.report_modal(&k, cx);
         let settings_modal = self.settings_modal(&k, cx);
+        let settings_ai_menu = self.settings_ai_menus(&k, cx);
+        let settings_unsaved = self.settings_unsaved_modal(&k, cx);
         let search_modal = self.search_modal(&k, cx);
         let concept_sort = self.concept_sort_menu(&k, cx);
         let concept_modals = [
@@ -838,8 +841,8 @@ impl Render for Spike {
                 }
                 // 설정 모달 — Esc 는 닫기(열린 고르기 판이 먼저)
                 if this.settings.open && e.keystroke.key == "escape" {
-                    if !this.close_settings_menu() {
-                        this.close_settings(cx);
+                    if !this.ai_escape() && !this.close_settings_menu() {
+                        this.request_close_settings(cx);
                     }
                     cx.stop_propagation();
                     cx.notify();
@@ -1077,6 +1080,8 @@ impl Render for Spike {
             .children(erd_confirm)
             .children(report_modal)
             .children(settings_modal)
+            .children(settings_ai_menu)
+            .children(settings_unsaved)
             .children(search_modal)
             .children(concept_sort)
             .children(concept_modals.into_iter().flatten())

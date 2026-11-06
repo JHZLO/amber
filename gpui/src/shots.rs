@@ -1395,6 +1395,25 @@ fn settings(s: &mut Shots) {
                 transport: "http".into(),
             },
         ],
+        clis: vec![
+            crate::report_probe::Cli {
+                id: "claude".into(),
+                name: "Claude Code".into(),
+                path: "/opt/homebrew/bin/claude".into(),
+                version: "2.1.280 (Claude Code)".into(),
+            },
+            crate::report_probe::Cli {
+                id: "codex".into(),
+                name: "OpenAI Codex CLI".into(),
+                path: "/opt/homebrew/bin/codex".into(),
+                version: "codex-cli 0.153.4".into(),
+            },
+        ],
+        auth: Some(crate::report_probe::Auth {
+            supported: true,
+            logged_in: Some(false),
+        }),
+        ..Fake::default()
     };
     let ok = GhState {
         ok: true,
@@ -1510,7 +1529,8 @@ fn concepts(s: &mut Shots) {
             let hits = crate::search_view::run_search(&sp.db, "log");
             if let Some(qs) = sp.search.as_mut() {
                 // 코드로 넣은 값은 Change 를 내지 않는다 — 결과를 바로 채운다
-                qs.input.update(cx, |st, cx| st.set_value("log", window, cx));
+                qs.input
+                    .update(cx, |st, cx| st.set_value("log", window, cx));
                 qs.hits = hits;
             }
         })
