@@ -14,6 +14,7 @@ mod dialog;
 mod drawer;
 mod erd_details;
 mod erd_overview;
+mod erd_sync;
 mod erd_view;
 mod figure;
 mod highlight;
@@ -1043,6 +1044,9 @@ impl Spike {
                         }
                         if section == Section::Diagrams {
                             this.reload_tree(vault_pane::Which::Diagrams);
+                        }
+                        if section == Section::Erd {
+                            this.erd_enter(cx);
                         }
                         cx.notify();
                     }))

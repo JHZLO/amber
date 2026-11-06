@@ -142,8 +142,14 @@ against the Rust one. See [the steps](#2).\n\n> [!NOTE]\n> Fixtures live in `par
             "indexes": [], "foreign_keys": fks, "checks": []})
     };
     let fk = |name: &str, col: &str, to: &str| serde_json::json!({"name": name, "columns": [col], "ref_schema": "shop", "ref_table": to, "ref_columns": ["id"]});
+    // 2분 전 — 오래되지 않아 열 때 다시 읽지 않는다
+    let synced_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or_default()
+        - 120_000;
     let snap = serde_json::json!({
-        "amber": 1, "connection": "demo", "schema": "shop", "server": "MySQL 8.0.36", "synced_at": 1_793_000_000_000i64, "fingerprint": "demo",
+        "amber": 1, "connection": "demo", "schema": "shop", "server": "MySQL 8.0.36", "synced_at": synced_at, "fingerprint": "demo",
         "tables": [
             table("users", "People who sign in", vec![col("id", "bigint", "bigint", "PRI", false, ""), col("email", "varchar", "varchar(255)", "UNI", false, "Sign-in email"), col("name", "varchar", "varchar(64)", "", true, "")], serde_json::json!([])),
             table("orders", "Customer orders", vec![col("id", "bigint", "bigint", "PRI", false, ""), col("user_id", "bigint", "bigint", "MUL", false, ""), col("status", "varchar", "enum('PENDING','PAID','CANCELED')", "", false, ""), col("created_at", "datetime", "datetime", "", false, "")], serde_json::json!([fk("fk_order_user", "user_id", "users")])),
@@ -234,7 +240,15 @@ pub fn run(dir: &str) {
             amber_gpui::i18n::init(Some("en"));
             theme::apply(Some("dark"), WindowAppearance::Dark, cx);
             let db = Db::open(&db, Clock::System).unwrap();
-            cx.new(|cx| Spike::new(db, DATE.into(), None, None, Instant::now(), window, cx))
+            let view =
+                cx.new(|cx| Spike::new(db, DATE.into(), None, None, Instant::now(), window, cx));
+            // 찍기는 DB 와 키체인에 닿지 않는다 — ERD 동기화는 거절당한다
+            view.update(cx, |s, _| {
+                s.erd.fake_introspect = Some(Arc::new(|_| {
+                    Err(amber_core::ai::AiError::new("DB_REFUSED", ""))
+                }))
+            });
+            view
         })
         .unwrap();
     std::fs::create_dir_all(dir).unwrap();
@@ -882,7 +896,7 @@ fn erd(s: &mut Shots) {
             sp.section = crate::Section::Erd;
             sp.load_erd();
             let ulid = sp.erd.connections.as_ref().unwrap()[0].ulid.clone();
-            sp.open_erd_schema(&ulid, "shop");
+            sp.open_erd_schema(&ulid, "shop", cx);
             cx.notify();
         })
         .unwrap();

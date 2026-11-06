@@ -15,6 +15,15 @@ impl AssetSource for Assets {
             .strip_prefix("amber/")
             .and_then(|p| p.strip_suffix(".svg"))
         {
+            // `<이름>-fill` — 같은 아이콘에 채움만 더한다(styles.css .icon-fill, 켜진 별)
+            if let Some(base) = name.strip_suffix("-fill") {
+                return Ok(ICONS.iter().find(|(n, _)| *n == base).map(|(_, s)| {
+                    Cow::Owned(
+                        s.replacen("fill=\"none\"", "fill=\"currentColor\"", 1)
+                            .into_bytes(),
+                    )
+                }));
+            }
             return Ok(ICONS
                 .iter()
                 .find(|(n, _)| *n == name)

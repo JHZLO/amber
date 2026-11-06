@@ -67,7 +67,15 @@ fn open_with(cx: &mut TestAppContext, db: &PathBuf, clock: Clock) -> VisualTestC
         };
         let (window, view) = gpui_kit::open_window(options, cx, move |window, cx| {
             let db = Db::open(&db, clock).unwrap();
-            cx.new(|cx| Spike::new(db, DATE.to_string(), None, None, Instant::now(), window, cx))
+            let view = cx
+                .new(|cx| Spike::new(db, DATE.to_string(), None, None, Instant::now(), window, cx));
+            // 시험은 DB 와 키체인에 닿지 않는다 — ERD 동기화는 늘 거절당한다(시험이 바꿔 꽂는다)
+            view.update(cx, |s, _| {
+                s.erd.fake_introspect = Some(std::sync::Arc::new(|_| {
+                    Err(amber_core::ai::AiError::new("DB_REFUSED", ""))
+                }))
+            });
+            view
         })
         .unwrap();
         LAST.with(|l| *l.borrow_mut() = Some(view));
@@ -2785,10 +2793,9 @@ fn the_erd_tab_lists_schemas_and_draws_the_snapshot(cx: &mut TestAppContext) {
     seed_erd(&db);
     let mut ui = open(cx, &db);
     click(&mut ui, "app.rail.erd");
-    // 연결을 펼치면 켜 둔 스키마만, 별표가 맨 위
+    // 들어오면 스냅샷 없는 스키마(svc_empty)를 채우느라 연결이 펼쳐진다 — 켜 둔 스키마만, 별표가 맨 위
     let conn = ui.update(|_, cx| spike().read(cx).erd.connections.as_ref().unwrap()[0].id);
     assert_eq!(conn, 1, "새 DB 의 첫 연결 — 시험 이름은 c1");
-    click(&mut ui, "erd-c1");
     assert!(ui.debug_bounds("erd-c1/svc_shop").is_some());
     assert!(ui.debug_bounds("erd-c1/svc_off").is_none(), "꺼 둔 스키마");
     // 스냅샷이 없는 스키마는 안내만
@@ -2844,7 +2851,6 @@ fn tapping_the_erd_opens_the_table_panel_and_column_popover(cx: &mut TestAppCont
     seed_erd(&db);
     let mut ui = open(cx, &db);
     click(&mut ui, "app.rail.erd");
-    click(&mut ui, "erd-c1");
     click(&mut ui, "erd-c1/svc_shop");
     assert!(erd_canvas(&mut ui).0, "그렸다");
     assert_eq!(erd_state(&mut ui), (None, None, false));
@@ -2923,7 +2929,6 @@ fn the_erd_view_menu_grid_and_find(cx: &mut TestAppContext) {
     seed_erd(&db);
     let mut ui = open(cx, &db);
     click(&mut ui, "app.rail.erd");
-    click(&mut ui, "erd-c1");
     click(&mut ui, "erd-c1/svc_shop");
     assert!(erd_canvas(&mut ui).0);
     let saved = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
@@ -3021,7 +3026,6 @@ fn the_erd_overview_lists_tables_and_opens_one_in_the_erd(cx: &mut TestAppContex
     seed_erd(&db);
     let mut ui = open(cx, &db);
     click(&mut ui, "app.rail.erd");
-    click(&mut ui, "erd-c1");
     click(&mut ui, "erd-c1/svc_shop");
     assert!(erd_canvas(&mut ui).0);
     click(&mut ui, "erd-mode-overview");
@@ -3050,8 +3054,8 @@ fn finding_in_the_erd_tree_filters_and_opens_a_table(cx: &mut TestAppContext) {
     click(&mut ui, "app.rail.erd");
     // 접힌 연결 안의 표까지 찾고, 조상은 임시로 펼친다
     assert!(
-        ui.debug_bounds("erd-c1/svc_shop").is_none(),
-        "처음엔 접혀 있다"
+        ui.debug_bounds("erd-c1/svc_shop/users").is_none(),
+        "처음엔 스키마가 접혀 있다"
     );
     click(&mut ui, "erd-tree-find");
     ui.simulate_input("user");
@@ -3084,4 +3088,100 @@ fn finding_in_the_erd_tree_filters_and_opens_a_table(cx: &mut TestAppContext) {
         let s = spike().read(cx);
         assert!(s.erd.tree_find.is_none() && s.erd.canvas.find.is_some());
     });
+}
+
+#[gpui_kit::test]
+fn syncing_an_erd_schema_writes_the_snapshot_and_shows_what_changed(cx: &mut TestAppContext) {
+    let db = seeded("erd-sync", &[]);
+    seed_erd(&db);
+    let mut ui = open(cx, &db);
+    // svc_shop 은 표 하나가 늘었다(coupons), 나머지는 비밀번호가 틀렸다
+    ui.update(|_, cx| {
+        spike().update(cx, |s, _| {
+            s.erd.fake_introspect = Some(std::sync::Arc::new(|schema: &str| {
+                if schema != "svc_shop" {
+                    return Err(amber_core::ai::AiError::new("DB_AUTH", ""));
+                }
+                let col = |name: &str, key: &str| {
+                    serde_json::json!({"name": name, "data_type": "bigint", "column_type": "bigint", "nullable": false,
+                        "key": key, "default_value": null, "extra": "", "comment": ""})
+                };
+                let table = |name: &str, cols: Vec<serde_json::Value>| {
+                    serde_json::json!({"name": name, "comment": "", "rows_estimate": 1200, "columns": cols,
+                        "indexes": [], "foreign_keys": [], "checks": []})
+                };
+                Ok(serde_json::from_value(serde_json::json!({
+                    "connection": "c", "schema": "svc_shop", "server": "MySQL 8.0.36", "synced_at": 1_800_000_000_000i64,
+                    "tables": [
+                        table("orders", vec![col("id", "PRI"), col("user_id", "MUL")]),
+                        table("users", vec![col("id", "PRI"), col("email", "UNI")]),
+                        table("coupons", vec![col("id", "PRI")]),
+                    ]
+                }))
+                .unwrap())
+            }));
+        })
+    });
+    // 들어오면 스냅샷이 없는 스키마(svc_empty)를 한 번 채워 본다 — 실패는 연결 행과 띠에
+    click(&mut ui, "app.rail.erd");
+    erd_canvas(&mut ui);
+    let err = ui.update(|_, cx| spike().read(cx).erd.error.clone());
+    assert!(
+        err.is_some_and(|e| e.starts_with("Sync failed")),
+        "동기화 실패 문구"
+    );
+    let saved = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    let row = || {
+        amber_gpui::dbconn::get_connection(&saved, 1)
+            .unwrap()
+            .unwrap()
+    };
+    assert_eq!(row()["last_error"], "DB_AUTH");
+    // 오래된 스냅샷(synced_at 0)을 열면 다시 읽는다 — 파일을 쓰고, 바뀐 것을 띠로
+    click(&mut ui, "erd-c1/svc_shop");
+    erd_canvas(&mut ui);
+    let file = db
+        .parent()
+        .unwrap()
+        .join("vault/erd/Local DB/svc_shop/schema.json");
+    let text = std::fs::read_to_string(&file).unwrap();
+    let snap = amber_gpui::schema_snapshot::parse_snapshot(&text).unwrap();
+    assert_eq!(snap.tables.len(), 3);
+    assert_eq!(
+        snap.fingerprint,
+        amber_gpui::schema_snapshot::fingerprint_of(&snap.tables)
+    );
+    assert_eq!(
+        text,
+        amber_gpui::schema_snapshot::snapshot_text(&snap),
+        "JSON.stringify(snap, null, 2) 모양"
+    );
+    assert!(text.contains("\"rows_estimate\": 1200,"), "정수는 정수로");
+    assert!(ui.debug_bounds("erd-diff").is_some(), "바뀐 것 띠");
+    assert!(row()["last_error"].is_null() && row()["last_sync_at"].is_number());
+    click(&mut ui, "erd-diff-close");
+    assert!(ui.debug_bounds("erd-diff").is_none());
+    // 즐겨찾기 — 저장하고, 트리에서 위로
+    click(&mut ui, "erd-star-c1/svc_empty");
+    let schemas = row()["schemas"].clone();
+    let empty = schemas
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["name"] == "svc_empty")
+        .unwrap()
+        .clone();
+    assert_eq!(empty["starred"], true);
+    let order = ui.update(|_, cx| {
+        let s = spike().read(cx);
+        let nodes = s.erd_nodes();
+        nodes[0]
+            .children
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|n| n.name.clone())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(order, ["svc_empty", "svc_shop"], "별표가 둘 다면 이름순");
 }

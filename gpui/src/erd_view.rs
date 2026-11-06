@@ -303,11 +303,13 @@ impl ErdCanvas {
     }
 
     /// 초점 없는 그림(시험이 칠한 그림과 견준다)
+    #[cfg(test)]
     pub fn plain_tree(&self) -> Option<Arc<usvg::Tree>> {
         self.plain.clone()
     }
 
     /// 칠한 초점(시험용)
+    #[cfg(test)]
     pub fn focus_target(&self) -> Option<(String, Option<String>)> {
         self.focus.clone()
     }
@@ -543,6 +545,12 @@ pub struct ErdState {
     pub ov_query: String,
     /// 트리에서 찾기(⌘F, 트리에 포커스가 있을 때)
     pub tree_find: Option<crate::note_find::TreeFindState>,
+    /// 동기화 — 도는 중, 차례를 기다리는 스키마 폴더, 바뀐 것(띠), 이번 실행에 자동으로 한 번 해 본 것
+    pub syncing: HashSet<String>,
+    pub queued: HashSet<String>,
+    pub diffs: HashMap<String, amber_gpui::schema_snapshot::SchemaDiff>,
+    pub attempted: HashSet<String>,
+    pub fake_introspect: Option<crate::erd_sync::FakeIntrospect>,
 }
 
 /// 트리를 찾기로 거른 모양 — 남길 경로(없으면 다), 임시로 펼칠 경로, 칠할 검색어, 지금 것
@@ -654,7 +662,7 @@ impl Spike {
         Some((c, p))
     }
 
-    pub(crate) fn open_erd_schema(&mut self, ulid: &str, schema: &str) {
+    pub(crate) fn open_erd_schema(&mut self, ulid: &str, schema: &str, cx: &mut Context<Self>) {
         let next = Some((ulid.to_string(), schema.to_string()));
         // 다른 스키마로 간다 — 예약해 둔 일도 버린다
         if self.erd.selected != next {
@@ -674,6 +682,20 @@ impl Spike {
         {
             let p = conn_path(c);
             self.erd.expanded.insert(p);
+            // 열 때 한 번, 스냅샷이 오래됐으면(10분) 다시 읽는다 — 폴링하지 않는다
+            let synced = self
+                .erd
+                .snaps
+                .get(&schema_folder(c, schema))
+                .cloned()
+                .flatten()
+                .map(|s| s.synced_at);
+            if amber_gpui::dbconn::is_stale(synced, self.db.now()) {
+                let c = c.clone();
+                if let Some(task) = self.erd_sync_one(&c, schema, cx) {
+                    task.detach();
+                }
+            }
         }
     }
 
@@ -685,7 +707,7 @@ impl Spike {
     /// render 에서 — 처음이면 읽고, 그릴 키가 바뀌었으면 뒤에서 그리고, 판을 재서 맞추고 굽는다
     pub(crate) fn prepare_erd(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.erd.connections.is_none() {
-            self.load_erd();
+            self.erd_enter(cx);
         }
         let dark = Tokens::get(cx).dark;
         self.draw_erd(dark, cx);
@@ -1271,7 +1293,7 @@ impl Spike {
         if is_dir {
             self.erd.expanded.insert(path.to_string());
             if let Some(schema) = schema {
-                self.open_erd_schema(&c.ulid, schema);
+                self.open_erd_schema(&c.ulid, schema, cx);
             }
             return;
         }
@@ -1334,7 +1356,10 @@ impl Spike {
 
     /// 트리에서 표를 골랐다 — 그림이 이 스키마의 것이면 바로, 아니면 그린 다음에(그림에 없는 표도 패널은 연다)
     fn erd_reveal_table(&mut self, ulid: &str, schema: &str, table: &str, cx: &mut Context<Self>) {
-        self.open_erd_schema(ulid, schema);
+        // 지금 스키마가 아닐 때만 연다(여는 일에 오래된 스냅샷 다시 읽기가 딸려 있다)
+        if self.erd.selected.as_ref() != Some(&(ulid.to_string(), schema.to_string())) {
+            self.open_erd_schema(ulid, schema, cx);
+        }
         let shown = self
             .erd_drawing_id()
             .is_some_and(|id| self.erd.canvas.shown_id == id && self.erd.canvas.drawn.is_some());
@@ -1509,6 +1534,8 @@ impl Spike {
         div()
             .id(SharedString::from(id.clone()))
             .tag(id)
+            .group("tree-row")
+            .relative()
             .flex()
             .items_center()
             .gap(px(6.))
@@ -1550,6 +1577,15 @@ impl Spike {
         let open = self.erd.expanded.contains(&path) || view.expand.contains(&path);
         let current = view.current.as_deref() == Some(path.as_str());
         let dot = conn_status_dot(conn_status(c));
+        let folders: Vec<String> = enabled_schemas(c)
+            .iter()
+            .map(|p| schema_folder(c, &p.name))
+            .collect();
+        let running = folders
+            .iter()
+            .filter(|f| self.erd.syncing.contains(*f) || self.erd.queued.contains(*f))
+            .count();
+        let progress = (running > 0).then(|| (folders.len() - running, folders.len()));
         let dot_color = match dot {
             "ok" => k.success,
             "warn" => k.warning,
@@ -1598,16 +1634,51 @@ impl Spike {
                         .text_size(px(11.))
                         .font_weight(FontWeight::NORMAL)
                         .text_color(k.text_3)
-                        .child(
-                            div()
-                                .size(px(7.))
-                                .rounded_full()
-                                .border_1()
-                                .border_color(dot_color)
-                                .when(!dot.is_empty(), |d| d.bg(dot_color)),
-                        )
-                        .child(env_label(&c.env)),
+                        // 동기화가 도는 동안은 상태 점 대신 진행 — 기다리는 이유가 여기 보인다
+                        .when_some(progress, |d, (done, total)| {
+                            d.child(t_with(
+                                "erd.db.tree.progress",
+                                &[("done", &done.to_string()), ("total", &total.to_string())],
+                            ))
+                        })
+                        .when(progress.is_none(), |d| {
+                            d.child(
+                                div()
+                                    .id(SharedString::from(format!("erd-dot-{path}")))
+                                    .size(px(7.))
+                                    .rounded_full()
+                                    .border_1()
+                                    .border_color(dot_color)
+                                    .when(!dot.is_empty(), |d| d.bg(dot_color))
+                                    .tooltip(tip(amber_gpui::dbconn::conn_status_label(
+                                        conn_status(c),
+                                    ))),
+                            )
+                            .child(env_label(&c.env))
+                        }),
                 )
+                .child({
+                    let c = c.clone();
+                    crate::note_names::row_actions(k).child(
+                        crate::note_names::row_act(
+                            format!("erd-sync-all-{path}"),
+                            "refresh",
+                            false,
+                            k,
+                        )
+                        .tooltip(tip(t("erd.db.tree.syncAll")))
+                        .when(progress.is_some(), |d| d.opacity(0.45))
+                        .when(progress.is_none(), |d| {
+                            d.on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                let todo =
+                                    enabled_schemas(&c).iter().map(|p| p.name.clone()).collect();
+                                this.erd_sync_many(&c, todo, cx).detach();
+                                cx.notify();
+                            }))
+                        }),
+                    )
+                })
                 .on_click(cx.listener(move |this, _, _, cx| {
                     if !this.erd.expanded.remove(&p) {
                         this.erd.expanded.insert(p.clone());
@@ -1641,6 +1712,9 @@ impl Spike {
         let folder = schema_folder(c, &p.name);
         let snap = self.erd.snaps.get(&folder).cloned().flatten();
         let selected = self.erd.selected.as_ref() == Some(&(c.ulid.clone(), p.name.clone()));
+        let syncing = self.erd.syncing.contains(&folder);
+        let queued = !syncing && self.erd.queued.contains(&folder);
+        let starred = p.starred == Some(true);
         let (ulid, name, toggle) = (c.ulid.clone(), p.name.clone(), path.clone());
         let caret_path = path.clone();
         let mut out = vec![
@@ -1672,7 +1746,7 @@ impl Spike {
                             cx.notify();
                         })),
                 )
-                .child(icon("table", 14.).text_color(k.text_2))
+                .child(icon(if syncing { "refresh" } else { "table" }, 14.).text_color(k.text_2))
                 .child(
                     div()
                         .min_w_0()
@@ -1700,24 +1774,71 @@ impl Spike {
                     )
                 })
                 .child(div().flex_1())
-                .when(snap.is_some() || p.starred == Some(true), |d| {
-                    d.child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(4.))
-                            .text_size(px(11.))
-                            .font_weight(FontWeight::NORMAL)
-                            .text_color(k.text_3)
-                            .when(p.starred == Some(true), |d| {
-                                d.child(icon("star", 11.).text_color(k.text_3))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .text_size(px(11.))
+                        .font_weight(FontWeight::NORMAL)
+                        .text_color(k.text_3)
+                        .when(syncing, |d| d.child(t("erd.db.tree.syncing")))
+                        .when(queued, |d| d.child(t("erd.db.tree.queued")))
+                        .when(!syncing && !queued, |d| {
+                            d.when(starred, |d| {
+                                d.child(icon("star-fill", 11.).text_color(k.text_2))
                             })
-                            .children(snap.as_ref().map(|s| s.tables.len().to_string())),
-                    )
+                            .children(snap.as_ref().map(|s| s.tables.len().to_string()))
+                        }),
+                )
+                .child({
+                    let (id, c2, schema) = (c.id, c.clone(), p.name.clone());
+                    let schema2 = schema.clone();
+                    let star_key = if starred {
+                        "erd.db.tree.unstar"
+                    } else {
+                        "erd.db.tree.star"
+                    };
+                    crate::note_names::row_actions(k)
+                        .child(
+                            crate::note_names::row_act(
+                                format!("erd-star-{path}"),
+                                if starred { "star-fill" } else { "star" },
+                                false,
+                                k,
+                            )
+                            .tooltip(tip(t(star_key)))
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.erd_toggle_star(id, &schema);
+                                    cx.notify();
+                                },
+                            )),
+                        )
+                        .child(
+                            crate::note_names::row_act(
+                                format!("erd-sync-{path}"),
+                                "refresh",
+                                false,
+                                k,
+                            )
+                            .tooltip(tip(t("erd.db.tree.syncHere")))
+                            .when(syncing, |d| d.opacity(0.45))
+                            .when(!syncing, |d| {
+                                d.on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    if let Some(task) = this.erd_sync_one(&c2, &schema2, cx) {
+                                        task.detach();
+                                    }
+                                    cx.notify();
+                                }))
+                            }),
+                        )
                 })
                 // 스키마는 누르면 ERD, 펼침은 셰브론이 맡는다(처음 누를 땐 함께 펼친다)
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.open_erd_schema(&ulid, &name);
+                    this.open_erd_schema(&ulid, &name, cx);
                     this.erd.expanded.insert(toggle.clone());
                     cx.notify();
                 }))
@@ -1894,7 +2015,37 @@ impl Spike {
                             cx.notify();
                         })),
                     ),
-            );
+            )
+            .child({
+                // 동기화 — 도는 중, 마지막 동기화 시각, 처음
+                let syncing = self.erd.syncing.contains(&folder);
+                let label = if syncing {
+                    t("erd.db.syncingShort")
+                } else if let Some(s) = &snap {
+                    t_with(
+                        "erd.db.syncAgo",
+                        &[(
+                            "ago",
+                            &crate::notes_view::time_ago(s.synced_at, self.db.now()),
+                        )],
+                    )
+                } else {
+                    t("erd.db.sync")
+                };
+                let (c, p) = (conn.clone(), pref.name.clone());
+                crate::day_card::button("erd-sync", k, false, syncing)
+                    .child(icon("refresh", 14.).text_color(k.text_2))
+                    .child(label)
+                    .when(!syncing, |d| {
+                        d.on_click(cx.listener(move |this, _, _, cx| {
+                            if let Some(task) = this.erd_sync_one(&c, &p, cx) {
+                                task.detach();
+                            }
+                            cx.notify();
+                        }))
+                    })
+            });
+        let syncing = self.erd.syncing.contains(&folder);
         let body: AnyElement = match &snap {
             _ if self.erd.overview => self.erd_overview(snap.as_deref(), k, cx),
             Some(_) => self.erd_canvas(k, window, cx).into_any_element(),
@@ -1905,15 +2056,69 @@ impl Spike {
                 .items_center()
                 .justify_center()
                 .gap(px(8.))
-                .child(icon("table", 22.).text_color(k.text_3))
+                .when(syncing, |d| {
+                    d.child(crate::spinner::spinner(k, cx.reduce_motion()))
+                })
+                .when(!syncing, |d| {
+                    d.child(icon("table", 22.).text_color(k.text_3))
+                })
                 .child(
                     div()
                         .text_size(px(13.))
                         .text_color(k.text_3)
-                        .child(t("erd.noSnapshot")),
+                        .child(t(if syncing {
+                            "erd.db.syncingShort"
+                        } else {
+                            "erd.noSnapshot"
+                        })),
                 )
                 .into_any_element(),
         };
+        // 바뀐 것 띠 — 동기화가 구조 변화를 찾았을 때. 닫으면 사라진다
+        let banner = self.erd.diffs.get(&folder).map(|d| {
+            let f = folder.clone();
+            div()
+                .tag("erd-diff")
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .px(px(14.))
+                .py(px(8.))
+                .bg(k.surface_2)
+                .border_b_1()
+                .border_color(k.border)
+                .text_size(px(12.5))
+                .text_color(k.text_2)
+                .child(icon("database", 14.).text_color(k.text_2))
+                .child(
+                    div()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(k.text)
+                        .child(t("erd.db.banner.changed")),
+                )
+                .child(t_with(
+                    "erd.db.banner.detail",
+                    &[
+                        ("ta", &d.tables_added.len().to_string()),
+                        ("tr", &d.tables_removed.len().to_string()),
+                        ("ca", &d.columns_added.len().to_string()),
+                        ("cr", &d.columns_removed.len().to_string()),
+                        (
+                            "cc",
+                            &(d.columns_changed.len() + d.constraint_tables.len()).to_string(),
+                        ),
+                    ],
+                ))
+                .child(div().flex_1())
+                .child(
+                    crate::day_card::button("erd-diff-close", k, false, false)
+                        .child(t("common.close"))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.erd.diffs.remove(&f);
+                            cx.notify();
+                        })),
+                )
+        });
         let meta = div()
             .tag("erd-meta")
             .px(px(16.))
@@ -1939,6 +2144,15 @@ impl Spike {
             .flex()
             .flex_col()
             .child(head)
+            .when_some(self.erd.error.clone(), |d, e| {
+                d.child(
+                    crate::note_ai_view::note_box(crate::note_ai_view::Note::Error, k)
+                        .tag("erd-error")
+                        .mx(px(16.))
+                        .mt(px(10.))
+                        .child(e),
+                )
+            })
             .when_some(self.erd.canvas.error.clone(), |d, e| {
                 d.child(
                     crate::note_ai_view::note_box(crate::note_ai_view::Note::Error, k)
@@ -1947,6 +2161,7 @@ impl Spike {
                         .child(t_with("erd.compileError", &[("msg", &e)])),
                 )
             })
+            .children(banner)
             .child(body)
             .child(meta)
             .into_any_element()

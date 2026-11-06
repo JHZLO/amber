@@ -401,57 +401,10 @@ impl Spike {
         cx: &mut Context<Self>,
     ) -> Div {
         let act = |id: String, icon_name: &'static str, danger: bool| {
-            let (soft, red, hover_bg, text) = (
-                k.danger_soft,
-                k.danger,
-                linear_gradient(
-                    150.,
-                    linear_color_stop(k.glass_fill_hover.0, 0.),
-                    linear_color_stop(k.glass_fill_hover.1, 1.),
-                ),
-                k.text,
-            );
-            let id = w.tag(&id);
-            let group: SharedString = format!("{id}-g").into();
-            div()
-                .id(SharedString::from(id.clone()))
-                .tag(id)
-                .group(group.clone())
-                .size(px(24.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(px(5.))
-                .cursor_pointer()
-                .when(danger, |d| d.hover(move |s| s.bg(soft)))
-                .when(!danger, |d| d.hover(move |s| s.bg(hover_bg)))
-                .child(
-                    icon(icon_name, 13.)
-                        .text_color(k.text_3)
-                        .group_hover(group, move |s| {
-                            s.text_color(if danger { red } else { text })
-                        }),
-                )
+            row_act(w.tag(&id), icon_name, danger, k)
         };
         let (path, is_dir, name) = (n.path.clone(), n.is_dir, n.name.clone());
-        div()
-            .absolute()
-            .right(px(4.))
-            .top_0()
-            .bottom_0()
-            .flex()
-            .items_center()
-            .pl(px(18.))
-            // 긴 라벨 위에 뜰 때 글자가 비치지 않게 hover 바탕색으로 덮는다
-            .bg(linear_gradient(
-                90.,
-                linear_color_stop(k.surface_2.opacity(0.), 0.),
-                linear_color_stop(k.surface_2, 0.3),
-            ))
-            .opacity(0.)
-            .group_hover("tree-row", |s| s.opacity(1.))
-            // 행 안 버튼을 누른 것은 끌기가 아니다
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        row_actions(k)
             .when(is_dir, |d| {
                 let (p1, p2) = (path.clone(), path.clone());
                 d.child(
@@ -525,4 +478,60 @@ impl Spike {
                 )),
             )
     }
+}
+
+/// 트리 행 끝의 단추 줄(.row-actions) — 손이 행("tree-row" 묶음)에 올라가야 보인다. 보관함 트리와 ERD 트리가 같이 쓴다
+pub(crate) fn row_actions(k: &Tokens) -> Div {
+    div()
+        .absolute()
+        .right(px(4.))
+        .top_0()
+        .bottom_0()
+        .flex()
+        .items_center()
+        .pl(px(18.))
+        // 긴 라벨 위에 뜰 때 글자가 비치지 않게 hover 바탕색으로 덮는다
+        .bg(linear_gradient(
+            90.,
+            linear_color_stop(k.surface_2.opacity(0.), 0.),
+            linear_color_stop(k.surface_2, 0.3),
+        ))
+        .opacity(0.)
+        .group_hover("tree-row", |s| s.opacity(1.))
+        // 행 안 버튼을 누른 것은 끌기가 아니다
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+}
+
+/// 행 단추 하나 — 24px, 아이콘 13px. danger 면 손이 올라갈 때 빨강
+pub(crate) fn row_act(id: String, icon_name: &str, danger: bool, k: &Tokens) -> Stateful<Div> {
+    let (soft, red, hover_bg, text) = (
+        k.danger_soft,
+        k.danger,
+        linear_gradient(
+            150.,
+            linear_color_stop(k.glass_fill_hover.0, 0.),
+            linear_color_stop(k.glass_fill_hover.1, 1.),
+        ),
+        k.text,
+    );
+    let group: SharedString = format!("{id}-g").into();
+    div()
+        .id(SharedString::from(id.clone()))
+        .tag(id)
+        .group(group.clone())
+        .size(px(24.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(5.))
+        .cursor_pointer()
+        .when(danger, |d| d.hover(move |s| s.bg(soft)))
+        .when(!danger, |d| d.hover(move |s| s.bg(hover_bg)))
+        .child(
+            icon(icon_name, 13.)
+                .text_color(k.text_3)
+                .group_hover(group, move |s| {
+                    s.text_color(if danger { red } else { text })
+                }),
+        )
 }

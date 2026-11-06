@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{Value as Json, json};
 
 use crate::resin::RefKind;
