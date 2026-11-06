@@ -4388,3 +4388,45 @@ fn the_ai_tab_picks_a_cli_and_saves_on_save(cx: &mut TestAppContext) {
     assert!(c.onboarded);
     assert!(ui.debug_bounds("set-tab-ai").is_none(), "저장하면 닫힌다");
 }
+
+#[gpui_kit::test]
+fn the_appearance_tab_applies_theme_now_and_asks_before_language(cx: &mut TestAppContext) {
+    let db = seeded("settings-look", &[]);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.settings");
+    click(&mut ui, "set-tab-appearance");
+    ui.update(|window, cx| {
+        spike().update(cx, |s, cx| s.set_theme_pref("light", window, cx));
+    });
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    assert_eq!(
+        amber_gpui::prefs::get(&d, "til.theme").as_deref(),
+        Some("light")
+    );
+    ui.update(|_, cx| assert!(!crate::theme::Tokens::get(cx).dark, "바로 바뀐다"));
+    // 언어는 묻는다 — 취소하면 그대로, 바꾸면 저장(앱을 다시 띄워 적용)
+    let other = if amber_gpui::i18n::is_ko() {
+        "en"
+    } else {
+        "ko"
+    };
+    ui.update(|_, cx| {
+        spike().update(cx, |s, cx| {
+            s.settings.lang_pending = Some(other);
+            cx.notify();
+        })
+    });
+    click(&mut ui, "set-lang-cancel");
+    assert_eq!(amber_gpui::prefs::get(&d, "amber.lang"), None);
+    ui.update(|_, cx| {
+        spike().update(cx, |s, cx| {
+            s.settings.lang_pending = Some(other);
+            cx.notify();
+        })
+    });
+    click(&mut ui, "set-lang-apply");
+    assert_eq!(
+        amber_gpui::prefs::get(&d, "amber.lang").as_deref(),
+        Some(other)
+    );
+}
