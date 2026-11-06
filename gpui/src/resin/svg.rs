@@ -219,6 +219,8 @@ struct Stage {
     stars: Option<Ink>,
     grain: f64,
     vignette: f64,
+    /// 손을 따라가는 빛(라이브 유리만) — 색, 세기, 반지름
+    light: (&'static str, f64, f64),
 }
 
 struct Glass {
@@ -226,6 +228,8 @@ struct Glass {
     veil: Ink,
     tint: Ink,
     rim: Ink,
+    /// 테두리 띠가 뒤를 휘는 정도(라이브 유리만)
+    lens: f64,
     shadow: Ink,
 }
 
@@ -307,6 +311,7 @@ static DARK_GLASS: Glass = Glass {
     veil: ("#0F121C", 0.74),
     tint: (WHITE, 0.07),
     rim: (WHITE, 0.16),
+    lens: 7.,
     shadow: ("#000000", 0.55),
 };
 static LIGHT_GLASS: Glass = Glass {
@@ -314,6 +319,7 @@ static LIGHT_GLASS: Glass = Glass {
     veil: ("#FAFBFD", 0.8),
     tint: (WHITE, 0.4),
     rim: ("#0F172A", 0.12),
+    lens: 7.,
     shadow: ("#1B2140", 0.18),
 };
 
@@ -336,6 +342,7 @@ fn look_of(name: &str) -> Look {
                 stars: Some((WHITE, 0.95)),
                 grain: 0.025,
                 vignette: 0.35,
+                light: ("#FFFFFF", 0.1, 420.),
             },
         ),
         "aurora-light" => glass(
@@ -350,6 +357,7 @@ fn look_of(name: &str) -> Look {
                 stars: Some(("#6E74DA", 0.45)),
                 grain: 0.02,
                 vignette: 0.06,
+                light: ("#FFFFFF", 0.22, 420.),
             },
         ),
         "silk-dark" => glass(
@@ -364,6 +372,7 @@ fn look_of(name: &str) -> Look {
                 stars: None,
                 grain: 0.025,
                 vignette: 0.4,
+                light: ("#FFE3C2", 0.1, 420.),
             },
         ),
         "silk-light" => glass(
@@ -378,6 +387,7 @@ fn look_of(name: &str) -> Look {
                 stars: None,
                 grain: 0.02,
                 vignette: 0.06,
+                light: ("#FFF8F0", 0.22, 420.),
             },
         ),
         "caustic-dark" => glass(
@@ -392,6 +402,7 @@ fn look_of(name: &str) -> Look {
                 stars: None,
                 grain: 0.025,
                 vignette: 0.4,
+                light: ("#CFF6FF", 0.1, 420.),
             },
         ),
         "caustic-light" => glass(
@@ -406,6 +417,7 @@ fn look_of(name: &str) -> Look {
                 stars: None,
                 grain: 0.02,
                 vignette: 0.06,
+                light: ("#FFFFFF", 0.22, 420.),
             },
         ),
         _ => Look {
@@ -414,6 +426,76 @@ fn look_of(name: &str) -> Look {
             glass: None,
         },
     }
+}
+
+// ---- 라이브 유리(viewer/glass.ts 가 stageOf, glassOf 로 읽는 것) ----
+
+/// 셰이더에 넘길 색 — JS 의 rgb(hex): 0..1
+fn rgb3(hex: &str) -> [f32; 3] {
+    let n = u32::from_str_radix(hex.trim_start_matches('#'), 16).unwrap_or(0);
+    [
+        (n >> 16) as f32 / 255.,
+        ((n >> 8) & 255) as f32 / 255.,
+        (n & 255) as f32 / 255.,
+    ]
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LiveStage {
+    /// aurora 0, silk 1, caustic 2
+    pub style: i32,
+    pub dark: bool,
+    pub base: [f32; 3],
+    pub colors: [([f32; 3], f32); 3],
+    pub spots: [[f32; 3]; 3],
+    pub light: ([f32; 3], f32, f32),
+    pub grid: ([f32; 3], f32),
+    pub stars: Option<([f32; 3], f32)>,
+    pub grain: f32,
+    pub vignette: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LiveGlass {
+    pub frost: f32,
+    pub veil: ([f32; 3], f32),
+    pub tint: ([f32; 3], f32),
+    pub rim: ([f32; 3], f32),
+    pub lens: f32,
+    pub shadow: ([f32; 3], f32),
+}
+
+/// stageOf(look), glassOf(look) — 무대가 있는 룩(`<무대>-<어둠>`)만
+pub fn live_of(look: &str) -> Option<(LiveStage, LiveGlass)> {
+    let l = look_of(look);
+    let (st, g) = (l.stage?, l.glass?);
+    let ink = |(c, a): Ink| (rgb3(c), a as f32);
+    Some((
+        LiveStage {
+            style: match st.style {
+                "aurora" => 0,
+                "silk" => 1,
+                _ => 2,
+            },
+            dark: st.dark,
+            base: rgb3(st.base),
+            colors: st.colors.map(ink),
+            spots: st.spots.map(|(x, y, r)| [x as f32, y as f32, r as f32]),
+            light: (rgb3(st.light.0), st.light.1 as f32, st.light.2 as f32),
+            grid: ink(st.grid),
+            stars: st.stars.map(ink),
+            grain: st.grain as f32,
+            vignette: st.vignette as f32,
+        },
+        LiveGlass {
+            frost: g.frost as f32,
+            veil: ink(g.veil),
+            tint: ink(g.tint),
+            rim: ink(g.rim),
+            lens: g.lens as f32,
+            shadow: ink(g.shadow),
+        },
+    ))
 }
 
 fn fill((c, a): Ink) -> String {

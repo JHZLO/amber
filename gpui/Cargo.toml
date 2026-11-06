@@ -33,6 +33,21 @@ resvg = "0.45.1"
 # 다이어그램 SVG 의 구조(class, data-id) 읽기 — usvg 는 class 를 버린다. usvg 0.45 와 같은 판
 roxmltree = "=0.20.0"
 merman = { version = "=0.10.0-alpha.1", features = ["math"] }
+# ERD 라이브 유리(resin viewer/glass.ts 의 WebGL2 셰이더를 Metal 로) — GPUI 의 Metal 렌더러가 쓰는 것과 같은 판.
+# 그린 것은 IOSurface 를 품은 CVPixelBuffer 로 paint_surface 에 넘긴다
+objc2 = "0.6"
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSError"] }
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFBase", "CFDictionary", "CFNumber", "CFString"] }
+objc2-metal = { version = "0.3.2", default-features = false, features = [
+    "std", "objc2-io-surface", "MTLAllocation", "MTLBlitCommandEncoder", "MTLBuffer", "MTLCommandBuffer", "MTLCommandEncoder",
+    "MTLCommandQueue", "MTLDevice", "MTLLibrary", "MTLPixelFormat", "MTLRenderCommandEncoder", "MTLRenderPass",
+    "MTLRenderPipeline", "MTLResource", "MTLSampler", "MTLTexture", "MTLTypes",
+] }
+objc2-core-video = { version = "0.3.2", default-features = false, features = [
+    "std", "objc2", "objc2-io-surface", "CVBase", "CVBuffer", "CVImageBuffer", "CVPixelBuffer", "CVPixelBufferIOSurface",
+    "CVPixelBufferPool", "CVReturn",
+] }
+objc2-io-surface = { version = "0.3.2", default-features = false, features = ["std", "objc2", "objc2-core-foundation", "IOSurfaceRef"] }
 
 [features]
 # 화면 찍기(--shots): 실제 macOS 렌더링으로 화면 밖 창에 그리고 hover, 끌기 같은 조작을 보내 PNG 로 남긴다(src/shots.rs)

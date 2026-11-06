@@ -18,6 +18,7 @@ mod erd_overview;
 mod erd_sync;
 mod erd_view;
 mod figure;
+mod glass;
 mod highlight;
 mod markdown;
 mod menu;

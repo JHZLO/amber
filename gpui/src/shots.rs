@@ -901,6 +901,25 @@ fn erd(s: &mut Shots) {
     s.settle();
     s.settle();
     s.shot("erd-open");
+    // 다른 무대 둘 — 비단, 물빛(라이브 유리)
+    for stage in ["silk", "caustic"] {
+        s.window
+            .update(&mut s.cx, |sp, _, cx| {
+                sp.set_erd_stage(stage);
+                cx.notify();
+            })
+            .unwrap();
+        s.settle();
+        s.settle();
+        s.shot(&format!("erd-glass-{stage}"));
+    }
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.set_erd_stage("aurora");
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
     // 표 이름 = 오른쪽 패널(초점), 컬럼 = 정보창
     s.window
         .update(&mut s.cx, |sp, window, cx| {

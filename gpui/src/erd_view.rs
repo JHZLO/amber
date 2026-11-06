@@ -253,6 +253,9 @@ pub struct ErdCanvas {
     panel_grab: Option<(f32, f32)>,
     /// 정보창의 잰 크기 — 다음 그리기에서 자리를 잡는다
     pop_size: Rc<Cell<(f32, f32)>>,
+    /// 라이브 유리(Metal) — 없으면(Metal 이 없거나 시험) 정지 그림. 웹의 WebGL2 있음/없음과 같다
+    pub live: Option<crate::glass::Live>,
+    live_failed: bool,
     /// 지금 보이는 그림의 키(모델과 보기를 함께 말한다)
     pub key: String,
     /// 그리는 중인 키
@@ -720,8 +723,26 @@ impl Spike {
         if self.erd.connections.is_none() {
             self.erd_enter(cx);
         }
+        // 시험은 정지 그림으로(GPU 프레임을 돌리지 않는다)
+        #[cfg(not(test))]
+        if self.erd.canvas.live.is_none() && !self.erd.canvas.live_failed {
+            match crate::glass::Live::new() {
+                Ok(l) => self.erd.canvas.live = Some(l),
+                Err(e) => {
+                    eprintln!("라이브 유리를 끈다: {e}");
+                    self.erd.canvas.live_failed = true;
+                }
+            }
+        }
         let dark = Tokens::get(cx).dark;
         self.draw_erd(dark, cx);
+        let still = cx.reduce_motion();
+        let grid = self.erd.view.grid;
+        let look = format!(
+            "{}-{}",
+            self.erd.view.stage,
+            if dark { "dark" } else { "light" }
+        );
         let c = &mut self.erd.canvas;
         let v = c.view();
         if c.tree.is_some() && v.0 > 0. && (c.fit_pending || (c.auto && c.measured != v)) {
@@ -745,6 +766,43 @@ impl Spike {
             };
             crate::raster::schedule(&mut c.raster, tree, g, |s| &mut s.erd.canvas.raster, cx);
         }
+        // 유리 한 프레임 — 카드 자리와 초점(흐릴 표)을 넘긴다
+        let (shown, moving, dpr) = (c.shown(), c.anim.is_some(), c.dpr.get());
+        if let (Some(live), Some(drawn)) = (c.live.as_mut(), c.drawn.clone())
+            && !c.fit_pending
+            && v.0 > 0.
+        {
+            let cards: Vec<[f32; 4]> = drawn
+                .cards
+                .iter()
+                .map(|k| [k.x as f32, k.y as f32, k.w as f32, k.h as f32])
+                .collect();
+            let dimmed: Option<Vec<bool>> = c
+                .focus
+                .as_ref()
+                .and_then(|(t, col)| drawn.focus(t, col.as_deref()))
+                .map(|f| {
+                    drawn
+                        .cards
+                        .iter()
+                        .map(|k| !f.tables.contains(&k.table))
+                        .collect()
+                });
+            let more = live.tick(&crate::glass::Scene {
+                size: v,
+                dpr,
+                view: shown,
+                moving,
+                look: &look,
+                grid,
+                cards: &cards,
+                dimmed: dimmed.as_deref(),
+                still,
+            });
+            if more {
+                window.request_animation_frame();
+            }
+        }
     }
 
     /// 스냅샷 → resin → SVG → 트리. 같은 키면 다시 그리지 않는다
@@ -759,8 +817,22 @@ impl Spike {
         let audit = pref_audit(pref);
         let drawing_id = format!("{}/{}/{}/{}", conn.ulid, pref.name, snap.fingerprint, audit);
         let view = self.erd.view.clone();
-        let look = format!("{}-{}", view.stage, if dark { "dark" } else { "light" });
-        let key = format!("{drawing_id}|{view:?}|{look}");
+        let live = self.erd.canvas.live.is_some();
+        let look = if live {
+            if dark { "aurora-dark" } else { "aurora-light" }.to_string()
+        } else {
+            format!("{}-{}", view.stage, if dark { "dark" } else { "light" })
+        };
+        // 유리 위에선 배경을 바꿔도 SVG 는 같다 — 무대는 키에서 뺀다
+        let key_view = ViewPrefs {
+            stage: if live {
+                String::new()
+            } else {
+                view.stage.clone()
+            },
+            ..view.clone()
+        };
+        let key = format!("{drawing_id}|{key_view:?}|{look}|{live}");
         let c = &mut self.erd.canvas;
         // 다른 스키마(또는 구조) — 그 표가 거기엔 없으니 패널과 정보창을 닫는다
         if c.drawing_id != drawing_id {
@@ -777,7 +849,7 @@ impl Spike {
             columns: view.columns,
             audit: view.audit,
             look,
-            stage: Some(true),
+            stage: Some(!live),
             edges: view.edges,
             direction: view.direction,
             hide: view.hide.clone(),
@@ -863,6 +935,9 @@ impl Spike {
         c.grab = Some((start, (x0, y0), true));
         c.auto = false;
         c.anim = None;
+        if let Some(l) = c.live.as_mut() {
+            l.touched();
+        }
         c.over = None;
         c.x = x0 + dx;
         c.y = y0 + dy;
@@ -2263,12 +2338,26 @@ impl Spike {
     fn erd_canvas(&self, k: &Tokens, window: &Window, cx: &mut Context<Self>) -> Div {
         let c = &self.erd.canvas;
         let (viewport, dpr) = (c.viewport.clone(), c.dpr.clone());
-        let bg = c
-            .background
-            .as_deref()
-            .and_then(|h| u32::from_str_radix(h.trim_start_matches('#'), 16).ok())
-            .map(|v| rgb(v).into())
-            .unwrap_or(k.surface);
+        // 유리 위에선 무대의 바탕색(첫 프레임 전에 번쩍이지 않게, --rz-stage)
+        let live_base = c.live.as_ref().and_then(|_| {
+            let look = format!(
+                "{}-{}",
+                self.erd.view.stage,
+                if k.dark { "dark" } else { "light" }
+            );
+            amber_gpui::resin::svg::live_of(&look).map(|(st, _)| {
+                let [r, g, b] = st.base;
+                Hsla::from(Rgba { r, g, b, a: 1. })
+            })
+        });
+        let bg = live_base.unwrap_or_else(|| {
+            c.background
+                .as_deref()
+                .and_then(|h| u32::from_str_radix(h.trim_start_matches('#'), 16).ok())
+                .map(|v| rgb(v).into())
+                .unwrap_or(k.surface)
+        });
+        let surface = c.live.as_ref().and_then(|l| l.buffer.clone());
         let (sx, sy, ss) = c.shown();
         let over_card = matches!(c.over, Some(Over::Head(_) | Over::Row(..) | Over::Body(_)));
         let mut stage = div()
@@ -2295,7 +2384,12 @@ impl Spike {
                         }
                         dpr.set(window.scale_factor());
                     },
-                    |_, _, _, _| {},
+                    // 유리 — 그림 층 밑에
+                    move |b, _, window, _| {
+                        if let Some(buf) = surface {
+                            window.paint_surface(b, buf);
+                        }
+                    },
                 )
                 .absolute()
                 .inset_0(),
@@ -2351,6 +2445,9 @@ impl Spike {
             .on_scroll(cx.listener(|this, e: &ScrollEvent, _, cx| {
                 let c = &mut this.erd.canvas;
                 c.anim = None;
+                if let Some(l) = c.live.as_mut() {
+                    l.touched();
+                }
                 c.wheel(e);
                 cx.stop_propagation();
                 cx.notify();
@@ -2359,6 +2456,9 @@ impl Spike {
                 let c = &mut this.erd.canvas;
                 let o = c.viewport.get().origin;
                 let p = (f32::from(e.position.x - o.x), f32::from(e.position.y - o.y));
+                if let Some(l) = c.live.as_mut() {
+                    l.point(p.0, p.1);
+                }
                 let over = if c.grab.is_some() || e.pressed_button.is_some() {
                     None
                 } else {
@@ -2370,7 +2470,11 @@ impl Spike {
                 }
             }))
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
-                if !hovered && this.erd.canvas.over.take().is_some() {
+                if !hovered {
+                    if let Some(l) = this.erd.canvas.live.as_mut() {
+                        l.rest();
+                    }
+                    this.erd.canvas.over = None;
                     cx.notify();
                 }
             }))
@@ -2403,6 +2507,17 @@ impl Spike {
                 };
                 if !tap {
                     return;
+                }
+                // 누른 자리에서 무대로 고리가 퍼진다
+                let still = cx.reduce_motion();
+                let c = &mut this.erd.canvas;
+                let o = c.viewport.get().origin;
+                if let Some(l) = c.live.as_mut() {
+                    l.ripple(
+                        f32::from(e.position().x - o.x),
+                        f32::from(e.position().y - o.y),
+                        still,
+                    );
                 }
                 this.erd_tap(e.position(), cx);
                 if e.click_count() == 2 {

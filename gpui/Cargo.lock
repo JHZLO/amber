@@ -205,6 +205,12 @@ dependencies = [
  "markdown",
  "merman",
  "notify",
+ "objc2 0.6.5",
+ "objc2-core-foundation",
+ "objc2-core-video",
+ "objc2-foundation 0.3.2",
+ "objc2-io-surface",
+ "objc2-metal 0.3.2",
  "pulldown-cmark",
  "regex",
  "resvg 0.45.1",
@@ -5378,6 +5384,7 @@ dependencies = [
  "dispatch2",
  "objc2 0.6.5",
  "objc2-foundation 0.3.2",
+ "objc2-io-surface",
 ]
 
 [[package]]
