@@ -1977,3 +1977,127 @@ fn a_broken_diagram_shows_the_error_line(cx: &mut TestAppContext) {
             .is_some_and(|t| !t.is_empty())
     );
 }
+
+fn read_diagram(db: &PathBuf, rel: &str) -> String {
+    std::fs::read_to_string(db.parent().unwrap().join("vault/diagrams").join(rel)).unwrap()
+}
+
+#[gpui_kit::test]
+fn editing_a_diagram_previews_then_saves_with_cmd_s(cx: &mut TestAppContext) {
+    let db = seeded("dgm-edit", &[]);
+    vault_diagram(&db, "a.mmd", "flowchart LR\n  A --> B\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    click(&mut ui, "dtree-a.mmd");
+    click(&mut ui, "dgm-edit");
+    ui.simulate_keystrokes("cmd-down");
+    ui.simulate_input("  B --> C\n");
+    ui.run_until_parked();
+    ui.update(|_, cx| assert!(spike().read(cx).diagram_dirty(cx)));
+    // 미리보기는 350ms 늦춰 그린다
+    ui.executor()
+        .advance_clock(std::time::Duration::from_millis(400));
+    ui.run_until_parked();
+    ui.update(|_, cx| {
+        assert!(
+            spike().read(cx).diagrams.canvas.chart.contains("B --> C"),
+            "캔버스가 초안을 그린다"
+        );
+    });
+    ui.simulate_keystrokes("cmd-s");
+    ui.run_until_parked();
+    assert_eq!(
+        read_diagram(&db, "a.mmd"),
+        "flowchart LR\n  A --> B\n  B --> C\n"
+    );
+    ui.update(|_, cx| assert!(spike().read(cx).diagrams.edit.is_none(), "저장하면 읽기로"));
+    // 취소 — 캔버스는 저장된 본문으로 돌아온다
+    click(&mut ui, "dgm-edit");
+    ui.simulate_keystrokes("cmd-down");
+    ui.simulate_input("  C --> D\n");
+    ui.executor()
+        .advance_clock(std::time::Duration::from_millis(400));
+    ui.run_until_parked();
+    click(&mut ui, "dgm-cancel");
+    ui.update(|_, cx| {
+        let d = &spike().read(cx).diagrams;
+        assert!(!d.canvas.chart.contains("C --> D"));
+    });
+}
+
+#[gpui_kit::test]
+fn switching_diagrams_with_unsaved_edits_asks_first(cx: &mut TestAppContext) {
+    let db = seeded("dgm-unsaved", &[]);
+    vault_diagram(&db, "a.mmd", "flowchart LR\n  A --> B\n");
+    vault_diagram(&db, "b.mmd", "flowchart LR\n  X --> Y\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    click(&mut ui, "dtree-a.mmd");
+    click(&mut ui, "dgm-edit");
+    ui.simulate_input("%% mine\n");
+    ui.run_until_parked();
+    click(&mut ui, "dtree-b.mmd");
+    assert!(ui.debug_bounds("unsaved-discard").is_some(), "먼저 묻는다");
+    click(&mut ui, "unsaved-keep");
+    ui.update(|_, cx| assert_eq!(spike().read(cx).diagrams.selected.as_deref(), Some("a.mmd")));
+    click(&mut ui, "dtree-b.mmd");
+    click(&mut ui, "unsaved-discard");
+    ui.update(|_, cx| {
+        let d = &spike().read(cx).diagrams;
+        assert_eq!(d.selected.as_deref(), Some("b.mmd"));
+        assert!(d.edit.is_none());
+    });
+    assert_eq!(
+        read_diagram(&db, "a.mmd"),
+        "flowchart LR\n  A --> B\n",
+        "버린 초안은 저장하지 않는다"
+    );
+}
+
+#[gpui_kit::test]
+fn saving_over_an_outside_edit_asks_to_overwrite_or_reread(cx: &mut TestAppContext) {
+    let db = seeded("dgm-conflict", &[]);
+    vault_diagram(&db, "a.mmd", "flowchart LR\n  A --> B\n");
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.diagrams");
+    click(&mut ui, "dtree-a.mmd");
+    click(&mut ui, "dgm-edit");
+    ui.simulate_input("%% mine\n");
+    ui.run_until_parked();
+    // 밖에서 먼저 고쳤다(더 새로운 시각)
+    let path = db.parent().unwrap().join("vault/diagrams/a.mmd");
+    std::fs::write(&path, "flowchart LR\n  theirs --> B\n").unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(60))
+        .unwrap();
+    ui.simulate_keystrokes("cmd-s");
+    ui.run_until_parked();
+    assert!(
+        ui.debug_bounds("conflict-overwrite").is_some(),
+        "조용히 덮지 않는다"
+    );
+    assert_eq!(read_diagram(&db, "a.mmd"), "flowchart LR\n  theirs --> B\n");
+    click(&mut ui, "conflict-reload");
+    ui.update(|_, cx| {
+        let d = &spike().read(cx).diagrams;
+        assert!(d.edit.is_none());
+        assert_eq!(d.body, "flowchart LR\n  theirs --> B\n", "다시 읽었다");
+    });
+    // 이번엔 덮어쓴다
+    click(&mut ui, "dgm-edit");
+    ui.simulate_input("%% mine\n");
+    ui.run_until_parked();
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(120))
+        .unwrap();
+    ui.simulate_keystrokes("cmd-s");
+    ui.run_until_parked();
+    click(&mut ui, "conflict-overwrite");
+    assert!(read_diagram(&db, "a.mmd").starts_with("%% mine\n"));
+}

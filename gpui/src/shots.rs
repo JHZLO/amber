@@ -714,6 +714,20 @@ fn diagrams(s: &mut Shots) {
     s.settle();
     s.shot("dgm-zoomed");
     s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.start_diagram_edit(window, cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("dgm-edit");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.cancel_diagram_edit();
+            cx.notify();
+        })
+        .unwrap();
+    s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.section = crate::Section::Notes;
             cx.notify();

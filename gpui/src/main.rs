@@ -551,10 +551,10 @@ impl Render for Spike {
         };
 
         // AI 작성 모달(실행 상태는 스토어, 이건 보기만)
-        let dgm_full = if self.section == Section::Diagrams {
-            self.diagram_fullscreen(&k, cx)
+        let (dgm_full, dgm_prompt) = if self.section == Section::Diagrams {
+            (self.diagram_fullscreen(&k, cx), self.diagram_prompt(&k, cx))
         } else {
-            None
+            (None, None)
         };
         let (ai_modal, span_modal) = if self.section == Section::Notes {
             (self.ai_modal_view(&k, cx), self.span_modal_view(&k, cx))
@@ -691,6 +691,16 @@ impl Render for Spike {
                     this.start_page_find(window, cx);
                     cx.notify();
                 }
+                // ⌘S — 다이어그램을 고치는 중일 때 저장
+                if this.section == Section::Diagrams
+                    && this.diagrams.edit.is_some()
+                    && m.platform
+                    && !m.alt
+                    && e.keystroke.key == "s"
+                {
+                    this.save_diagram(false, cx);
+                    cx.notify();
+                }
                 // ⌘S — 노트를 고치는 중일 때 저장
                 if this.section == Section::Notes
                     && this.notes.edit.is_some()
@@ -769,6 +779,7 @@ impl Render for Spike {
             .children(self.comment_fab(&k, cx))
             .children(ai_modal)
             .children(dgm_full)
+            .children(dgm_prompt)
             .children(span_modal)
             .children(match self.section {
                 Section::Diagrams => {

@@ -1,8 +1,12 @@
 // 다이어그램 탭 — 지금 앱 DiagramsView.tsx. 왼쪽 트리(노트 탭과 같은 vault_pane), 오른쪽은 고른 .mmd 의 렌더.
 // 정본은 vault/diagrams/(또는 고른 작업 폴더)의 실제 파일이다. 창으로 돌아올 때마다 트리를 다시 읽는다(감시는 없다).
 
+use std::time::Duration;
+
 use amber_gpui::i18n::{t, t_with};
 use amber_gpui::vault;
+use gpui_kit::component::input::{InputEvent, Textarea, TextareaState};
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
 use crate::Spike;
@@ -18,6 +22,12 @@ pub enum DiagramPrompt {
     Conflict { disk: i64 },
 }
 
+pub struct DiagramEdit {
+    pub state: Entity<TextareaState>,
+    pub dirty: bool,
+    debounce: Option<Task<()>>,
+}
+
 #[derive(Default)]
 pub struct DiagramsState {
     /// 트리 — Deref 로 self.diagrams.selected 처럼 쓴다
@@ -26,6 +36,8 @@ pub struct DiagramsState {
     pub mtime: Option<i64>,
     pub read_error: Option<String>,
     pub prompt: Option<DiagramPrompt>,
+    /// 편집 중이면 원문 칸 — 미리보기는 캔버스가 350ms 늦춰 그린다
+    pub edit: Option<DiagramEdit>,
     /// 캔버스(확대, 이동, 마지막 정상 렌더) — diagram_canvas.rs
     pub canvas: crate::diagram_canvas::Canvas,
 }
@@ -49,11 +61,19 @@ fn diagram_name(rel: &str) -> String {
 }
 
 impl Spike {
-    /// 고치던 초안이 있는가 — 편집(D3c)이 붙기 전에는 늘 없다
+    /// 고치던 초안이 있는가(저장 안 한 변경)
     pub(crate) fn diagram_dirty(&self, _cx: &App) -> bool {
-        false
+        self.diagrams.edit.as_ref().is_some_and(|e| e.dirty)
     }
 
+    pub(crate) fn diagram_draft(&self, cx: &App) -> Option<String> {
+        self.diagrams
+            .edit
+            .as_ref()
+            .map(|e| e.state.read(cx).value().to_string())
+    }
+
+    /// 트리에서 다른 파일을 누름 — 저장 안 한 변경이 있으면 먼저 묻는다
     pub(crate) fn request_open_diagram(&mut self, rel: &str, cx: &mut Context<Self>) {
         if self.diagram_dirty(cx) {
             self.diagrams.prompt = Some(DiagramPrompt::Unsaved {
@@ -61,7 +81,44 @@ impl Spike {
             });
             return;
         }
+        self.diagrams.edit = None;
         self.open_diagram(rel, cx);
+    }
+
+    /// 편집을 접는다 — 미리보기로 바뀐 캔버스를 본문으로 되돌린다
+    pub(crate) fn cancel_diagram_edit(&mut self) {
+        let d = &mut self.diagrams;
+        d.edit = None;
+        let body = d.body.clone();
+        d.canvas.set_chart(&body);
+        d.canvas.fit_pending = true;
+    }
+
+    /// ⌘S. force = 디스크가 더 새로운 걸 알고도 덮는다(충돌 창의 '그래도 덮어쓰기')
+    pub(crate) fn save_diagram(&mut self, force: bool, cx: &mut Context<Self>) {
+        let (Some(rel), Some(draft)) = (self.diagrams.selected.clone(), self.diagram_draft(cx))
+        else {
+            return;
+        };
+        if self.diagrams.read_error.is_some() {
+            return;
+        }
+        let tree = tree_of(&self.db, Which::Diagrams);
+        // 열 때 잡아 둔 시각보다 디스크가 새로우면 밖(Finder, vim, git)이 먼저 고친 것 — 조용히 덮지 않는다
+        if !force
+            && let (Some(cur), Some(opened)) = (tree.mtime(&rel), self.diagrams.mtime)
+            && cur > opened
+        {
+            self.diagrams.prompt = Some(DiagramPrompt::Conflict { disk: cur });
+            return;
+        }
+        if let Err(e) = tree.write_file(&rel, &draft) {
+            self.diagrams.read_error = Some(e);
+            return;
+        }
+        self.diagrams.edit = None;
+        self.open_diagram(&rel, cx);
+        self.diagrams.canvas.fit_pending = true;
     }
 
     pub(crate) fn open_diagram(&mut self, rel: &str, _cx: &mut Context<Self>) {
@@ -96,11 +153,51 @@ impl Spike {
         }
     }
 
-    /// 편집 시작 — D3c 에서 원문 | 미리보기를 붙인다
-    pub(crate) fn start_diagram_edit(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {}
+    /// 편집 시작 — 원문 | 캔버스. 타이핑은 350ms 늦춰 캔버스에 그린다(mermaid 다시 그리기가 비싸다)
+    pub(crate) fn start_diagram_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.diagrams.selected.is_none() || self.diagrams.read_error.is_some() {
+            return;
+        }
+        let body = self.diagrams.body.clone();
+        let state = cx.new(|cx| {
+            let mut s = TextareaState::new(window, cx);
+            s.set_value(body, window, cx);
+            s
+        });
+        cx.subscribe_in(&state, window, |this, input, ev: &InputEvent, _, cx| {
+            if let InputEvent::Change = ev {
+                let draft = input.read(cx).value().to_string();
+                let dirty = draft != this.diagrams.body;
+                let task = cx.spawn(async move |this, cx| {
+                    cx.background_executor()
+                        .timer(Duration::from_millis(350))
+                        .await;
+                    let _ = this.update(cx, |s, cx| {
+                        s.diagrams.canvas.set_chart(&draft);
+                        cx.notify();
+                    });
+                });
+                if let Some(e) = this.diagrams.edit.as_mut() {
+                    e.dirty = dirty;
+                    e.debounce = Some(task);
+                }
+                cx.notify();
+            }
+        })
+        .detach();
+        state.update(cx, |s, cx| s.focus(window, cx));
+        // 지금 앱은 읽기/편집 캔버스가 따로라 바꿀 때마다 새로 맞춘다 — 판 폭이 반으로 바뀐다
+        self.diagrams.canvas.fit_pending = true;
+        self.diagrams.edit = Some(DiagramEdit {
+            state,
+            dirty: false,
+            debounce: None,
+        });
+    }
 
     pub(crate) fn close_diagram(&mut self) {
         let d = &mut self.diagrams;
+        d.edit = None;
         d.selected = None;
         d.body.clear();
         d.canvas = Default::default();
@@ -226,11 +323,34 @@ impl Spike {
                     .child(icon("sparkles", 14.).text_color(k.text_3))
                     .child("DDL \u{2192} ERD"),
             )
-            .child(
-                button("dgm-edit", k, false, true)
-                    .child(icon("pencil", 14.).text_color(k.text_3))
-                    .child(t("diagrams.edit")),
-            )
+            .children(if d.edit.is_some() {
+                vec![
+                    primary_button("dgm-save", k, false)
+                        .child(format!("{} (\u{2318}S)", t("common.save")))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.save_diagram(false, cx);
+                            cx.notify();
+                        })),
+                    button("dgm-cancel", k, false, false)
+                        .child(t("common.cancel"))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.cancel_diagram_edit();
+                            cx.notify();
+                        })),
+                ]
+            } else {
+                vec![
+                    button("dgm-edit", k, false, !ok)
+                        .child(icon("pencil", 14.).text_color(if ok { k.text_2 } else { k.text_3 }))
+                        .child(t("diagrams.edit"))
+                        .when(ok, |d| {
+                            d.on_click(cx.listener(|this, _, window, cx| {
+                                this.start_diagram_edit(window, cx);
+                                cx.notify();
+                            }))
+                        }),
+                ]
+            })
             .child({
                 let (rel, name) = (rel.to_string(), name.clone());
                 danger_button("dgm-delete", k)
@@ -251,11 +371,53 @@ impl Spike {
                 .my(px(10.))
                 .child(msg)
         };
-        // 읽기 화면의 캔버스는 프레임 없이 모서리까지. 전체 화면이면 뿌리 판이 그린다
-        let canvas = match &d.read_error {
-            Some(e) => error_note(t_with("diagrams.readError", &[("msg", e)])).into_any_element(),
-            None if d.canvas.fullscreen => div().flex_1().into_any_element(),
-            None => self.diagram_canvas(k, cx).into_any_element(),
+        // 읽기 화면의 캔버스는 프레임 없이 모서리까지, 편집이면 원문 | 테두리 있는 캔버스(.note-edit-split).
+        // 전체 화면이면 뿌리 판이 그린다
+        let canvas = match (&d.read_error, &d.edit) {
+            (Some(e), _) => {
+                error_note(t_with("diagrams.readError", &[("msg", e)])).into_any_element()
+            }
+            (None, Some(edit)) => div()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .gap(px(10.))
+                .px(px(14.))
+                .py(px(10.))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .rounded(px(6.))
+                        .border_1()
+                        .border_color(k.border_strong)
+                        .bg(k.surface)
+                        .py(px(9.))
+                        .px(px(11.))
+                        .font_family(crate::markdown::MONO)
+                        .text_size(px(13.))
+                        .line_height(relative(1.6))
+                        .child(Textarea::new(&edit.state).appearance(false).h(relative(1.))),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .flex()
+                        .flex_col()
+                        .rounded(px(6.))
+                        .border_1()
+                        .border_color(k.border)
+                        .overflow_hidden()
+                        .when(!d.canvas.fullscreen, |x| {
+                            x.child(self.diagram_canvas(k, cx))
+                        }),
+                )
+                .into_any_element(),
+            (None, None) if d.canvas.fullscreen => div().flex_1().into_any_element(),
+            (None, None) => self.diagram_canvas(k, cx).into_any_element(),
         };
         let mut meta = format!("{}/{rel}", self.root_name(Which::Diagrams));
         if let Some(ms) = d.mtime.filter(|_| ok) {
@@ -286,6 +448,103 @@ impl Spike {
                     .text_color(k.text_3)
                     .child(meta),
             )
+    }
+
+    /// 저장 안 한 변경(다른 파일, 작업 폴더) / 밖에서 먼저 고침(덮기, 다시 읽기)
+    pub(crate) fn diagram_prompt(&self, k: &Tokens, cx: &mut Context<Self>) -> Option<Div> {
+        let prompt = self.diagrams.prompt.as_ref()?;
+        let close = || {
+            cx.listener(|this, _, _, cx| {
+                this.diagrams.prompt = None;
+                cx.notify();
+            })
+        };
+        let keep = || {
+            button("unsaved-keep", k, false, false)
+                .child(t("common.unsaved.keep"))
+                .on_click(close())
+        };
+        let unsaved = |discard: Stateful<Div>| {
+            crate::dialog::shell(
+                k,
+                440.,
+                t("common.unsaved.title"),
+                div().child(t("common.unsaved.body")).into_any_element(),
+                vec![keep(), discard],
+                close(),
+            )
+        };
+        Some(match prompt {
+            DiagramPrompt::Unsaved { target } => {
+                let target = target.clone();
+                unsaved(
+                    danger_button("unsaved-discard", k)
+                        .child(t("common.unsaved.discard"))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.diagrams.prompt = None;
+                            this.diagrams.edit = None;
+                            this.open_diagram(&target, cx);
+                            cx.notify();
+                        })),
+                )
+            }
+            DiagramPrompt::UnsavedRoot { root } => {
+                let root = root.clone();
+                unsaved(
+                    danger_button("unsaved-discard", k)
+                        .child(t("common.unsaved.discard"))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.diagrams.prompt = None;
+                            this.apply_root(Which::Diagrams, root.clone());
+                            cx.notify();
+                        })),
+                )
+            }
+            DiagramPrompt::Conflict { disk } => {
+                let now = chrono::Local::now().timestamp_millis();
+                // 지금 앱과 같은 구분자(U+00B7)
+                let body = format!(
+                    "{} \u{b7} {}.",
+                    t("diagrams.conflict.body1"),
+                    t_with(
+                        "diagrams.conflict.diskMtime",
+                        &[("ago", &crate::notes_view::time_ago(*disk, now))]
+                    )
+                );
+                crate::dialog::shell(
+                    k,
+                    440.,
+                    t("diagrams.conflict.title"),
+                    div()
+                        .flex()
+                        .flex_col()
+                        .child(body)
+                        .child(t("diagrams.conflict.body2"))
+                        .into_any_element(),
+                    vec![
+                        keep(),
+                        danger_button("conflict-reload", k)
+                            .child(t("diagrams.conflict.reread"))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.diagrams.prompt = None;
+                                this.diagrams.edit = None;
+                                if let Some(rel) = this.diagrams.selected.clone() {
+                                    this.open_diagram(&rel, cx);
+                                }
+                                cx.notify();
+                            })),
+                        danger_button("conflict-overwrite", k)
+                            .child(t("diagrams.conflict.overwrite"))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.diagrams.prompt = None;
+                                this.save_diagram(true, cx);
+                                cx.notify();
+                            })),
+                    ],
+                    close(),
+                )
+            }
+        })
     }
 
     /// 고른 파일이 없을 때(.notes-empty) — 만들기 단추와 두 가지 팁
