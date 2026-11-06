@@ -15,6 +15,7 @@ import * as config from "../src/lib/config";
 import * as date from "../src/lib/date";
 import * as db from "../src/lib/db";
 import * as dbconn from "../src/lib/dbconn";
+import * as diagramGraph from "../src/lib/diagramGraph";
 import * as diagrams from "../src/lib/diagrams";
 import * as erdStore from "../src/lib/erdStore";
 import * as holidays from "../src/lib/holidays";
@@ -63,6 +64,7 @@ export const MODULES = [
   "aiActivity",
   "aiWait",
   "noteAiRun",
+  "diagramGraph",
 ] as const;
 
 export const OPS: Record<string, Op> = {
@@ -202,6 +204,15 @@ export const OPS: Record<string, Op> = {
   "aiActivity.shortTarget": aiActivity.shortTarget,
   "aiActivity.describeActivity": aiActivity.describeActivity,
   "aiWait.waitLine": aiWait.waitLine,
+
+  // 다이어그램 포커스 모드와 ER 컬럼 판 — 렌더된 SVG 의 data-id, 컬럼 라벨을 읽는 규칙
+  "diagramGraph.splitOptionalType": diagramGraph.splitOptionalType,
+  "diagramGraph.nullFlagOf": diagramGraph.nullFlagOf,
+  "diagramGraph.nullabilityFlag": diagramGraph.nullabilityFlag,
+  "diagramGraph.parseEdgeEndpoints": diagramGraph.parseEdgeEndpoints,
+  "diagramGraph.neighborsOf": (id: string, edges: { source: string; target: string }[]) => [
+    ...diagramGraph.neighborsOf(id, edges),
+  ],
 
   // 트리에서 찾기(⌘F) — 접힌 폴더 안까지 거르고 조상을 펼친다
   "treeFind.hits": treeFind.hits,

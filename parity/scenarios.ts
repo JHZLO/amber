@@ -1088,6 +1088,36 @@ const noteAiPure: Scenario = {
   },
 };
 
+const diagramGraphPure: Scenario = {
+  name: "diagramGraph/pure",
+  plan() {
+    const steps: Step[] = [];
+    for (const t of ["string", "string?", "?", "", "varchar(20)?", "a??"])
+      steps.push(s("diagramGraph.splitOptionalType", t));
+    for (const c of ["", "[NULL] 메모", "설명 [ not  null ]", "[NOTNULL]", "[nullable]", "x [NULL] y [NOTNULL]"])
+      steps.push(s("diagramGraph.nullFlagOf", c));
+    for (const [t, c, o] of [
+      ["string?", "", false], ["string", "", true], ["string", "[NULL]", false], ["string", "", false],
+      ["int?", "[NOTNULL]", true],
+    ] as const)
+      steps.push(s("diagramGraph.nullabilityFlag", t, c, o));
+    const ids = ["entity-a-0", "entity-a_b-1", "entity-b-2", "entity-booking_air_tickets-3"];
+    for (const d of [
+      "", "id_entity-a-0_entity-b-2_0", "id_entity-a_b-1_entity-a-0_4", "id_entity-booking_air_tickets-3_entity-a_b-1_1",
+      "id_entity-a-0_entity-a-0_2", "entity-b-2-cyclic-special-1", "entity-b-2-cyclic-special-mid",
+      "nope-cyclic-special-2", "L_A_B_0", "id_unknown_entity-a-0_0", "id_entity-a-0_",
+    ])
+      steps.push(s("diagramGraph.parseEdgeEndpoints", d, ids));
+    const edges = [
+      { source: "a", target: "b" }, { source: "c", target: "a" }, { source: "a", target: "a" },
+      { source: "b", target: "c" }, { source: "a", target: "b" },
+    ];
+    for (const n of ["a", "b", "c", "z"]) steps.push(s("diagramGraph.neighborsOf", n, edges));
+    steps.push(s("diagramGraph.neighborsOf", "a", []));
+    return steps;
+  },
+};
+
 const treeFindSweep: Scenario = {
   name: "treeFind/sweep",
   plan() {
@@ -1231,6 +1261,7 @@ export const SCENARIOS: Scenario[] = [
   vaultTreePure,
   treeFindSweep,
   noteAiPure,
+  diagramGraphPure,
   commentFiles,
   aiConfig,
   aiConfigGemini,
