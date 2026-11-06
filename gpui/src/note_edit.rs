@@ -3,11 +3,12 @@
 // 저장하려는 순간 디스크가 연 때보다 새로우면(Obsidian, vim, git 이 먼저 고침) 조용히 덮지 않고 묻는다.
 // 저장 안 한 변경이 있는데 다른 노트를 열면 '계속 편집 / 버리고 옮기기'를 묻는다.
 
+use std::ops::Range;
 use std::time::Duration;
 
 use amber_gpui::i18n::{t, t_with};
 use amber_gpui::vault;
-use gpui_kit::component::input::{InputEvent, Textarea, TextareaState};
+use gpui_kit::component::input::{InputEditsEvent, InputEvent, Textarea, TextareaState};
 use gpui_kit::*;
 
 use crate::day_card::{Tag, button, danger_button};
@@ -24,6 +25,49 @@ pub struct NoteEdit {
     pub has_sel: bool,
     /// 미리보기를 늦춰 그리는 작업 — 새 글자가 오면 버리고 다시 건다
     debounce: Option<Task<()>>,
+}
+
+// 토글 단축키 — 지금 앱 mdDetails.ts 의 toggleShortcut / toggleTitleEnter. 자리는 바이트(입력칸과 같다).
+const SUMMARY_OPEN: &str = "<details>\n<summary>";
+const SUMMARY_CLOSE: &str = "</summary>\n\n\n\n</details>";
+
+fn line_start(v: &str, caret: usize) -> usize {
+    v[..caret].rfind('\n').map_or(0, |i| i + 1)
+}
+
+/// 줄 맨 앞의 `>>` 뒤 스페이스 → 토글 뼈대. 그 줄에 이미 쓴 글은 제목이 된다.
+/// (바꿀 구간, 넣을 글, 커서 = 제목 자리). 아니면 None(평소 스페이스)
+pub(crate) fn toggle_shortcut(v: &str, caret: usize) -> Option<(Range<usize>, String, usize)> {
+    let start = line_start(v, caret);
+    if &v[start..caret] != ">>" {
+        return None;
+    }
+    let end = v[caret..].find('\n').map_or(v.len(), |i| caret + i);
+    let text = format!("{SUMMARY_OPEN}{}{SUMMARY_CLOSE}", &v[caret..end]);
+    Some((start..end, text, start + SUMMARY_OPEN.len()))
+}
+
+/// 토글 제목 줄에서 Enter — 제목에 줄바꿈을 넣는 대신 본문 자리로 커서를 옮긴다.
+/// 뼈대 모양(제목 줄 뒤에 빈 줄 둘)일 때만 그 둘째 빈 줄 머리. 아니면 None(평소 Enter)
+pub(crate) fn toggle_title_enter(v: &str, caret: usize) -> Option<usize> {
+    let start = line_start(v, caret);
+    let line_end = caret + v[caret..].find('\n')?;
+    // /^<summary>.*<\/summary>$/ — JS 의 `.` 은 줄 끝 문자를 넘지 않는다
+    let mid = v[start..line_end]
+        .strip_prefix("<summary>")?
+        .strip_suffix("</summary>")?;
+    if mid.contains(['\r', '\u{2028}', '\u{2029}']) {
+        return None;
+    }
+    v[line_end..].starts_with("\n\n\n").then_some(line_end + 2)
+}
+
+actions!(note_edit, [SrcEnter]);
+
+/// 원문 칸의 Enter 를 입력칸보다 먼저 받는다 — 같은 깊이면 나중에 묶은 바인딩이 이긴다.
+/// gpui_kit::init 뒤에 부른다. 토글 제목 줄이 아니면 입력칸의 Enter 로 넘긴다
+pub fn bind_keys(cx: &mut App) {
+    cx.bind_keys([KeyBinding::new("enter", SrcEnter, Some("NoteSrc > Input"))]);
 }
 
 pub enum NotePrompt {
@@ -63,6 +107,40 @@ impl Spike {
             }
         })
         .detach();
+        // `>>` 뒤 스페이스 — 키를 가로채지 않고 들어온 글자를 본다. 한글 입력기가 켜져 있으면
+        // macOS 가 스페이스를 키 이벤트보다 입력기로 먼저 보내서, 키 리스너는 그걸 못 본다
+        cx.subscribe_in(
+            &state,
+            window,
+            |_, input, ev: &InputEditsEvent, window, cx| {
+                let [(e, _)] = ev.edits() else {
+                    return;
+                };
+                if e.old_end_byte != e.start_byte || e.new_end_byte != e.start_byte + 1 {
+                    return;
+                }
+                let (value, sel) = {
+                    let s = input.read(cx);
+                    (s.value(), s.selected_range())
+                };
+                if sel != (e.new_end_byte..e.new_end_byte)
+                    || value.as_bytes().get(e.start_byte) != Some(&b' ')
+                {
+                    return;
+                }
+                let mut before = value.to_string();
+                before.remove(e.start_byte);
+                let Some((r, text, caret)) = toggle_shortcut(&before, e.start_byte) else {
+                    return;
+                };
+                input.update(cx, |s, cx| {
+                    s.set_selected_range(r.start..r.end + 1, cx);
+                    s.replace(text, window, cx);
+                    s.set_selected_range(caret..caret, cx);
+                });
+            },
+        )
+        .detach();
         // 고른 구간이 생기거나 사라질 때만 판을 다시 그린다(커서가 움직일 때마다가 아니라)
         cx.observe(&state, |this, state, cx| {
             let has = !state.read(cx).selected_range().is_empty();
@@ -84,6 +162,25 @@ impl Spike {
             has_sel: false,
             debounce: None,
         });
+    }
+
+    /// 원문 칸의 Enter — 토글 제목 줄이면 본문 자리로, 아니면 입력칸에 넘긴다(줄바꿈)
+    fn src_enter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(state) = self.notes.edit.as_ref().map(|e| e.state.clone()) else {
+            cx.propagate();
+            return;
+        };
+        let at = state.update(cx, |s, cx| {
+            let sel = s.selected_range();
+            if !sel.is_empty() || s.marked_text_range(window, cx).is_some() {
+                return None;
+            }
+            toggle_title_enter(&s.value(), sel.start)
+        });
+        match at {
+            Some(at) => state.update(cx, |s, cx| s.set_selected_range(at..at, cx)),
+            None => cx.propagate(),
+        }
     }
 
     fn refresh_preview(&mut self, cx: &mut Context<Self>) {
@@ -149,6 +246,10 @@ impl Spike {
             .child(
                 // .textarea.note-textarea — 고정폭 13px, 줄 높이 1.6, 강한 테
                 div()
+                    .key_context("NoteSrc")
+                    .on_action(
+                        cx.listener(|this, _: &SrcEnter, window, cx| this.src_enter(window, cx)),
+                    )
                     .flex_1()
                     .min_w_0()
                     .h_full()
@@ -353,5 +454,70 @@ impl Spike {
                 )
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{toggle_shortcut, toggle_title_enter};
+
+    /// 편집 한 번을 적용한 결과 — 글과 커서 자리
+    fn apply(v: &str, caret: usize) -> Option<(String, usize)> {
+        let (r, text, at) = toggle_shortcut(v, caret)?;
+        Some((format!("{}{text}{}", &v[..r.start], &v[r.end..]), at))
+    }
+
+    #[test]
+    fn shortcut_at_line_start_builds_the_skeleton_with_the_caret_in_the_title() {
+        let v = "앞 문단\n>>";
+        let (next, at) = apply(v, v.len()).unwrap();
+        assert_eq!(
+            next,
+            "앞 문단\n<details>\n<summary></summary>\n\n\n\n</details>"
+        );
+        assert!(next[at..].starts_with("</summary>"));
+    }
+
+    #[test]
+    fn text_already_on_the_line_becomes_the_title_and_the_next_line_stays() {
+        let (next, _) = apply(">>계좌 간 송금\n다음 줄", 2).unwrap();
+        assert_eq!(
+            next,
+            "<details>\n<summary>계좌 간 송금</summary>\n\n\n\n</details>\n다음 줄"
+        );
+    }
+
+    #[test]
+    fn shortcut_then_title_then_enter_then_body_reads_as_a_toggle() {
+        let (next, at) = apply(">>", 2).unwrap();
+        let titled = format!("{}제목{}", &next[..at], &next[at..]);
+        let enter = toggle_title_enter(&titled, at + "제목".len()).unwrap();
+        let body = format!("{}본문{}", &titled[..enter], &titled[enter..]);
+        assert_eq!(
+            body,
+            "<details>\n<summary>제목</summary>\n\n본문\n\n</details>"
+        );
+    }
+
+    #[test]
+    fn a_single_gt_a_mid_line_pair_or_a_prefixed_pair_is_left_alone() {
+        assert!(toggle_shortcut(">", 1).is_none());
+        assert!(toggle_shortcut("a >>", 4).is_none());
+        assert!(toggle_shortcut("x>>", 3).is_none());
+        assert!(toggle_shortcut(">>>", 3).is_none());
+    }
+
+    #[test]
+    fn title_enter_jumps_one_blank_line_into_the_body() {
+        let v = "<details>\n<summary>제목</summary>\n\n\n\n</details>";
+        let at = toggle_title_enter(v, v.find("</summary>").unwrap()).unwrap();
+        assert_eq!(&v[..at], "<details>\n<summary>제목</summary>\n\n");
+    }
+
+    #[test]
+    fn title_enter_leaves_other_lines_and_filled_toggles_alone() {
+        assert!(toggle_title_enter("그냥 글\n\n\n", "그냥".len()).is_none());
+        let filled = "<details>\n<summary>제목</summary>\n\n본문\n\n</details>";
+        assert!(toggle_title_enter(filled, filled.find("</summary>").unwrap()).is_none());
     }
 }

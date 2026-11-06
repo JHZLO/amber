@@ -57,6 +57,7 @@ fn open_with(cx: &mut TestAppContext, db: &PathBuf, clock: Clock) -> VisualTestC
     let db = db.to_str().unwrap().to_string();
     let window = cx.update(|cx| {
         gpui_kit::init(cx);
+        crate::note_edit::bind_keys(cx);
         amber_gpui::i18n::init(Some("en"));
         theme::apply(Some("dark"), WindowAppearance::Dark, cx);
         let bounds = Bounds {
@@ -754,6 +755,27 @@ fn editing_and_saving_writes_the_file(cx: &mut TestAppContext) {
     ui.simulate_keystrokes("cmd-s");
     ui.run_until_parked();
     assert_eq!(read_note(&db, "A.md"), "# A\n\nby shortcut\n");
+}
+
+#[gpui_kit::test]
+fn typing_gt_gt_space_then_title_enter_writes_a_toggle(cx: &mut TestAppContext) {
+    let db = seeded("notes-toggle-key", &[]);
+    vault_note(&db, "A.md", "# A\n");
+    let mut ui = open(cx, &db);
+    edit_note(&mut ui, "tree-A.md", "intro\n>>");
+    ui.simulate_keystrokes("space");
+    ui.simulate_input("제목");
+    ui.simulate_keystrokes("enter");
+    ui.simulate_input("본문");
+    // 제목 줄이 아니면 평소 Enter(줄바꿈)
+    ui.simulate_keystrokes("enter");
+    ui.simulate_input("x y");
+    ui.simulate_keystrokes("cmd-s");
+    ui.run_until_parked();
+    assert_eq!(
+        read_note(&db, "A.md"),
+        "intro\n<details>\n<summary>제목</summary>\n\n본문\nx y\n\n</details>"
+    );
 }
 
 #[gpui_kit::test]

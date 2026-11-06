@@ -265,6 +265,7 @@ pub fn run(dir: &str) {
     let window = cx
         .open_offscreen_window(size(px(1440.), px(920.)), move |window, cx| {
             gpui_kit::init(cx);
+            crate::note_edit::bind_keys(cx);
             amber_gpui::i18n::init(Some("en"));
             theme::apply(Some("dark"), WindowAppearance::Dark, cx);
             let db = Db::open(&db, Clock::System).unwrap();

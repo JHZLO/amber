@@ -1425,6 +1425,7 @@ fn main() {
         .with_assets(assets::Assets)
         .run(move |cx| {
             gpui_kit::init(cx);
+            note_edit::bind_keys(cx);
             let bounds = Bounds::centered(None, size(px(1440.), px(920.)), cx);
             let options = WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
