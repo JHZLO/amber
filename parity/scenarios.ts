@@ -2,6 +2,8 @@
 // 무작위 걸음은 사람이 생각 못 한 순서를 덮는다. 무작위라도 시드가 고정이라 다시 녹화해도 같다.
 // 걸음은 화면이 실제로 부르는 순서를 흉내 낸다(체크 뒤 조상 재계산, 순환을 만드는 부모 이동은 하지 않음).
 
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { parityUlid } from "./sqlite";
 import type { Scenario, Step, StepCtx } from "./runner";
 
@@ -1118,6 +1120,86 @@ const diagramGraphPure: Scenario = {
   },
 };
 
+// ERD 생성 — 스냅샷(information_schema 꼴)을 손으로 지어 추론 규칙마다 한 번은 지나게 한다(erdGen.test.ts 의 갈래)
+const erdGenPure: Scenario = {
+  name: "erdGen/pure",
+  plan() {
+    type Col = { name: string; data_type: string; column_type: string; nullable: boolean; key: string; default_value: string | null; extra: string; comment: string };
+    const col = (name: string, data_type: string, o: Partial<Col> = {}): Col => ({
+      name, data_type, column_type: o.column_type ?? data_type, nullable: o.nullable ?? false, key: o.key ?? "",
+      default_value: o.default_value ?? null, extra: o.extra ?? "", comment: o.comment ?? "",
+    });
+    const pk = (name = "id", type = "bigint") => col(name, type, { key: "PRI", extra: "auto_increment" });
+    const ix = (name: string, columns: string[], unique = false) => ({ name, unique, columns });
+    const fk = (name: string, columns: string[], ref_table: string, ref_columns: string[] = ["id"], ref_schema = "svc_booking") =>
+      ({ name, columns, ref_schema, ref_table, ref_columns });
+    const tbl = (name: string, columns: Col[], o: { comment?: string; indexes?: ReturnType<typeof ix>[]; fks?: ReturnType<typeof fk>[]; checks?: { name: string; clause: string }[] } = {}) =>
+      ({ name, comment: o.comment ?? "", rows_estimate: null, columns, indexes: o.indexes ?? [], foreign_keys: o.fks ?? [], checks: o.checks ?? [] });
+    const snap = (tables: ReturnType<typeof tbl>[], schema = "svc_booking") =>
+      ({ amber: 1, connection: "01JCONN", schema, server: "MySQL 8.0.36", synced_at: 0, fingerprint: "test", tables });
+
+    const fixture = [
+      tbl("ts_booking", [pk(), col("user_id", "bigint", { key: "MUL", comment: "회원 ID" }), col("booking_no", "varchar", { column_type: "varchar(32)", key: "UNI", comment: "예약번호" }),
+        col("status", "varchar", { column_type: "enum('PENDING','CONFIRMED','CANCELED')", key: "MUL" }), col("cancel_reason", "varchar", { column_type: "varchar(255)", nullable: true, comment: "취소 사유" }),
+        col("created_at", "datetime"), col("updated_at", "datetime")], { comment: "예약", indexes: [ix("idx_user_id", ["user_id"]), ix("idx_status", ["status"])] }),
+      tbl("ts_booking_passenger", [pk(), col("booking_id", "bigint", { key: "MUL", comment: "예약 ID" }), col("name", "varchar", { column_type: "varchar(255)", nullable: true, comment: "이름 (암호화)" }),
+        col("passport_no", "varchar", { column_type: "varchar(255)", nullable: true, comment: "여권번호" }), col("phone", "varchar", { column_type: "varchar(64)", nullable: true }), col("created_at", "datetime")],
+        { comment: "예약 승객", indexes: [ix("ix_booking_id", ["booking_id"])] }),
+      tbl("ts_booking_payment", [pk(), col("booking_id", "bigint", { key: "UNI" }), col("method", "varchar", { column_type: "varchar(20)" }), col("amount", "decimal", { column_type: "decimal(12,2)" }),
+        col("created_at", "datetime"), col("updated_at", "datetime", { nullable: true })],
+        { comment: "결제", indexes: [ix("uq_booking_id", ["booking_id"], true)], checks: [{ name: "chk_payment_method", clause: "(`method` in (_utf8mb4'CARD',_utf8mb4'BANK_TRANSFER'))" }] }),
+      tbl("ts_booking_refund", [pk(), col("payment_id", "bigint", { key: "MUL", comment: "결제 ID" }), col("created_at", "datetime")],
+        { comment: "환불", indexes: [ix("ix_payment_id", ["payment_id"])], fks: [fk("fk_refund_payment", ["payment_id"], "ts_booking_payment")] }),
+      tbl("ts_booking_memo", [pk(), col("booking_id", "bigint"), col("body", "text", { nullable: true, comment: 'a "quoted" memo\r\n  second   line' }), col("created_at", "datetime")]),
+      tbl("ts_booking_coupon_use", [pk(), col("booking_id", "bigint", { key: "MUL" }), col("coupon_code", "varchar", { column_type: "varchar(64)" }), col("created_at", "datetime")],
+        { comment: "쿠폰 사용", indexes: [ix("uk_booking_coupon", ["booking_id", "coupon_code"], true)] }),
+      tbl("revinfo", [pk("rev", "int"), col("revtstmp", "bigint")]),
+      tbl("ts_booking_aud", [col("id", "bigint", { key: "PRI" }), col("rev", "int", { key: "PRI" }), col("revtype", "tinyint", { nullable: true }),
+        col("status", "varchar", { column_type: "varchar(20)", nullable: true }), col("created_at", "datetime", { nullable: true })]),
+    ];
+    // 실제 accounts 스키마의 구멍들 — 코멘트 참조, 대다수 접두사, `_x` 꼬리, 타입이 다르면 같은 이름 UNIQUE, 여러 FK, 깨진 인코딩
+    const accounts = [
+      tbl("ts_customers", [pk(), col("email", "varchar", { column_type: "varchar(255)", comment: "이메일 (enc)" })]),
+      tbl("ts_devices", [pk(), col("model", "varchar", { column_type: "varchar(32)" })]),
+      tbl("editing_logs", [pk(), col("user_id", "bigint", { comment: "ts_customers.id - 유저 ID" }), col("device_id", "bigint"), col("note", "varchar", { column_type: "varchar(10)", comment: "ì—¬í–‰ ë…¸íŠ¸" })]),
+      tbl("ts_user_profiles", [pk(), col("nick", "varchar", { column_type: "varchar(20)" })]),
+      tbl("ts_like_share", [pk()]),
+      tbl("ts_post_share", [pk()]),
+      tbl("ts_posts", [pk(), col("profile_id", "bigint"), col("share_id", "bigint"), col("travel_id", "varchar", { column_type: "varchar(36)" }), col("category_id", "int")]),
+      tbl("ts_travels", [pk(), col("travel_id", "varchar", { column_type: "varchar(36)", key: "UNI" })]),
+      tbl("ts_categories", [pk("id", "int"), col("name", "varchar", { column_type: "varchar(30)" })]),
+      tbl("ts_transfers", [pk(), col("from_id", "bigint"), col("to_id", "bigint"), col("customer_id", "bigint")],
+        { fks: [fk("fk_from", ["from_id"], "ts_customers"), fk("fk_to", ["to_id"], "ts_customers"), fk("fk_none", [], "ts_customers")] }),
+      tbl("ts_id_only", [col("id", "bigint", { key: "PRI", comment: "ID" }), col("parent_id", "bigint"), col("ts_id_only_id", "bigint")]),
+    ];
+    // 컬럼 세부 — 순서, 따옴표, 널 PK, enc 형제 규칙, enum 우선, 다른 스키마 FK, 없는 표, 1:1, 이상한 이름
+    const details = [
+      tbl("orders", [col("updated_at", "datetime"), col("created_at", "datetime"), pk(), col("code", "varchar", { column_type: "varchar(8)", key: "UNI" }),
+        col("state", "varchar", { column_type: "enum('A','B')" }), col("grade", "char", { column_type: "char(1)" }), col("kind", "varchar", { column_type: "varchar(4)" })],
+        { checks: [{ name: "c1", clause: "`state` in ('X')" }, { name: "c2", clause: "grade IN ('S','M', 'it''s')" }, { name: "c3", clause: "kind in ()" }] }),
+      tbl("ts_pay", [pk("id", "bigint"), col("buyer_id", "bigint"), col("card_no", "varchar", { column_type: "varchar(200)" }), col("email", "varchar", { column_type: "VARCHAR(512)" }),
+        col("address", "text"), col("secret", "varchar", { column_type: "varchar(10)", comment: "AES 암호화" }), col("encoding", "varchar", { column_type: "varchar(300)", comment: "encode only" })],
+        { fks: [fk("fk_buyer", ["buyer_id"], "users", ["id"], "svc_accounts"), fk("fk_gone", ["id"], "ts_gone")] }),
+      tbl("ts_pay_detail", [pk(), col("pay_id", "bigint", { key: "UNI" })], { fks: [fk("fk_pay", ["pay_id"], "ts_pay")] }),
+      tbl("order items", [col("id", "bigint", { key: "PRI", nullable: true, comment: "고유 식별자" }), col("weird col", "character varying", { column_type: "character varying(20)" }),
+        col("geo", "geometry", { column_type: "point" })], { comment: "줄바꿈\n있는 표" }),
+      tbl("ts_mixed", [pk(), col("x", "int"), col("y", "int")], { indexes: [ix("PRIMARY", ["id"], true), ix("ix_xy", ["x", "y"]), ix("uq_x", ["x"], true)] }),
+    ];
+    const steps: Step[] = [];
+    for (const [tables, schema] of [[fixture, "svc_booking"], [accounts, "svc_accounts"], [details, "svc_booking"]] as const) {
+      const sn = snap([...tables], schema);
+      steps.push(s("erdGen.generateErd", sn, {}), s("erdGen.generateErd", sn, { audit: false }), s("erdGen.inferReferences", sn));
+      // 순서를 섞어도 같은 원문
+      steps.push(s("erdGen.generateErd", snap([...tables].reverse(), schema), {}));
+    }
+    // revinfo 가 없으면 *_aud 는 평범한 표
+    steps.push(s("erdGen.generateErd", snap([fixture[0], fixture[7]]), {}));
+    for (const names of [[], ["a"], ["ts_booking", "ts_booking_passenger"], ["ts_a", "ts_b", "editing_logs"], ["ts_a", "x_b", "y_c"], ["abc", "abd"], ["a_x", "b_x", "a_y", "b_y"]])
+      steps.push(s("erdGen.commonTablePrefix", names));
+    return steps;
+  },
+};
+
 const treeFindSweep: Scenario = {
   name: "treeFind/sweep",
   plan() {
@@ -1262,6 +1344,7 @@ export const SCENARIOS: Scenario[] = [
   treeFindSweep,
   noteAiPure,
   diagramGraphPure,
+  erdGenPure,
   commentFiles,
   aiConfig,
   aiConfigGemini,
@@ -1322,6 +1405,27 @@ export function realSweep(file: string): Scenario {
         s("dbconn.listConnections"),
       ];
       return steps;
+    },
+  };
+}
+
+/** 실제 스키마 스냅샷(ERD 탭이 동기화해 둔 schema.json 사본)을 전부 resin 원문으로 — 감사 표를 싣고, 빼고 */
+export function realErd(dir: string): Scenario {
+  const files: string[] = [];
+  const walk = (d: string) => {
+    for (const n of readdirSync(d, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+      if (n.isDirectory()) walk(join(d, n.name));
+      else if (n.name === "schema.json") files.push(join(d, n.name));
+    }
+  };
+  walk(dir);
+  return {
+    name: "real/erd",
+    plan() {
+      return files.flatMap((f) => {
+        const snapshot = JSON.parse(readFileSync(f, "utf8"));
+        return [s("erdGen.generateErd", snapshot, {}), s("erdGen.generateErd", snapshot, { audit: false })];
+      });
     },
   };
 }

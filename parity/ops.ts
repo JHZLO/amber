@@ -17,6 +17,7 @@ import * as db from "../src/lib/db";
 import * as dbconn from "../src/lib/dbconn";
 import * as diagramGraph from "../src/lib/diagramGraph";
 import * as diagrams from "../src/lib/diagrams";
+import * as erdGen from "../src/lib/erdGen";
 import * as erdStore from "../src/lib/erdStore";
 import * as holidays from "../src/lib/holidays";
 import * as mdSections from "../src/lib/mdSections";
@@ -65,6 +66,7 @@ export const MODULES = [
   "aiWait",
   "noteAiRun",
   "diagramGraph",
+  "erdGen",
 ] as const;
 
 export const OPS: Record<string, Op> = {
@@ -206,6 +208,11 @@ export const OPS: Record<string, Op> = {
   "aiWait.waitLine": aiWait.waitLine,
 
   // 다이어그램 포커스 모드와 ER 컬럼 판 — 렌더된 SVG 의 data-id, 컬럼 라벨을 읽는 규칙
+  // ERD 탭 — 스냅샷 → resin 원문(사내 추론 + resin fromSchema)
+  "erdGen.generateErd": erdGen.generateErd,
+  "erdGen.inferReferences": erdGen.inferReferences,
+  "erdGen.commonTablePrefix": erdGen.commonTablePrefix,
+
   "diagramGraph.splitOptionalType": diagramGraph.splitOptionalType,
   "diagramGraph.nullFlagOf": diagramGraph.nullFlagOf,
   "diagramGraph.nullabilityFlag": diagramGraph.nullabilityFlag,

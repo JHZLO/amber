@@ -9,6 +9,8 @@
 // 사본은 이렇게 뜬다. WAL 그대로 두면 읽기만 해도 옆 파일이 생기고 녹화 때의 해시와 어긋난다:
 //   sqlite3 ~/Library/Application\ Support/dev.jhzlo.amber/amber.db ".backup '.claude/parity/real/amber.db'"
 //   sqlite3 .claude/parity/real/amber.db "PRAGMA journal_mode=DELETE"
+// ERD 스냅샷도 있으면(.claude/parity/real/erd) 전부 resin 원문으로 녹화해 견준다:
+//   rsync -a --include='*/' --include='schema.json' --exclude='*' ~/Library/Application\ Support/dev.jhzlo.amber/vault/erd/ .claude/parity/real/erd/
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -29,7 +31,7 @@ import {
   type Fixture,
   type MigrationGolden,
 } from "./runner";
-import { SCENARIOS, realSweep, realWalks } from "./scenarios";
+import { SCENARIOS, realErd, realSweep, realWalks } from "./scenarios";
 import { canonical, firstDiff } from "./state";
 import { REPO, pluginSql } from "./sqlite";
 
@@ -59,6 +61,8 @@ const RECORD = process.env.PARITY_RECORD === "1";
 const EXTERNAL = process.env.AMBER_PARITY_ENGINE;
 const REAL_DB_REL = ".claude/parity/real/amber.db";
 const REAL_DB = join(REPO, REAL_DB_REL);
+/** ERD 탭이 동기화한 스냅샷 사본(로컬 전용) — vault/erd 아래 schema.json 만 그대로 떠 온다 */
+const REAL_ERD = join(REPO, ".claude/parity/real/erd");
 const MIGRATIONS_FILE = join(FIXTURES, "_migrations.json");
 
 beforeAll(() => {
@@ -87,7 +91,11 @@ describe.runIf(RECORD)("녹화", () => {
   }, 300_000);
 
   it.runIf(existsSync(REAL_DB))("실데이터 사본", async () => {
-    await recordAll(REAL_FIXTURES, [realSweep(REAL_DB_REL), ...realWalks(REAL_DB_REL)]);
+    await recordAll(REAL_FIXTURES, [
+      realSweep(REAL_DB_REL),
+      ...realWalks(REAL_DB_REL),
+      ...(existsSync(REAL_ERD) ? [realErd(REAL_ERD)] : []),
+    ]);
   }, 600_000);
 });
 
