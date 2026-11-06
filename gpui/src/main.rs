@@ -38,6 +38,7 @@ mod note_page_find;
 mod note_span_ai;
 mod note_watch;
 mod notes_view;
+mod onboarding;
 mod pane;
 mod raster;
 mod report_probe;
@@ -132,6 +133,8 @@ struct Spike {
     concepts: concepts_view::ConceptsUi,
     /// 리포트 생성 실행(날짜마다, 주간은 w: 접두)과 레일 완료 점
     reports: report_run::Reports,
+    /// 첫 실행 안내(연결도 건너뛰기도 안 했을 때)
+    onboarding: Option<onboarding::Onboarding>,
     /// 빠른 검색(⌘K, ⌘P)
     search: Option<search_view::QuickSearch>,
     /// 설정 모달(열렸나, 칸, 리포트 칸 상태, gh/claude 확인)
@@ -307,6 +310,7 @@ impl Spike {
             reports: report_run::Reports::default(),
             settings: settings_view::SettingsUi::default(),
             search: None,
+            onboarding: None,
             concepts,
             notes: notes_view::NotesState {
                 ui: vault_pane::TreeUi {
@@ -362,6 +366,7 @@ impl Spike {
         this.focus.focus(window, cx);
         this.reload();
         this.reload_concepts();
+        this.maybe_onboard(cx);
         this.reload_calendar();
         this.reload_blocks();
         if this.section == Section::Notes || open.is_some() {
@@ -663,6 +668,7 @@ impl Render for Spike {
         let appearance_menu = self.appearance_menu(&k, cx);
         let lang_confirm = self.lang_confirm_modal(&k, cx);
         let prompt_del = self.prompt_delete_modal(&k, cx);
+        let onboarding = self.onboarding_modal(&k, cx);
         let db_modals = [self.db_delete_modal(&k, cx), self.db_password_modal(&k, cx)];
         let settings_unsaved = self.settings_unsaved_modal(&k, cx);
         let search_modal = self.search_modal(&k, cx);
@@ -821,6 +827,12 @@ impl Render for Spike {
                         cx.notify();
                         return;
                     }
+                }
+                // 첫 실행 안내 — Esc 는 건너뛰기(닫기와 같다)
+                if this.onboarding.is_some() && e.keystroke.key == "escape" {
+                    this.onboard_skip(cx);
+                    cx.stop_propagation();
+                    return;
                 }
                 // 빠른 검색 — Esc 는 닫기
                 if this.search.is_some() && e.keystroke.key == "escape" {
@@ -1107,6 +1119,7 @@ impl Render for Spike {
             .children(prompt_del)
             .children(db_modals.into_iter().flatten())
             .children(erd_conn_over)
+            .children(onboarding)
             .children(search_modal)
             .children(concept_sort)
             .children(concept_modals.into_iter().flatten())
@@ -1166,6 +1179,7 @@ impl Spike {
             || self.mmd_zoom.is_some()
             || self.settings.open
             || self.search.is_some()
+            || self.onboarding.is_some()
             || c.add.is_some()
             || c.augment.is_some()
             || c.pending.is_some()

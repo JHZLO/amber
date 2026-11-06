@@ -98,6 +98,7 @@ against the Rust one. See [the steps](#2).\n\n> [!NOTE]\n> Fixtures live in `par
     .unwrap();
     let db = Db::open(db_path.to_str().unwrap(), Clock::System).unwrap();
     amber_gpui::migrate::run(&db).unwrap();
+    amber_gpui::ai_config::skip_ai_onboarding(&db).unwrap();
     // AI 연결(실행은 안 한다 — 찍기는 스토어 상태를 직접 놓는다), 저장 프롬프트 하나, 최근 참고 폴더 둘
     amber_gpui::ai_config::connect_provider(&db, "claude", "/usr/bin/false", None).unwrap();
     amber_gpui::prefs::set(

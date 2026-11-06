@@ -24,6 +24,8 @@ fn seeded(name: &str, items: &[(&str, Option<usize>)]) -> PathBuf {
     let path = dir.join("amber.db");
     let db = Db::open(path.to_str().unwrap(), Clock::System).unwrap();
     amber_gpui::migrate::run(&db).unwrap();
+    // 첫 실행 안내는 끝낸 것으로 — 안내 창이 다른 시험을 가리지 않게(안내 자체는 따로 시험한다)
+    amber_gpui::ai_config::skip_ai_onboarding(&db).unwrap();
     let mut ids = Vec::new();
     for (content, parent) in items {
         let parent = parent.map(|i| ids[i]);
@@ -4586,4 +4588,36 @@ fn backup_writes_a_timestamped_copy_and_reports_it(cx: &mut TestAppContext) {
         ui.debug_bounds("set-backup-result").is_some(),
         "판 맨 위에 결과"
     );
+}
+
+#[gpui_kit::test]
+fn first_run_onboarding_connects_the_detected_cli_or_skips(cx: &mut TestAppContext) {
+    // 안내를 아직 안 끝낸 DB
+    let db = seeded("onboarding", &[]);
+    {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        d.execute("DELETE FROM settings WHERE key = 'ai_onboarded'", &[])
+            .unwrap();
+    }
+    let mut ui = open(cx, &db);
+    ui.update(|_, cx| {
+        spike().update(cx, |s, cx| {
+            s.settings.probe = std::rc::Rc::new(ai_fake());
+            s.onboarding = None;
+            s.maybe_onboard(cx);
+        })
+    });
+    ui.run_until_parked();
+    assert!(ui.debug_bounds("onb-card-claude").is_some(), "감지한 CLI");
+    // ⌘ 단축키는 안내가 떠 있으면 양보한다
+    ui.simulate_keystrokes("cmd-2");
+    ui.update(|_, cx| assert!(spike().read(cx).section != crate::Section::Til));
+    click(&mut ui, "onb-card-codex");
+    click(&mut ui, "onb-connect");
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    let c = amber_gpui::ai_config::load_config(&d).unwrap();
+    assert_eq!(c.provider.as_deref(), Some("codex"));
+    assert_eq!(c.cli_path, "/opt/homebrew/bin/codex");
+    assert!(c.onboarded);
+    assert!(ui.debug_bounds("onb-connect").is_none());
 }
