@@ -614,7 +614,7 @@ impl Spike {
                     .read_file_if_exists(&snapshot_path(c, &p.name))
                     .ok()
                     .flatten()
-                    .and_then(|body| serde_json::from_str::<SchemaSnapshot>(&body).ok())
+                    .and_then(|body| amber_gpui::schema_snapshot::parse_snapshot(&body))
                     .map(Arc::new);
                 snaps.insert(schema_folder(c, &p.name), snap);
             }

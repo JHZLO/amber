@@ -15,72 +15,11 @@ use crate::resin::sql::{
     SchemaColumn, SchemaForeignKey, SchemaIndex, SchemaInput, SchemaTable, from_schema,
 };
 
-// ---- 스냅샷(schemaSnapshot.ts) ----
+// ---- 스냅샷(schemaSnapshot.ts) — 형태와 지문, 비교는 schema_snapshot 이 갖는다 ----
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct SnapshotColumn {
-    pub name: String,
-    /// 길이 없는 물리 타입 소문자 — 'bigint' 'varchar'
-    pub data_type: String,
-    /// 선언 그대로 — 'varchar(255)' 'bigint unsigned' "enum('A','B')"
-    pub column_type: String,
-    pub nullable: bool,
-    /// PRI / UNI / MUL / ''
-    pub key: String,
-    pub default_value: Option<String>,
-    pub extra: String,
-    pub comment: String,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct SnapshotIndex {
-    pub name: String,
-    pub unique: bool,
-    pub columns: Vec<String>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct SnapshotForeignKey {
-    pub name: String,
-    pub columns: Vec<String>,
-    pub ref_schema: String,
-    pub ref_table: String,
-    pub ref_columns: Vec<String>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct SnapshotCheck {
-    pub name: String,
-    pub clause: String,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct SnapshotTable {
-    pub name: String,
-    pub comment: String,
-    pub rows_estimate: Option<f64>,
-    pub columns: Vec<SnapshotColumn>,
-    pub indexes: Vec<SnapshotIndex>,
-    pub foreign_keys: Vec<SnapshotForeignKey>,
-    pub checks: Vec<SnapshotCheck>,
-}
-
-/// 생성이 읽는 건 schema 와 tables 뿐 — 나머지는 옛 파일에 없어도 읽힌다
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct SchemaSnapshot {
-    #[serde(default)]
-    pub amber: i64,
-    #[serde(default)]
-    pub connection: String,
-    pub schema: String,
-    #[serde(default)]
-    pub server: String,
-    #[serde(default)]
-    pub synced_at: i64,
-    #[serde(default)]
-    pub fingerprint: String,
-    pub tables: Vec<SnapshotTable>,
-}
+pub use crate::schema_snapshot::{
+    SchemaSnapshot, SnapshotCheck, SnapshotColumn, SnapshotForeignKey, SnapshotIndex, SnapshotTable,
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]

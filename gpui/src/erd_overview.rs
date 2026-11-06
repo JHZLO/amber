@@ -97,14 +97,14 @@ pub fn stats(s: &SchemaSnapshot) -> Stats {
     }
 }
 
-/// 목록 — 감사 테이블은 뒤로, 이름순(localeCompare). 찾기는 이름, 코멘트, 컬럼 이름과 코멘트에서
+/// 목록 — 감사 테이블은 뒤로, 이름순(로캘 없는 localeCompare). 찾기는 이름, 코멘트, 컬럼 이름과 코멘트에서
 pub fn rows<'a>(s: &'a SchemaSnapshot, query: &str) -> Vec<&'a SnapshotTable> {
     let q = query.trim().to_lowercase();
     let mut v: Vec<&SnapshotTable> = s.tables.iter().collect();
     v.sort_by(|a, b| {
         is_audit(&a.name)
             .cmp(&is_audit(&b.name))
-            .then_with(|| amber_gpui::vault::ko_compare(&a.name, &b.name))
+            .then_with(|| amber_gpui::vault::default_compare(&a.name, &b.name))
     });
     if q.is_empty() {
         return v;
@@ -244,76 +244,76 @@ impl Spike {
         for tb in list {
             let audit = is_audit(&tb.name);
             let name = tb.name.clone();
-            items = items.child(
-                div()
-                    .id(SharedString::from(format!("erd-ov-{}", tb.name)))
-                    .tag(&format!("erd-ov-{}", tb.name))
-                    .flex()
-                    .items_center()
-                    .gap(px(12.))
-                    .px(px(12.))
-                    .py(px(6.))
-                    .border_b_1()
-                    .border_color(k.border)
-                    .text_color(k.text_2)
-                    .cursor_pointer()
-                    .hover(move |st| st.bg(hover))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .overflow_hidden()
-                                    .whitespace_nowrap()
-                                    .text_ellipsis()
-                                    .font_family(crate::markdown::MONO)
-                                    .text_size(px(12.))
-                                    .when(audit, |d| d.text_color(k.text_3))
-                                    .when(!audit, |d| {
-                                        d.text_color(k.text).font_weight(FontWeight::MEDIUM)
-                                    })
-                                    .child(tb.name.clone()),
-                            )
-                            .child(
-                                div()
-                                    .overflow_hidden()
-                                    .whitespace_nowrap()
-                                    .text_ellipsis()
-                                    .text_size(px(11.5))
-                                    .text_color(k.text_3)
-                                    .child(if tb.comment.is_empty() {
-                                        t("erd.db.overview.noComment")
-                                    } else {
-                                        tb.comment.clone()
-                                    }),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex_none()
-                            .text_size(px(11.5))
-                            .text_color(k.text_3)
-                            .child(t_with(
-                                "erd.db.overview.cols",
-                                &[("n", &tb.columns.len().to_string())],
-                            )),
-                    )
-                    .child(
-                        div()
-                            .flex_none()
-                            .text_size(px(11.5))
-                            .text_color(k.text_3)
-                            .children(
-                                tb.rows_estimate
-                                    .map(|n| t_with("erd.db.overview.rows", &[("n", &compact(n))])),
-                            ),
-                    )
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.erd_pick_from_overview(&name, cx);
-                        cx.notify();
-                    })),
-            );
+            items =
+                items.child(
+                    div()
+                        .id(SharedString::from(format!("erd-ov-{}", tb.name)))
+                        .tag(&format!("erd-ov-{}", tb.name))
+                        .flex()
+                        .items_center()
+                        .gap(px(12.))
+                        .px(px(12.))
+                        .py(px(6.))
+                        .border_b_1()
+                        .border_color(k.border)
+                        .text_color(k.text_2)
+                        .cursor_pointer()
+                        .hover(move |st| st.bg(hover))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .overflow_hidden()
+                                        .whitespace_nowrap()
+                                        .text_ellipsis()
+                                        .font_family(crate::markdown::MONO)
+                                        .text_size(px(12.))
+                                        .when(audit, |d| d.text_color(k.text_3))
+                                        .when(!audit, |d| {
+                                            d.text_color(k.text).font_weight(FontWeight::MEDIUM)
+                                        })
+                                        .child(tb.name.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .overflow_hidden()
+                                        .whitespace_nowrap()
+                                        .text_ellipsis()
+                                        .text_size(px(11.5))
+                                        .text_color(k.text_3)
+                                        .child(if tb.comment.is_empty() {
+                                            t("erd.db.overview.noComment")
+                                        } else {
+                                            tb.comment.clone()
+                                        }),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex_none()
+                                .text_size(px(11.5))
+                                .text_color(k.text_3)
+                                .child(t_with(
+                                    "erd.db.overview.cols",
+                                    &[("n", &tb.columns.len().to_string())],
+                                )),
+                        )
+                        .child(
+                            div()
+                                .flex_none()
+                                .text_size(px(11.5))
+                                .text_color(k.text_3)
+                                .children(tb.rows_estimate.as_ref().and_then(|n| n.as_f64()).map(
+                                    |n| t_with("erd.db.overview.rows", &[("n", &compact(n))]),
+                                )),
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.erd_pick_from_overview(&name, cx);
+                            cx.notify();
+                        })),
+                );
         }
         let search = div()
             .w(px(200.))

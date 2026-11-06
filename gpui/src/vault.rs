@@ -114,6 +114,17 @@ pub fn ko_compare(a: &str, b: &str) -> Ordering {
     .compare(a, b)
 }
 
+/// localeCompare(…) — 로캘을 주지 않은 비교. 하네스(node)의 기본 로캘 en-US 와 같게.
+/// ko 는 한글을 라틴 글자보다 앞에 두어(문자 체계 재배열) 섞인 이름에서 순서가 갈린다
+pub fn default_compare(a: &str, b: &str) -> Ordering {
+    static EN: OnceLock<CollatorBorrowed<'static>> = OnceLock::new();
+    EN.get_or_init(|| {
+        let en: icu_locale_core::Locale = "en".parse().expect("en");
+        Collator::try_new((&en).into(), CollatorOptions::default()).expect("en collation")
+    })
+    .compare(a, b)
+}
+
 // ---- 순수 계산(vaultTree.ts) ----
 
 /// 이름 하나의 문제(vaultTree.ts 의 invalidNameReason) — 빈 이름, `/ \ :`, 점으로 시작, 80자(UTF-16) 넘음

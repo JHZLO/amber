@@ -16,6 +16,7 @@ pub mod note_ai_text;
 pub mod prefs;
 pub mod report;
 pub mod resin;
+pub mod schema_snapshot;
 pub mod timetable;
 pub mod todos;
 pub mod tree;
@@ -194,6 +195,11 @@ pub const OPS: &[&str] = &[
     "erdGen.generateErd",
     "erdGen.inferReferences",
     "erdGen.commonTablePrefix",
+    "schemaSnapshot.fingerprintOf",
+    "schemaSnapshot.finalizeSnapshot",
+    "schemaSnapshot.parseSnapshot",
+    "schemaSnapshot.diffSnapshots",
+    "schemaSnapshot.diffIsEmpty",
     "diagramGraph.splitOptionalType",
     "diagramGraph.nullFlagOf",
     "diagramGraph.nullabilityFlag",
@@ -392,6 +398,7 @@ fn call_files(db: &Db, op: &str, a: &Args) -> Result<Json, String> {
             .or_else(|| note_ai_text::call(op, a.0))
             .or_else(|| diagram_graph::call(op, a.0))
             .or_else(|| erd_gen::call(op, a.0))
+            .or_else(|| schema_snapshot::call(op, a.0))
             .or_else(|| dbconn::call_pure(op, a.0))
             .or_else(|| dates::call(op, a.0, db.now()))
             .or_else(|| tree::call(op, a.0))
