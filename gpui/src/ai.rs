@@ -97,8 +97,18 @@ const CODE_KEY: &[(&str, &str)] = &[
     ("KEYCHAIN_MISSING", "common.err.keychain.missing"),
 ];
 
+/// AI 호출이 CLI 로그인 만료(AI_AUTH)로 실패했다 — 화면이 다음 그리기 전에 로그인 창을 연다(지금 앱 setAuthRequiredHandler)
+static AUTH_REQUIRED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn take_auth_required() -> bool {
+    AUTH_REQUIRED.swap(false, std::sync::atomic::Ordering::SeqCst)
+}
+
 /// errText — 코드가 있으면 번역, 미등록 코드는 Rust 의 폴백 문구(비면 코드)
 pub fn err_text(e: &AiError) -> String {
+    if e.code == "AI_AUTH" {
+        AUTH_REQUIRED.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
     let Some((_, key)) = CODE_KEY.iter().find(|(c, _)| *c == e.code) else {
         return if e.message.is_empty() {
             e.code.clone()

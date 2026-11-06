@@ -151,8 +151,6 @@ pub struct AiTab {
     lang_anchor: Rc<Cell<Bounds<Pixels>>>,
     /// 저장 안 한 변경을 안고 닫으려 했다
     pub confirm_close: bool,
-    /// 로그인 창(D7f)
-    pub auth_open: bool,
 }
 
 impl AiTab {
@@ -241,7 +239,6 @@ impl Spike {
             lang_open: false,
             lang_anchor: Rc::default(),
             confirm_close: false,
-            auth_open: false,
         });
         let codex = self.settings.probe.codex_models();
         cx.spawn(async move |this, cx| {
@@ -656,12 +653,15 @@ impl Spike {
                 .text_color(k.text_3)
                 .child(text)
         };
+        // 로그인 창 — 지금 고른 CLI 와 경로로(저장 전이어도)
         let open_login = || {
-            cx.listener(|this, _, _, cx| {
-                if let Some(a) = this.settings.ai.as_mut() {
-                    a.auth_open = true;
-                }
-                cx.notify();
+            cx.listener(|this, _, window, cx| {
+                let Some(a) = this.settings.ai.as_ref() else {
+                    return;
+                };
+                let p = a.provider.clone();
+                let path = Some(a.path.read(cx).value().to_string()).filter(|v| !v.is_empty());
+                this.open_auth(p, path, window, cx);
             })
         };
         match &a.auth {

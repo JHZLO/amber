@@ -4,6 +4,7 @@
 //   cargo run --release -- --db <amber.db 사본> [--note <보관함 기준 노트 경로>] [--date YYYY-MM-DD] [--jump 2-3]
 
 mod ai;
+mod ai_auth;
 mod assets;
 mod calendar;
 mod concept_add;
@@ -133,6 +134,8 @@ struct Spike {
     concepts: concepts_view::ConceptsUi,
     /// 리포트 생성 실행(날짜마다, 주간은 w: 접두)과 레일 완료 점
     reports: report_run::Reports,
+    /// AI 로그인 창(설정의 로그인 단추, 또는 AI 호출이 AI_AUTH 로 실패했을 때)
+    auth: Option<ai_auth::AuthModal>,
     /// 첫 실행 안내(연결도 건너뛰기도 안 했을 때)
     onboarding: Option<onboarding::Onboarding>,
     /// 빠른 검색(⌘K, ⌘P)
@@ -311,6 +314,7 @@ impl Spike {
             settings: settings_view::SettingsUi::default(),
             search: None,
             onboarding: None,
+            auth: None,
             concepts,
             notes: notes_view::NotesState {
                 ui: vault_pane::TreeUi {
@@ -587,6 +591,7 @@ impl Render for Spike {
             self.prepare_concept_detail(cx);
         }
         self.prepare_settings(window, cx);
+        self.take_auth_required(window, cx);
         if !cx.has_active_drag() {
             self.diagrams.canvas.grab = None;
             if self.row_drag.is_some() {
@@ -669,6 +674,7 @@ impl Render for Spike {
         let lang_confirm = self.lang_confirm_modal(&k, cx);
         let prompt_del = self.prompt_delete_modal(&k, cx);
         let onboarding = self.onboarding_modal(&k, cx);
+        let auth = self.auth_modal(&k, cx);
         let db_modals = [self.db_delete_modal(&k, cx), self.db_password_modal(&k, cx)];
         let settings_unsaved = self.settings_unsaved_modal(&k, cx);
         let search_modal = self.search_modal(&k, cx);
@@ -827,6 +833,12 @@ impl Render for Spike {
                         cx.notify();
                         return;
                     }
+                }
+                // 로그인 창 — Esc 는 닫기(진행 중인 로그인은 끊는다)
+                if this.auth.is_some() && e.keystroke.key == "escape" {
+                    this.close_auth(window, cx);
+                    cx.stop_propagation();
+                    return;
                 }
                 // 첫 실행 안내 — Esc 는 건너뛰기(닫기와 같다)
                 if this.onboarding.is_some() && e.keystroke.key == "escape" {
@@ -1120,6 +1132,7 @@ impl Render for Spike {
             .children(db_modals.into_iter().flatten())
             .children(erd_conn_over)
             .children(onboarding)
+            .children(auth)
             .children(search_modal)
             .children(concept_sort)
             .children(concept_modals.into_iter().flatten())
@@ -1180,6 +1193,7 @@ impl Spike {
             || self.settings.open
             || self.search.is_some()
             || self.onboarding.is_some()
+            || self.auth.is_some()
             || c.add.is_some()
             || c.augment.is_some()
             || c.pending.is_some()

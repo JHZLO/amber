@@ -4621,3 +4621,47 @@ fn first_run_onboarding_connects_the_detected_cli_or_skips(cx: &mut TestAppConte
     assert!(c.onboarded);
     assert!(ui.debug_bounds("onb-connect").is_none());
 }
+
+#[gpui_kit::test]
+fn the_login_window_shows_the_url_and_takes_a_code(cx: &mut TestAppContext) {
+    use crate::report_probe::Auth;
+    let db = seeded("auth", &[]);
+    connect_fake(&db, std::path::Path::new("/opt/homebrew/bin/claude"));
+    let mut ui = open(cx, &db);
+    let mut fake = ai_fake();
+    fake.auth = Some(Auth {
+        supported: true,
+        logged_in: Some(false),
+    });
+    fake.login_output =
+        "Opening browser\nIf the browser didn't open, visit: https://claude.com/x?code=true.\nPaste code here if prompted > "
+            .into();
+    ui.update(|_, cx| spike().update(cx, |s, _| s.settings.probe = std::rc::Rc::new(fake)));
+    click(&mut ui, "app.rail.settings");
+    click(&mut ui, "set-ai-login");
+    assert!(
+        ui.debug_bounds("auth-start").is_some(),
+        "만료 → 로그인 시작"
+    );
+    click(&mut ui, "auth-start");
+    for _ in 0..5 {
+        ui.executor()
+            .advance_clock(std::time::Duration::from_millis(120));
+        ui.run_until_parked();
+    }
+    assert!(ui.debug_bounds("auth-url").is_some(), "흘러온 글에서 주소");
+    assert!(ui.debug_bounds("auth-code").is_some(), "코드를 묻는다");
+    click(&mut ui, "auth-code");
+    ui.simulate_input("abc123");
+    click(&mut ui, "auth-submit");
+    ui.update(|_, cx| assert!(spike().read(cx).auth.as_ref().unwrap().err.is_none()));
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    ui.update(|_, cx| assert!(spike().read(cx).auth.is_none(), "Esc 는 로그인 창만"));
+    assert!(ui.debug_bounds("set-tab-ai").is_some());
+    // 어느 AI 기능이든 AI_AUTH 로 실패하면 같은 창이 뜬다
+    let _ = crate::ai::err_text(&amber_core::ai::AiError::new("AI_AUTH", "expired"));
+    ui.update(|window, _| window.refresh());
+    ui.run_until_parked();
+    ui.update(|_, cx| assert!(spike().read(cx).auth.is_some()));
+}
