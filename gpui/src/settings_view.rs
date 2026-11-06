@@ -70,6 +70,10 @@ pub struct SettingsUi {
     /// 프롬프트 칸 — 집중 편집기(열려 있으면 설정 판 대신 뜬다)와 지우기 확인(id, 이름)
     pub prompt_edit: Option<crate::settings_prompts::PromptEdit>,
     pub prompt_del: Option<(String, String)>,
+    /// 데이터베이스 칸 — 지우기 확인, 비밀번호 다시 넣기, 오류
+    pub db_delete: Option<amber_gpui::dbconn::DbConnection>,
+    pub db_password: Option<crate::settings_db::DbPassword>,
+    pub db_error: Option<String>,
     pub theme_anchor: std::rc::Rc<std::cell::Cell<Bounds<Pixels>>>,
     pub lang_anchor: std::rc::Rc<std::cell::Cell<Bounds<Pixels>>>,
 }
@@ -92,6 +96,9 @@ impl Default for SettingsUi {
             lang_pending: None,
             prompt_edit: None,
             prompt_del: None,
+            db_delete: None,
+            db_password: None,
+            db_error: None,
             theme_anchor: Default::default(),
             lang_anchor: Default::default(),
         }
@@ -113,6 +120,9 @@ impl Spike {
         self.settings.ai = None;
         self.settings.prompt_edit = None;
         self.settings.prompt_del = None;
+        self.settings.db_delete = None;
+        self.settings.db_password = None;
+        self.settings.db_error = None;
         cx.notify();
     }
 
@@ -196,6 +206,9 @@ impl Spike {
             .pb(px(22.))
             .when(cur == Tab::Ai, |d| d.child(self.settings_ai_tab(k, cx)))
             .when(cur == Tab::Prompts, |d| d.child(self.prompts_tab(k, cx)))
+            .when(cur == Tab::Databases, |d| {
+                d.child(self.databases_tab(k, cx))
+            })
             .when(cur == Tab::Report, |d| d.child(self.report_settings(k, cx)))
             .when(cur == Tab::Appearance, |d| {
                 d.child(self.appearance_tab(k, cx))

@@ -4484,3 +4484,69 @@ fn saved_prompts_are_added_edited_and_deleted(cx: &mut TestAppContext) {
     click(&mut ui, "confirm-delete");
     assert!(saved(&db).is_empty());
 }
+
+#[gpui_kit::test]
+fn the_databases_tab_lists_connections_and_deletes_them(cx: &mut TestAppContext) {
+    let db = seeded("settings-db", &[]);
+    let id = {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        let c = amber_gpui::dbconn::create_connection(
+            &d,
+            &amber_gpui::dbconn::ConnectionInput {
+                name: "Shop DB".into(),
+                kind: "mysql".into(),
+                env: "prod".into(),
+                host: "127.0.0.1".into(),
+                port: 3306.,
+                username: "reader".into(),
+                tls: "preferred".into(),
+                credential_command: String::new(),
+                folder_path: "Shop DB".into(),
+                schemas: serde_json::json!([{ "name": "shop", "label": "", "enabled": true }]),
+            },
+        )
+        .unwrap();
+        let id = c["id"].as_i64().unwrap();
+        // 백업을 다른 기기에 복원했다 — 키체인에 비밀번호가 없다
+        amber_gpui::dbconn::mark_sync(&d, id, Some("KEYCHAIN_MISSING")).unwrap();
+        id
+    };
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.settings");
+    click(&mut ui, "set-tab-databases");
+    assert!(
+        ui.debug_bounds(&*format!("set-db-row-{id}").leak())
+            .is_some()
+    );
+    // 비밀번호 다시 넣기 — 시험 백엔드는 키체인을 거절한다(사용자 키체인에 닿지 않는다)
+    click(&mut ui, format!("set-db-pw-{id}").leak());
+    ui.simulate_input("secret");
+    click(&mut ui, "set-db-pw-save");
+    for _ in 0..20 {
+        ui.executor()
+            .advance_clock(std::time::Duration::from_millis(60));
+        ui.run_until_parked();
+    }
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        assert!(
+            s.settings.db_password.as_ref().unwrap().error.is_some(),
+            "실패는 창 안에"
+        );
+    });
+    click(&mut ui, "set-db-pw-cancel");
+    // 편집은 ERD 의 연결 모달이 설정 위에 뜬다
+    click(&mut ui, format!("set-db-edit-{id}").leak());
+    ui.update(|_, cx| assert!(spike().read(cx).erd.conn.is_some()));
+    ui.update(|window, cx| spike().update(cx, |s, cx| s.close_conn_modal(window, cx)));
+    // 지우기 — 확인 후 ERD 의 [끊기]와 같은 길
+    click(&mut ui, format!("set-db-del-{id}").leak());
+    click(&mut ui, "set-db-del-confirm");
+    for _ in 0..20 {
+        ui.executor()
+            .advance_clock(std::time::Duration::from_millis(60));
+        ui.run_until_parked();
+    }
+    let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+    assert!(amber_gpui::dbconn::list_connections(&d).unwrap().is_empty());
+}

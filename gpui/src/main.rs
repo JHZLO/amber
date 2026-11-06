@@ -48,6 +48,7 @@ mod root_picker;
 mod row_drag;
 mod search_view;
 mod settings_ai;
+mod settings_db;
 mod settings_prompts;
 mod settings_view;
 #[cfg(feature = "shots")]
@@ -662,6 +663,7 @@ impl Render for Spike {
         let appearance_menu = self.appearance_menu(&k, cx);
         let lang_confirm = self.lang_confirm_modal(&k, cx);
         let prompt_del = self.prompt_delete_modal(&k, cx);
+        let db_modals = [self.db_delete_modal(&k, cx), self.db_password_modal(&k, cx)];
         let settings_unsaved = self.settings_unsaved_modal(&k, cx);
         let search_modal = self.search_modal(&k, cx);
         let concept_sort = self.concept_sort_menu(&k, cx);
@@ -671,6 +673,7 @@ impl Render for Spike {
             self.augment_modal(&k, cx),
             self.add_concept_modal(&k, cx),
         ];
+        // 연결 모달은 설정 › 데이터베이스에서도 뜬다
         let (erd_modal, erd_confirm) = if self.section == Section::Erd {
             (
                 self.erd_conn_view(&k, window, cx),
@@ -678,6 +681,12 @@ impl Render for Spike {
             )
         } else {
             (None, None)
+        };
+        // 설정 위에 겹쳐 뜬다(나중에 그린 것이 위)
+        let erd_conn_over = if self.settings.open && self.section != Section::Erd {
+            self.erd_conn_view(&k, window, cx)
+        } else {
+            None
         };
         let (ai_modal, span_modal) = if self.section == Section::Notes {
             (self.ai_modal_view(&k, cx), self.span_modal_view(&k, cx))
@@ -1096,6 +1105,8 @@ impl Render for Spike {
             .children(appearance_menu)
             .children(lang_confirm)
             .children(prompt_del)
+            .children(db_modals.into_iter().flatten())
+            .children(erd_conn_over)
             .children(search_modal)
             .children(concept_sort)
             .children(concept_modals.into_iter().flatten())
