@@ -214,6 +214,10 @@ impl Shots {
     /// 실제 시간으로 기다렸다가 다시 그린다 — 시계로 움직이는 모션(끌기의 밀림)을 그 순간에 찍는다
     fn wait(&mut self, ms: u64) {
         std::thread::sleep(std::time::Duration::from_millis(ms));
+        // GPUI 의 with_animation 은 실행기 시계로 잰다(찍기에선 흉내 시계) — 같이 민다
+        self.cx
+            .executor()
+            .advance_clock(std::time::Duration::from_millis(ms));
         let _ = self
             .window
             .update(&mut self.cx, |_, window, _| window.refresh());
@@ -771,6 +775,9 @@ fn note_ai(s: &mut Shots) {
         .unwrap();
     s.cx.run_until_parked();
     s.shot("ai-loading");
+    // 막대 스윕이 시계로 도는지 — 같은 상태를 조금 뒤에 다시 찍어 막대 자리를 견준다
+    s.wait(300);
+    s.shot("ai-loading-later");
     let result = body.replacen(
         "## 2. Steps",
         "## 2. Rust engine\n\nSet `AMBER_PARITY_ENGINE` to the built binary.\n\n## 3. Steps",
