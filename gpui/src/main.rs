@@ -189,6 +189,8 @@ struct Spike {
     mmd_zoom: Option<mermaid_zoom::MmdZoom>,
     started: Instant,
     first_frame: bool,
+    /// 창 높이(그릴 때마다) — vh 로 잰 최대 높이(내용 보기의 50vh 등)
+    view_h: f32,
 }
 
 impl Spike {
@@ -372,6 +374,7 @@ impl Spike {
             },
             started,
             first_frame: false,
+            view_h: 920.,
         };
         this.focus.focus(window, cx);
         this.reload();
@@ -625,6 +628,7 @@ impl Render for Spike {
         // (지금 앱의 .todo-body 처럼 서랍 칸도 몸통 안이다)
         let parked = self.parked_open && self.cal.unit == calendar::Unit::Day;
         let body_w = f32::from(window.viewport_size().width) - 68.;
+        self.view_h = f32::from(window.viewport_size().height);
         let cal_w = pane::effective(self.cal_w, CAL_PANE.min, body_w);
         let body = match self.section {
             // .todo-body: 달력 판(폭 cal_w, 안쪽 여백 0 4 8 8, 카드 위 8) | 하루 판
@@ -925,6 +929,15 @@ impl Render for Spike {
                 if this.section == Section::Todo
                     && e.keystroke.key == "escape"
                     && this.report_escape()
+                {
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
+                // 노트 AI 작성 모달 — Esc 는 위에 뜬 것부터(내용 보기, 버리기 확인, 그다음 모달은 숨기기)
+                if this.section == Section::Notes
+                    && e.keystroke.key == "escape"
+                    && this.ai_modal_escape()
                 {
                     cx.stop_propagation();
                     cx.notify();

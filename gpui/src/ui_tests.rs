@@ -1787,6 +1787,60 @@ fn wait_note_ai(ui: &mut VisualTestContext, path: &str) {
 }
 
 #[gpui_kit::test]
+fn the_eye_on_a_saved_prompt_shows_it_and_toggles_it(cx: &mut TestAppContext) {
+    let db = seeded("ai-peek", &[]);
+    vault_note(&db, "C.md", "# C\n");
+    {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        amber_gpui::ai_config::connect_provider(&d, "claude", "/usr/bin/false", None).unwrap();
+        amber_gpui::prefs::set(
+            &d,
+            "note_ai_prompts",
+            r#"[{"id":"p1","label":"Team style","text":"Short sentences."}]"#,
+        );
+    }
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-C.md");
+    click(&mut ui, "note-ai");
+    let state = |ui: &mut VisualTestContext| {
+        ui.update(|_, cx| {
+            let m = spike()
+                .read(cx)
+                .notes
+                .ai_modal
+                .as_ref()
+                .map(|m| (m.peek.as_ref().map(|p| p.id.clone()), m.chosen.clone()));
+            m
+        })
+    };
+    click(&mut ui, "ai-peek-s:p1");
+    assert_eq!(state(&mut ui), Some((Some("p1".into()), vec![])));
+    assert!(ui.debug_bounds("ai-peek-text").is_some(), "지시문을 보인다");
+    // 포함 — 켜고 닫힌다
+    click(&mut ui, "ai-peek-toggle");
+    assert_eq!(state(&mut ui), Some((None, vec!["s:p1".to_string()])));
+    // 다시 보면 '빼기', 닫기는 그대로 둔다
+    click(&mut ui, "ai-peek-s:p1");
+    click(&mut ui, "ai-peek-close");
+    assert_eq!(state(&mut ui), Some((None, vec!["s:p1".to_string()])));
+    click(&mut ui, "ai-peek-s:p1");
+    click(&mut ui, "ai-peek-toggle");
+    assert_eq!(state(&mut ui), Some((None, vec![])));
+    // 칩 본체는 그대로 토글
+    click(&mut ui, "ai-chip-s:p1");
+    assert_eq!(state(&mut ui), Some((None, vec!["s:p1".to_string()])));
+    // Esc 는 위에 뜬 것부터 — 내용 보기, 그다음 작성 모달
+    click(&mut ui, "ai-peek-s:p1");
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert_eq!(state(&mut ui), Some((None, vec!["s:p1".to_string()])));
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert_eq!(state(&mut ui), None, "작성 모달을 숨긴다");
+}
+
+#[gpui_kit::test]
 fn writing_a_note_with_ai_reviews_the_diff_then_applies_a_draft(cx: &mut TestAppContext) {
     let db = seeded("ai-compose", &[]);
     vault_note(&db, "C.md", "# C\n\nold body\n");

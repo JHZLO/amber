@@ -1,7 +1,7 @@
 // 노트 AI 작성 화면 — 지금 앱 NoteAiModal.tsx(지시 → 백그라운드 실행 → 검토 → 편집 초안으로 적용), NoteAiBanner.tsx
 // (노트 위 배너), 트리 행의 점, 레일의 점. 실행 상태는 스토어(note_ai.rs)에 있다 — 닫기는 중단이 아니라 숨기기라
 // 묻지 않는다. 파일에 바로 쓰지 않는다: 적용하면 편집 초안이 되고 사용자가 ⌘S 로 저장한다(AI 출력은 초안).
-// 아직: 저장 프롬프트 내용 보기(칩의 눈 단추, PromptPeekModal).
+// 저장 프롬프트 칩의 눈 단추는 내용 보기(PromptPeekModal) — 작성 모달 위에 겹쳐 뜨고, 읽은 자리에서 포함/제외를 정한다.
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -59,6 +59,8 @@ pub struct AiModal {
     /// '다시 지시' — 결과가 있어도 지시 화면을 보인다
     pub revise: bool,
     pub confirm_discard: bool,
+    /// 내용을 보고 있는 저장 프롬프트(눈 단추)
+    pub peek: Option<Prompt>,
     pub view: AiView,
     pub saved: Vec<Prompt>,
     pub source: Option<Entity<TextareaState>>,
@@ -237,6 +239,95 @@ pub(crate) fn choice_chip(
         )
 }
 
+/// 저장 프롬프트 칩 — 토글 칸과 내용 보기 칸(눈). 버튼 안에 버튼을 넣지 못해 바깥 테가 둘을 감싸고,
+/// 나눔선 하나로 '다른 버튼'임을 말한다(.chip-choice .chip-peek)
+pub(crate) fn peek_chip(
+    key: &str,
+    label: String,
+    on: bool,
+    k: &Tokens,
+    toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    peek: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> Stateful<Div> {
+    let (hover_fill, hover_edge, part_hover) =
+        (glass(k.glass_fill_hover), k.glass_edge_hover, k.surface_2);
+    let main_id = SharedString::from(format!("ai-chip-{key}"));
+    let peek_id = SharedString::from(format!("ai-peek-{key}"));
+    let eye_group = SharedString::from(format!("ai-peek-g-{key}"));
+    let text = k.text;
+    div()
+        .id(SharedString::from(format!("ai-chipbox-{key}")))
+        .flex()
+        .max_w_full()
+        .rounded(px(4.))
+        .border_1()
+        .overflow_hidden()
+        .text_size(px(12.))
+        .line_height(relative(1.4))
+        .when(on, |d| {
+            d.bg(k.success_soft)
+                .border_color(k.success)
+                .text_color(k.success_text)
+        })
+        .when(!on, |d| {
+            d.bg(glass(k.glass_fill))
+                .border_color(k.glass_edge)
+                .text_color(k.text)
+                .hover(move |s| s.bg(hover_fill).border_color(hover_edge))
+        })
+        .child(
+            div()
+                .id(main_id.clone())
+                .tag(main_id)
+                .flex()
+                .items_center()
+                .gap(px(5.))
+                .min_w_0()
+                .pl(px(8.))
+                .pr(px(10.))
+                .py(px(4.))
+                .cursor_pointer()
+                .when(!on, |d| d.hover(move |s| s.bg(part_hover)))
+                .child(
+                    icon(if on { "check" } else { "sparkles" }, 12.)
+                        .flex_shrink_0()
+                        .text_color(if on { k.success } else { k.text_3 }),
+                )
+                .child(
+                    div()
+                        .max_w(px(260.))
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .text_ellipsis()
+                        .child(label),
+                )
+                .on_click(toggle),
+        )
+        .child(
+            div()
+                .id(peek_id.clone())
+                .tag(peek_id)
+                .group(eye_group.clone())
+                .flex()
+                .items_center()
+                .px(px(7.))
+                .border_l_1()
+                .border_color(if on { k.success } else { k.border })
+                .cursor_pointer()
+                .when(!on, |d| d.hover(move |s| s.bg(part_hover)))
+                .tooltip(crate::tip::tip(t("notes.ai.promptPeek.open")))
+                .child(
+                    icon("eye", 12.)
+                        .flex_shrink_0()
+                        .text_color(if on { k.success } else { k.text_3 })
+                        .when(!on, |d| {
+                            d.group_hover(eye_group, move |s| s.text_color(text))
+                        }),
+                )
+                .on_click(peek),
+        )
+}
+
 /// .ai-thinking(.compact) — 라벨, 쓸고 지나가는 막대 하나, 진행 한 줄. 모션은 막대 하나뿐
 pub fn ai_thinking(
     id: &'static str,
@@ -352,6 +443,7 @@ impl Spike {
             ref_on: cur.as_ref().map(|r| r.ref_dirs.clone()).unwrap_or_default(),
             revise: false,
             confirm_discard: false,
+            peek: None,
             view: if cur.as_ref().is_some_and(|r| r.result.is_some()) && has_existing {
                 AiView::Diff
             } else {
@@ -605,6 +697,7 @@ impl Spike {
             None
         };
         let (view, revise, confirm_discard) = (m.view, m.revise, m.confirm_discard);
+        let peek = self.ai_prompt_peek(k, cx);
         let m = self.notes.ai_modal.as_ref()?;
         let (instruction, _, n_extra) = self.ai_instruction(m, cx);
         let too_short = instruction.encode_utf16().count() < 2;
@@ -825,7 +918,8 @@ impl Spike {
                 .child(modal)
                 .when(confirm_discard, |d| {
                     d.child(self.ai_discard_confirm(&path, k, cx))
-                }),
+                })
+                .children(peek),
         )
     }
 
@@ -845,7 +939,20 @@ impl Spike {
             } else {
                 p.label.trim().to_string()
             };
-            chips.push(self.chip_toggle(key, label, "sparkles", m, k, cx));
+            let (toggle_key, prompt) = (key.clone(), p.clone());
+            chips.push(peek_chip(
+                &key,
+                label,
+                m.chosen.contains(&key),
+                k,
+                cx.listener(move |this, _, _, cx| this.ai_toggle_chip(&toggle_key, cx)),
+                cx.listener(move |this, _, _, cx| {
+                    if let Some(m) = this.notes.ai_modal.as_mut() {
+                        m.peek = Some(prompt.clone());
+                    }
+                    cx.notify();
+                }),
+            ));
         }
         for (i, key) in PRESETS.iter().enumerate() {
             chips.push(self.chip_toggle(format!("p:{i}"), t(key), "plus", m, k, cx));
@@ -942,16 +1049,96 @@ impl Spike {
             icon_name,
             k,
         )
-        .on_click(cx.listener(move |this, _, _, cx| {
+        .on_click(cx.listener(move |this, _, _, cx| this.ai_toggle_chip(&key, cx)))
+    }
+
+    /// 칩 하나를 요청에 넣거나 뺀다
+    fn ai_toggle_chip(&mut self, key: &str, cx: &mut Context<Self>) {
+        if let Some(m) = self.notes.ai_modal.as_mut() {
+            if let Some(i) = m.chosen.iter().position(|x| x == key) {
+                m.chosen.remove(i);
+            } else {
+                m.chosen.push(key.to_string());
+            }
+        }
+        cx.notify();
+    }
+
+    /// 저장 프롬프트 내용 보기(PromptPeekModal) — 편집은 하지 않는다(정본은 설정 › 프롬프트). 읽은 자리에서 포함/제외를 정하고 닫힌다
+    fn ai_prompt_peek(&self, k: &Tokens, cx: &mut Context<Self>) -> Option<Div> {
+        let m = self.notes.ai_modal.as_ref()?;
+        let p = m.peek.as_ref()?;
+        let key = format!("s:{}", p.id);
+        let included = m.chosen.contains(&key);
+        let name = if p.label.trim().is_empty() {
+            p.text.chars().take(20).collect()
+        } else {
+            p.label.trim().to_string()
+        };
+        let close = |this: &mut Self, cx: &mut Context<Self>| {
             if let Some(m) = this.notes.ai_modal.as_mut() {
-                if let Some(i) = m.chosen.iter().position(|x| *x == key) {
-                    m.chosen.remove(i);
-                } else {
-                    m.chosen.push(key.clone());
-                }
+                m.peek = None;
             }
             cx.notify();
-        }))
+        };
+        let body = div()
+            .flex()
+            .flex_col()
+            .child(field_label(t("notes.ai.promptPeek.eyebrow"), k))
+            .child(
+                div()
+                    .id("ai-peek-text")
+                    .tag("ai-peek-text")
+                    .max_h(px(self.view_h * 0.5))
+                    .overflow_y_scroll()
+                    .py(px(12.))
+                    .px(px(14.))
+                    .rounded(px(6.))
+                    .border_1()
+                    .border_color(k.border)
+                    .bg(k.surface_2)
+                    .text_size(px(13.))
+                    .line_height(relative(1.6))
+                    .text_color(k.text)
+                    .child(p.text.clone()),
+            )
+            .child(hint(t("notes.ai.promptPeek.editHint"), k));
+        let action = if included {
+            button("ai-peek-toggle", k, false, false)
+                .child(icon("minus", 15.).text_color(k.text))
+                .child(t("notes.ai.promptPeek.exclude"))
+        } else {
+            primary_button("ai-peek-toggle", k, false)
+                .child(icon("check", 15.).text_color(k.text))
+                .child(t("notes.ai.promptPeek.include"))
+        };
+        Some(crate::dialog::shell(
+            k,
+            640.,
+            name,
+            body.into_any_element(),
+            vec![
+                button("ai-peek-close", k, false, false)
+                    .child(t("common.close"))
+                    .on_click(cx.listener(move |this, _, _, cx| close(this, cx))),
+                action.on_click(cx.listener(move |this, _, _, cx| {
+                    this.ai_toggle_chip(&key, cx);
+                    close(this, cx);
+                })),
+            ],
+            cx.listener(move |this, _, _, cx| close(this, cx)),
+        ))
+    }
+
+    /// Esc — 위에 뜬 것부터 닫는다(내용 보기, 버리기 확인, 그다음 작성 모달 — 닫기는 숨기기)
+    pub(crate) fn ai_modal_escape(&mut self) -> bool {
+        let Some(m) = self.notes.ai_modal.as_mut() else {
+            return false;
+        };
+        if m.peek.take().is_none() && !std::mem::take(&mut m.confirm_discard) {
+            self.notes.ai_modal = None;
+        }
+        true
     }
 
     #[allow(clippy::too_many_arguments)]

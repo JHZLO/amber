@@ -489,8 +489,18 @@ fn notes(s: &mut Shots) {
     s.shot("notes-reading-end");
     // 찾기가 알림 상자 본문과 코드 창 안까지 — 블록이 제 조각을 칠한다
     for (note, q, idx, name) in [
-        ("Engineering/Parity harness.md", "parity", 0, "page-find-alert"),
-        ("Engineering/Runbooks/Release.md", "push", 1, "page-find-code"),
+        (
+            "Engineering/Parity harness.md",
+            "parity",
+            0,
+            "page-find-alert",
+        ),
+        (
+            "Engineering/Runbooks/Release.md",
+            "push",
+            1,
+            "page-find-code",
+        ),
     ] {
         s.window
             .update(&mut s.cx, |sp, _, cx| {
@@ -672,6 +682,24 @@ fn note_ai(s: &mut Shots) {
         .unwrap();
     s.mouse(point(px(1300.), px(880.)), false);
     s.shot("ai-prompt");
+    // 저장 프롬프트 내용 보기(칩의 눈 단추)
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            if let Some(m) = sp.notes.ai_modal.as_mut() {
+                m.peek = m.saved.first().cloned();
+            }
+            cx.notify();
+        })
+        .unwrap();
+    s.shot("ai-prompt-peek");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            if let Some(m) = sp.notes.ai_modal.as_mut() {
+                m.peek = None;
+            }
+            cx.notify();
+        })
+        .unwrap();
     let body = s
         .window
         .update(&mut s.cx, |sp, _, _| sp.notes.body.clone())
