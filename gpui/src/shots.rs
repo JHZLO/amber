@@ -65,7 +65,7 @@ fn seed(dir: &Path) -> String {
     .unwrap();
     std::fs::write(
         notes.join("Engineering/Runbooks/Release.md"),
-        "# Release\n\n1. Tag\n2. Push\n",
+        "# Release\n\n1. Tag\n2. Push\n\n```bash\ngit tag v1\ngit push --tags\n```\n",
     )
     .unwrap();
     std::fs::write(
@@ -487,6 +487,39 @@ fn notes(s: &mut Shots) {
         .unwrap();
     s.cx.run_until_parked();
     s.shot("notes-reading-end");
+    // 찾기가 알림 상자 본문과 코드 창 안까지 — 블록이 제 조각을 칠한다
+    for (note, q, idx, name) in [
+        ("Engineering/Parity harness.md", "parity", 0, "page-find-alert"),
+        ("Engineering/Runbooks/Release.md", "push", 1, "page-find-code"),
+    ] {
+        s.window
+            .update(&mut s.cx, |sp, _, cx| {
+                sp.open_note(note, cx);
+                cx.notify();
+            })
+            .unwrap();
+        s.cx.run_until_parked();
+        s.window
+            .update(&mut s.cx, |sp, window, cx| {
+                sp.start_page_find(window, cx);
+                if let Some(f) = sp.notes.page_find.as_mut() {
+                    f.input.update(cx, |st, cx| st.set_value(q, window, cx));
+                    f.query = q.into();
+                    f.idx = idx;
+                }
+                sp.paint_page_find(cx);
+                cx.notify();
+            })
+            .unwrap();
+        s.cx.run_until_parked();
+        s.shot(name);
+        s.window
+            .update(&mut s.cx, |sp, window, cx| {
+                sp.close_page_find(window, cx);
+                cx.notify();
+            })
+            .unwrap();
+    }
     s.window
         .update(&mut s.cx, |sp, window, cx| {
             sp.open_note("Engineering/Parity harness.md", cx);

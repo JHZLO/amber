@@ -2,7 +2,7 @@
 // 글을 고치지 않고 배경만 칠한다(TextView 의 RangeHighlight). Enter = 다음, Shift+Enter = 이전, Esc = 닫기.
 // 찾기 줄은 본문 판 오른쪽 위에 떠서 본문 폭을 밀지 않는다. 트리에 포커스가 있을 때의 ⌘F 는 트리 찾기다.
 // 편집 중에는 원문에서 찾는다(지금 앱의 sourceRef 갈래) — 미리보기는 칠하지 않는다(마크다운 기호 때문에 개수가 어긋난다).
-// 아직: 알림 상자와 코드 창 안의 글자(직접 그리는 블록).
+// 알림 상자와 코드 창(직접 그리는 블록)은 블록이 자기 조각을 적어 두고 찾기가 그 조각에서 찾아 칠을 넘긴다(markdown::CustomFind).
 
 use std::ops::Range;
 
@@ -14,8 +14,10 @@ use gpui_kit::*;
 use crate::Spike;
 use crate::assets::icon;
 use crate::day_card::Tag;
+use crate::markdown::{CustomFind, Piece};
 use crate::notes_view::text_states;
 use crate::theme::Tokens;
+use gpui_kit::base::text::{RangeHighlight, TextViewState};
 
 /// 한 번에 칠할 상한 — 넘는 만큼은 개수에 '+'로만 알린다
 const FIND_LIMIT: usize = 500;
@@ -47,6 +49,34 @@ fn find_colors(dark: bool) -> (Hsla, Hsla) {
             hsla(240. / 360., 0.04, 0.49, 0.3),
             hsla(50. / 360., 0.95, 0.53, 0.55),
         )
+    }
+}
+
+/// 결과 하나를 칠할 곳 — 글 덩어리의 그려진 글, 직접 그리는 블록의 글 조각(블록 번호, 조각 번호), 알림 본문 보기
+enum At {
+    Text(usize, Range<usize>),
+    Piece(usize, usize, Range<usize>),
+    View(Entity<TextViewState>, Range<usize>),
+}
+
+/// 직접 그리는 블록의 칠을 걷는다(다시 찾기 전, 닫을 때)
+fn clear_custom_marks(cx: &mut App) {
+    let views: Vec<Entity<TextViewState>> = {
+        let reg = cx.default_global::<CustomFind>();
+        for b in reg.0.iter_mut() {
+            b.marks.clear();
+        }
+        reg.0
+            .iter()
+            .flat_map(|b| b.pieces.iter())
+            .filter_map(|p| match p {
+                Piece::View(v) => Some(v.clone()),
+                Piece::Text(_) => None,
+            })
+            .collect()
+    };
+    for v in views {
+        v.update(cx, |s, cx| s.clear_range_highlights(cx));
     }
 }
 
@@ -346,6 +376,7 @@ impl Spike {
         &mut self,
         cx: &mut Context<Self>,
     ) -> Vec<(usize, Range<usize>, Hsla)> {
+        clear_custom_marks(cx);
         let Some(f) = self.notes.page_find.as_ref() else {
             return Vec::new();
         };
@@ -354,23 +385,100 @@ impl Spike {
         }
         let (query, idx) = (f.query.clone(), f.idx);
         let (hit, cur) = find_colors(Tokens::get(cx).dark);
-        let mut hits = Vec::new();
+        // 직접 그리는 블록 — (바깥 글 덩어리, 원문 자리, 조각)
+        let customs: Vec<(EntityId, Range<usize>, Vec<Piece>)> = cx
+            .default_global::<CustomFind>()
+            .0
+            .iter()
+            .map(|b| {
+                let pieces = b
+                    .pieces
+                    .iter()
+                    .map(|p| match p {
+                        Piece::Text(t) => Piece::Text(t.clone()),
+                        Piece::View(v) => Piece::View(v.clone()),
+                    })
+                    .collect();
+                (b.outer.entity_id(), b.source.clone(), pieces)
+            })
+            .collect();
+        // 결과마다 (덩어리 번호, 굴릴 자리, 칠할 곳) — 화면 순서대로. 블록 안의 결과는 블록째 굴린다
+        let mut found: Vec<(usize, Range<usize>, At)> = Vec::new();
         for (bi, state) in text_states(&self.notes.blocks).iter().enumerate() {
             let text = state.read(cx).rendered_text();
-            let left = FIND_LIMIT - hits.len().min(FIND_LIMIT);
-            hits.extend(
-                find_in_text(text.as_str(), &query, left)
-                    .into_iter()
-                    .map(|r| (bi, r)),
-            );
+            let mut objs: Vec<(Range<usize>, usize)> = customs
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| c.0 == state.entity_id())
+                .filter_map(|(i, c)| text.range_for_source(c.1.clone()).map(|o| (o, i)))
+                .collect();
+            objs.sort_by_key(|(o, _)| o.start);
+            let mut outer = find_in_text(text.as_str(), &query, FIND_LIMIT)
+                .into_iter()
+                .peekable();
+            for (obj, i) in objs {
+                while let Some(r) = outer.next_if(|r| r.start < obj.start) {
+                    found.push((bi, r.clone(), At::Text(bi, r)));
+                }
+                // 블록의 글은 블록이 칠한다 — 바깥 글에서 잡힌 것은 버리고 조각에서 다시 찾는다
+                while outer.next_if(|r| r.start < obj.end).is_some() {}
+                for (pi, piece) in customs[i].2.iter().enumerate() {
+                    match piece {
+                        Piece::Text(t) => {
+                            for r in find_in_text(t, &query, FIND_LIMIT) {
+                                found.push((bi, obj.clone(), At::Piece(i, pi, r)));
+                            }
+                        }
+                        Piece::View(v) => {
+                            let inner = v.read(cx).rendered_text();
+                            for r in find_in_text(inner.as_str(), &query, FIND_LIMIT) {
+                                found.push((bi, obj.clone(), At::View(v.clone(), r)));
+                            }
+                        }
+                    }
+                }
+            }
+            found.extend(outer.map(|r| (bi, r.clone(), At::Text(bi, r))));
+            if found.len() >= FIND_LIMIT {
+                break;
+            }
         }
-        let marks = hits
-            .iter()
-            .enumerate()
-            .map(|(n, (bi, r))| (*bi, r.clone(), if n == idx { cur } else { hit }))
-            .collect();
+        found.truncate(FIND_LIMIT);
+        let mut marks = Vec::new();
+        let mut piece_marks: Vec<(usize, usize, Range<usize>, Hsla)> = Vec::new();
+        let mut view_marks: Vec<(Entity<TextViewState>, RangeHighlight)> = Vec::new();
+        for (n, (_, _, at)) in found.iter().enumerate() {
+            let color = if n == idx { cur } else { hit };
+            match at {
+                At::Text(bi, r) => marks.push((*bi, r.clone(), color)),
+                At::Piece(i, pi, r) => piece_marks.push((*i, *pi, r.clone(), color)),
+                At::View(v, r) => {
+                    view_marks.push((v.clone(), RangeHighlight::new(r.clone(), color)))
+                }
+            }
+        }
+        {
+            let reg = cx.default_global::<CustomFind>();
+            for (i, pi, r, c) in piece_marks {
+                if let Some(b) = reg.0.get_mut(i) {
+                    b.marks.push((pi, r, c));
+                }
+            }
+        }
+        let mut per_view: Vec<(Entity<TextViewState>, Vec<RangeHighlight>)> = Vec::new();
+        for (v, h) in view_marks {
+            match per_view.iter_mut().find(|(w, _)| *w == v) {
+                Some((_, hs)) => hs.push(h),
+                None => per_view.push((v, vec![h])),
+            }
+        }
+        for (v, hs) in per_view {
+            v.update(cx, |s, cx| {
+                let _ = s.set_range_highlights(hs, cx);
+            });
+        }
         if let Some(f) = self.notes.page_find.as_mut() {
-            f.hits = hits;
+            f.hits = found.into_iter().map(|(bi, r, _)| (bi, r)).collect();
         }
         marks
     }

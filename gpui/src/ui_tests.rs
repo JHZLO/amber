@@ -988,6 +988,68 @@ fn find_while_editing_searches_the_source_and_leaves_the_caret_there(cx: &mut Te
     assert_eq!(src_find_of(&mut ui), Some((vec![0..5, 6..11], 0, true)));
 }
 
+/// 찾기 결과(굴릴 자리)와 직접 그리는 블록에 넘긴 칠 — (조각 번호, 범위)
+fn custom_find_of(
+    ui: &mut VisualTestContext,
+) -> (
+    Vec<std::ops::Range<usize>>,
+    Vec<(usize, std::ops::Range<usize>)>,
+) {
+    ui.update(|_, cx| {
+        let hits = spike()
+            .read(cx)
+            .notes
+            .page_find
+            .as_ref()
+            .map(|f| f.hits.iter().map(|(_, r)| r.clone()).collect())
+            .unwrap_or_default();
+        let marks = cx
+            .global::<crate::markdown::CustomFind>()
+            .0
+            .iter()
+            .flat_map(|b| b.marks.iter().map(|(p, r, _)| (*p, r.clone())))
+            .collect();
+        (hits, marks)
+    })
+}
+
+#[gpui_kit::test]
+fn find_reaches_inside_callouts_and_code_windows(cx: &mut TestAppContext) {
+    let db = seeded("page-find-custom", &[]);
+    vault_note(
+        &db,
+        "T.md",
+        "# T\n\nfoo one\n\n> [!NOTE]\n> foo in alert\n\n```rust\nlet foo = 1;\n```\n\nfoo after\n",
+    );
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-T.md");
+    click(&mut ui, "note-scroll");
+    ui.simulate_keystrokes("cmd-f");
+    ui.simulate_input("foo");
+    ui.run_until_parked();
+    let (hits, marks) = custom_find_of(&mut ui);
+    assert_eq!(hits.len(), 4, "본문, 알림 본문, 코드, 본문: {hits:?}");
+    assert!(
+        hits.windows(2).all(|w| w[0].start <= w[1].start),
+        "화면 순서: {hits:?}"
+    );
+    assert_eq!(marks, vec![(1, 4..7)], "코드 본문의 칠");
+    // 알림 라벨과 코드 창의 언어 이름도 그려진 글이다
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_input("note");
+    ui.run_until_parked();
+    assert_eq!(custom_find_of(&mut ui).1, vec![(0, 0..4)], "알림 라벨");
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_input("rust");
+    ui.run_until_parked();
+    assert_eq!(custom_find_of(&mut ui).1, vec![(0, 0..4)], "언어 이름");
+    // 닫으면 걷는다
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert_eq!(custom_find_of(&mut ui), (vec![], vec![]));
+}
+
 #[gpui_kit::test]
 fn switching_notes_with_unsaved_changes_asks_first(cx: &mut TestAppContext) {
     let db = seeded("notes-unsaved", &[]);
