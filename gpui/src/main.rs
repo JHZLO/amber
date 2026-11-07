@@ -197,6 +197,7 @@ struct Spike {
     close_dirty: close_dirty::CloseDirty,
     /// 창 높이(그릴 때마다) — vh 로 잰 최대 높이(내용 보기의 50vh 등)
     view_h: f32,
+    view_w: f32,
 }
 
 impl Spike {
@@ -384,6 +385,7 @@ impl Spike {
             first_frame: false,
             close_dirty: Default::default(),
             view_h: 920.,
+            view_w: 1440.,
         };
         this.focus.focus(window, cx);
         this.reload();
@@ -647,6 +649,7 @@ impl Render for Spike {
         let parked = self.parked_open && self.cal.unit == calendar::Unit::Day;
         let body_w = f32::from(window.viewport_size().width) - 68.;
         self.view_h = f32::from(window.viewport_size().height);
+        self.view_w = f32::from(window.viewport_size().width);
         let cal_w = pane::effective(self.cal_w, CAL_PANE.min, body_w);
         let body = match self.section {
             // .todo-body: 달력 판(폭 cal_w, 안쪽 여백 0 4 8 8, 카드 위 8) | 하루 판

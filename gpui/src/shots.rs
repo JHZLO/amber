@@ -214,7 +214,9 @@ impl Shots {
     /// 실제 시간으로 기다렸다가 다시 그린다 — 시계로 움직이는 모션(끌기의 밀림)을 그 순간에 찍는다
     fn wait(&mut self, ms: u64) {
         std::thread::sleep(std::time::Duration::from_millis(ms));
-        let _ = self.window.update(&mut self.cx, |_, window, _| window.refresh());
+        let _ = self
+            .window
+            .update(&mut self.cx, |_, window, _| window.refresh());
         self.cx.run_until_parked();
     }
 

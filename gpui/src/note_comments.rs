@@ -48,6 +48,14 @@ pub struct Sel {
     pub block: Option<Range<usize>>,
 }
 
+/// 질문 패널을 붙일 자리를 재는 것들(창 좌표, 지난 그림) — 본문 칸, 목차(안 보이면 빈 자리), 읽기 줄
+#[derive(Default, Clone)]
+pub struct DockGeo {
+    pub col: std::rc::Rc<std::cell::Cell<Bounds<Pixels>>>,
+    pub toc: std::rc::Rc<std::cell::Cell<Bounds<Pixels>>>,
+    pub wrap: std::rc::Rc<std::cell::Cell<Bounds<Pixels>>>,
+}
+
 #[derive(Default)]
 pub struct Cmts {
     pub list: Vec<Json>,
@@ -783,11 +791,53 @@ impl Spike {
     }
 
     /// 본문 판 위의 '질문 N'(.cmt-list-trigger)과 목록/질문/스레드 패널(.cmt-pop)
+    /// 패널 자리(지금 앱 NoteComments 의 dock) — 가로는 본문 오른쪽 끝 ~ 목차 왼쪽 끝 사이 여백(24 띄우고 260~380),
+    /// 세로는 본문 줄 안에 갇힌다: 위는 스크롤 판 위 + 44(찾기 줄 자리), 아래는 본문 끝(또는 판 아래 - 12), 최소 140.
+    /// 여백이 좁으면 None — 오른쪽 위 폴백. 판(카드) 안 좌표로 (왼쪽, 폭, 위, 최대 높이)
+    fn cmt_dock(&self) -> Option<(Pixels, Pixels, Pixels, Pixels)> {
+        const GAP: f32 = 24.;
+        const MIN: f32 = 260.;
+        const MAX: f32 = 380.;
+        const PAD_TOP: f32 = 44.;
+        const PAD_BOTTOM: f32 = 12.;
+        const MIN_H: f32 = 140.;
+        let g = &self.notes.dock_geo;
+        let (col, toc, wrap) = (g.col.get(), g.toc.get(), g.wrap.get());
+        let s = self.scroll.bounds();
+        if col.size.width <= px(0.) || s.size.height <= px(0.) {
+            return None;
+        }
+        let left = col.right() + px(GAP);
+        let right = if toc.size.width > px(0.) {
+            toc.left() - px(GAP)
+        } else {
+            px(self.view_w - 16.)
+        };
+        let avail = right - left;
+        if avail < px(MIN) {
+            return None;
+        }
+        let top_limit = s.top() + px(PAD_TOP);
+        let bottom_limit = s.bottom() - px(PAD_BOTTOM);
+        // 읽기 줄의 지금 위(굴린 만큼) — 지난 그림의 자리 대신 스크롤 값으로(목차와 같은 셈)
+        let wrap_top = s.top()
+            + px(crate::notes_view::DETAIL_PAD_T)
+            + self.notes.head_h.get()
+            + self.scroll.offset().y;
+        let floor = (wrap_top + wrap.size.height).min(bottom_limit);
+        let top = wrap_top
+            .max(top_limit)
+            .min(top_limit.max(floor - px(MIN_H)));
+        let max_h = px(MIN_H).max(floor - top);
+        Some((left - s.left(), avail.min(px(MAX)), top - s.top(), max_h))
+    }
+
     pub(crate) fn comment_layer(&self, k: &Tokens, cx: &mut Context<Self>) -> Option<AnyElement> {
         let c = &self.notes.cmts;
         if self.notes.edit.is_some() || self.notes.selected.is_none() {
             return None;
         }
+        let dock = self.cmt_dock();
         if c.pop.is_none() && !c.list_open {
             if c.list.is_empty() {
                 return None;
@@ -795,8 +845,10 @@ impl Spike {
             return Some(
                 div()
                     .absolute()
-                    .top(px(16.))
-                    .right(px(16.))
+                    .map(|d| match dock {
+                        Some((left, _, top, _)) => d.left(left).top(top),
+                        None => d.top(px(16.)).right(px(16.)),
+                    })
                     .child(
                         div()
                             .id("cmt-trigger")
@@ -847,10 +899,11 @@ impl Spike {
         Some(
             div()
                 .absolute()
-                .top(px(16.))
-                .right(px(16.))
-                .bottom(px(16.))
-                .w(px(380.))
+                .map(|d| match dock {
+                    // 붙일 자리 — 높이는 상자일 뿐 패널은 내용만큼(넘치면 그 안에서 굴린다)
+                    Some((left, w, top, max_h)) => d.left(left).top(top).w(w).h(max_h),
+                    None => d.top(px(16.)).right(px(16.)).bottom(px(16.)).w(px(380.)),
+                })
                 .flex()
                 .flex_col()
                 .child(

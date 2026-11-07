@@ -54,6 +54,16 @@ fn spike() -> gpui_kit::Entity<Spike> {
 }
 
 fn open_with(cx: &mut TestAppContext, db: &PathBuf, clock: Clock) -> VisualTestContext {
+    open_at(cx, db, clock, size(px(1440.), px(920.)))
+}
+
+/// 창 크기를 정해 연다(넓은 창에서만 보이는 배치)
+fn open_at(
+    cx: &mut TestAppContext,
+    db: &PathBuf,
+    clock: Clock,
+    win: gpui_kit::Size<Pixels>,
+) -> VisualTestContext {
     let db = db.to_str().unwrap().to_string();
     let window = cx.update(|cx| {
         gpui_kit::init(cx);
@@ -62,7 +72,7 @@ fn open_with(cx: &mut TestAppContext, db: &PathBuf, clock: Clock) -> VisualTestC
         theme::apply(Some("dark"), WindowAppearance::Dark, cx);
         let bounds = Bounds {
             origin: Point::default(),
-            size: size(px(1440.), px(920.)),
+            size: win,
         };
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -1457,6 +1467,53 @@ fn sidecar_ids(db: &PathBuf, rel: &str) -> Vec<String> {
         .iter()
         .map(|c| c["id"].as_str().unwrap().to_string())
         .collect()
+}
+
+#[gpui_kit::test]
+fn the_question_panel_docks_between_the_body_and_the_toc(cx: &mut TestAppContext) {
+    let db = seeded("cmt-dock", &[]);
+    vault_note(
+        &db,
+        "Q.md",
+        "# Q\n\nalpha beta\n\n## 1. One\n\ntext\n\n## 2. Two\n\nmore\n",
+    );
+    vault_sidecar(
+        &db,
+        "Q.md",
+        r#"{"version":1,"comments":[{"id":"c1","anchor":"alpha","occurrence":0,"question":"q","answer":"a","createdAt":1}]}"#,
+    );
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-Q.md");
+    // 좁으면(본문과 목차 사이가 260 미만) 오른쪽 위 폴백
+    let card = |ui: &mut VisualTestContext| ui.update(|_, cx| spike().read(cx).scroll.bounds());
+    let narrow = bounds(&mut ui, "cmt-trigger");
+    assert!(
+        (card(&mut ui).right() - narrow.right() - px(16.)).abs() < px(1.),
+        "폴백은 판 오른쪽 16"
+    );
+    // 넓은 창 — 본문 오른쪽 끝 + 24 에, 폭은 여백만큼(최대 380)
+    let mut ui = open_at(cx, &db, Clock::System, size(px(2400.), px(1000.)));
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-Q.md");
+    let (col, toc) = ui.update(|_, cx| {
+        let g = &spike().read(cx).notes.dock_geo;
+        (g.col.get(), g.toc.get())
+    });
+    assert!(toc.size.width > px(0.), "목차가 보인다");
+    let trig = bounds(&mut ui, "cmt-trigger");
+    assert!(
+        (trig.left() - (col.right() + px(24.))).abs() < px(1.),
+        "{trig:?} {col:?}"
+    );
+    click(&mut ui, "cmt-trigger");
+    let pop = bounds(&mut ui, "cmt-pop");
+    assert!((pop.left() - (col.right() + px(24.))).abs() < px(1.));
+    let avail = toc.left() - px(24.) - (col.right() + px(24.));
+    assert!(
+        (pop.size.width - avail.min(px(380.))).abs() < px(1.),
+        "{pop:?}"
+    );
 }
 
 #[gpui_kit::test]

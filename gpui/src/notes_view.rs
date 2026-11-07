@@ -194,6 +194,8 @@ pub struct NotesState {
     /// 그린 뒤 잰 자리 — 덩어리마다(창 좌표), 머리(경로 줄 ~ 동작 줄) 높이
     pub marks: Rc<RefCell<HashMap<usize, Bounds<Pixels>>>>,
     pub head_h: Rc<Cell<Pixels>>,
+    /// 질문 패널을 붙일 자리를 재는 것들 — 본문 칸, 목차, 읽기 줄(본문 + 목차)의 지난 그림 자리
+    pub dock_geo: crate::note_comments::DockGeo,
     /// 인라인 질문(사이드카) — note_comments.rs
     pub cmts: crate::note_comments::Cmts,
     /// AI 전문 작성/부분 수정 실행 — note_ai.rs. 노트를 옮겨 다녀도 남는다
@@ -224,7 +226,7 @@ impl std::ops::DerefMut for NotesState {
 }
 
 /// 본문 판의 위 여백(.detail padding-top)
-const DETAIL_PAD_T: f32 = 32.;
+pub(crate) const DETAIL_PAD_T: f32 = 32.;
 /// 목차가 보이는 창 폭 — 더 좁으면 숨기고 본문 폭 제한도 푼다(@media max-width: 1140px)
 const TOC_MIN_WINDOW: f32 = 1140.;
 
@@ -721,7 +723,12 @@ impl Spike {
                 )
         });
         let show_toc = wide && self.notes.toc.len() >= 2;
+        let geo = self.notes.dock_geo.clone();
+        if !show_toc {
+            geo.toc.set(Bounds::default());
+        }
         let column = div()
+            .relative()
             .flex_1()
             .min_w_0()
             .flex()
@@ -730,7 +737,13 @@ impl Spike {
             .when(wide, |d| d.max_w(px(720.)))
             .on_mouse_down(MouseButton::Left, press)
             .on_mouse_up(MouseButton::Left, release)
-            .children(body);
+            .children(body)
+            .child({
+                let col = geo.col.clone();
+                canvas(move |b, _, _| col.set(b), |_, _, _, _| {})
+                    .absolute()
+                    .inset_0()
+            });
         // 이 노트에서 만든 개념 — 누르면 개념 탭에서 그 개념을 연다
         let made = (!editing && !self.notes.made.is_empty()).then(|| {
             div()
@@ -834,10 +847,17 @@ impl Spike {
             })
             .child(
                 div()
+                    .relative()
                     .flex()
                     .items_start()
                     .child(column)
-                    .when(show_toc, |d| d.child(self.note_toc(k, cx))),
+                    .when(show_toc, |d| d.child(self.note_toc(k, cx)))
+                    .child({
+                        let wrap = geo.wrap.clone();
+                        canvas(move |b, _, _| wrap.set(b), |_, _, _, _| {})
+                            .absolute()
+                            .inset_0()
+                    }),
             )
             .children(made)
             .when(self.notes.read_error.is_none(), |d| d.child(meta))
@@ -1020,11 +1040,17 @@ impl Spike {
         let dy = (sy + 4. - wrap_top).max(0.);
         let active = self.active_heading();
         let view_h = f32::from(self.scroll.bounds().size.height);
+        let toc_b = self.notes.dock_geo.toc.clone();
         div()
             .relative()
             .top(px(dy))
             .ml_auto()
             .w(px(190.))
+            .child(
+                canvas(move |b, _, _| toc_b.set(b), |_, _, _, _| {})
+                    .absolute()
+                    .inset_0(),
+            )
             .flex_shrink_0()
             .pl(px(14.))
             .border_l_1()
