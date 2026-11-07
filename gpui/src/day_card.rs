@@ -397,7 +397,8 @@ impl Spike {
                     .track_scroll(&self.reports.panel.stack.list)
                     .on_drag_move::<DragRow>(cx.listener(
                         |this, e: &DragMoveEvent<DragRow>, _, cx| {
-                            if this.row_drag_move(e.event.position) {
+                            let reduce = cx.reduce_motion();
+                            if this.row_drag_move(e.event.position, reduce) {
                                 cx.notify();
                             }
                         },
@@ -442,6 +443,10 @@ impl Spike {
                                 self.unit(r, 0, k, cx).when(gap, |d| d.mt(px(22.)))
                             })
                             .collect::<Vec<_>>()
+                    })
+                    // 끄는 동안 — 빠진 줄 자리만큼 아래를 남긴다(밀려 내려간 마지막 줄이 잘리지 않게)
+                    .when_some(self.row_drag.as_ref().map(|d| d.gap), |d, g| {
+                        d.child(div().flex_shrink_0().h(g))
                     }),
             )
             .child(if week {
@@ -840,19 +845,19 @@ impl Spike {
     /// 끌기의 바탕 — 잰 자리(틈을 뺀 위치), 놓일 자리의 틈, hover 때 왼쪽 여백에 뜨는 손잡이.
     /// 넘긴 줄(고스트)과 지워진 기록은 손잡이가 없지만 자리는 잰다(그 사이로도 놓을 수 있다)
     fn drag_frame(&self, el: Div, id: i64, grip: bool, k: &Tokens, cx: &mut Context<Self>) -> Div {
-        let drag = self.row_drag.as_ref();
-        let shift = drag.filter(|d| d.shifted(id)).map(|d| d.gap);
-        let gap = drag.filter(|d| d.gap_before(id)).map(|d| d.gap);
+        let shift = self
+            .row_drag
+            .as_ref()
+            .map_or(px(0.), |d| d.shift(id, std::time::Instant::now()));
         let map = self.row_bounds.clone();
         let this = cx.entity().downgrade();
         el.relative()
-            .when_some(gap, |d, g| d.mt(g))
+            // 그려진 자리만 내려간다(transform) — 자리는 그대로라 잰 자리에서 밀린 만큼 뺀다
+            .top(shift)
             .child(
                 canvas(
                     move |mut b, _, _| {
-                        if let Some(s) = shift {
-                            b.origin.y -= s;
-                        }
+                        b.origin.y -= shift;
                         map.borrow_mut().insert(id, b);
                     },
                     |_, _, _, _| {},

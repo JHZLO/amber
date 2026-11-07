@@ -615,6 +615,14 @@ impl Render for Spike {
         self.prepare_settings(window, cx);
         self.take_auth_required(window, cx);
         self.sync_close_dirty(cx);
+        // 끄는 줄의 밀림과 삽입선이 미끄러지는 동안 다음 그림을 청한다
+        if self
+            .row_drag
+            .as_ref()
+            .is_some_and(|d| d.moving(Instant::now()))
+        {
+            window.request_animation_frame();
+        }
         if !cx.has_active_drag() {
             self.diagrams.canvas.grab = None;
             // 파일 끌기가 창 밖으로 나갔다(놓지 않고) — 점선 표시를 거둔다

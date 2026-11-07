@@ -211,6 +211,13 @@ impl Shots {
         eprintln!("{}", path.display());
     }
 
+    /// 실제 시간으로 기다렸다가 다시 그린다 — 시계로 움직이는 모션(끌기의 밀림)을 그 순간에 찍는다
+    fn wait(&mut self, ms: u64) {
+        std::thread::sleep(std::time::Duration::from_millis(ms));
+        let _ = self.window.update(&mut self.cx, |_, window, _| window.refresh());
+        self.cx.run_until_parked();
+    }
+
     fn row(&mut self, id: i64) -> Bounds<Pixels> {
         self.cx.run_until_parked();
         self.window
@@ -300,12 +307,17 @@ pub fn run(dir: &str) {
     let r3 = s.row(3);
     s.mouse(point(grip.x + px(26.), r3.top() + px(4.)), true);
     s.mouse(point(grip.x + px(26.), r3.top() + px(2.)), true);
+    // 틈이 0.35s 에 걸쳐 벌어진다 — 가는 중, 다 벌어진 뒤
+    s.wait(120);
+    s.shot("drag-2a-opening");
+    s.wait(400);
     s.shot("drag-2-into-group");
 
     // 맨 위로
     let r1 = s.row(1);
     s.mouse(point(grip.x, r1.top() + px(2.)), true);
     s.mouse(point(grip.x, r1.top() + px(1.)), true);
+    s.wait(450);
     s.shot("drag-3-top");
 
     let at = point(grip.x, r1.top() + px(1.));
