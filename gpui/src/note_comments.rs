@@ -78,6 +78,10 @@ pub struct Cmts {
     pub mouse: Point<Pixels>,
     /// 덩어리마다 마지막으로 본 글자(파싱이 끝났는지 알려고)
     seen: Vec<RenderedText>,
+    /// 답을 기다리는 자리에 지나가는 빛(SelectionSweep) — (덩어리, 그려진 글자 범위, 시작 때)와
+    /// 그 덩어리의 나머지 칠(질문, 찾기). 빛은 그 위에 그림마다 다시 얹는다
+    sweep: Option<(usize, Range<usize>, std::time::Instant)>,
+    sweep_base: Vec<RangeHighlight>,
 }
 
 type AskRx = futures::channel::oneshot::Receiver<
@@ -132,6 +136,78 @@ fn occurrence_at(hay: &str, anchor: &str, pos: usize) -> usize {
         n += 1;
     }
     n
+}
+
+/// 지나가는 빛의 폭(px) — 줄 길이와 무관하게 일정해야 같은 붓으로 그은 것처럼 보인다
+const SWEEP_BAND: f32 = 200.;
+
+/// 답을 기다리는 구간의 칠(SelectionSweep) — 옅은 중성 틴트 위로 무지개 빛 한 줄기가 지나간다(초당 560px,
+/// 한 바퀴 1~3.2초, linear). 줄들은 읽는 순서로 이어 붙인 한 줄로 본다. 칠은 글자 단위라 글자 폭은 어림한다
+/// (본문 14px — 한글 1em, 라틴 0.55em, 빈칸 0.28em). 움직임 줄이기면 틴트만
+fn sweep_marks(slice: &str, secs: f32, dark: bool, reduce: bool) -> Vec<(Range<usize>, Hsla)> {
+    // (r, g, b, a) — styles.css 의 .sel-sweep-line 과 그라데이션
+    let tint: [f32; 4] = if dark {
+        [160., 160., 175., 0.16]
+    } else {
+        [120., 120., 130., 0.18]
+    };
+    let to_hsla = |c: [f32; 4]| -> Hsla {
+        Rgba {
+            r: c[0] / 255.,
+            g: c[1] / 255.,
+            b: c[2] / 255.,
+            a: c[3],
+        }
+        .into()
+    };
+    let width = |ch: char| -> f32 {
+        if ch.is_whitespace() {
+            3.9
+        } else if (ch as u32) >= 0x1100 {
+            14.
+        } else {
+            7.7
+        }
+    };
+    let total: f32 = slice.chars().map(width).sum();
+    if reduce || total <= 0. {
+        return vec![(0..slice.len(), to_hsla(tint))];
+    }
+    const STOPS: [(f32, [f32; 4]); 6] = [
+        (0., [250., 204., 21., 0.]),
+        (0.24, [250., 204., 21., 0.34]),
+        (0.42, [52., 211., 153., 0.3]),
+        (0.60, [96., 165., 250., 0.34]),
+        (0.78, [167., 139., 250., 0.3]),
+        (1., [167., 139., 250., 0.]),
+    ];
+    let dur = ((total + SWEEP_BAND) / 560.).clamp(1., 3.2);
+    let band_left = -SWEEP_BAND + (secs % dur) / dur * (total + SWEEP_BAND);
+    let mut out = Vec::new();
+    let mut x = 0.;
+    for (i, ch) in slice.char_indices() {
+        let w = width(ch);
+        let u = (x + w / 2. - band_left) / SWEEP_BAND;
+        x += w;
+        let range = i..i + ch.len_utf8();
+        if !(0. ..1.).contains(&u) {
+            out.push((range, to_hsla(tint)));
+            continue;
+        }
+        let k = STOPS
+            .iter()
+            .position(|(at, _)| *at > u)
+            .unwrap_or(STOPS.len() - 1);
+        let ((a0, c0), (a1, c1)) = (STOPS[k - 1], STOPS[k]);
+        let f = (u - a0) / (a1 - a0);
+        let band: [f32; 4] = std::array::from_fn(|j| c0[j] + (c1[j] - c0[j]) * f);
+        // 빛을 틴트 위에 얹는다(지금 앱의 섞기 대신 덮어 칠하기)
+        let a = band[3] + tint[3] * (1. - band[3]);
+        let rgb: [f32; 3] =
+            std::array::from_fn(|j| (band[j] * band[3] + tint[j] * tint[3] * (1. - band[3])) / a);
+        out.push((range, to_hsla([rgb[0], rgb[1], rgb[2], a])));
+    }
+    out
 }
 
 impl Spike {
@@ -298,31 +374,66 @@ impl Spike {
                 .or_default()
                 .push(RangeHighlight::new(r.clone(), color));
         }
-        // 묻는 중이거나 질문 패널이 열린 자리 — 아직 저장 전이라 위 목록에 없다
-        let pending = match (&c.asking, &c.pop) {
-            (Some((a, o, _)), _) => Some((a.clone(), *o)),
-            (None, Some(Pop::Ask { anchor, occurrence })) => Some((anchor.clone(), *occurrence)),
-            _ => None,
-        };
-        if let Some((a, o)) = pending {
+        // 답을 기다리는 자리 — 아직 저장 전이라 위 목록에 없다. 지금 앱처럼 기다리는 동안만 빛이 지나간다
+        // (쓰는 중인 질문 자리는 칠하지 않는다 — 선택을 풀고 패널로 넘어간다)
+        let asking = c.asking.as_ref().map(|(a, o, _)| (a.clone(), *o));
+        let target = asking.and_then(|(a, o)| {
             let doc = self.doc_text(cx);
-            if let Some((bi, r, _)) = self.find_anchor(&doc, &a, o, cx) {
-                per.entry(bi)
-                    .or_default()
-                    .push(RangeHighlight::new(r, q_cur));
-            }
-        }
+            self.find_anchor(&doc, &a, o, cx).map(|(bi, r, _)| (bi, r))
+        });
         for (bi, r, color) in self.page_find_marks(cx) {
             per.entry(bi)
                 .or_default()
                 .push(RangeHighlight::new(r, color));
         }
+        let c = &mut self.notes.cmts;
+        c.sweep = target.map(|(bi, r)| {
+            let start = match &c.sweep {
+                Some((b, old, at)) if *b == bi && *old == r => *at,
+                _ => std::time::Instant::now(),
+            };
+            (bi, r, start)
+        });
+        c.sweep_base = c
+            .sweep
+            .as_ref()
+            .and_then(|(bi, ..)| per.get(bi).cloned())
+            .unwrap_or_default();
         for (bi, state) in text_states(&self.notes.blocks).iter().enumerate() {
             let marks = per.remove(&bi).unwrap_or_default();
             state.update(cx, |s, cx| {
                 let _ = s.set_range_highlights(marks, cx);
             });
         }
+        self.paint_sweep(cx);
+    }
+
+    /// 기다리는 자리의 빛을 지금 시각으로 다시 얹는다(그림마다) — 움직였으면 true(다음 그림을 청한다)
+    pub(crate) fn paint_sweep(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some((bi, r, start)) = self.notes.cmts.sweep.clone() else {
+            return false;
+        };
+        let Some(state) = text_states(&self.notes.blocks).get(bi).cloned() else {
+            return false;
+        };
+        let reduce = cx.reduce_motion();
+        let dark = Tokens::get(cx).dark;
+        let text = state.read(cx).rendered_text();
+        let Some(slice) = text.as_str().get(r.clone()) else {
+            return false;
+        };
+        let mut marks = self.notes.cmts.sweep_base.clone();
+        marks.extend(
+            sweep_marks(slice, start.elapsed().as_secs_f32(), dark, reduce)
+                .into_iter()
+                .map(|(sub, color)| {
+                    RangeHighlight::new(r.start + sub.start..r.start + sub.end, color)
+                }),
+        );
+        state.update(cx, |s, cx| {
+            let _ = s.set_range_highlights(marks, cx);
+        });
+        !reduce
     }
 
     pub(crate) fn open_pop(&mut self, pop: Pop, cx: &mut Context<Self>) {
@@ -1546,6 +1657,30 @@ impl Spike {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_sweep_is_one_band_over_a_tint_and_reduce_keeps_only_the_tint() {
+        use super::sweep_marks;
+        let text = "plain words and 한글 글자도 섞인 질문 구간입니다";
+        // 움직임 줄이기 — 틴트 한 칸
+        let flat = sweep_marks(text, 0.4, true, true);
+        assert_eq!(flat.len(), 1);
+        assert_eq!(flat[0].0, 0..text.len());
+        // 글자마다 이어 붙어 구간 전체를 덮고, 띠 안의 글자만 틴트와 다르다
+        let m = sweep_marks(text, 0.4, true, false);
+        assert_eq!(m.first().unwrap().0.start, 0);
+        assert_eq!(m.last().unwrap().0.end, text.len());
+        assert!(m.windows(2).all(|w| w[0].0.end == w[1].0.start));
+        let tint = flat[0].1;
+        let lit = m.iter().filter(|(_, c)| *c != tint).count();
+        assert!(lit > 0 && lit < m.len(), "빛은 한 줄기: {lit}/{}", m.len());
+        // 시간이 지나면 띠가 옮겨 간다
+        let later = sweep_marks(text, 0.9, true, false);
+        assert_ne!(
+            m.iter().map(|(_, c)| *c != tint).collect::<Vec<_>>(),
+            later.iter().map(|(_, c)| *c != tint).collect::<Vec<_>>()
+        );
+    }
+
     use super::{nth_byte, occurrence_at};
 
     #[test]

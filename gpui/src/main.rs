@@ -575,6 +575,10 @@ impl Render for Spike {
         if self.section == Section::Notes {
             self.watch_notes_root(cx);
             self.sync_page_find(cx);
+            // 답을 기다리는 자리의 빛 — 그림마다 다시 얹고, 도는 동안 다음 그림을 청한다
+            if self.notes.edit.is_none() && self.paint_sweep(cx) {
+                window.request_animation_frame();
+            }
             if let Some(e) = self.notes.edit.as_mut() {
                 e.focused = e.state.read(cx).focus_handle(cx).is_focused(window);
             }

@@ -662,19 +662,34 @@ fn comments(s: &mut Shots) {
         .update(&mut s.cx, |sp, _, _| sp.notes.cmts.sel.clone())
         .unwrap();
     if let Some(sel) = fab {
+        let ask = crate::note_comments::Pop::Ask {
+            anchor: sel.anchor.clone(),
+            occurrence: sel.occurrence,
+        };
         s.window
             .update(&mut s.cx, |sp, _, cx| {
-                sp.open_pop(
-                    crate::note_comments::Pop::Ask {
-                        anchor: sel.anchor,
-                        occurrence: sel.occurrence,
-                    },
-                    cx,
-                );
+                sp.open_pop(ask.clone(), cx);
                 cx.notify();
             })
             .unwrap();
         s.shot("cmt-ask");
+        // 답을 기다리는 동안 — 물은 자리에 빛이 지나간다(틴트 + 무지개 한 줄기)
+        s.window
+            .update(&mut s.cx, |sp, _, cx| {
+                sp.notes.cmts.asking = Some((sel.anchor.clone(), sel.occurrence, ask.clone()));
+                sp.repaint_marks(cx);
+                cx.notify();
+            })
+            .unwrap();
+        s.wait(380);
+        s.shot("cmt-asking");
+        s.window
+            .update(&mut s.cx, |sp, _, cx| {
+                sp.notes.cmts.asking = None;
+                sp.repaint_marks(cx);
+                cx.notify();
+            })
+            .unwrap();
     }
     s.window
         .update(&mut s.cx, |sp, _, cx| {
