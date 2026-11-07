@@ -474,8 +474,8 @@ fn notes(s: &mut Shots) {
     s.cx.run_until_parked();
     s.shot("page-find");
     s.window
-        .update(&mut s.cx, |sp, _, cx| {
-            sp.close_page_find(cx);
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.close_page_find(window, cx);
             cx.notify();
         })
         .unwrap();
@@ -495,6 +495,30 @@ fn notes(s: &mut Shots) {
         })
         .unwrap();
     s.shot("notes-edit");
+    // 편집 중 찾기 — 원문 칸 위의 칠(.find-src-mirror)
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.start_page_find(window, cx);
+            if let Some(f) = sp.notes.page_find.as_mut() {
+                f.input
+                    .update(cx, |st, cx| st.set_value("parity", window, cx));
+                f.query = "parity".into();
+            }
+            sp.run_src_find(cx);
+            if let Some(f) = sp.notes.page_find.as_mut() {
+                f.idx = 1;
+            }
+            cx.notify();
+        })
+        .unwrap();
+    s.cx.run_until_parked();
+    s.shot("notes-edit-find");
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.close_page_find(window, cx);
+            cx.notify();
+        })
+        .unwrap();
     s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.notes.edit = None;

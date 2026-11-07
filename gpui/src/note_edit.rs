@@ -389,12 +389,31 @@ impl Spike {
                     .font_family(MONO)
                     .text_size(px(13.))
                     .line_height(relative(1.6))
-                    .child(Textarea::new(&edit.state).appearance(false).h(relative(1.)))
+                    // 입력칸은 제 글자 크기(text_sm 14px, 줄 1.25rem)를 스스로 깐다 — 칸에도 같은 값을 줘야 13px, 1.6 이 된다
+                    .child(
+                        Textarea::new(&edit.state)
+                            .appearance(false)
+                            .h(relative(1.))
+                            .text_size(px(13.))
+                            .line_height(relative(1.6)),
+                    )
                     .child({
                         let this = cx.entity().downgrade();
+                        // 편집 중 찾기의 칠(칸 뒤에 그려 이번 그림의 자리를 쓴다)
+                        let find = self
+                            .notes
+                            .page_find
+                            .as_ref()
+                            .filter(|f| f.in_src && !f.src.is_empty())
+                            .map(|f| (edit.state.clone(), f.src.clone(), f.idx, k.dark));
                         canvas(
                             |_, _, _| {},
-                            move |_, _, window, _| {
+                            move |_, _, window, cx| {
+                                if let Some((state, hits, cur, dark)) = &find {
+                                    crate::note_page_find::paint_src_find(
+                                        state, hits, *cur, *dark, window, cx,
+                                    );
+                                }
                                 window.on_mouse_event(
                                     move |_: &MouseUpEvent, phase, window, cx| {
                                         if phase == DispatchPhase::Bubble {

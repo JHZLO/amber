@@ -899,6 +899,84 @@ fn dropping_image_files_on_the_source_imports_them(cx: &mut TestAppContext) {
     );
 }
 
+/// (원문 결과, 지금 번호, 원문 쪽인가)
+fn src_find_of(ui: &mut VisualTestContext) -> Option<(Vec<std::ops::Range<usize>>, usize, bool)> {
+    ui.update(|_, cx| {
+        let n = &spike().read(cx).notes;
+        n.page_find
+            .as_ref()
+            .map(|f| (f.src.clone(), f.idx, f.in_src))
+    })
+}
+
+#[gpui_kit::test]
+fn find_while_editing_searches_the_source_and_leaves_the_caret_there(cx: &mut TestAppContext) {
+    let db = seeded("notes-find-src", &[]);
+    vault_note(&db, "A.md", "# A\n\nalpha beta\n");
+    let mut ui = open(cx, &db);
+    // 읽기에서 연 찾기는 편집으로 들어가면 원문에서 다시 찾는다
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-A.md");
+    click(&mut ui, "note-scroll");
+    ui.simulate_keystrokes("cmd-f");
+    ui.simulate_input("alpha");
+    ui.run_until_parked();
+    assert_eq!(src_find_of(&mut ui).map(|f| f.2), Some(false));
+    click(&mut ui, "note-edit");
+    assert_eq!(
+        src_find_of(&mut ui),
+        Some((vec![5..10], 0, true)),
+        "원문 바이트 자리"
+    );
+    click(&mut ui, "page-find-close");
+    // 편집 중에 연다 — 마크다운 기호까지 원문 그대로, 대소문자 무시
+    click(&mut ui, "note-src");
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_input("alpha *Alpha*\n`x alpha`");
+    ui.simulate_keystrokes("cmd-f");
+    ui.simulate_input("ALPHA");
+    ui.run_until_parked();
+    assert_eq!(
+        src_find_of(&mut ui),
+        Some((vec![0..5, 7..12, 17..22], 0, true))
+    );
+    ui.simulate_keystrokes("enter");
+    ui.simulate_keystrokes("enter");
+    ui.run_until_parked();
+    assert_eq!(src_find_of(&mut ui).map(|f| f.1), Some(2));
+    ui.simulate_keystrokes("shift-enter");
+    ui.run_until_parked();
+    assert_eq!(src_find_of(&mut ui).map(|f| f.1), Some(1));
+    // 찾기 줄에서 Esc — 찾던 자리에 커서를 두고 원문 칸으로 돌아간다
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert!(src_find_of(&mut ui).is_none());
+    let sel = ui.update(|_, cx| {
+        let n = &spike().read(cx).notes;
+        n.edit.as_ref().map(|e| e.state.read(cx).selected_range())
+    });
+    assert_eq!(sel, Some(7..12));
+    // 원문을 고치면 다시 찾는다(처음부터)
+    ui.simulate_keystrokes("cmd-f");
+    ui.simulate_input("alpha");
+    ui.run_until_parked();
+    ui.update(|window, cx| {
+        let n = &spike().read(cx).notes;
+        let state = n.edit.as_ref().unwrap().state.clone();
+        state.update(cx, |s, cx| s.set_value("alpha", window, cx));
+    });
+    ui.update(|window, cx| {
+        let n = &spike().read(cx).notes;
+        let state = n.edit.as_ref().unwrap().state.clone();
+        state.update(cx, |s, cx| {
+            s.set_selected_range(5..5, cx);
+            s.insert(" alpha", window, cx)
+        });
+    });
+    ui.run_until_parked();
+    assert_eq!(src_find_of(&mut ui), Some((vec![0..5, 6..11], 0, true)));
+}
+
 #[gpui_kit::test]
 fn switching_notes_with_unsaved_changes_asks_first(cx: &mut TestAppContext) {
     let db = seeded("notes-unsaved", &[]);

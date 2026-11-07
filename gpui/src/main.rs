@@ -560,6 +560,7 @@ impl Render for Spike {
         // 노트 탭이면 보관함을 감시한다(작업 폴더가 바뀌면 다시) — 밖에서 고친 노트를 다시 열지 않아도 반영
         if self.section == Section::Notes {
             self.watch_notes_root(cx);
+            self.sync_page_find(cx);
         }
         // 디스크 내용으로 바꿀 초안 — 입력칸 값은 창이 있어야 바뀐다
         if let Some(d) = self.notes.pending_draft.take()
