@@ -5200,8 +5200,10 @@ fn the_widget_window_flips_concepts_and_updates_the_main_window(cx: &mut TestApp
     let h = ui
         .update(|_, cx| spike().read(cx).widget)
         .expect("위젯 창이 열린다");
+    // 지금 열린 위젯 창(숨겼다 다시 열면 새 창이다)
     let titles = |ui: &mut VisualTestContext| {
         ui.update(|_, cx| {
+            let h = spike().read(cx).widget.expect("위젯 창");
             h.update(cx, |w, _, _| {
                 w.queue
                     .iter()
@@ -5220,6 +5222,27 @@ fn the_widget_window_flips_concepts_and_updates_the_main_window(cx: &mut TestApp
             1,
             "처음에서 뒤로 = 끝"
         )
+    });
+    // 숨겼다가 다시 열면 같은 카드, 같은 자리(창은 닫고 엔티티와 자리를 메인이 쥔다)
+    let moved = Bounds::new(point(px(40.), px(60.)), size(px(320.), px(210.)));
+    ui.update(|_, cx| {
+        // 창을 닫으며 끝나서 update 는 '창 없음'을 돌려준다
+        let _ = h.update(cx, |w, window, cx| {
+            window.resize(moved.size);
+            w.hide(window, cx)
+        });
+    });
+    ui.run_until_parked();
+    let saved = ui.update(|_, cx| spike().read(cx).widget_bounds);
+    assert!(saved.is_some(), "숨길 때 자리를 맡긴다");
+    click(&mut ui, "topbar-widget");
+    let h = ui
+        .update(|_, cx| spike().read(cx).widget)
+        .expect("다시 열린다");
+    ui.update(|_, cx| {
+        assert_eq!(h.update(cx, |w, _, _| w.idx).unwrap(), 1, "넘기던 카드");
+        let b = h.update(cx, |_, window, _| window.bounds()).unwrap();
+        assert_eq!(Some(b), saved, "그 자리");
     });
     // 확신 + → 점만 바로, 순서는 다음 이동부터
     ui.update(|_, cx| h.update(cx, |w, _, cx| w.conf(1, cx)).unwrap());

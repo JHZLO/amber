@@ -63,6 +63,14 @@ impl Widget {
         w
     }
 
+    /// 숨기기 — 지금 앱은 창을 숨겼다가 같은 상태, 같은 자리로 다시 보인다. GPUI 는 창 하나만 숨길 수 없어서
+    /// 창은 닫고 자리를 메인에 맡긴다(이 엔티티는 메인이 쥐고 있다가 다시 열 때 그대로 쓴다)
+    pub(crate) fn hide(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let b = window.bounds();
+        let _ = self.main.update(cx, |s, _| s.widget_bounds = Some(b));
+        window.remove_window();
+    }
+
     /// 학습 중 큐를 다시 읽는다 — keep 이 있으면 그 카드에 머문다
     fn snapshot(&mut self, keep: Option<i64>) {
         self.queue = concepts::learning_queue(&self.db).unwrap_or_default();
@@ -259,7 +267,7 @@ impl Render for Widget {
                     .tooltip(tip(t("app.widget.hide")))
                     .child(icon("x", 13.).text_color(k.text_3))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .on_click(|_, window, _| window.remove_window()),
+                    .on_click(cx.listener(|this, _, window, cx| this.hide(window, cx))),
             );
         let card = div()
             .absolute()
@@ -458,7 +466,9 @@ impl Spike {
         let path = self.db.data_dir().join("amber.db");
         let main = cx.entity().downgrade();
         let main_window = window.window_handle();
-        let bounds = Bounds::centered(None, size(px(320.), px(210.)), cx);
+        let bounds = self
+            .widget_bounds
+            .unwrap_or_else(|| Bounds::centered(None, size(px(320.), px(210.)), cx));
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             titlebar: None,
@@ -470,12 +480,29 @@ impl Spike {
             ..Default::default()
         };
         let dirty = self.widget_flag.clone();
+        // 숨겼던 위젯이면 그 상태 그대로(넘기던 카드), 그 자리에
+        let keep = self.widget_view.clone();
+        let made: std::rc::Rc<std::cell::RefCell<Option<Entity<Widget>>>> = Default::default();
+        let out = made.clone();
         let opened = cx.open_window(options, move |window, cx| {
-            let db = Db::open(path.to_str().unwrap_or_default(), Clock::System).expect("DB");
-            cx.new(|cx| Widget::new(db, dirty, main, main_window, window, cx))
+            let v = match keep {
+                Some(v) => {
+                    let focus = v.read(cx).focus.clone();
+                    focus.focus(window, cx);
+                    v
+                }
+                None => {
+                    let db =
+                        Db::open(path.to_str().unwrap_or_default(), Clock::System).expect("DB");
+                    cx.new(|cx| Widget::new(db, dirty, main, main_window, window, cx))
+                }
+            };
+            *out.borrow_mut() = Some(v.clone());
+            v
         });
         if let Ok(h) = opened {
             self.widget = Some(h);
+            self.widget_view = made.borrow_mut().take();
         }
     }
 }

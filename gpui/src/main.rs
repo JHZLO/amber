@@ -140,6 +140,9 @@ struct Spike {
     auth: Option<ai_auth::AuthModal>,
     /// 바탕화면 위젯 창과 '개념이 바뀌었다' 깃발(위젯과 나눠 쥔다)
     widget: Option<WindowHandle<widget::Widget>>,
+    /// 숨긴 위젯 — 다시 열면 같은 상태(엔티티), 같은 자리(창 자리)로
+    widget_view: Option<Entity<widget::Widget>>,
+    widget_bounds: Option<Bounds<Pixels>>,
     widget_flag: std::rc::Rc<std::cell::Cell<bool>>,
     /// 첫 실행 안내(연결도 건너뛰기도 안 했을 때)
     onboarding: Option<onboarding::Onboarding>,
@@ -324,6 +327,8 @@ impl Spike {
             search: None,
             onboarding: None,
             widget: None,
+            widget_view: None,
+            widget_bounds: None,
             widget_flag: Default::default(),
             auth: None,
             concepts,
