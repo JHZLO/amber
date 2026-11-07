@@ -12,6 +12,7 @@ import * as aiInstruction from "../src/lib/aiInstruction";
 import * as aiWait from "../src/lib/aiWait";
 import * as comments from "../src/lib/comments";
 import * as noteConcepts from "../src/lib/noteConcepts";
+import * as noteAssets from "../src/lib/noteAssets";
 import * as config from "../src/lib/config";
 import * as date from "../src/lib/date";
 import * as db from "../src/lib/db";
@@ -62,6 +63,7 @@ export const MODULES = [
   "treeFind",
   "comments",
   "noteConcepts",
+  "noteAssets",
   "config",
   "noteAnchor",
   "mdSections",
@@ -208,6 +210,18 @@ export const OPS: Record<string, Op> = {
   "noteConcepts.loadNoteConcepts": noteConcepts.loadNoteConcepts,
   "noteConcepts.addNoteConcept": noteConcepts.addNoteConcept,
   "noteConcepts.removeNoteConcept": noteConcepts.removeNoteConcept,
+
+  // 노트 그림(_assets) — 이름, 링크, 끼울 자리의 줄바꿈, 본문이 가리키는 파일, 옮길 때 복사.
+  // assetFileName 의 Date 는 JSON 으로 못 넘겨 ms 로 받는다(하네스 시간대의 현지 시각으로 읽는다)
+  "noteAssets.extForMime": noteAssets.extForMime,
+  "noteAssets.mimeForName": noteAssets.mimeForName,
+  "noteAssets.assetFileName": (ms: number, ext: string, rand: string) =>
+    noteAssets.assetFileName(new Date(ms), ext, rand),
+  "noteAssets.imageMarkdown": noteAssets.imageMarkdown,
+  "noteAssets.imageInsertText": noteAssets.imageInsertText,
+  "noteAssets.assetRefs": noteAssets.assetRefs,
+  "noteAssets.resolveLocalSrc": noteAssets.resolveLocalSrc,
+  "noteAssets.copyAssetsForMove": noteAssets.copyAssetsForMove,
   "comments.commentsPathFor": comments.commentsPathFor,
   "comments.readComments": comments.readComments,
   "comments.loadComments": comments.loadComments,
@@ -350,6 +364,9 @@ export const NOT_COVERED: Record<string, string> = {
   "dbconn.notifyConnectionsChanged": "창 이벤트",
   "notes.noteMtime": "파일 수정 시각은 녹화할 때마다 다르다",
   "comments.newCommentId": "crypto.randomUUID — 매번 다르다",
+  "noteAssets.saveNoteImage": "이름 꼬리가 난수라 녹화마다 다르다 — 이름은 assetFileName, 종류는 extForMime 으로 잰다",
+  "noteAssets.importImageFile": "앱 데이터 밖의 절대경로를 읽고 saveNoteImage 로 쓴다(난수 이름)",
+  "noteAssets.loadImageUrl": "Blob URL — GPUI 는 markdown.rs 가 파일을 바로 읽는다",
   "aiWait.useAiWaitLine": "React 훅(1초마다 다시 그린다) — 계산은 aiWait.waitLine 으로 잰다",
   "noteAiRun.getNoteAiRun": "실행 스토어(메모리) — GPUI 는 note_ai.rs 가 같은 상태 기계를 갖고 ui_tests 가 가짜 CLI 로 잰다",
   "noteAiRun.isNoteAiRunning": "실행 스토어(메모리) — note_ai.rs, ui_tests",

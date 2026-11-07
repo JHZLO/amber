@@ -1445,6 +1445,57 @@ const treeFindSweep: Scenario = {
 
 /** 노트 질문 사이드카 — 정상, 깨진 JSON, comments 가 배열이 아님, 후속 문답 형태 검사, 비우면 파일을 지운다 */
 /** 노트 → 개념 역참조 사이드카 — 깨진 파일, 숫자가 아닌 conceptId, 같은 개념 갈아 끼우기(맨 뒤로), 다 빼면 파일째 지우기 */
+/** 노트 그림 — 받는 종류, 파일 이름(현지 시각), 링크, 끼울 자리의 앞뒤 줄바꿈(UTF-16 자리), 본문이 가리키는
+ *  파일, 노트를 옮길 때 새 폴더로 복사(이미 있으면 두고, 없는 원본은 건너뛰고, 아무것도 없으면 폴더도 안 만든다) */
+const noteAssetFiles: Scenario = {
+  name: "noteAssets/files",
+  seed: [
+    { path: "vault/notes/CS/A.md", text: "# A\n![](_assets/p.png)\n" },
+    { path: "vault/notes/CS/_assets/p.png", text: "PNG" },
+    { path: "vault/notes/CS/_assets/q.webp", text: "WEBP" },
+    { path: "vault/notes/Other/_assets/q.webp", text: "OTHER" },
+  ],
+  plan() {
+    const md = "# A\n![](_assets/p.png)\n![](_assets/q.webp)\n![](_assets/missing.png)\n";
+    return [
+      ...["image/png", "IMAGE/JPEG", "image/jpeg", "image/gif", "image/webp", "image/svg+xml", "text/plain", "", "image/png "]
+        .map((m) => s("noteAssets.extForMime", m)),
+      ...["a.png", "b.JPG", "c.jpeg", "d.svg", "noext", "x.tar.gz", "dir.png/file", ".png", "a.", "a.webp", "a.GIF", "한글.Png"]
+        .map((n) => s("noteAssets.mimeForName", n)),
+      s("noteAssets.assetFileName", Date.UTC(2026, 8, 24, 6, 30, 12), "png", "a1b2"),
+      s("noteAssets.assetFileName", Date.UTC(2026, 11, 31, 15, 0, 0), "jpg", "zz00"),
+      s("noteAssets.assetFileName", 0, "gif", "0000"),
+      ...["20260924-153012-a1b2.png", "공백 있는.png", ""].map((n) => s("noteAssets.imageMarkdown", n)),
+      s("noteAssets.imageInsertText", "", 0, 0, ["L1"]),
+      s("noteAssets.imageInsertText", "abc", 3, 3, ["L1", "L2"]),
+      s("noteAssets.imageInsertText", "abc\ndef", 4, 4, ["L"]),
+      s("noteAssets.imageInsertText", "가나\n다", 2, 2, ["L"]),
+      s("noteAssets.imageInsertText", "😀x", 2, 3, ["L"]),
+      s("noteAssets.imageInsertText", "ab", 1, 1, []),
+      s("noteAssets.imageInsertText", "a\n", 2, 2, ["L"]),
+      s("noteAssets.imageInsertText", "ab", 0, 2, ["L"]),
+      ...[
+        '![](_assets/a.png) ![alt](./_assets/b.jpg) ![](<_assets/c.gif> "title") ![](_assets/a.png)',
+        "![](_assets/sub/x.png) ![](_assets/.hidden.png) ![](_assets/..\\x.png) ![](other/y.png)",
+        "",
+        "![]( _assets/sp.png )",
+      ].map((m) => s("noteAssets.assetRefs", m)),
+      ...[
+        "_assets/p.png", "./_assets/a%20b.png", "../up.png", "../../../../x.png", "https://e.com/a.png",
+        "/abs.png", "//h/a.png", "a.txt", "data:image/png;base64,xx", "_assets/%E0%A4%A.png",
+        "p.png?x=1#y", "  _assets/t.webp  ", "C:/x.png", "",
+      ].map((src) => s("noteAssets.resolveLocalSrc", "vault/notes/CS", src)),
+      s("noteAssets.resolveLocalSrc", "/abs/notes", "a/../b.gif"),
+      s("noteAssets.resolveLocalSrc", "", "../x.png"),
+      s("noteAssets.copyAssetsForMove", md, "vault/notes/CS", "vault/notes/Other"),
+      s("noteAssets.copyAssetsForMove", md, "vault/notes/CS", "vault/notes/CS"),
+      s("noteAssets.copyAssetsForMove", "no images", "vault/notes/CS", "vault/notes/New"),
+      s("noteAssets.copyAssetsForMove", "![](_assets/missing.png)", "vault/notes/CS", "vault/notes/Fresh"),
+      s("noteAssets.copyAssetsForMove", "![](_assets/p.png)", "vault/notes/CS", "vault/notes/Deep/Er"),
+    ];
+  },
+};
+
 const noteConceptFiles: Scenario = {
   name: "noteConcepts/files",
   seed: [
@@ -1606,6 +1657,7 @@ export const SCENARIOS: Scenario[] = [
   dbconnPure,
   commentFiles,
   noteConceptFiles,
+  noteAssetFiles,
   aiConfig,
   aiConfigGemini,
   conceptNotes,
