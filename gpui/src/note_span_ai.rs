@@ -179,7 +179,10 @@ impl Spike {
                 }
             })
             .detach();
-            input.update(cx, |s, cx| s.focus(window, cx));
+            // 절 고르기 화면에서는 칸이 그려지지 않는다 — 거기에 포커스를 두면 Esc 와 ⌘ 키가 갈 곳이 없다
+            if !m.picking {
+                input.update(cx, |s, cx| s.focus(window, cx));
+            }
             m.input = Some(input);
         }
         let path = m.path.clone();
@@ -385,12 +388,20 @@ impl Spike {
                         .child(t("notes.spanAi.next"))
                         .child(icon("chevron-right", 14.).text_color(k.text))
                         .when(!picked.is_empty(), |d| {
-                            d.on_click(cx.listener(|this, _, _, cx| {
+                            d.on_click(cx.listener(|this, _, window, cx| {
                                 let body = this.ai_current_body(cx);
                                 if let Some(m) = this.notes.span_modal.as_mut() {
                                     m.runs = runs_from_picked(&body, &m.picked);
                                     m.picking = false;
-                                    m.seed.get_or_insert_default();
+                                    // 칸이 이미 있으면 그대로(친 지시를 지우지 않는다), 없으면 다음 그림에서 만든다
+                                    match &m.input {
+                                        Some(input) => {
+                                            input.update(cx, |s, cx| s.focus(window, cx))
+                                        }
+                                        None => {
+                                            m.seed.get_or_insert_default();
+                                        }
+                                    }
                                 }
                                 cx.notify();
                             }))
@@ -415,10 +426,11 @@ impl Spike {
                         button("span-back-pick", k, false, false)
                             .child(icon("chevron-left", 14.).text_color(k.text_2))
                             .child(t("notes.spanAi.backToPick"))
-                            .on_click(cx.listener(|this, _, _, cx| {
+                            .on_click(cx.listener(|this, _, window, cx| {
                                 if let Some(m) = this.notes.span_modal.as_mut() {
                                     m.picking = true;
                                 }
+                                this.focus.focus(window, cx);
                                 cx.notify();
                             })),
                     );

@@ -1975,6 +1975,43 @@ fn a_run_finished_on_another_tab_lights_the_rail(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn escape_closes_the_section_ai_modal(cx: &mut TestAppContext) {
+    let db = seeded("span-esc", &[]);
+    vault_note(&db, "S.md", "# 1. A\n\nold a\n\n## 2. B\n\nold b\n");
+    {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        amber_gpui::ai_config::connect_provider(&d, "claude", "/usr/bin/false", None).unwrap();
+    }
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-S.md");
+    click(&mut ui, "note-span-ai");
+    assert!(ui.update(|_, cx| spike().read(cx).notes.span_modal.is_some()));
+    // 지시를 치고 절 고르기로 돌아갔다 와도 지시는 그대로
+    click(&mut ui, "span-pick-1");
+    click(&mut ui, "span-next");
+    ui.simulate_input("tighten");
+    click(&mut ui, "span-back-pick");
+    click(&mut ui, "span-next");
+    let typed = ui.update(|_, cx| {
+        let m = spike()
+            .read(cx)
+            .notes
+            .span_modal
+            .as_ref()
+            .unwrap()
+            .input
+            .clone();
+        m.map(|i| i.read(cx).value().to_string())
+    });
+    assert_eq!(typed.as_deref(), Some("tighten"));
+    click(&mut ui, "span-back-pick");
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert!(ui.update(|_, cx| spike().read(cx).notes.span_modal.is_none()));
+}
+
+#[gpui_kit::test]
 fn editing_one_section_with_ai_splices_it_back(cx: &mut TestAppContext) {
     let db = seeded("span-sec", &[]);
     let body = "# 1. A\n\nold a\n\n## 2. B\n\nold b\n\n## 3. C\n\nold c\n";

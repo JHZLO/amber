@@ -1130,15 +1130,22 @@ impl Spike {
         ))
     }
 
-    /// Esc — 위에 뜬 것부터 닫는다(내용 보기, 버리기 확인, 그다음 작성 모달 — 닫기는 숨기기)
+    /// Esc — 위에 뜬 것부터 닫는다(내용 보기, 버리기 확인, 그다음 작성 모달 — 닫기는 숨기기).
+    /// 부분 수정 모달도 같다(버리기 확인, 그다음 모달)
     pub(crate) fn ai_modal_escape(&mut self) -> bool {
-        let Some(m) = self.notes.ai_modal.as_mut() else {
-            return false;
-        };
-        if m.peek.take().is_none() && !std::mem::take(&mut m.confirm_discard) {
-            self.notes.ai_modal = None;
+        if let Some(m) = self.notes.ai_modal.as_mut() {
+            if m.peek.take().is_none() && !std::mem::take(&mut m.confirm_discard) {
+                self.notes.ai_modal = None;
+            }
+            return true;
         }
-        true
+        if let Some(m) = self.notes.span_modal.as_mut() {
+            if !std::mem::take(&mut m.confirm_discard) {
+                self.notes.span_modal = None;
+            }
+            return true;
+        }
+        false
     }
 
     #[allow(clippy::too_many_arguments)]

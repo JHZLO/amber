@@ -934,7 +934,7 @@ impl Render for Spike {
                     cx.notify();
                     return;
                 }
-                // 노트 AI 작성 모달 — Esc 는 위에 뜬 것부터(내용 보기, 버리기 확인, 그다음 모달은 숨기기)
+                // 노트 AI 작성/부분 수정 모달 — Esc 는 위에 뜬 것부터(내용 보기, 버리기 확인, 그다음 모달)
                 if this.section == Section::Notes
                     && e.keystroke.key == "escape"
                     && this.ai_modal_escape()
