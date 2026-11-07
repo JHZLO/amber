@@ -2022,6 +2022,55 @@ fn escape_closes_the_section_ai_modal(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn dragging_in_the_read_view_offers_edit_for_that_block(cx: &mut TestAppContext) {
+    let db = seeded("span-read-drag", &[]);
+    let body = "# A\n\nfirst [[1]] para\n\n## 2. B\n\nsecond para here\n\nlast\n";
+    vault_note(&db, "R.md", body);
+    {
+        let d = Db::open(db.to_str().unwrap(), Clock::System).unwrap();
+        amber_gpui::ai_config::connect_provider(&d, "claude", "/usr/bin/false", None).unwrap();
+    }
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "tree-R.md");
+    // 둘째 덩어리(## 2. B 부터)의 문단을 끈다 — 첫 덩어리는 절 링크가 바뀌어 글이 짧아졌다
+    let b = bounds(&mut ui, "note-block-1");
+    let heading_h = px(44.);
+    let y = b.origin.y + heading_h + px(14.);
+    drag_points(
+        &mut ui,
+        point(b.origin.x + px(2.), y),
+        point(b.origin.x + px(60.), y),
+        Modifiers::none(),
+    );
+    let sel = ui.update(|_, cx| spike().read(cx).notes.cmts.sel.clone());
+    let sel = sel.expect("선택하면 단추 줄");
+    let start = body.find("second").unwrap();
+    assert_eq!(
+        sel.block,
+        Some(start..start + "second para here".len()),
+        "그 문단의 본문 구간: {:?}",
+        sel.anchor
+    );
+    click(&mut ui, "cmt-edit");
+    let runs = ui.update(|_, cx| {
+        spike().read(cx).notes.span_modal.as_ref().map(|m| {
+            (
+                m.mode,
+                m.runs.iter().map(|r| r.start..r.end).collect::<Vec<_>>(),
+            )
+        })
+    });
+    assert_eq!(
+        runs,
+        Some((
+            crate::note_span_ai::SpanMode::Selection,
+            vec![start..start + "second para here".len()]
+        ))
+    );
+}
+
+#[gpui_kit::test]
 fn editing_one_section_with_ai_splices_it_back(cx: &mut TestAppContext) {
     let db = seeded("span-sec", &[]);
     let body = "# 1. A\n\nold a\n\n## 2. B\n\nold b\n\n## 3. C\n\nold c\n";

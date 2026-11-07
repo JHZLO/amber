@@ -100,6 +100,28 @@ pub(crate) fn text_states(blocks: &[Block]) -> Vec<Entity<gpui_kit::base::text::
     out
 }
 
+/// 글 덩어리마다(text_states 순서) 그 소스의 줄이 본문의 어느 구간인가 — 읽기 화면에서 고른 블록을
+/// 본문 좌표로 되돌린다(blocks_of 와 같은 순서로 토글 안까지)
+pub(crate) fn text_origins(body: &str) -> Vec<Vec<std::ops::Range<usize>>> {
+    fn go(
+        src: &str,
+        origin: &[std::ops::Range<usize>],
+        out: &mut Vec<Vec<std::ops::Range<usize>>>,
+    ) {
+        for (seg, idx) in note::split_lines(src) {
+            let map: Vec<_> = idx.iter().filter_map(|&i| origin.get(i).cloned()).collect();
+            match seg {
+                note::Segment::Markdown(_) => out.push(map),
+                note::Segment::Toggle { body, .. } => go(&body, &map, out),
+                note::Segment::Svg(_) | note::Segment::Mermaid(_) => {}
+            }
+        }
+    }
+    let mut out = Vec::new();
+    go(body, &note::line_ranges(body), &mut out);
+    out
+}
+
 fn blocks_of(src: &str, text_hex: &str, prefix: &str, cx: &mut App) -> Vec<Block> {
     note::split(src)
         .into_iter()
@@ -1106,5 +1128,25 @@ impl Spike {
                     .child(t("notes.empty.lead"))
                     .child(t("notes.empty.sub")),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::text_origins;
+
+    #[test]
+    fn text_origins_follow_lines_into_toggles() {
+        let body = "# A\n\nx\n\n<details open>\n<summary>T</summary>\n\ninner\n</details>\nafter\n";
+        let o = text_origins(body);
+        let line = |s: &str| {
+            let i = body.find(s).unwrap();
+            i..i + s.len()
+        };
+        assert_eq!(o.len(), 3, "앞 글, 토글 안 글, 뒤 글");
+        assert_eq!(o[0][0], line("# A"));
+        // 토글 안 덩어리의 줄 0 = 빈 줄, 줄 1 = inner — 본문의 그 줄
+        assert_eq!(o[1][1], line("inner"));
+        assert_eq!(o[2][0], line("after"));
     }
 }

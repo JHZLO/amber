@@ -44,6 +44,8 @@ pub struct Sel {
     /// 놓은 자리(창 좌표)와 그때의 본문 스크롤 — 굴리면 버튼이 글을 따라간다
     pub at: Point<Pixels>,
     pub scroll_y: Pixels,
+    /// 선택이 걸친 블록의 본문 소스 구간 — [수정](부분 수정)이 받는다. 못 찾으면 단추가 없다
+    pub block: Option<Range<usize>>,
 }
 
 #[derive(Default)]
@@ -222,13 +224,18 @@ impl Spike {
     pub(crate) fn note_mouse_up(&mut self, at: Point<Pixels>, cx: &mut Context<Self>) {
         self.notes.cmts.mouse = at;
         let (doc, starts) = self.doc_text(cx);
+        let origins = crate::notes_view::text_origins(&self.notes.body);
         let mut found = None;
-        for (state, &start) in text_states(&self.notes.blocks).iter().zip(&starts) {
+        for (bi, (state, &start)) in text_states(&self.notes.blocks)
+            .iter()
+            .zip(&starts)
+            .enumerate()
+        {
             let st = state.read(cx);
             let Some(src) = st.selected_source_range().filter(|r| !r.is_empty()) else {
                 continue;
             };
-            let Some(r) = st.rendered_text().range_for_source(src) else {
+            let Some(r) = st.rendered_text().range_for_source(src.clone()) else {
                 continue;
             };
             let a = start + r.start;
@@ -239,11 +246,22 @@ impl Spike {
             if anchor.trim().chars().count() < 2 {
                 continue;
             }
+            // 그 블록의 소스 구간 → 본문 줄(블록은 줄 머리에서 시작해 줄 끝에서 끝난다)
+            let block = origins.get(bi).and_then(|lines| {
+                let md = st.rendered_text().source().to_string();
+                let b = crate::note::selection_block(&md, src.clone())?;
+                let (ls, le) = (
+                    md[..b.start].matches('\n').count(),
+                    md[..b.end].matches('\n').count(),
+                );
+                Some(lines.get(ls)?.start..lines.get(le)?.end)
+            });
             found = Some(Sel {
                 occurrence: occurrence_at(&doc, &anchor, a),
                 anchor,
                 at,
                 scroll_y: self.scroll.offset().y,
+                block,
             });
             break;
         }
@@ -744,7 +762,23 @@ impl Spike {
                             })),
                     )
                 })
-                .child(promote),
+                .child(promote)
+                // 소스 좌표를 찾은 선택만 고칠 수 있다(제목 #### 아래, 알림 본문 같은 곳은 없다)
+                .children(sel.block.clone().map(|span| {
+                    fab("cmt-edit")
+                        .tooltip(crate::tip::tip(t("notes.cmt.editTip")))
+                        .child(icon("scissors", 13.).text_color(k.text_3))
+                        .child(t("notes.cmt.edit"))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.notes.cmts.sel = None;
+                            this.open_span_modal(
+                                crate::note_span_ai::SpanMode::Selection,
+                                Some(span.clone()),
+                                cx,
+                            );
+                            cx.notify();
+                        }))
+                })),
         )
     }
 

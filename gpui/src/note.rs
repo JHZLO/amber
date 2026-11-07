@@ -3,6 +3,10 @@
 // 글 덩어리는 제목(#~###)마다 새로 시작한다 — 절 링크가 스크롤해 갈 제목이 판의 직계 자식이어야 해서다.
 
 use std::borrow::Cow;
+use std::ops::Range;
+
+/// 줄 번호를 단 줄들 — split 이 덩어리마다 원래 몇째 줄이었는지 남긴다
+type Lines<'a> = std::iter::Peekable<std::iter::Enumerate<std::str::Lines<'a>>>;
 
 pub enum Segment {
     Markdown(String),
@@ -44,17 +48,15 @@ fn summary_of(s: &str) -> Option<String> {
 }
 
 /// 토글 하나를 거둔다 — 첫 줄(여는 태그) 다음부터 짝 맞는 `</details>` 까지. 펜스 안의 태그는 세지 않는다
-fn take_toggle<'a>(
-    first_rest: &str,
-    lines: &mut std::iter::Peekable<std::str::Lines<'a>>,
-) -> (Option<String>, String) {
+fn take_toggle(first_rest: &str, lines: &mut Lines<'_>) -> (Option<String>, String, Vec<usize>) {
     let mut summary = summary_of(first_rest);
     let mut body = String::new();
+    let mut idx = Vec::new();
     let mut depth = 1;
     let mut code: Option<(char, usize)> = None;
     // 제목은 여는 태그 바로 뒤(빈 줄 전)에서만 — 본문 중간의 <summary> 는 글로 둔다
     let mut head = summary.is_none();
-    while let Some(line) = lines.next() {
+    for (i, line) in lines.by_ref() {
         if code.is_none() {
             if head && summary.is_none() {
                 if let Some(t) = summary_of(line) {
@@ -85,36 +87,51 @@ fn take_toggle<'a>(
         }
         body.push_str(line);
         body.push('\n');
+        idx.push(i);
     }
-    (summary, body)
+    (summary, body, idx)
 }
 
 pub fn split(md: &str) -> Vec<Segment> {
+    split_lines(md).into_iter().map(|(s, _)| s).collect()
+}
+
+/// split 과 같고, 덩어리마다 그 글의 줄이 md 의 몇째 줄이었는지(글 덩어리는 글의 줄, 토글은 본문의 줄, 그림은 빈 목록).
+/// 줄 안의 글은 바뀌어도(절 링크) 줄은 하나씩 대응한다 — 읽기 화면의 소스 좌표를 노트 좌표로 되돌리는 데 쓴다
+pub fn split_lines(md: &str) -> Vec<(Segment, Vec<usize>)> {
     let mut out = Vec::new();
     let mut text = String::new();
+    let mut idx: Vec<usize> = Vec::new();
     // 그림이 아닌 코드 펜스 안인지 — 여는 펜스의 문자와 길이(mdSections.ts 와 같은 닫기 판정)
     let mut code: Option<(char, usize)> = None;
-    let mut lines = md.lines().peekable();
-    while let Some(line) = lines.next() {
+    let mut lines = md.lines().enumerate().peekable();
+    while let Some((i, line)) = lines.next() {
         if code.is_none()
             && let Some((open, rest)) = details_open(line)
         {
-            let (summary, body) = take_toggle(rest, &mut lines);
+            let (summary, body, body_idx) = take_toggle(rest, &mut lines);
             if !text.trim().is_empty() {
-                out.push(Segment::Markdown(std::mem::take(&mut text)));
+                out.push((
+                    Segment::Markdown(std::mem::take(&mut text)),
+                    std::mem::take(&mut idx),
+                ));
             }
             text.clear();
-            out.push(Segment::Toggle {
-                summary,
-                open,
-                body,
-            });
+            idx.clear();
+            out.push((
+                Segment::Toggle {
+                    summary,
+                    open,
+                    body,
+                },
+                body_idx,
+            ));
             continue;
         }
         let lang = line.trim_start().strip_prefix("```").map(str::trim);
         if let (None, Some(lang @ ("svg" | "mermaid"))) = (code, lang) {
             let mut body = String::new();
-            for inner in lines.by_ref() {
+            for (_, inner) in lines.by_ref() {
                 if inner.trim() == "```" {
                     break;
                 }
@@ -122,14 +139,21 @@ pub fn split(md: &str) -> Vec<Segment> {
                 body.push('\n');
             }
             if !text.trim().is_empty() {
-                out.push(Segment::Markdown(std::mem::take(&mut text)));
+                out.push((
+                    Segment::Markdown(std::mem::take(&mut text)),
+                    std::mem::take(&mut idx),
+                ));
             }
             text.clear();
-            out.push(if lang == "svg" {
-                Segment::Svg(body)
-            } else {
-                Segment::Mermaid(body)
-            });
+            idx.clear();
+            out.push((
+                if lang == "svg" {
+                    Segment::Svg(body)
+                } else {
+                    Segment::Mermaid(body)
+                },
+                Vec::new(),
+            ));
             continue;
         }
         let was_code = code.is_some();
@@ -139,7 +163,10 @@ pub fn split(md: &str) -> Vec<Segment> {
                 code = None
             }
             (None, None) if heading(line).is_some() && !text.trim().is_empty() => {
-                out.push(Segment::Markdown(std::mem::take(&mut text)));
+                out.push((
+                    Segment::Markdown(std::mem::take(&mut text)),
+                    std::mem::take(&mut idx),
+                ));
             }
             _ => {}
         }
@@ -150,11 +177,75 @@ pub fn split(md: &str) -> Vec<Segment> {
         };
         text.push_str(&line);
         text.push('\n');
+        idx.push(i);
     }
     if !text.trim().is_empty() {
-        out.push(Segment::Markdown(text));
+        out.push((Segment::Markdown(text), idx));
     }
     out
+}
+
+/// str::lines 의 줄마다 md 안의 자리(줄바꿈 \n, \r\n 은 빼고)
+pub fn line_ranges(md: &str) -> Vec<Range<usize>> {
+    let mut out = Vec::new();
+    let mut start = 0;
+    for piece in md.split_inclusive('\n') {
+        let content = match piece.strip_suffix('\n') {
+            Some(c) => c.strip_suffix('\r').unwrap_or(c),
+            None => piece,
+        };
+        out.push(start..start + content.len());
+        start += piece.len();
+    }
+    out
+}
+
+/// 그 자리를 품은 가장 안쪽 '고칠 수 있는 블록'(mdBlocks.ts 의 srcAttrs + closest) — 문단, 제목(#~###), 목록 항목,
+/// 표, 인용/알림, 코드 펜스 가운데 줄 머리에서 시작해 줄 끝에서 끝나는 것. 인용 안의 문단은 `> ` 뒤에서 시작해
+/// 그 구간만 갈아 끼우면 접두사가 남아 깨지므로 건너뛰고 바깥 인용이 대상이 된다
+pub fn block_span(md: &str, at: usize) -> Option<Range<usize>> {
+    use markdown::mdast::Node as N;
+    fn walk(n: &N, md: &[u8], at: usize, best: &mut Option<Range<usize>>) {
+        if let Some(p) = n.position() {
+            let (s, mut e) = (p.start.offset, p.end.offset);
+            if at < s || at >= e {
+                return;
+            }
+            // markdown-rs 는 마지막 목록 항목의 끝을 줄바꿈 뒤로 잡는다(remark 는 글 끝) — 갈아 끼울 때 빈 줄을 먹지 않게
+            while e > s && matches!(md.get(e - 1), Some(b'\n' | b'\r')) {
+                e -= 1;
+            }
+            let tagged = match n {
+                N::Paragraph(_) | N::ListItem(_) | N::Table(_) | N::Blockquote(_) | N::Code(_) => {
+                    true
+                }
+                N::Heading(h) => h.depth <= 3,
+                _ => false,
+            };
+            let line_start = s == 0 || md.get(s - 1) == Some(&b'\n');
+            let line_end = e >= md.len() || md.get(e) == Some(&b'\n');
+            if tagged && line_start && line_end && e > s {
+                *best = Some(s..e);
+            }
+        }
+        for c in n.children().into_iter().flatten() {
+            walk(c, md, at, best);
+        }
+    }
+    let tree = markdown::to_mdast(md, &markdown::ParseOptions::gfm()).ok()?;
+    let mut best = None;
+    walk(&tree, md.as_bytes(), at, &mut best);
+    best
+}
+
+/// 고른 소스 구간이 걸친 블록들을 아우르는 구간(mdBlocks.ts 의 blockRangeFromSelection) — 못 찾으면 None
+pub fn selection_block(md: &str, sel: Range<usize>) -> Option<Range<usize>> {
+    let a = block_span(md, sel.start);
+    let b = block_span(md, sel.end.saturating_sub(1).max(sel.start));
+    match (a, b) {
+        (Some(a), Some(b)) => Some(a.start.min(b.start)..a.end.max(b.end)),
+        (a, b) => a.or(b),
+    }
 }
 
 /// 글 덩어리가 번호 단 제목으로 시작하면 그 번호 — 절 링크의 목적지다
@@ -364,5 +455,58 @@ mod tests {
     fn sec_refs_stay_in_code_blocks() {
         let t = texts("```\n[[1-2]]\n```\n[[1-2]]\n");
         assert_eq!(t[0], "```\n[[1-2]]\n```\n[1-2](#1-2)\n");
+    }
+
+    // mdBlocks.test.ts 의 srcAttrs — 바이트 자리로
+    #[test]
+    fn blocks_that_start_and_end_on_line_boundaries_are_editable() {
+        use super::block_span;
+        let md = "# 제목\n\n문단.\n\n> [!NOTE]\n> 알림.\n";
+        let h = "# 제목".len();
+        assert_eq!(block_span(md, 0), Some(0..h));
+        let p = md.find("문단").unwrap();
+        assert_eq!(block_span(md, p + 3), Some(p..p + "문단.".len()));
+        // 인용 안 문단은 `> ` 뒤에서 시작 — 바깥 인용(알림)이 대상
+        let q = md.find("> [!NOTE]").unwrap();
+        let inner = md.find("알림").unwrap();
+        assert_eq!(block_span(md, inner), Some(q..md.len() - 1));
+        // 빈 줄(블록 사이)은 없다
+        assert_eq!(block_span(md, h + 1), None);
+    }
+
+    #[test]
+    fn list_items_tables_code_and_shallow_headings_only() {
+        use super::{block_span, selection_block};
+        let md = "#### 넷째\n\n- 하나\n- 둘\n\n```rs\nlet x;\n```\n";
+        assert_eq!(block_span(md, 2), None, "#### 는 고칠 블록이 아니다");
+        let one = md.find("- 하나").unwrap();
+        let two = md.find("- 둘").unwrap();
+        assert_eq!(block_span(md, one + 3), Some(one..one + "- 하나".len()));
+        // 두 항목에 걸친 선택은 둘을 아우른다
+        assert_eq!(
+            selection_block(md, one + 3..two + 5),
+            Some(one..two + "- 둘".len())
+        );
+        let code = md.find("```rs").unwrap();
+        assert_eq!(block_span(md, code + 7), Some(code..md.len() - 1));
+    }
+
+    #[test]
+    fn split_lines_keeps_each_line_number_through_toggles_and_figures() {
+        use super::{Segment, line_ranges, split_lines};
+        let md = "# A\n[[1]] x\n\n<details>\n<summary>T</summary>\n\nin\n</details>\n```svg\n<svg/>\n```\ntail\n";
+        let segs = split_lines(md);
+        let idx: Vec<&Vec<usize>> = segs.iter().map(|(_, i)| i).collect();
+        assert_eq!(
+            idx[0],
+            &vec![0, 1, 2],
+            "글 덩어리 — 절 링크로 글이 바뀐 줄도 한 줄"
+        );
+        assert!(matches!(segs[1].0, Segment::Toggle { .. }));
+        assert_eq!(idx[1], &vec![5, 6], "토글 본문(제목 줄은 빠진다)");
+        assert!(matches!(segs[2].0, Segment::Svg(_)) && idx[2].is_empty());
+        assert_eq!(idx[3], &vec![11]);
+        let lines = line_ranges("a\r\nbb\n\nc");
+        assert_eq!(lines, vec![0..1, 3..5, 6..6, 7..8]);
     }
 }

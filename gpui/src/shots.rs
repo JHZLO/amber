@@ -627,11 +627,17 @@ fn comments(s: &mut Shots) {
         .expect("첫 덩어리");
     s.window
         .update(&mut s.cx, |sp, _, cx| {
+            // 그 문단 — [수정]이 받는 본문 구간
+            let body = &sp.notes.body;
+            let block = body
+                .find("The harness")
+                .map(|s| s..body[s..].find('\n').map_or(body.len(), |e| s + e));
             sp.notes.cmts.sel = Some(crate::note_comments::Sel {
                 anchor: "replays it against the Rust one".into(),
                 occurrence: 0,
                 at: point(b.left() + px(560.), b.top() + px(68.)),
                 scroll_y: sp.scroll.offset().y,
+                block,
             });
             cx.notify();
         })
