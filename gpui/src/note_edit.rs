@@ -30,6 +30,8 @@ pub struct NoteEdit {
     pub image_error: Option<String>,
     /// Finder 에서 끌어 온 파일이 원문 칸 위에 있다(그 경로들) — 테두리가 점선이 되고, 놓으면 넣는다
     pub drop: Option<ExternalPaths>,
+    /// 원문 칸에 포커스가 있나 — 테두리가 진해진다(.textarea:focus). 그리기 전에 단다
+    pub focused: bool,
 }
 
 // 토글 단축키 — 지금 앱 mdDetails.ts 의 toggleShortcut / toggleTitleEnter. 자리는 바이트(입력칸과 같다).
@@ -177,6 +179,7 @@ impl Spike {
             debounce: None,
             image_error: None,
             drop: None,
+            focused: true,
         });
     }
 
@@ -378,7 +381,11 @@ impl Spike {
                     .h_full()
                     .rounded(px(6.))
                     .border_1()
-                    .border_color(k.border_strong)
+                    .border_color(if edit.focused {
+                        k.text_2
+                    } else {
+                        k.border_strong
+                    })
                     // Finder 에서 그림을 끌어 올렸을 때 — 놓을 수 있는 자리라는 표시(.note-textarea.is-drop)
                     .when(edit.drop.is_some(), |d| {
                         d.border_color(k.text_2).border_dashed()

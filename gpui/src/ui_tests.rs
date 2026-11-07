@@ -947,6 +947,16 @@ fn find_while_editing_searches_the_source_and_leaves_the_caret_there(cx: &mut Te
     ui.simulate_keystrokes("shift-enter");
     ui.run_until_parked();
     assert_eq!(src_find_of(&mut ui).map(|f| f.1), Some(1));
+    let focused = |ui: &mut VisualTestContext| {
+        ui.update(|_, cx| {
+            let n = &spike().read(cx).notes;
+            n.edit.as_ref().is_some_and(|e| e.focused)
+        })
+    };
+    assert!(
+        !focused(&mut ui),
+        "찾기 줄에 손이 있으면 원문 칸 테두리는 보통"
+    );
     // 찾기 줄에서 Esc — 찾던 자리에 커서를 두고 원문 칸으로 돌아간다
     ui.simulate_keystrokes("escape");
     ui.run_until_parked();
@@ -956,6 +966,7 @@ fn find_while_editing_searches_the_source_and_leaves_the_caret_there(cx: &mut Te
         n.edit.as_ref().map(|e| e.state.read(cx).selected_range())
     });
     assert_eq!(sel, Some(7..12));
+    assert!(focused(&mut ui), "돌아오면 진한 테두리(.textarea:focus)");
     // 원문을 고치면 다시 찾는다(처음부터)
     ui.simulate_keystrokes("cmd-f");
     ui.simulate_input("alpha");

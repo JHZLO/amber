@@ -561,6 +561,9 @@ impl Render for Spike {
         if self.section == Section::Notes {
             self.watch_notes_root(cx);
             self.sync_page_find(cx);
+            if let Some(e) = self.notes.edit.as_mut() {
+                e.focused = e.state.read(cx).focus_handle(cx).is_focused(window);
+            }
         }
         // 디스크 내용으로 바꿀 초안 — 입력칸 값은 창이 있어야 바뀐다
         if let Some(d) = self.notes.pending_draft.take()
