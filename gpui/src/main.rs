@@ -7,6 +7,7 @@ mod ai;
 mod ai_auth;
 mod assets;
 mod calendar;
+mod close_dirty;
 mod concept_add;
 mod concept_augment;
 mod concept_detail;
@@ -189,6 +190,8 @@ struct Spike {
     mmd_zoom: Option<mermaid_zoom::MmdZoom>,
     started: Instant,
     first_frame: bool,
+    /// Esc 로 닫기 전에 묻기 — 모달마다 연 뒤 친 게 있나(close_dirty.rs)
+    close_dirty: close_dirty::CloseDirty,
     /// 창 높이(그릴 때마다) — vh 로 잰 최대 높이(내용 보기의 50vh 등)
     view_h: f32,
 }
@@ -374,6 +377,7 @@ impl Spike {
             },
             started,
             first_frame: false,
+            close_dirty: Default::default(),
             view_h: 920.,
         };
         this.focus.focus(window, cx);
@@ -605,6 +609,7 @@ impl Render for Spike {
         }
         self.prepare_settings(window, cx);
         self.take_auth_required(window, cx);
+        self.sync_close_dirty(cx);
         if !cx.has_active_drag() {
             self.diagrams.canvas.grab = None;
             // 파일 끌기가 창 밖으로 나갔다(놓지 않고) — 점선 표시를 거둔다
@@ -824,6 +829,11 @@ impl Render for Spike {
             // ⌥⌘C — 노트 탭에서 지금 노트의 경로 복사(NoteCrumb)
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
                 let m = &e.keystroke.modifiers;
+                // '입력한 내용을 버릴까요?'가 맨 위 — Esc 는 계속 편집
+                if e.keystroke.key == "escape" && this.close_dirty_keep(window, cx) {
+                    cx.stop_propagation();
+                    return;
+                }
                 // 확대 뷰어가 맨 위 — Esc 는 그것부터 닫는다
                 if this.mmd_zoom.is_some() && e.keystroke.key == "escape" {
                     this.mmd_zoom = None;
@@ -854,7 +864,7 @@ impl Render for Spike {
                 }
                 // 로그인 창 — Esc 는 닫기(진행 중인 로그인은 끊는다)
                 if this.auth.is_some() && e.keystroke.key == "escape" {
-                    this.close_auth(window, cx);
+                    this.esc_close("auth", window, cx, |s, w, cx| s.close_auth(w, cx));
                     cx.stop_propagation();
                     return;
                 }
@@ -866,7 +876,7 @@ impl Render for Spike {
                 }
                 // 빠른 검색 — Esc 는 닫기
                 if this.search.is_some() && e.keystroke.key == "escape" {
-                    this.close_search(window, cx);
+                    this.esc_close("search", window, cx, |s, w, cx| s.close_search(w, cx));
                     cx.stop_propagation();
                     cx.notify();
                     return;
@@ -894,24 +904,55 @@ impl Render for Spike {
                         return;
                     }
                 }
+                // DB 연결 모달(ERD 탭, 설정 위) — Esc 는 위의 확인부터, 그다음 모달(입력이 있으면 묻는다)
+                if e.keystroke.key == "escape"
+                    && let Some(m) = this.erd.conn.as_mut()
+                {
+                    if m.prod_confirm {
+                        m.prod_confirm = false;
+                    } else if !m.busy {
+                        this.esc_close("erd-conn", window, cx, |s, w, cx| {
+                            s.close_conn_modal(w, cx)
+                        });
+                    }
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
+                // 다이어그램 AI — Esc 는 확인부터, 그다음 닫기(결과가 있으면 다시 묻는다)
+                if e.keystroke.key == "escape" && this.dgm_ai_escape(window, cx) {
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
                 // 설정 모달 — Esc 는 닫기(열린 고르기 판이 먼저)
                 if this.settings.open && e.keystroke.key == "escape" {
-                    if this.settings.prompt_del.take().is_some() {
+                    // 위에 뜬 것부터 — DB 지우기 확인, 비밀번호 창(입력이 있으면 묻는다), 프롬프트 지우기 확인
+                    if this.settings.db_delete.take().is_some()
+                        || this.settings.prompt_del.take().is_some()
+                    {
+                    } else if this.settings.db_password.is_some() {
+                        this.esc_close("db-password", window, cx, |s, w, cx| {
+                            s.settings.db_password = None;
+                            s.focus.focus(w, cx);
+                        });
                     } else if this.settings.prompt_edit.is_some() {
-                        this.prompt_cancel(window, cx);
+                        this.esc_close("settings", window, cx, |s, w, cx| s.prompt_cancel(w, cx));
                     } else if this.settings.lang_pending.take().is_some()
                         || std::mem::take(&mut this.settings.theme_open)
                         || std::mem::take(&mut this.settings.lang_open)
                     {
                     } else if !this.ai_escape() && !this.close_settings_menu() {
-                        this.request_close_settings(cx);
+                        this.esc_close("settings", window, cx, |s, _, cx| {
+                            s.request_close_settings(cx)
+                        });
                     }
                     cx.stop_propagation();
                     cx.notify();
                     return;
                 }
                 // 개념 추가/올리기 창(노트 탭에서도 뜬다) — Esc 는 확인부터
-                if e.keystroke.key == "escape" && this.add_concept_escape(cx) {
+                if e.keystroke.key == "escape" && this.add_concept_escape(window, cx) {
                     cx.stop_propagation();
                     cx.notify();
                     return;
@@ -919,7 +960,7 @@ impl Render for Spike {
                 // 개념 — 지우기 확인, 초안 확인, AI 보강(결과가 있으면 묻는다) 순으로 Esc
                 if this.section == Section::Til
                     && e.keystroke.key == "escape"
-                    && this.concept_escape(cx)
+                    && this.concept_escape(window, cx)
                 {
                     cx.stop_propagation();
                     cx.notify();
@@ -937,7 +978,7 @@ impl Render for Spike {
                 // 노트 AI 작성/부분 수정 모달 — Esc 는 위에 뜬 것부터(내용 보기, 버리기 확인, 그다음 모달)
                 if this.section == Section::Notes
                     && e.keystroke.key == "escape"
-                    && this.ai_modal_escape()
+                    && this.ai_modal_escape(window, cx)
                 {
                     cx.stop_propagation();
                     cx.notify();
@@ -951,20 +992,6 @@ impl Render for Spike {
                     if !this.erd.busy {
                         this.erd.confirm_disconnect = None;
                         this.erd.confirm_legacy = false;
-                    }
-                    cx.stop_propagation();
-                    cx.notify();
-                    return;
-                }
-                // ERD 연결 모달 — Esc 는 위의 확인부터, 그다음 모달
-                if this.section == Section::Erd
-                    && e.keystroke.key == "escape"
-                    && let Some(m) = this.erd.conn.as_mut()
-                {
-                    if m.prod_confirm {
-                        m.prod_confirm = false;
-                    } else if !m.busy {
-                        this.close_conn_modal(window, cx);
                     }
                     cx.stop_propagation();
                     cx.notify();
@@ -1175,6 +1202,7 @@ impl Render for Spike {
             .children(self.note_prompt(&k, cx))
             .children(confirm)
             .children(self.mmd_zoom_view(&k, cx))
+            .children(self.close_dirty_modal(&k, cx))
     }
 }
 
@@ -1431,6 +1459,12 @@ fn arg(name: &str) -> Option<String> {
         .and_then(|i| args.get(i + 1).cloned())
 }
 
+/// 앱 공통 — gpui_kit::init 뒤에(앱, 찍기, 시험이 같은 것을 부른다)
+pub(crate) fn app_init(cx: &mut App) {
+    note_edit::bind_keys(cx);
+    close_dirty::init(cx);
+}
+
 fn main() {
     #[cfg(feature = "shots")]
     if let Some(dir) = arg("--shots") {
@@ -1446,7 +1480,7 @@ fn main() {
         .with_assets(assets::Assets)
         .run(move |cx| {
             gpui_kit::init(cx);
-            note_edit::bind_keys(cx);
+            app_init(cx);
             let bounds = Bounds::centered(None, size(px(1440.), px(920.)), cx);
             let options = WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),

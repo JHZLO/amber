@@ -125,6 +125,21 @@ fn auth_label(by_command: bool) -> String {
 }
 
 impl ConnModal {
+    /// 닫기 전에 묻기(close_dirty)가 세는 입력칸
+    pub(crate) fn field_ids(&self) -> Vec<EntityId> {
+        let mut ids = vec![
+            self.name.entity_id(),
+            self.host.entity_id(),
+            self.port.entity_id(),
+            self.user.entity_id(),
+            self.password.entity_id(),
+            self.command.entity_id(),
+            self.schema_text.entity_id(),
+        ];
+        ids.extend(self.labels.values().map(|e| e.entity_id()));
+        ids
+    }
+
     fn value(e: &Entity<InputState>, cx: &App) -> String {
         e.read(cx).value().to_string()
     }

@@ -98,6 +98,17 @@ fn runs_from_picked(body: &str, picked: &[usize]) -> Vec<Span> {
         .collect()
 }
 
+impl SpanModal {
+    /// 닫기 전에 묻기(close_dirty)가 세는 입력칸 — 지시와 원문 조각 칸
+    pub(crate) fn field_ids(&self) -> Vec<EntityId> {
+        self.input
+            .iter()
+            .map(|i| i.entity_id())
+            .chain(self.sources.iter().map(|s| s.entity_id()))
+            .collect()
+    }
+}
+
 impl Spike {
     /// 열 때마다 — 이 노트에 부분 수정 실행이 남아 있으면 그때의 구간, 지시, 폴더를 되살리고, 없으면 새로
     /// (selection 은 받은 구간으로 바로, section 은 고르는 화면부터)

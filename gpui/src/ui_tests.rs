@@ -57,7 +57,7 @@ fn open_with(cx: &mut TestAppContext, db: &PathBuf, clock: Clock) -> VisualTestC
     let db = db.to_str().unwrap().to_string();
     let window = cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::note_edit::bind_keys(cx);
+        crate::app_init(cx);
         amber_gpui::i18n::init(Some("en"));
         theme::apply(Some("dark"), WindowAppearance::Dark, cx);
         let bounds = Bounds {
@@ -789,6 +789,16 @@ fn assets_of(db: &PathBuf) -> Vec<String> {
         .unwrap_or_default();
     names.sort();
     names
+}
+
+/// 친 게 있는 모달에서 Esc 를 누른 뒤 — '입력한 내용을 버릴까요?'에서 버리고 닫는다
+fn discard_typed(ui: &mut VisualTestContext) {
+    ui.run_until_parked();
+    assert!(
+        ui.debug_bounds("dirty-keep").is_some(),
+        "친 게 있으면 Esc 는 먼저 묻는다"
+    );
+    click(ui, "dirty-discard");
 }
 
 fn draft_of(ui: &mut VisualTestContext) -> String {
@@ -2007,7 +2017,7 @@ fn escape_closes_the_section_ai_modal(cx: &mut TestAppContext) {
     assert_eq!(typed.as_deref(), Some("tighten"));
     click(&mut ui, "span-back-pick");
     ui.simulate_keystrokes("escape");
-    ui.run_until_parked();
+    discard_typed(&mut ui);
     assert!(ui.update(|_, cx| spike().read(cx).notes.span_modal.is_none()));
 }
 
@@ -3772,6 +3782,7 @@ fn the_erd_connection_modal_tests_saves_and_edits(cx: &mut TestAppContext) {
     click(&mut ui, "erd-prod-ok");
     assert_eq!(state(&mut ui).unwrap().0, crate::erd_conn::Step::Schemas);
     ui.simulate_keystrokes("escape");
+    discard_typed(&mut ui);
     assert!(state(&mut ui).is_none(), "Esc 로 닫는다");
 }
 
@@ -4186,9 +4197,9 @@ fn report_settings_save_on_every_change(cx: &mut TestAppContext) {
     ui.simulate_input("Jun");
     ui.run_until_parked();
     assert_eq!(report_cfg(&db)["displayName"], "Jun");
-    // Esc 로 닫는다
+    // Esc 로 닫는다(친 게 있어 먼저 묻는다)
     ui.simulate_keystrokes("escape");
-    ui.run_until_parked();
+    discard_typed(&mut ui);
     assert!(ui.debug_bounds("rep-settings").is_none());
 }
 
@@ -4525,9 +4536,9 @@ fn adding_a_concept_with_ai_fills_the_review(cx: &mut TestAppContext) {
             .to_string()
     });
     assert_eq!(title, "MVCC");
-    // 결과가 떠 있으면 닫기 전에 묻는다
+    // 결과가 떠 있으면 닫기 전에 묻는다(친 게 있어 그 전에 한 번 더)
     ui.simulate_keystrokes("escape");
-    ui.run_until_parked();
+    discard_typed(&mut ui);
     assert!(ui.debug_bounds("add-keep").is_some());
     click(&mut ui, "add-keep");
     click(&mut ui, "add-save");
@@ -4620,6 +4631,63 @@ fn promoting_a_note_selection_makes_a_linked_concept(cx: &mut TestAppContext) {
         ui.debug_bounds("concept-source").is_some(),
         "출처 노트 단추"
     );
+}
+
+#[gpui_kit::test]
+fn escape_asks_before_dropping_what_was_typed(cx: &mut TestAppContext) {
+    let db = seeded("close-dirty", &[]);
+    vault_note(&db, "Inbox.md", "# Inbox\n");
+    let mut ui = open(cx, &db);
+    let search_q = |ui: &mut VisualTestContext| {
+        ui.update(|_, cx| {
+            spike()
+                .read(cx)
+                .search
+                .as_ref()
+                .map(|s| s.input.read(cx).value().to_string())
+        })
+    };
+    // 치지 않았으면 바로 닫는다
+    ui.simulate_keystrokes("cmd-k");
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert_eq!(search_q(&mut ui), None);
+    assert!(ui.debug_bounds("dirty-keep").is_none());
+    // 쳤으면 묻는다 — 확인 창의 Esc 는 계속 편집(그 칸으로 돌아가 이어 친다)
+    ui.simulate_keystrokes("cmd-k");
+    ui.simulate_input("lo");
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert!(ui.debug_bounds("dirty-keep").is_some());
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert!(ui.debug_bounds("dirty-keep").is_none());
+    ui.simulate_input("g");
+    ui.run_until_parked();
+    assert_eq!(search_q(&mut ui).as_deref(), Some("log"));
+    // 한 번 쳤으면 닫을 때까지 — 지워도 묻는다
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_keystrokes("backspace");
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert!(ui.debug_bounds("dirty-keep").is_some());
+    click(&mut ui, "dirty-keep");
+    assert_eq!(search_q(&mut ui).as_deref(), Some(""));
+    ui.simulate_keystrokes("escape");
+    discard_typed(&mut ui);
+    assert_eq!(search_q(&mut ui), None);
+    // 다시 열면 처음부터 센다
+    ui.simulate_keystrokes("cmd-k");
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    assert_eq!(search_q(&mut ui), None);
+    // 이름 창도 같다
+    click(&mut ui, "app.rail.notes");
+    click(&mut ui, "notes-new-note");
+    ui.simulate_input("Draft");
+    ui.simulate_keystrokes("escape");
+    discard_typed(&mut ui);
+    assert!(ui.update(|_, cx| spike().read(cx).notes.names.is_none()));
 }
 
 #[gpui_kit::test]
@@ -4758,8 +4826,9 @@ fn the_ai_tab_picks_a_cli_and_saves_on_save(cx: &mut TestAppContext) {
             "직접 입력"
         );
     });
-    // 닫기 — 저장 안 한 변경이 있으면 묻는다
+    // 닫기 — 친 게 있으면 먼저, 그다음 저장 안 한 변경이 있으면 묻는다
     ui.simulate_keystrokes("escape");
+    discard_typed(&mut ui);
     ui.run_until_parked();
     assert!(
         ui.debug_bounds("set-unsaved-keep").is_some(),
@@ -4850,9 +4919,10 @@ fn saved_prompts_are_added_edited_and_deleted(cx: &mut TestAppContext) {
     ui.simulate_input("Examples");
     click(&mut ui, "set-prompt-save");
     assert_eq!(saved(&db)[0].label, "Examples");
-    // Esc 는 편집기만 닫는다
+    // Esc 는 편집기만 닫는다(설정에서 친 게 있어 먼저 묻는다 — 창을 닫을 때까지 남는다)
     click(&mut ui, "set-prompt-new");
     ui.simulate_keystrokes("escape");
+    discard_typed(&mut ui);
     ui.run_until_parked();
     assert!(
         ui.debug_bounds("set-tab-prompts").is_some(),
@@ -4921,11 +4991,22 @@ fn the_databases_tab_lists_connections_and_deletes_them(cx: &mut TestAppContext)
             "실패는 창 안에"
         );
     });
-    click(&mut ui, "set-db-pw-cancel");
-    // 편집은 ERD 의 연결 모달이 설정 위에 뜬다
+    // Esc 는 위에 뜬 비밀번호 창만(친 게 있어 먼저 묻는다) — 설정은 그대로
+    ui.simulate_keystrokes("escape");
+    discard_typed(&mut ui);
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        assert!(s.settings.db_password.is_none() && s.settings.open);
+    });
+    // 편집은 ERD 의 연결 모달이 설정 위에 뜬다 — Esc 는 그 창만
     click(&mut ui, format!("set-db-edit-{id}").leak());
     ui.update(|_, cx| assert!(spike().read(cx).erd.conn.is_some()));
-    ui.update(|window, cx| spike().update(cx, |s, cx| s.close_conn_modal(window, cx)));
+    ui.simulate_keystrokes("escape");
+    ui.run_until_parked();
+    ui.update(|_, cx| {
+        let s = spike().read(cx);
+        assert!(s.erd.conn.is_none() && s.settings.open);
+    });
     // 지우기 — 확인 후 ERD 의 [끊기]와 같은 길
     click(&mut ui, format!("set-db-del-{id}").leak());
     click(&mut ui, "set-db-del-confirm");
@@ -5041,6 +5122,7 @@ fn the_login_window_shows_the_url_and_takes_a_code(cx: &mut TestAppContext) {
     click(&mut ui, "auth-submit");
     ui.update(|_, cx| assert!(spike().read(cx).auth.as_ref().unwrap().err.is_none()));
     ui.simulate_keystrokes("escape");
+    discard_typed(&mut ui);
     ui.run_until_parked();
     ui.update(|_, cx| assert!(spike().read(cx).auth.is_none(), "Esc 는 로그인 창만"));
     assert!(ui.debug_bounds("set-tab-ai").is_some());

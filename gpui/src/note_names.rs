@@ -35,6 +35,13 @@ pub struct NameModal {
     dir_anchor: Rc<Cell<Bounds<Pixels>>>,
 }
 
+impl NameModal {
+    /// 닫기 전에 묻기(close_dirty)가 세는 입력칸
+    pub(crate) fn input_id(&self) -> EntityId {
+        self.input.entity_id()
+    }
+}
+
 /// 자리 표기 — 루트는 '/', 나머지는 '/CS/깊이'
 fn encode_dir(d: &str) -> String {
     format!("/{d}")
@@ -290,10 +297,17 @@ impl Spike {
                             .px(px(11.))
                             .py(px(4.))
                             .text_size(px(14.))
-                            .on_key_down(cx.listener(move |this, e: &KeyDownEvent, _, cx| {
+                            .on_key_down(cx.listener(move |this, e: &KeyDownEvent, window, cx| {
                                 if e.keystroke.key == "escape" {
-                                    this.ui_mut(w).names = None;
-                                    cx.notify();
+                                    let key = match w {
+                                        Which::Notes => "names-notes",
+                                        Which::Diagrams => "names-diagrams",
+                                    };
+                                    this.esc_close(key, window, cx, move |s, _, cx| {
+                                        s.ui_mut(w).names = None;
+                                        cx.notify();
+                                    });
+                                    cx.stop_propagation();
                                 }
                             }))
                             .child(Input::new(&m.input).appearance(false).px_0()),

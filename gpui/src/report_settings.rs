@@ -130,6 +130,18 @@ pub struct RepSettings {
     ph: String,
 }
 
+impl RepSettings {
+    /// 닫기 전에 묻기(close_dirty)가 세는 입력칸
+    pub(crate) fn field_ids(&self) -> Vec<EntityId> {
+        vec![
+            self.path.entity_id(),
+            self.repos.entity_id(),
+            self.context.entity_id(),
+            self.name.entity_id(),
+        ]
+    }
+}
+
 fn wait<T: 'static>(
     rx: futures::channel::oneshot::Receiver<T>,
     cx: &mut AsyncApp,

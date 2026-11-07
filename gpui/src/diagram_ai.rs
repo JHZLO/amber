@@ -261,6 +261,17 @@ impl Spike {
         a.step = Step::Prompt;
     }
 
+    /// Esc — 확인 창이면 그것만 닫고, 아니면 닫기를 청한다(입력이 있으면 먼저 묻는다)
+    pub(crate) fn dgm_ai_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let Some(a) = self.diagrams.ai.as_mut() else {
+            return false;
+        };
+        if !std::mem::take(&mut a.confirm_close) {
+            self.esc_close("dgm-ai", window, cx, |s, _, _| s.request_close_diagram_ai());
+        }
+        true
+    }
+
     /// 닫기 — 결과가 있거나 생성 중이면 한 번 묻는다. 몇 분 걸린 생성물이 X 한 번에 사라지면 안 된다
     fn request_close_diagram_ai(&mut self) {
         let Some(a) = self.diagrams.ai.as_mut() else {

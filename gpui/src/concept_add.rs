@@ -166,14 +166,20 @@ impl Spike {
     }
 
     /// Esc — 확인 창이 떠 있으면 그것부터. 닫은 게 있으면 true
-    pub(crate) fn add_concept_escape(&mut self, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn add_concept_escape(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let Some(a) = self.concepts.add.as_mut() else {
             return false;
         };
         if a.confirm_close {
             a.confirm_close = false;
         } else {
-            self.add_request_close(cx);
+            self.esc_close("concept-add", window, cx, |s, _, cx| {
+                s.add_request_close(cx)
+            });
         }
         true
     }
