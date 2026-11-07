@@ -600,6 +600,10 @@ impl Render for Spike {
         self.take_auth_required(window, cx);
         if !cx.has_active_drag() {
             self.diagrams.canvas.grab = None;
+            // 파일 끌기가 창 밖으로 나갔다(놓지 않고) — 점선 표시를 거둔다
+            if let Some(e) = self.notes.edit.as_mut() {
+                e.drop = None;
+            }
             if self.row_drag.is_some() {
                 self.drop_row();
             }

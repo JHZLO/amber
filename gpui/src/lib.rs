@@ -14,6 +14,7 @@ pub mod line_diff;
 pub mod mermaid;
 pub mod migrate;
 pub mod note_ai_text;
+pub mod note_assets;
 pub mod note_concepts;
 pub mod prefs;
 pub mod report;
@@ -146,6 +147,14 @@ pub const OPS: &[&str] = &[
     "noteConcepts.loadNoteConcepts",
     "noteConcepts.addNoteConcept",
     "noteConcepts.removeNoteConcept",
+    "noteAssets.extForMime",
+    "noteAssets.mimeForName",
+    "noteAssets.assetFileName",
+    "noteAssets.imageMarkdown",
+    "noteAssets.imageInsertText",
+    "noteAssets.assetRefs",
+    "noteAssets.resolveLocalSrc",
+    "noteAssets.copyAssetsForMove",
     "comments.commentsPathFor",
     "comments.readComments",
     "comments.loadComments",
@@ -393,6 +402,9 @@ pub fn call(db: &Db, op: &str, args: &[Json]) -> Result<Json, String> {
 /// vault 파일 op — DB 쪽과 결과 모양이 같다(경로는 문자열, 없음은 null)
 fn call_files(db: &Db, op: &str, a: &Args) -> Result<Json, String> {
     if let Some(r) = note_concepts::call(db, op, a.0) {
+        return r;
+    }
+    if let Some(r) = note_assets::call(db, op, a.0) {
         return r;
     }
     if let Some(r) = comments::call(db, op, a.0) {

@@ -790,6 +790,16 @@ impl Spike {
                 .flex()
                 .flex_col()
                 .child(head)
+                .when_some(
+                    self.notes.edit.as_ref().and_then(|e| e.image_error.clone()),
+                    |d, e| {
+                        d.child(
+                            crate::note_ai_view::note_box(crate::note_ai_view::Note::Error, k)
+                                .mb(px(10.))
+                                .child(e),
+                        )
+                    },
+                )
                 .child(self.note_edit_split(k, cx))
                 .child(meta.mt(px(14.)));
         }

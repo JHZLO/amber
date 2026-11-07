@@ -778,6 +778,127 @@ fn typing_gt_gt_space_then_title_enter_writes_a_toggle(cx: &mut TestAppContext) 
     );
 }
 
+/// 노트 폴더(보관함 맨 위)의 `_assets/` 에 생긴 파일들
+fn assets_of(db: &PathBuf) -> Vec<String> {
+    let dir = db.parent().unwrap().join("vault/notes/_assets");
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .map(|r| {
+            r.filter_map(|e| e.ok()?.file_name().into_string().ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    names
+}
+
+fn draft_of(ui: &mut VisualTestContext) -> String {
+    ui.update(|_, cx| spike().read(cx).note_draft(cx).unwrap_or_default())
+}
+
+fn image_error_of(ui: &mut VisualTestContext) -> Option<String> {
+    ui.update(|_, cx| {
+        let n = &spike().read(cx).notes;
+        n.edit.as_ref().and_then(|e| e.image_error.clone())
+    })
+}
+
+#[gpui_kit::test]
+fn pasting_an_image_saves_it_beside_the_note_and_links_it(cx: &mut TestAppContext) {
+    let db = seeded("notes-paste-image", &[]);
+    vault_note(&db, "A.md", "# A\n");
+    let mut ui = open(cx, &db);
+    edit_note(&mut ui, "tree-A.md", "intro");
+    let image = |format, bytes: &[u8]| {
+        gpui_kit::ClipboardItem::new_image(&gpui_kit::Image {
+            format,
+            bytes: bytes.to_vec(),
+            id: 1,
+        })
+    };
+    ui.write_to_clipboard(image(gpui_kit::ImageFormat::Png, b"PNG!"));
+    ui.simulate_keystrokes("cmd-v");
+    ui.run_until_parked();
+    let names = assets_of(&db);
+    assert_eq!(names.len(), 1, "{names:?}");
+    assert!(names[0].ends_with(".png"));
+    let saved = db
+        .parent()
+        .unwrap()
+        .join("vault/notes/_assets")
+        .join(&names[0]);
+    assert_eq!(std::fs::read(saved).unwrap(), b"PNG!");
+    assert_eq!(
+        draft_of(&mut ui),
+        format!("intro\n![](_assets/{})", names[0]),
+        "줄 중간이면 줄을 바꿔 혼자 선다"
+    );
+    // 글자 붙여넣기는 입력칸이 그대로 받는다
+    ui.write_to_clipboard(gpui_kit::ClipboardItem::new_string("\ntail".into()));
+    ui.simulate_keystrokes("cmd-v");
+    ui.run_until_parked();
+    assert!(draft_of(&mut ui).ends_with(")\ntail"));
+    assert_eq!(image_error_of(&mut ui), None);
+    // svg 는 그림으로 들이지 않는다
+    ui.write_to_clipboard(image(gpui_kit::ImageFormat::Svg, b"<svg/>"));
+    ui.simulate_keystrokes("cmd-v");
+    ui.run_until_parked();
+    assert_eq!(assets_of(&db).len(), 1);
+    assert!(draft_of(&mut ui).ends_with(")\ntail"));
+    assert_eq!(
+        image_error_of(&mut ui).as_deref(),
+        Some("Couldn't save the image: Only PNG, JPG, GIF and WebP images can be added.")
+    );
+}
+
+#[gpui_kit::test]
+fn dropping_image_files_on_the_source_imports_them(cx: &mut TestAppContext) {
+    let db = seeded("notes-drop-image", &[]);
+    vault_note(&db, "A.md", "# A\n");
+    let outside = db.parent().unwrap().join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    let (png, txt) = (outside.join("shot.PNG"), outside.join("memo.txt"));
+    std::fs::write(&png, b"DROP").unwrap();
+    std::fs::write(&txt, b"text").unwrap();
+    let mut ui = open(cx, &db);
+    edit_note(&mut ui, "tree-A.md", "a\n");
+    let drop = |ui: &mut VisualTestContext, paths: Vec<PathBuf>| {
+        let at = bounds(ui, "note-src").center();
+        ui.simulate_event(gpui_kit::FileDropEvent::Entered {
+            position: at,
+            paths: gpui_kit::ExternalPaths(paths.into()),
+        });
+        ui.simulate_event(gpui_kit::FileDropEvent::Submit { position: at });
+        ui.run_until_parked();
+    };
+    drop(&mut ui, vec![png.clone(), txt.clone()]);
+    let names = assets_of(&db);
+    assert_eq!(names.len(), 1, "그림만 받는다: {names:?}");
+    assert!(names[0].ends_with(".png"), "{names:?}");
+    assert_eq!(draft_of(&mut ui), format!("a\n![](_assets/{})", names[0]));
+    // 올렸다가 놓지 않고 창 밖으로 나가면 점선 표시를 거둔다
+    let at = bounds(&mut ui, "note-src").center();
+    ui.simulate_event(gpui_kit::FileDropEvent::Entered {
+        position: at,
+        paths: gpui_kit::ExternalPaths(vec![png.clone()].into()),
+    });
+    let over = |ui: &mut VisualTestContext| {
+        ui.update(|_, cx| {
+            let n = &spike().read(cx).notes;
+            n.edit.as_ref().is_some_and(|e| e.drop.is_some())
+        })
+    };
+    assert!(over(&mut ui), "칸 위 — 점선");
+    ui.simulate_event(gpui_kit::FileDropEvent::Exited);
+    ui.run_until_parked();
+    assert!(!over(&mut ui), "밖으로 나갔다");
+    assert_eq!(assets_of(&db).len(), 1, "놓지 않았으니 그대로");
+    drop(&mut ui, vec![txt]);
+    assert_eq!(
+        image_error_of(&mut ui).as_deref(),
+        Some("Only PNG, JPG, GIF and WebP images can be added.")
+    );
+}
+
 #[gpui_kit::test]
 fn switching_notes_with_unsaved_changes_asks_first(cx: &mut TestAppContext) {
     let db = seeded("notes-unsaved", &[]);

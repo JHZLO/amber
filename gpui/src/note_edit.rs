@@ -9,6 +9,7 @@ use std::time::Duration;
 use amber_gpui::i18n::{t, t_with};
 use amber_gpui::vault;
 use gpui_kit::component::input::{InputEditsEvent, InputEvent, Textarea, TextareaState};
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
 use crate::day_card::{Tag, button, danger_button};
@@ -25,6 +26,10 @@ pub struct NoteEdit {
     pub has_sel: bool,
     /// 미리보기를 늦춰 그리는 작업 — 새 글자가 오면 버리고 다시 건다
     debounce: Option<Task<()>>,
+    /// 그림을 넣다 실패했다(.error-note) — 다음에 넣을 때 지운다
+    pub image_error: Option<String>,
+    /// Finder 에서 끌어 온 파일이 원문 칸 위에 있다(그 경로들) — 테두리가 점선이 되고, 놓으면 넣는다
+    pub drop: Option<ExternalPaths>,
 }
 
 // 토글 단축키 — 지금 앱 mdDetails.ts 의 toggleShortcut / toggleTitleEnter. 자리는 바이트(입력칸과 같다).
@@ -62,12 +67,21 @@ pub(crate) fn toggle_title_enter(v: &str, caret: usize) -> Option<usize> {
     v[line_end..].starts_with("\n\n\n").then_some(line_end + 2)
 }
 
-actions!(note_edit, [SrcEnter]);
+actions!(note_edit, [SrcEnter, SrcPaste]);
 
-/// 원문 칸의 Enter 를 입력칸보다 먼저 받는다 — 같은 깊이면 나중에 묶은 바인딩이 이긴다.
-/// gpui_kit::init 뒤에 부른다. 토글 제목 줄이 아니면 입력칸의 Enter 로 넘긴다
+/// 원문 칸의 Enter 와 ⌘V 를 입력칸보다 먼저 받는다 — 같은 깊이면 나중에 묶은 바인딩이 이긴다.
+/// gpui_kit::init 뒤에 부른다. 토글 제목 줄이 아니면 Enter 를, 그림이 아니면 ⌘V 를 입력칸으로 넘긴다
 pub fn bind_keys(cx: &mut App) {
-    cx.bind_keys([KeyBinding::new("enter", SrcEnter, Some("NoteSrc > Input"))]);
+    cx.bind_keys([
+        KeyBinding::new("enter", SrcEnter, Some("NoteSrc > Input")),
+        KeyBinding::new("cmd-v", SrcPaste, Some("NoteSrc > Input")),
+    ]);
+}
+
+/// 넣을 그림 하나 — 클립보드의 그림 바이트, 또는 Finder 의 파일
+enum ImageJob {
+    Bytes(Vec<u8>, &'static str),
+    File(String),
 }
 
 pub enum NotePrompt {
@@ -161,6 +175,8 @@ impl Spike {
             dirty: false,
             has_sel: false,
             debounce: None,
+            image_error: None,
+            drop: None,
         });
     }
 
@@ -181,6 +197,102 @@ impl Spike {
             Some(at) => state.update(cx, |s, cx| s.set_selected_range(at..at, cx)),
             None => cx.propagate(),
         }
+    }
+
+    /// ⌘V — 클립보드에 그림(스크린샷)이나 Finder 에서 복사한 그림 파일이 있으면 노트 폴더의 `_assets/` 에 쓰고
+    /// 커서 자리에 링크를 끼운다. 글자 붙여넣기는 입력칸에 넘긴다
+    fn src_paste(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let jobs: Vec<ImageJob> = cx
+            .read_from_clipboard()
+            .map(|c| {
+                c.entries()
+                    .iter()
+                    .flat_map(|e| match e {
+                        ClipboardEntry::Image(img) => {
+                            vec![ImageJob::Bytes(img.bytes.clone(), img.format.mime_type())]
+                        }
+                        ClipboardEntry::ExternalPaths(p) => image_files(p),
+                        ClipboardEntry::String(_) => vec![],
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if jobs.is_empty() || self.notes.selected.is_none() {
+            cx.propagate();
+            return;
+        }
+        self.add_images(jobs, window, cx);
+    }
+
+    /// Finder 에서 끄는 동안 — 원문 칸 위에 있나. GPUI 의 drag_over/on_drop 은 hover 로 판단하는데, 마지막
+    /// 입력이 키보드면 hover 가 꺼지고 파일 끌기는 그걸 마우스로 되돌리지 않는다(치다가 끌어 오면 놓기가
+    /// 무시된다). 그래서 끌기 이동은 칸의 자리로, 놓기는 창의 mouseup 으로 직접 판단한다
+    fn src_drag_move(&mut self, e: &DragMoveEvent<ExternalPaths>, cx: &mut Context<Self>) {
+        let over = e
+            .bounds
+            .contains(&e.event.position)
+            .then(|| e.drag(cx).clone());
+        if let Some(ed) = self.notes.edit.as_mut()
+            && ed.drop.is_some() != over.is_some()
+        {
+            ed.drop = over;
+            cx.notify();
+        }
+    }
+
+    /// 창의 mouseup — 원문 칸 위에서 끌던 파일을 놓았다. 그림 파일만 받는다
+    fn src_drop(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(paths) = self.notes.edit.as_mut().and_then(|e| e.drop.take()) else {
+            return;
+        };
+        let jobs = image_files(&paths);
+        if jobs.is_empty() {
+            if let Some(e) = self.notes.edit.as_mut() {
+                e.image_error = Some(t("notes.image.unsupported"));
+            }
+            cx.notify();
+            return;
+        }
+        self.add_images(jobs, window, cx);
+    }
+
+    /// 차례로 저장해 성공한 것만 끼운다. 하나가 실패해도 나머지는 넣는다
+    fn add_images(&mut self, jobs: Vec<ImageJob>, window: &mut Window, cx: &mut Context<Self>) {
+        use amber_gpui::note_assets as na;
+        let (Some(rel), Some(state)) = (
+            self.notes.selected.clone(),
+            self.notes.edit.as_ref().map(|e| e.state.clone()),
+        ) else {
+            return;
+        };
+        let dir = vault::note_dir_path(&vault::notes(&self.db), &rel);
+        let now = self.db.now();
+        let mut links = Vec::new();
+        let mut failure = None;
+        for job in jobs {
+            let saved = match job {
+                ImageJob::Bytes(data, mime) => {
+                    na::save_note_image(&self.db, &dir, &data, mime, now)
+                }
+                ImageJob::File(path) => na::import_image_file(&self.db, &dir, &path, now),
+            };
+            match saved {
+                Ok(name) => links.push(na::image_markdown(&name)),
+                Err(e) => failure = Some(e),
+            }
+        }
+        if !links.is_empty() {
+            state.update(cx, |s, cx| {
+                s.focus(window, cx);
+                let sel = s.selected_range();
+                let text = na::image_insert_text(&s.value(), sel.start, sel.end, &links);
+                s.replace(text, window, cx);
+            });
+        }
+        if let Some(e) = self.notes.edit.as_mut() {
+            e.image_error = failure.map(|msg| t_with("notes.image.saveFailed", &[("msg", &msg)]));
+        }
+        cx.notify();
     }
 
     fn refresh_preview(&mut self, cx: &mut Context<Self>) {
@@ -246,23 +358,55 @@ impl Spike {
             .child(
                 // .textarea.note-textarea — 고정폭 13px, 줄 높이 1.6, 강한 테
                 div()
+                    .id("note-src")
+                    .tag("note-src")
                     .key_context("NoteSrc")
                     .on_action(
                         cx.listener(|this, _: &SrcEnter, window, cx| this.src_enter(window, cx)),
                     )
+                    .on_action(
+                        cx.listener(|this, _: &SrcPaste, window, cx| this.src_paste(window, cx)),
+                    )
+                    .on_drag_move(
+                        cx.listener(|this, e: &DragMoveEvent<ExternalPaths>, _, cx| {
+                            this.src_drag_move(e, cx)
+                        }),
+                    )
+                    .relative()
                     .flex_1()
                     .min_w_0()
                     .h_full()
                     .rounded(px(6.))
                     .border_1()
                     .border_color(k.border_strong)
+                    // Finder 에서 그림을 끌어 올렸을 때 — 놓을 수 있는 자리라는 표시(.note-textarea.is-drop)
+                    .when(edit.drop.is_some(), |d| {
+                        d.border_color(k.text_2).border_dashed()
+                    })
                     .bg(k.surface)
                     .py(px(9.))
                     .px(px(11.))
                     .font_family(MONO)
                     .text_size(px(13.))
                     .line_height(relative(1.6))
-                    .child(Textarea::new(&edit.state).appearance(false).h(relative(1.))),
+                    .child(Textarea::new(&edit.state).appearance(false).h(relative(1.)))
+                    .child({
+                        let this = cx.entity().downgrade();
+                        canvas(
+                            |_, _, _| {},
+                            move |_, _, window, _| {
+                                window.on_mouse_event(
+                                    move |_: &MouseUpEvent, phase, window, cx| {
+                                        if phase == DispatchPhase::Bubble {
+                                            let _ = this.update(cx, |s, cx| s.src_drop(window, cx));
+                                        }
+                                    },
+                                );
+                            },
+                        )
+                        .absolute()
+                        .size_0()
+                    }),
             )
             .child(
                 // .note-preview — 원문 칸과 세로 여백(9px)이 같아야 두 칸의 첫 줄이 맞는다
@@ -455,6 +599,16 @@ impl Spike {
             }
         })
     }
+}
+
+/// 그림 파일만 고른다(확장자로) — 아니면 빈 목록
+fn image_files(p: &ExternalPaths) -> Vec<ImageJob> {
+    p.paths()
+        .iter()
+        .filter_map(|path| path.to_str())
+        .filter(|path| amber_gpui::note_assets::mime_for_name(path).is_some())
+        .map(|path| ImageJob::File(path.to_string()))
+        .collect()
 }
 
 #[cfg(test)]
