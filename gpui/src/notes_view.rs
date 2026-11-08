@@ -270,6 +270,9 @@ pub fn build_blocks(
     text_hex: &str,
     cx: &mut App,
 ) -> (Vec<Block>, HashMap<String, usize>) {
+    let mut figures = Vec::new();
+    figure_sources(src, &mut figures);
+    figure::prepare(&figures, text_hex);
     let segments = note::split(src);
     let mut sections = HashMap::new();
     for (i, s) in segments.iter().enumerate() {
@@ -281,6 +284,18 @@ pub fn build_blocks(
         }
     }
     (blocks_of(src, text_hex, "", cx), sections)
+}
+
+/// 본문의 그림(토글 안까지) — (mermaid 인가, 원문)
+fn figure_sources(src: &str, out: &mut Vec<(bool, String)>) {
+    for s in note::split(src) {
+        match s {
+            note::Segment::Svg(src) => out.push((false, src)),
+            note::Segment::Mermaid(src) => out.push((true, src)),
+            note::Segment::Toggle { body, .. } => figure_sources(&body, out),
+            note::Segment::Markdown(_) => {}
+        }
+    }
 }
 
 /// 'TIL/이름.md' → '이름'
