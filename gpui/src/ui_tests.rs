@@ -5239,6 +5239,68 @@ fn the_login_window_shows_the_url_and_takes_a_code(cx: &mut TestAppContext) {
     ui.update(|_, cx| assert!(spike().read(cx).auth.is_some()));
 }
 
+// 창 자리 — 지금 앱(tauri-plugin-window-state)이 남긴 파일을 그대로 읽고, 같은 꼴로 고쳐 쓴다
+#[gpui_kit::test]
+fn window_state_shares_the_tauri_file(cx: &mut TestAppContext) {
+    let db = seeded("winstate", &[]);
+    let dir = db.parent().unwrap().to_path_buf();
+    let file = dir.join(".window-state.json");
+    std::fs::write(
+        &file,
+        r#"{
+  "main": {"width": 2000, "height": 1440, "x": 0, "y": 50, "prev_x": 100, "prev_y": 76,
+           "maximized": true, "visible": true, "decorated": true, "fullscreen": false},
+  "widget": {"width": 640, "height": 420, "x": 1600, "y": 136, "prev_x": 1600, "prev_y": 136,
+             "maximized": false, "visible": false, "decorated": false, "fullscreen": false}
+}"#,
+    )
+    .unwrap();
+    let read =
+        || -> serde_json::Value { serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap() };
+    let mut ui = open(cx, &db);
+    ui.update(|_, cx| {
+        assert!(
+            matches!(
+                crate::shell::main_bounds(&dir, cx),
+                WindowBounds::Maximized(_)
+            ),
+            "최대화한 채 끝낸 메인"
+        )
+    });
+    // 위젯은 처음 열 때 적어 둔 자리에
+    click(&mut ui, "topbar-widget");
+    let h = ui.update(|_, cx| spike().read(cx).widget).expect("위젯 창");
+    let first = ui.update(|_, cx| h.update(cx, |_, window, _| window.bounds()).unwrap());
+    let restored =
+        ui.update(|_, cx| crate::shell::widget_bounds(&dir, size(px(320.), px(210.)), cx));
+    assert_eq!(Some(first), restored);
+    // 숨기면 물리 픽셀(시험 창 배율 2)로 적고, 다른 창의 기록은 건드리지 않는다
+    ui.update(|_, cx| {
+        let _ = h.update(cx, |w, window, cx| w.hide(window, cx));
+    });
+    ui.run_until_parked();
+    let saved = read();
+    assert_eq!(saved["widget"]["visible"], false);
+    assert_eq!(saved["widget"]["decorated"], false);
+    assert_eq!(
+        (
+            saved["widget"]["width"].clone(),
+            saved["widget"]["height"].clone()
+        ),
+        (640.into(), 420.into())
+    );
+    assert_eq!(saved["main"]["prev_x"], 100);
+    // 메인 — 최대화가 아니면 내용 크기와 자리를 적는다
+    let w = ui.update(|window, _| {
+        crate::shell::save_window(&dir, crate::shell::MAIN, window, true);
+        window.viewport_size().width
+    });
+    let saved = read();
+    assert_eq!(saved["main"]["maximized"], false);
+    assert_eq!(saved["main"]["decorated"], true);
+    assert_eq!(saved["main"]["width"], (w.as_f32() * 2.).round() as i64);
+}
+
 #[gpui_kit::test]
 fn the_widget_window_flips_concepts_and_updates_the_main_window(cx: &mut TestAppContext) {
     let db = seeded("widget", &[]);

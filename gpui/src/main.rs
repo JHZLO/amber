@@ -54,6 +54,7 @@ mod settings_ai;
 mod settings_db;
 mod settings_prompts;
 mod settings_view;
+mod shell;
 #[cfg(feature = "shots")]
 mod shots;
 mod spinner;
@@ -1491,7 +1492,8 @@ fn main() {
         return shots::run(&dir);
     }
     let started = Instant::now();
-    let db_path = arg("--db").expect("--db <amber.db 사본>");
+    // --db 는 사본으로 띄울 때만(개발). 없으면 지금 앱과 같은 데이터 폴더
+    let db_path = arg("--db").unwrap_or_else(shell::db_path);
     let note = arg("--note");
     let date = arg("--date").unwrap_or_else(|| chrono::Local::now().format("%Y-%m-%d").to_string());
     let jump = arg("--jump");
@@ -1501,16 +1503,20 @@ fn main() {
         .run(move |cx| {
             gpui_kit::init(cx);
             app_init(cx);
-            let bounds = Bounds::centered(None, size(px(1440.), px(920.)), cx);
+            let dir = std::path::Path::new(&db_path)
+                .parent()
+                .map(std::path::Path::to_path_buf)
+                .unwrap_or_default();
             let options = WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
+                window_bounds: Some(shell::main_bounds(&dir, cx)),
+                window_min_size: Some(size(px(720.), px(520.))),
                 titlebar: Some(TitlebarOptions {
-                    title: Some("Amber GPUI 시험판".into()),
+                    title: Some("Amber".into()),
                     ..Default::default()
                 }),
                 ..Default::default()
             };
-            gpui_kit::open_window(options, cx, move |window, cx| {
+            let (main_window, spike) = gpui_kit::open_window(options, cx, move |window, cx| {
                 let db = Db::open(&db_path, Clock::System).expect("DB 사본을 못 열었다");
                 amber_gpui::migrate::run(&db).expect("마이그레이션");
                 // 지금 앱에서 고른 언어, 테마, 작업 폴더를 이어받는다(처음 한 번, 아직 없는 키만)
@@ -1521,6 +1527,7 @@ fn main() {
                 cx.new(|cx| Spike::new(db, date, note, jump, started, window, cx))
             })
             .expect("창을 못 열었다");
+            shell::install(main_window, spike, cx);
             cx.activate(true);
         });
 }

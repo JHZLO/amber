@@ -68,6 +68,7 @@ impl Widget {
     pub(crate) fn hide(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let b = window.bounds();
         let _ = self.main.update(cx, |s, _| s.widget_bounds = Some(b));
+        crate::shell::save_window(&self.db.data_dir(), crate::shell::WIDGET, window, false);
         window.remove_window();
     }
 
@@ -466,9 +467,11 @@ impl Spike {
         let path = self.db.data_dir().join("amber.db");
         let main = cx.entity().downgrade();
         let main_window = window.window_handle();
+        let sz = size(px(320.), px(210.));
         let bounds = self
             .widget_bounds
-            .unwrap_or_else(|| Bounds::centered(None, size(px(320.), px(210.)), cx));
+            .or_else(|| crate::shell::widget_bounds(&self.db.data_dir(), sz, cx))
+            .unwrap_or_else(|| Bounds::centered(None, sz, cx));
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             titlebar: None,
