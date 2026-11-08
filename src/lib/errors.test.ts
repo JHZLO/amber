@@ -5,8 +5,9 @@
 import { describe, expect, it } from "vitest";
 import { CODE_KEY, errText } from "./errors";
 
-// @types/node 를 끌어오지 않으려고 fs 대신 vite 의 raw glob 으로 Rust 소스를 읽는다
-const RUST_SOURCES = import.meta.glob("/src-tauri/src/*.rs", {
+// @types/node 를 끌어오지 않으려고 fs 대신 vite 의 raw glob 으로 Rust 소스를 읽는다.
+// AI, 리포트, 외부 DB 의 코드는 amber-core(core/src)에 있다
+const RUST_SOURCES = import.meta.glob(["/src-tauri/src/*.rs", "/core/src/*.rs"], {
   query: "?raw",
   import: "default",
   eager: true,
