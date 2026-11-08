@@ -10,7 +10,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use tauri::ipc::Channel;
+use crate::Channel;
 use tokio::io::AsyncBufReadExt;
 use tokio::time::timeout;
 
@@ -716,7 +716,7 @@ pub struct GhCheck {
 }
 
 /// 설정 화면의 GitHub 상태 — 실제 수집과 같은 준비 단계(prepare_github)를 그대로 돌린다
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn report_check_github(path: Option<String>, account: Option<String>) -> GhCheck {
     let found = match path.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
         Some(p) => crate::shellenv::which(p).await,
@@ -1293,7 +1293,7 @@ async fn collect_ai_sessions(
 // ---- 커맨드: 수집 ----
 
 /// 활성 소스를 병렬 수집. 각 소스가 끝나는 대로 on_progress 로 알리고, 전체 digest 를 반환한다.
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn report_collect(
     date: String,
     start_ms: i64,
@@ -1454,7 +1454,7 @@ pub(crate) fn mcp_instructions(date: &str, mcp: &mut [McpSource]) -> String {
 /// 조립한 프롬프트를 기존 프로바이더 브리지로 요약(claude 는 스트리밍).
 /// P2: mcp_sources 가 있고 provider=claude 면 --allowedTools/--permission-mode 로 등록 MCP 서버 도구를
 /// 비대화식 허용하고, 프롬프트에 수집 지시를 붙여 claude 가 Slack·Notion 을 직접 조회하게 한다.
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn report_generate(
     date: String,
     todos_digest: String,
@@ -1631,7 +1631,7 @@ fn is_ref_only(s: &str) -> bool {
 /// 주간 리포트 생성. 재료는 프론트가 이어붙인 '그 주의 일간 리포트 본문'이다 —
 /// GitHub 을 다시 수집하지 않는다(이미 일간 생성 때 걷었고, 오래된 주는 피드가 닿지도 않는다).
 /// 그래서 소스 칩·MCP 위임이 없고 스트리밍만 있다.
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn report_generate_weekly(
     week_start: String,
     week_end: String,
@@ -1726,7 +1726,7 @@ async fn resolve_gh_path() -> Option<String> {
 }
 
 /// gh 설치/버전 + AI 세션 디렉터리 존재 여부 (설정 화면 상태 표시용)
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn detect_report_tools() -> ReportTools {
     let gh = match resolve_gh_path().await {
         Some(path) => {
@@ -1808,7 +1808,7 @@ fn parse_mcp_list(text: &str) -> Vec<McpServer> {
 }
 
 /// 연결된 claude 프로바이더에 등록된 MCP 서버 목록. codex 는 빈 목록(호출부에서 미사용).
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn report_mcp_servers(cli_path: Option<String>) -> Vec<McpServer> {
     let program = cli_path
         .filter(|p| !p.is_empty())
@@ -1867,7 +1867,7 @@ fn parse_gh_accounts(text: &str) -> Vec<GhAccount> {
 }
 
 /// gh 에 로그인된 계정 목록 (설정에서 리포트 조회 계정 선택용). gh 없거나 미인증이면 빈 목록.
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn report_gh_accounts(cli_path: Option<String>) -> Vec<GhAccount> {
     let program = match cli_path.filter(|p| !p.is_empty()) {
         Some(p) => p,

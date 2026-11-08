@@ -1,0 +1,71 @@
+[package]
+name = "amber-gpui"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+gpui-kit = "=0.9.0"
+rusqlite = { version = "0.37", features = ["bundled", "functions"] }
+serde = { version = "1", features = ["derive"] }
+# preserve_order: 설정에 저장하는 JSON 이 JS 의 JSON.stringify 와 같은 키 순서여야 한다
+serde_json = { version = "1", features = ["preserve_order"] }
+chrono = "0.4"
+ulid = "1.2"
+sha2 = "0.10"
+# 노트 트리 정렬 — 지금 앱의 localeCompare(…, "ko") 와 같은 ICU 한국어 규칙(한글, 한자가 라틴보다 앞)
+icu_collator = "2"
+icu_locale_core = "2"
+regex = "1"
+# 시스템 언어(지금 앱의 navigator.language 와 같은 기본값)
+sys-locale = "0.3"
+# 휴지통, 백업, AI 실행 등 지금 앱과 같이 쓰는 Rust
+amber-core = { path = "../core" }
+pulldown-cmark = { version = "0.13", default-features = false }
+# 토글 머리의 '안에 든 것'을 센다 — gpui-base 의 마크다운 렌더러가 쓰는 것과 같은 파서(mdast)
+markdown = "=1.0.0"
+# 노트 폴더 감시(FSEvents) — 다른 프로그램이 고친 노트를 다시 열지 않아도 반영한다(lib/noteWatch.ts)
+notify = "=8.2.1"
+# AI 실행 — amber-core 의 AI 함수는 tokio 위에서 CLI 를 띄운다. 화면(GPUI 실행기)과 따로 돌리고 결과만 받는다
+tokio = { version = "1", features = ["rt-multi-thread"] }
+futures = "0.3"
+resvg = "0.45.1"
+# 다이어그램 SVG 의 구조(class, data-id) 읽기 — usvg 는 class 를 버린다. usvg 0.45 와 같은 판
+roxmltree = "=0.20.0"
+merman = { version = "=0.10.0-alpha.1", features = ["math"] }
+# ERD 라이브 유리(resin viewer/glass.ts 의 WebGL2 셰이더를 Metal 로) — GPUI 의 Metal 렌더러가 쓰는 것과 같은 판.
+# 그린 것은 IOSurface 를 품은 CVPixelBuffer 로 paint_surface 에 넘긴다
+objc2 = "0.6"
+# 메인 창 숨기기(NSWindow orderOut) — GPUI 에는 창 하나만 숨기는 길이 없다
+raw-window-handle = "0.6"
+# 메뉴 막대 트레이 — 지금 앱(Tauri)의 트레이가 쓰는 것과 같은 판
+tray-icon = { version = "=0.24.1", default-features = false }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSError"] }
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFBase", "CFDictionary", "CFNumber", "CFString"] }
+objc2-metal = { version = "0.3.2", default-features = false, features = [
+    "std", "objc2-io-surface", "MTLAllocation", "MTLBlitCommandEncoder", "MTLBuffer", "MTLCommandBuffer", "MTLCommandEncoder",
+    "MTLCommandQueue", "MTLDevice", "MTLLibrary", "MTLPixelFormat", "MTLRenderCommandEncoder", "MTLRenderPass",
+    "MTLRenderPipeline", "MTLResource", "MTLSampler", "MTLTexture", "MTLTypes",
+] }
+objc2-core-video = { version = "0.3.2", default-features = false, features = [
+    "std", "objc2", "objc2-io-surface", "CVBase", "CVBuffer", "CVImageBuffer", "CVPixelBuffer", "CVPixelBufferIOSurface",
+    "CVPixelBufferPool", "CVReturn",
+] }
+objc2-io-surface = { version = "0.3.2", default-features = false, features = ["std", "objc2", "objc2-core-foundation", "IOSurfaceRef"] }
+
+[features]
+# 화면 찍기(--shots): 실제 macOS 렌더링으로 화면 밖 창에 그리고 hover, 끌기 같은 조작을 보내 PNG 로 남긴다(src/shots.rs)
+shots = ["gpui-kit/test-support"]
+
+[dev-dependencies]
+# 화면 조작 시험대 — 헤드리스 창에 실제 화면을 그리고 클릭, 끌기, 키 입력을 보낸다(src/ui_tests.rs)
+gpui-kit = { version = "=0.9.0", features = ["test-support"] }
+
+[build-dependencies]
+# build.rs 가 지금 앱 소스(아이콘, 다국어 사전)를 읽어 굽는다
+regex = "1"
+serde_json = "1"
+
+# 의존성만 최적화 — 시험대와 찍기가 SVG 읽기(usvg), 굽기(resvg)를 디버그 빌드로 돌면 ERD 시험 하나가 몇 분 걸린다
+[profile.dev.package."*"]
+opt-level = 2

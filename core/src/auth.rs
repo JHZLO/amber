@@ -16,7 +16,7 @@ use serde::Serialize;
 use std::process::Stdio;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
-use tauri::ipc::Channel;
+use crate::Channel;
 use tokio::io::AsyncWriteExt;
 use tokio::process::ChildStdin;
 use tokio::time::timeout;
@@ -94,7 +94,7 @@ fn login_args(kind: ProviderKind) -> Option<&'static [&'static str]> {
 }
 
 /// 현재 인증 상태. 만료를 에러로 마주치기 전에 설정·모달에서 먼저 보여 준다.
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn ai_auth_status(provider: Option<String>, cli_path: Option<String>) -> AuthStatus {
     let (kind, program) = program_for(provider.as_deref(), cli_path);
     if login_args(kind).is_none() {
@@ -135,7 +135,7 @@ pub async fn ai_auth_status(provider: Option<String>, cli_path: Option<String>) 
 
 /// 로그인 시작. 자식을 띄우고 stdout 을 그대로 채널로 흘린다 — URL 도 프롬프트도 에러도
 /// CLI 가 쓴 문장 그대로 보여 준다(우리가 다시 쓰면 CLI 가 바뀔 때마다 어긋난다).
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn ai_auth_login(
     provider: Option<String>,
     cli_path: Option<String>,
@@ -214,7 +214,7 @@ async fn pump<R: tokio::io::AsyncRead + Unpin>(mut r: R, ch: Channel<LoginEvent>
 }
 
 /// 브라우저에서 받은 코드를 자식 stdin 으로 넘긴다. 어디에도 저장하지 않는다.
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub async fn ai_auth_code(code: String) -> Result<(), AiError> {
     let mut sess = take_session()
         .ok_or_else(|| AiError::new("AI_AUTH_NO_SESSION", "진행 중인 로그인이 없습니다."))?;
@@ -228,7 +228,7 @@ pub async fn ai_auth_code(code: String) -> Result<(), AiError> {
 }
 
 /// 모달을 닫거나 다시 시작할 때 — 진행 중인 로그인을 끝낸다.
-#[tauri::command]
+#[cfg_attr(feature = "tauri", tauri::command)]
 pub fn ai_auth_cancel() {
     cancel_running();
 }
