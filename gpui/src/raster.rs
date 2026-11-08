@@ -40,8 +40,20 @@ pub struct Raster {
     pub sharp: Option<((f32, f32, f32, f32), f32, Arc<Image>)>,
     generation: u64,
     task: Option<Task<()>>,
+    /// 굽고 있는 것 — 같은 것을 또 청하면 그대로 둔다. 판은 그림마다 청하는데(유리가 도는 ERD 는 매 프레임),
+    /// 그때마다 새로 시작하면 끝나기 전에 버려져 그림이 끝내 안 나온다
+    pending: Option<Want>,
     /// 트리가 바뀌었다 — 전체부터 다시
     pub stale: bool,
+}
+
+/// 굽기 한 건 — 전체인가, 어느 트리의 어느 구간을 어떤 배율로
+#[derive(Clone, Copy, PartialEq)]
+struct Want {
+    full: bool,
+    tree: *const usvg::Tree,
+    region: (f32, f32, f32, f32),
+    scale: f32,
 }
 
 /// 굽는 데 필요한 것 — 화면 배율(그림 단위 → 논리 픽셀), 그림 왼쪽 위의 판 안 자리, 판 크기, 화면 배율, 전체를 굽는 배율
@@ -118,13 +130,27 @@ pub fn schedule(
     if !need_full && !need_sharp {
         return;
     }
-    raster.generation += 1;
-    let generation = raster.generation;
     let size = g.size;
     let full_scale = (g.full_base * dpr)
         .min(FULL_MAX_PX / size.0.max(size.1))
         .max(0.05);
     let region = visible_region(g.view, g.pan, g.scale, size);
+    let ask = Want {
+        full: need_full,
+        tree: Arc::as_ptr(&tree),
+        region: if need_full {
+            (0., 0., size.0, size.1)
+        } else {
+            region
+        },
+        scale: if need_full { full_scale } else { want },
+    };
+    if raster.pending == Some(ask) {
+        return;
+    }
+    raster.pending = Some(ask);
+    raster.generation += 1;
+    let generation = raster.generation;
     let task = cx.spawn(async move |this, cx| {
         cx.background_executor()
             .timer(Duration::from_millis(if need_full { 0 } else { 120 }))
@@ -145,6 +171,7 @@ pub fn schedule(
             if r.generation != generation {
                 return;
             }
+            r.pending = None;
             match out {
                 Ok((true, _, scale, img)) => {
                     r.full = Some(img);
