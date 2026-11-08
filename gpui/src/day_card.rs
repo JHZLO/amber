@@ -6,6 +6,7 @@ use amber_gpui::dates;
 use amber_gpui::db::Row;
 use amber_gpui::i18n::{t, t_with};
 use amber_gpui::tree::{self, Node};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
@@ -83,6 +84,30 @@ fn vac_of(s: &Spike) -> Option<String> {
 
 /// 중첩 단계마다 더 들어가는 폭
 const INDENT: f32 = 24.;
+
+/// 할 일 입력칸 중 포커스를 쥔 것 — 지금 앱 .input:focus(테두리), .todo-card .todo-quick:focus-within(아래 선, 아이콘)
+#[derive(Default, Clone, Copy, PartialEq)]
+pub(crate) enum TodoFocus {
+    #[default]
+    None,
+    Quick,
+    Child,
+    Edit,
+}
+
+/// 입력칸 상자(.input .todo-edit, 한 줄 30px) — 판 위에서 어디에 적는지 보이게 테두리와 면을 둔다.
+/// 안의 칸은 small(24px, 여러 줄은 안쪽 여백 2/8 을 스스로 갖는다)
+fn edit_box(focused: bool, k: &Tokens) -> Div {
+    div()
+        .flex_1()
+        .min_w_0()
+        .rounded(px(6.))
+        .border_1()
+        .border_color(if focused { k.text_2 } else { k.border_strong })
+        .bg(k.surface)
+        .py(px(2.))
+        .text_size(px(13.5))
+}
 const OVERDUE_LIMIT: usize = 20;
 
 fn glass(k: &Tokens) -> Background {
@@ -348,6 +373,7 @@ impl Spike {
                 )
             });
 
+        let quick_focus = self.todo_focus == TodoFocus::Quick;
         let quick = div()
             .flex()
             .items_center()
@@ -357,8 +383,12 @@ impl Spike {
             .pr(px(18.))
             .py(px(12.))
             .border_b_1()
-            .border_color(k.glass_edge)
-            .child(icon("plus", 15.).text_color(k.text_3))
+            .border_color(if quick_focus {
+                k.glass_edge_hover
+            } else {
+                k.glass_edge
+            })
+            .child(icon("plus", 15.).text_color(if quick_focus { k.text } else { k.text_3 }))
             .child(
                 div()
                     .flex_1()
@@ -580,11 +610,11 @@ impl Spike {
                     .filter(|(pid, _)| *pid == node.id()),
                 |d, (_, input)| {
                     d.child(
-                        div()
-                            .ml(px(INDENT))
-                            .px(px(8.))
-                            .py(px(6.))
-                            .text_size(px(14.))
+                        // .todo-row.todo-subadd 의 여백(4px 8px) 안에 선다
+                        edit_box(self.todo_focus == TodoFocus::Child, k)
+                            .ml(px(INDENT + 8.))
+                            .mr(px(8.))
+                            .my(px(4.))
                             .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
                                 if e.keystroke.key == "escape" {
                                     this.adding_child = None;
@@ -600,7 +630,7 @@ impl Spike {
                                 this.adding_child = None;
                                 cx.notify();
                             }))
-                            .child(Input::new(input).appearance(false)),
+                            .child(Input::new(input).appearance(false).small().px(px(8.))),
                     )
                 },
             )
@@ -723,10 +753,7 @@ impl Spike {
                     )
                     .when_some(editing, |d, state| {
                         d.child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .text_size(px(14.))
+                            edit_box(self.todo_focus == TodoFocus::Edit, k)
                                 .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
                                     if e.keystroke.key == "escape" {
                                         this.editing = None;
@@ -738,7 +765,13 @@ impl Spike {
                                     this.save_edit(cx);
                                     cx.notify();
                                 }))
-                                .child(Textarea::new(&state).appearance(false)),
+                                .child(
+                                    Textarea::new(&state)
+                                        .appearance(false)
+                                        .small()
+                                        .text_size(px(13.5))
+                                        .line_height(relative(1.5)),
+                                ),
                         )
                     })
                     .when(
@@ -1007,7 +1040,13 @@ impl Spike {
     }
 
     /// 글자를 누르면 그 자리에서 고친다 — Enter 저장, Shift+Enter 줄바꿈, Esc 취소, 바깥을 누르면 저장
-    fn start_edit(&mut self, id: i64, content: &str, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn start_edit(
+        &mut self,
+        id: i64,
+        content: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let state = cx.new(|cx| {
             let mut s = TextareaState::new(window, cx)
                 .auto_grow(1, 12)
@@ -1049,7 +1088,7 @@ impl Spike {
         self.reload();
     }
 
-    fn start_child(&mut self, parent: i64, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn start_child(&mut self, parent: i64, window: &mut Window, cx: &mut Context<Self>) {
         let state =
             cx.new(|cx| InputState::new(window, cx).placeholder(t("todos.child.placeholder")));
         cx.subscribe_in(

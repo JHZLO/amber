@@ -129,6 +129,7 @@ struct Spike {
     /// 고치는 중인 줄, 하위를 적는 중인 부모, 지우기 전에 묻는 것
     editing: Option<(i64, Entity<gpui_kit::component::input::TextareaState>)>,
     adding_child: Option<(i64, Entity<InputState>)>,
+    todo_focus: day_card::TodoFocus,
     confirm: Option<day_card::Confirm>,
     input: Entity<InputState>,
     /// 노트 탭: 트리, 펼친 폴더, 고른 노트와 그 본문 덩어리, 판 폭
@@ -322,6 +323,7 @@ impl Spike {
             parked_anc: Vec::new(),
             editing: None,
             adding_child: None,
+            todo_focus: day_card::TodoFocus::None,
             confirm: None,
             input,
             reports: report_run::Reports::default(),
@@ -584,6 +586,25 @@ impl Render for Spike {
                 e.focused = e.state.read(cx).focus_handle(cx).is_focused(window);
             }
         }
+        // 포커스는 창이 있어야 안다 — 할 일 입력칸의 테두리, 아래 선을 칠할 몫
+        let focused = |h: FocusHandle| h.is_focused(window);
+        self.todo_focus = if focused(self.input.read(cx).focus_handle(cx)) {
+            day_card::TodoFocus::Quick
+        } else if self
+            .adding_child
+            .as_ref()
+            .is_some_and(|(_, i)| focused(i.read(cx).focus_handle(cx)))
+        {
+            day_card::TodoFocus::Child
+        } else if self
+            .editing
+            .as_ref()
+            .is_some_and(|(_, e)| focused(e.read(cx).focus_handle(cx)))
+        {
+            day_card::TodoFocus::Edit
+        } else {
+            day_card::TodoFocus::None
+        };
         // 디스크 내용으로 바꿀 초안 — 입력칸 값은 창이 있어야 바뀐다
         if let Some(d) = self.notes.pending_draft.take()
             && let Some(e) = self.notes.edit.as_ref()

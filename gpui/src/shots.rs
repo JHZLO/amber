@@ -330,6 +330,29 @@ pub fn run(dir: &str) {
     s.cx.simulate_mouse_up(w, at, MouseButton::Left, Modifiers::none());
     s.shot("drag-4-dropped");
 
+    // 입력칸이 보이는가 — 하위 추가, 줄 고치기는 상자(.input), 빠른 추가는 포커스에 아래 선과 아이콘이 짙어진다
+    s.window
+        .update(&mut s.cx, |sp, window, cx| sp.start_child(1, window, cx))
+        .unwrap();
+    s.shot("todo-child-add");
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.adding_child = None;
+            sp.start_edit(2, "Edit this line", window, cx)
+        })
+        .unwrap();
+    s.shot("todo-edit");
+    s.window
+        .update(&mut s.cx, |sp, window, cx| {
+            sp.editing = None;
+            sp.input.read(cx).focus_handle(cx).focus(window, cx);
+        })
+        .unwrap();
+    s.shot("todo-quick-focus");
+    s.window
+        .update(&mut s.cx, |sp, window, cx| sp.focus.focus(window, cx))
+        .unwrap();
+
     timetable(&mut s);
     vacation(&mut s);
     let w = s.any();
