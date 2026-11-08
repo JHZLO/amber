@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "pnpm test:ts && cargo test --manifest-path src-tauri/Cargo.toml && cargo test --manifest-path core/Cargo.toml",
+    "test": "pnpm test:ts && cargo test --manifest-path src-tauri/Cargo.toml && cargo test --manifest-path core/Cargo.toml && (cd gpui && cargo test)",
     "tauri": "tauri",
     "test:ts": "vitest run",
     "parity": "vitest run parity",
