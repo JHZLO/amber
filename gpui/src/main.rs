@@ -1518,6 +1518,7 @@ fn main() {
     let note = arg("--note");
     let date = arg("--date").unwrap_or_else(|| chrono::Local::now().format("%Y-%m-%d").to_string());
     let jump = arg("--jump");
+    std::thread::spawn(figure::warm_fonts);
 
     gpui_kit::application()
         .with_assets(assets::Assets)

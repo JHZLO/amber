@@ -19,11 +19,25 @@ pub struct Figure {
     pub tree: Arc<usvg::Tree>,
 }
 
+/// 시스템 글꼴 목록은 처음 한 번 읽는 데 0.1초쯤 든다 — 앱이 뜰 때 뒤에서 미리 읽어 첫 그림이 기다리지 않게
+pub fn warm_fonts() {
+    fonts();
+}
+
 fn fonts() -> Arc<usvg::fontdb::Database> {
     static DB: OnceLock<Arc<usvg::fontdb::Database>> = OnceLock::new();
     DB.get_or_init(|| {
         let mut db = usvg::fontdb::Database::new();
         db.load_system_fonts();
+        // 글꼴 파일을 한 번만 매핑해 둔다 — 안 그러면 글자 덩어리마다 파일을 열고 매핑하고 닫는다(큰 한글 글꼴이라
+        // 노트 그림 시간의 절반이 그것이었고, 여러 스레드로 나눠도 그 시스템 호출에서 줄을 섰다)
+        let ids: Vec<_> = db.faces().map(|f| f.id).collect();
+        for id in ids {
+            // SAFETY: 매핑한 파일을 다른 프로세스가 고치면 안 된다 — 시스템 글꼴은 고쳐지지 않는다
+            unsafe {
+                db.make_shared_face_data(id);
+            }
+        }
         Arc::new(db)
     })
     .clone()
