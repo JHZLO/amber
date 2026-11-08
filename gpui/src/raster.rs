@@ -34,10 +34,10 @@ pub fn visible_region(
 #[derive(Default)]
 pub struct Raster {
     /// 전체(낮은 해상도)와 그 배율
-    pub full: Option<Arc<Image>>,
+    pub full: Option<Arc<RenderImage>>,
     full_scale: f32,
     /// 보이는 곳(선명하게): 구간, 배율, 그림
-    pub sharp: Option<((f32, f32, f32, f32), f32, Arc<Image>)>,
+    pub sharp: Option<((f32, f32, f32, f32), f32, Arc<RenderImage>)>,
     generation: u64,
     task: Option<Task<()>>,
     /// 굽고 있는 것 — 같은 것을 또 청하면 그대로 둔다. 판은 그림마다 청하는데(유리가 도는 ERD 는 매 프레임),
@@ -45,6 +45,8 @@ pub struct Raster {
     pending: Option<Want>,
     /// 트리가 바뀌었다 — 전체부터 다시
     pub stale: bool,
+    /// 밀려난 그림 — 그림판(atlas)에서 내려야 메모리가 돌아온다. 창을 고치는 도중이 아닌 굽기 끝에서 내린다
+    retired: Vec<Arc<RenderImage>>,
 }
 
 /// 굽기 한 건 — 전체인가, 어느 트리의 어느 구간을 어떤 배율로
@@ -69,12 +71,18 @@ pub struct Geometry {
 impl Raster {
     /// 새 그림 — 다 버린다(굽던 것도)
     pub fn reset(&mut self) {
-        *self = Raster::default();
+        let mut retired = std::mem::take(&mut self.retired);
+        retired.extend(self.full.take());
+        retired.extend(self.sharp.take().map(|s| s.2));
+        *self = Raster {
+            retired,
+            ..Raster::default()
+        };
     }
 
     /// 판 위의 그림 층(전체, 그 위에 선명한 곳)
     pub fn layers(&self, size: (f32, f32), pan: (f32, f32), scale: f32) -> Vec<Img> {
-        let layer = |i: Arc<Image>, x: f32, y: f32, w: f32, h: f32| {
+        let layer = |i: Arc<RenderImage>, x: f32, y: f32, w: f32, h: f32| {
             img(i).absolute().left(px(x)).top(px(y)).w(px(w)).h(px(h))
         };
         let mut out = Vec::new();
@@ -172,18 +180,24 @@ pub fn schedule(
                 return;
             }
             r.pending = None;
+            let mut gone = std::mem::take(&mut r.retired);
             match out {
                 Ok((true, _, scale, img)) => {
-                    r.full = Some(img);
+                    gone.extend(r.full.replace(img));
                     r.full_scale = scale;
                     // 낡은 선명 층이 새 그림을 덮지 않게
                     if r.stale {
                         r.stale = false;
-                        r.sharp = None;
+                        gone.extend(r.sharp.take().map(|s| s.2));
                     }
                 }
-                Ok((false, region, scale, img)) => r.sharp = Some((region, scale, img)),
+                Ok((false, region, scale, img)) => {
+                    gone.extend(r.sharp.replace((region, scale, img)).map(|s| s.2));
+                }
                 Err(e) => eprintln!("그림 굽기: {e}"),
+            }
+            for img in gone {
+                cx.drop_image(img, None);
             }
             cx.notify();
         });

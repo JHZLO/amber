@@ -3,14 +3,14 @@
 
 use std::sync::{Arc, OnceLock};
 
-use gpui_kit::{Image, ImageFormat};
+use gpui_kit::RenderImage;
 use resvg::{tiny_skia, usvg};
 
 const SCALE: f32 = 2.0;
 
 #[derive(Clone)]
 pub struct Figure {
-    pub image: Arc<Image>,
+    pub image: Arc<RenderImage>,
     pub width: f32,
     pub height: f32,
     /// 확대 뷰어가 더 큰 배율로 다시 굽는다
@@ -47,12 +47,13 @@ pub fn parse_styled(source: &str, text: &str, css: Option<String>) -> Result<usv
     usvg::Tree::from_str(&source, &options).map_err(|e| e.to_string())
 }
 
-/// 그림의 한 구간(그림 좌표 x, y, w, h)을 scale 배로 굽는다 — 캔버스가 보이는 곳만 선명하게 다시 굽는다
+/// 그림의 한 구간(그림 좌표 x, y, w, h)을 scale 배로 굽는다 — 캔버스가 보이는 곳만 선명하게 다시 굽는다.
+/// GPUI 가 바로 올리는 BGRA 로 넘긴다 — PNG 로 싸면 압축에 굽는 만큼 들고, 그리기 전에 다시 풀어야 한다
 pub fn raster(
     tree: &usvg::Tree,
     region: (f32, f32, f32, f32),
     scale: f32,
-) -> Result<Arc<Image>, String> {
+) -> Result<Arc<RenderImage>, String> {
     let (x, y, w, h) = region;
     let (pw, ph) = ((w * scale).ceil() as u32, (h * scale).ceil() as u32);
     let mut pixmap = tiny_skia::Pixmap::new(pw.max(1), ph.max(1)).ok_or("빈 그림")?;
@@ -61,8 +62,13 @@ pub fn raster(
         tiny_skia::Transform::from_scale(scale, scale).pre_translate(-x, -y),
         &mut pixmap.as_mut(),
     );
-    let png = pixmap.encode_png().map_err(|e| e.to_string())?;
-    Ok(Arc::new(Image::from_bytes(ImageFormat::Png, png)))
+    let (w, h) = (pixmap.width(), pixmap.height());
+    let mut data = pixmap.take();
+    for px in data.chunks_exact_mut(4) {
+        gpui_kit::swap_rgba_pa_to_bgra(px);
+    }
+    let frame = image::RgbaImage::from_raw(w, h, data).ok_or("그림 크기")?;
+    Ok(Arc::new(RenderImage::new(vec![image::Frame::new(frame)])))
 }
 
 pub fn svg(source: &str, text: &str) -> Result<Figure, String> {

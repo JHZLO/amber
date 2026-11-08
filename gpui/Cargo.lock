@@ -202,6 +202,7 @@ dependencies = [
  "gpui-kit",
  "icu_collator",
  "icu_locale_core",
+ "image",
  "markdown",
  "merman",
  "notify",

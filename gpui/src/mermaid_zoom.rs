@@ -34,7 +34,7 @@ impl Render for ZoomDrag {
 }
 
 pub struct MmdZoom {
-    img: Arc<Image>,
+    img: Arc<RenderImage>,
     /// 그림의 자연 크기
     size: (f32, f32),
     pub scale: f32,
@@ -410,13 +410,15 @@ mod tests {
     use std::rc::Rc;
     use std::sync::Arc;
 
-    use gpui_kit::{Bounds, Image, ImageFormat, ScrollDelta, ScrollEvent, point, px, size};
+    use gpui_kit::{Bounds, RenderImage, ScrollDelta, ScrollEvent, point, px, size};
 
     use super::{MAX, MmdZoom};
 
     fn zoom(scale: f32) -> MmdZoom {
         MmdZoom {
-            img: Arc::new(Image::from_bytes(ImageFormat::Png, Vec::new())),
+            img: Arc::new(RenderImage::new(vec![image::Frame::new(
+                image::RgbaImage::new(1, 1),
+            )])),
             size: (400., 200.),
             scale,
             t: (0., 0.),

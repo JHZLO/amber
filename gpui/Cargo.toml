@@ -30,6 +30,8 @@ notify = "=8.2.1"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 futures = "0.3"
 resvg = "0.45.1"
+# 구운 그림을 GPUI 의 RenderImage 로 바로 넘긴다(PNG 로 싸고 다시 풀지 않게) — gpui 가 쓰는 판
+image = { version = "0.25.10", default-features = false }
 # 다이어그램 SVG 의 구조(class, data-id) 읽기 — usvg 는 class 를 버린다. usvg 0.45 와 같은 판
 roxmltree = "=0.20.0"
 merman = { version = "=0.10.0-alpha.1", features = ["math"] }

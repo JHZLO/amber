@@ -3557,9 +3557,9 @@ fn direction_key(d: Direction) -> &'static str {
 }
 
 /// 배경 견본(.erd-swatch-*) — 14x10, 모서리 2, 안쪽 회색 테. CSS 그라디언트를 같은 기하로 SVG 에 옮겨 한 번 굽는다
-fn stage_swatch(stage: &str) -> Option<Arc<Image>> {
+fn stage_swatch(stage: &str) -> Option<Arc<RenderImage>> {
     thread_local! {
-        static CACHE: std::cell::RefCell<HashMap<String, Arc<Image>>> = Default::default();
+        static CACHE: std::cell::RefCell<HashMap<String, Arc<RenderImage>>> = Default::default();
     }
     if let Some(i) = CACHE.with(|c| c.borrow().get(stage).cloned()) {
         return Some(i);
