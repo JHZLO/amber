@@ -5301,6 +5301,45 @@ fn window_state_shares_the_tauri_file(cx: &mut TestAppContext) {
     assert_eq!(saved["main"]["width"], (w.as_f32() * 2.).round() as i64);
 }
 
+// ⌘W(닫기 단추와 같다) — 메인은 자리를 적고 숨는다(창은 남는다), 위젯 창에서는 위젯 숨기기
+#[gpui_kit::test]
+fn close_window_hides_the_main_window_and_the_widget(cx: &mut TestAppContext) {
+    let db = seeded("closewin", &[]);
+    let dir = db.parent().unwrap().to_path_buf();
+    let mut ui = open(cx, &db);
+    let main = ui.update(|window, _| window.window_handle());
+    ui.update(|_, cx| crate::shell::menus(main, spike().downgrade(), cx));
+    // 단축키는 앞에 있는 창에 간다
+    ui.update(|window, _| window.activate_window());
+    ui.run_until_parked();
+    ui.simulate_keystrokes("cmd-w");
+    ui.run_until_parked();
+    let saved: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join(".window-state.json")).unwrap()).unwrap();
+    assert_eq!(saved["main"]["visible"], false, "숨기며 자리를 적는다");
+    assert!(
+        ui.update(|_, cx| cx.windows().contains(&main)),
+        "창은 닫지 않는다"
+    );
+    click(&mut ui, "topbar-widget");
+    let h = ui.update(|_, cx| spike().read(cx).widget).expect("위젯 창");
+    ui.update(|_, cx| {
+        let _ = h.update(cx, |_, window, cx| {
+            window.activate_window();
+            window.dispatch_action(Box::new(crate::shell::CloseWindow), cx)
+        });
+    });
+    ui.run_until_parked();
+    assert!(
+        ui.update(|_, cx| h.update(cx, |_, _, _| ()).is_err()),
+        "위젯은 숨는다"
+    );
+    assert!(
+        ui.update(|_, cx| cx.windows().contains(&main)),
+        "메인은 그대로"
+    );
+}
+
 #[gpui_kit::test]
 fn the_widget_window_flips_concepts_and_updates_the_main_window(cx: &mut TestAppContext) {
     let db = seeded("widget", &[]);

@@ -36,6 +36,10 @@ merman = { version = "=0.10.0-alpha.1", features = ["math"] }
 # ERD 라이브 유리(resin viewer/glass.ts 의 WebGL2 셰이더를 Metal 로) — GPUI 의 Metal 렌더러가 쓰는 것과 같은 판.
 # 그린 것은 IOSurface 를 품은 CVPixelBuffer 로 paint_surface 에 넘긴다
 objc2 = "0.6"
+# 메인 창 숨기기(NSWindow orderOut) — GPUI 에는 창 하나만 숨기는 길이 없다
+raw-window-handle = "0.6"
+# 메뉴 막대 트레이 — 지금 앱(Tauri)의 트레이가 쓰는 것과 같은 판
+tray-icon = { version = "=0.24.1", default-features = false }
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSError"] }
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFBase", "CFDictionary", "CFNumber", "CFString"] }
 objc2-metal = { version = "0.3.2", default-features = false, features = [
