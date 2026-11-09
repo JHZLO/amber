@@ -63,6 +63,12 @@ fn seed(dir: &Path) -> String {
         "flowchart LR\n  A[Tag] --> B[Push] --> C[Rebuild app]\n",
     )
     .unwrap();
+    // 키가 큰 한글 시퀀스 — 확대했을 때 글자가 선명한가, 메모 글이 상자 안에 드는가
+    std::fs::write(
+        diagrams.join("Checkout flow.mmd"),
+        "sequenceDiagram\n  autonumber\n  participant W as 웹 화면\n  participant B as 주문 BFF\n  participant O as 주문 서비스\n  participant D as 주문 DB\n  participant P as 결제 대행\n  Note over W: 결제 버튼은 로그인한 뒤에만<br/>장바구니 화면에서 보인다\n  opt 단계 1\n    W->>B: POST /orders/1\n    B->>O: 주문 생성 요청\n    O->>D: 재고와 가격 확인\n    opt 쿠폰을 썼음\n      O->>P: 할인 금액 조회\n      P-->>O: 할인 금액\n      O->>D: 할인 내역 갱신\n    end\n    O-->>B: 상태와 주문 번호\n    B-->>W: 상태와 마스킹된 결제 수단\n  end\n  opt 단계 2\n    W->>B: POST /orders/2\n    B->>O: 결제 승인 요청\n    O->>D: 승인 번호 저장\n    opt 쿠폰을 썼음\n      O->>P: 할인 금액 조회\n      P-->>O: 할인 금액\n      O->>D: 할인 내역 갱신\n    end\n    O-->>B: 상태와 주문 번호\n    B-->>W: 상태와 마스킹된 결제 수단\n  end\n  opt 단계 3\n    W->>B: POST /orders/3\n    B->>O: 배송 접수 요청\n    O->>D: 송장 번호 저장\n    opt 쿠폰을 썼음\n      O->>P: 할인 금액 조회\n      P-->>O: 할인 금액\n      O->>D: 할인 내역 갱신\n    end\n    O-->>B: 상태와 주문 번호\n    B-->>W: 상태와 마스킹된 결제 수단\n  end\n",
+    )
+    .unwrap();
     std::fs::write(
         notes.join("Engineering/Runbooks/Release.md"),
         "# Release\n\n1. Tag\n2. Push\n\n```bash\ngit tag v1\ngit push --tags\n```\n",
@@ -1054,6 +1060,31 @@ fn diagrams(s: &mut Shots) {
         .unwrap();
     s.settle();
     s.shot("mmd-zoom");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.mmd_zoom = None;
+            sp.diagrams.ai = None;
+            sp.open_diagram("Checkout flow.mmd", cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    // 100% 로, 왼쪽 위를 붙잡고 — 보이는 곳을 화면 배율로 다시 굽는다
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            let c = &mut sp.diagrams.canvas;
+            let base = c.base;
+            c.zoom_by(1. / base, (0., 0.));
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    // 막 키운 때(전체 그림을 늘려 그린다 — 글자 가에 검은 테, 상자 밖 흰 글자의 유령이 없어야 한다)
+    s.shot("dgm-seq-100");
+    // 멈추고 120ms 뒤 보이는 곳을 화면 배율로 다시 굽는다 — 찍기의 실행기 시계는 밀어야 간다
+    s.wait(200);
+    s.wait(400);
+    s.shot("dgm-seq-100-sharp");
     s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.mmd_zoom = None;
