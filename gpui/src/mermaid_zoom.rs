@@ -97,8 +97,9 @@ impl Spike {
     pub(crate) fn open_mmd_zoom(&mut self, fig: &Figure, window: &mut Window, cx: &mut App) {
         self.focus.focus(window, cx);
         let dpr = window.scale_factor().max(1.);
-        let img = crate::figure::raster(&fig.tree, (0., 0., fig.width, fig.height), MAX * dpr)
-            .unwrap_or_else(|_| fig.image.clone());
+        let img =
+            crate::figure::raster(&fig.tree, (0., 0., fig.width, fig.height), MAX * dpr, true)
+                .unwrap_or_else(|_| fig.image.clone());
         self.mmd_zoom = Some(MmdZoom {
             img,
             size: (fig.width, fig.height),

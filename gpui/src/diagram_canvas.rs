@@ -624,6 +624,7 @@ impl Spike {
             view: c.view(),
             dpr: c.dpr.get(),
             full_base: c.base,
+            paper: true,
         };
         crate::raster::schedule(
             &mut c.raster,

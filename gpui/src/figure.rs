@@ -64,15 +64,21 @@ pub fn parse_styled(source: &str, text: &str, css: Option<String>) -> Result<usv
 }
 
 /// 그림의 한 구간(그림 좌표 x, y, w, h)을 scale 배로 굽는다 — 캔버스가 보이는 곳만 선명하게 다시 굽는다.
-/// GPUI 가 바로 올리는 BGRA 로 넘긴다 — PNG 로 싸면 압축에 굽는 만큼 들고, 그리기 전에 다시 풀어야 한다
+/// GPUI 가 바로 올리는 BGRA 로 넘긴다 — PNG 로 싸면 압축에 굽는 만큼 들고, 그리기 전에 다시 풀어야 한다.
+/// paper = 흰 판 위에 놓인다(mermaid, 다이어그램 캔버스) — 바탕을 희게 칠해 둔다. 투명한 곳은 검정(0,0,0,0)이라
+/// 키워 그릴 때 글자 가장자리에 검은 테가 번진다(진한 글자는 굵게, 상자 밖으로 나간 흰 글자는 회색 유령으로)
 pub fn raster(
     tree: &usvg::Tree,
     region: (f32, f32, f32, f32),
     scale: f32,
+    paper: bool,
 ) -> Result<Arc<RenderImage>, String> {
     let (x, y, w, h) = region;
     let (pw, ph) = ((w * scale).ceil() as u32, (h * scale).ceil() as u32);
     let mut pixmap = tiny_skia::Pixmap::new(pw.max(1), ph.max(1)).ok_or("빈 그림")?;
+    if paper {
+        pixmap.fill(tiny_skia::Color::WHITE);
+    }
     resvg::render(
         tree,
         tiny_skia::Transform::from_scale(scale, scale).pre_translate(-x, -y),
@@ -118,7 +124,7 @@ fn cached(
 }
 
 pub fn svg(source: &str, text: &str) -> Result<Figure, String> {
-    cached(false, source, text, || build(source, text))
+    cached(false, source, text, || build(source, text, false))
 }
 
 /// 아직 없는 그림을 코어마다 나눠 미리 굽는다 — 그림이 스무 장 넘는 노트도 한 장씩 차례로 기다리지 않게.
@@ -153,9 +159,10 @@ pub fn prepare(items: &[(bool, String)], text: &str) {
                             return out;
                         };
                         let fig = if *m {
-                            amber_gpui::mermaid::to_svg(src).and_then(|svg| build(&svg, "#333333"))
+                            amber_gpui::mermaid::to_svg(src)
+                                .and_then(|svg| build(&svg, "#333333", true))
                         } else {
-                            build(src, text)
+                            build(src, text, false)
                         };
                         out.push((*m, src.clone(), fig));
                     }
@@ -178,11 +185,11 @@ pub fn prepare(items: &[(bool, String)], text: &str) {
     });
 }
 
-fn build(source: &str, text: &str) -> Result<Figure, String> {
+fn build(source: &str, text: &str, paper: bool) -> Result<Figure, String> {
     let tree = parse(source, text)?;
     let size = tree.size();
     Ok(Figure {
-        image: raster(&tree, (0., 0., size.width(), size.height()), SCALE)?,
+        image: raster(&tree, (0., 0., size.width(), size.height()), SCALE, paper)?,
         width: size.width(),
         height: size.height(),
         tree: Arc::new(tree),
@@ -192,6 +199,6 @@ fn build(source: &str, text: &str) -> Result<Figure, String> {
 /// 지금 앱처럼 밝은(neutral) 테마로 그린다 — 흰 판 위에 놓인다
 pub fn mermaid(source: &str) -> Result<Figure, String> {
     cached(true, source, "", || {
-        build(&amber_gpui::mermaid::to_svg(source)?, "#333333")
+        build(&amber_gpui::mermaid::to_svg(source)?, "#333333", true)
     })
 }

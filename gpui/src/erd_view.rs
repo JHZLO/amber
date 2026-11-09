@@ -763,6 +763,7 @@ impl Spike {
                 view: v,
                 dpr: c.dpr.get(),
                 full_base: c.fit_scale(),
+                paper: false,
             };
             crate::raster::schedule(&mut c.raster, tree, g, |s| &mut s.erd.canvas.raster, cx);
         }
@@ -3636,7 +3637,7 @@ fn stage_swatch(stage: &str) -> Option<Arc<RenderImage>> {
         "<svg xmlns='http://www.w3.org/2000/svg' width='14' height='10' viewBox='0 0 14 10'><defs>{defs}</defs>{rects}<rect x='0.5' y='0.5' width='13' height='9' rx='1.5' fill='none' stroke='rgb(128,128,128)' stroke-opacity='0.4'/></svg>"
     );
     let tree = crate::figure::parse(&svg, "#000").ok()?;
-    let image = crate::figure::raster(&tree, (0., 0., 14., 10.), 4.).ok()?;
+    let image = crate::figure::raster(&tree, (0., 0., 14., 10.), 4., false).ok()?;
     CACHE.with(|c| c.borrow_mut().insert(stage.to_string(), image.clone()));
     Some(image)
 }

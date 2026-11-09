@@ -66,6 +66,8 @@ pub struct Geometry {
     pub view: (f32, f32),
     pub dpr: f32,
     pub full_base: f32,
+    /// 흰 판 위에 놓인다(figure::raster 의 paper)
+    pub paper: bool,
 }
 
 impl Raster {
@@ -143,6 +145,7 @@ pub fn schedule(
         .min(FULL_MAX_PX / size.0.max(size.1))
         .max(0.05);
     let region = visible_region(g.view, g.pan, g.scale, size);
+    let paper = g.paper;
     let ask = Want {
         full: need_full,
         tree: Arc::as_ptr(&tree),
@@ -167,10 +170,11 @@ pub fn schedule(
         let out = ex
             .spawn(async move {
                 if need_full {
-                    crate::figure::raster(&tree, (0., 0., size.0, size.1), full_scale)
+                    crate::figure::raster(&tree, (0., 0., size.0, size.1), full_scale, paper)
                         .map(|i| (true, region, full_scale, i))
                 } else {
-                    crate::figure::raster(&tree, region, want).map(|i| (false, region, want, i))
+                    crate::figure::raster(&tree, region, want, paper)
+                        .map(|i| (false, region, want, i))
                 }
             })
             .await;
