@@ -82,13 +82,28 @@ impl Raster {
         };
     }
 
-    /// 판 위의 그림 층(전체, 그 위에 선명한 곳)
-    pub fn layers(&self, size: (f32, f32), pan: (f32, f32), scale: f32) -> Vec<Img> {
+    /// 판 위의 그림 층(전체, 그 위에 선명한 곳). 선명한 층이 보이는 곳을 다 덮으면 그것만 — 투명한 그림(ERD)은
+    /// 밑에 깔린 흐린 전체 그림의 글자가 비쳐 선명한 글자 둘레에 번진 테가 생긴다
+    pub fn layers(
+        &self,
+        size: (f32, f32),
+        pan: (f32, f32),
+        scale: f32,
+        view: (f32, f32),
+    ) -> Vec<Img> {
         let layer = |i: Arc<RenderImage>, x: f32, y: f32, w: f32, h: f32| {
             img(i).absolute().left(px(x)).top(px(y)).w(px(w)).h(px(h))
         };
+        let covered = self.sharp.as_ref().is_some_and(|((rx, ry, rw, rh), _, _)| {
+            let (x0, y0) = ((-pan.0 / scale).max(0.), (-pan.1 / scale).max(0.));
+            let x1 = ((view.0 - pan.0) / scale).min(size.0);
+            let y1 = ((view.1 - pan.1) / scale).min(size.1);
+            x0 >= rx - 0.5 && y0 >= ry - 0.5 && x1 <= rx + rw + 0.5 && y1 <= ry + rh + 0.5
+        });
         let mut out = Vec::new();
-        if let Some(full) = &self.full {
+        if let Some(full) = &self.full
+            && !covered
+        {
             out.push(layer(
                 full.clone(),
                 pan.0,

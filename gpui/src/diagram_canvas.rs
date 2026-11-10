@@ -877,7 +877,7 @@ impl Spike {
         if let (Some(tree), false) = (&c.tree, c.fit_pending) {
             let (w, h) = (tree.size().width(), tree.size().height());
             let (px0, py0) = (f32::from(c.pan.x), f32::from(c.pan.y));
-            stage = stage.children(c.raster.layers((w, h), (px0, py0), scale));
+            stage = stage.children(c.raster.layers((w, h), (px0, py0), scale, c.view()));
             // 찾기 결과가 든 노드 상자(.dgm-hit-box) — 지금 것은 한 단계 굵게
             for ((x, y, w, h), cur) in c.hit_boxes() {
                 let width = if cur { 3.5 } else { 2. };

@@ -2396,7 +2396,7 @@ impl Spike {
                 .inset_0(),
             );
         if c.tree.is_some() && !c.fit_pending {
-            stage = stage.children(c.raster.layers(c.size, (sx, sy), ss));
+            stage = stage.children(c.raster.layers(c.size, (sx, sy), ss, c.view()));
             // 머리글과 행은 손이 올라가면 옅게(.rz-hit 0.07) — 고른 행(초점의 강조색)은 그대로
             if let (Some(d), Some(over)) = (&c.drawn, c.over)
                 && c.grab.is_none()
