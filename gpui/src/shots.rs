@@ -1133,6 +1133,25 @@ fn erd(s: &mut Shots) {
         })
         .unwrap();
     s.settle();
+    // 한 표를 크게 — 멈추고 보이는 곳을 화면 배율로 다시 굽는다(찍기의 실행기 시계는 밀어야 간다)
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.erd.canvas.zoom_by(3., None, false);
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("erd-zoom");
+    s.wait(200);
+    s.wait(400);
+    s.shot("erd-zoom-sharp");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.erd.canvas.fit(false);
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
     // 표 이름 = 오른쪽 패널(초점), 컬럼 = 정보창
     s.window
         .update(&mut s.cx, |sp, window, cx| {
