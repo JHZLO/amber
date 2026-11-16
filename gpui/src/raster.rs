@@ -1,6 +1,6 @@
 // 벡터 그림을 어느 배율에서도 선명하게 — 다이어그램 캔버스와 ERD 캔버스가 함께 쓴다. 그림 전체는 판에 맞춘 해상도로 한 번
 // 굽고(옮기고 키우는 동안 바로 보인다), 확대가 멈추면 보이는 곳(+여백)만 그 배율로 다시 구워 위에 얹는다. 굽기는 뒤에서 돈다.
-// 트리가 바뀌면(칠하기, 흐리기) stale 로 표시하고 새로 구울 때까지 옛 그림을 그대로 둔다.
+// 트리가 바뀌면(칠하기, 흐리기, 카드 옮기기) retree 로 표시하고 새로 구울 때까지 옛 그림을 그대로 둔다.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -22,12 +22,22 @@ pub fn visible_region(
     scale: f32,
     size: (f32, f32),
 ) -> (f32, f32, f32, f32) {
+    region_around(view, pan, scale, size, MARGIN)
+}
+
+fn region_around(
+    view: (f32, f32),
+    pan: (f32, f32),
+    scale: f32,
+    size: (f32, f32),
+    margin: f32,
+) -> (f32, f32, f32, f32) {
     let (vx, vy) = (-pan.0 / scale, -pan.1 / scale);
     let (vw, vh) = (view.0 / scale, view.1 / scale);
-    let x0 = (vx - vw * MARGIN).max(0.);
-    let y0 = (vy - vh * MARGIN).max(0.);
-    let x1 = (vx + vw * (1. + MARGIN)).min(size.0);
-    let y1 = (vy + vh * (1. + MARGIN)).min(size.1);
+    let x0 = (vx - vw * margin).max(0.);
+    let y0 = (vy - vh * margin).max(0.);
+    let x1 = (vx + vw * (1. + margin)).min(size.0);
+    let y1 = (vy + vh * (1. + margin)).min(size.1);
     (x0, y0, (x1 - x0).max(0.), (y1 - y0).max(0.))
 }
 
@@ -45,8 +55,11 @@ pub struct Raster {
     /// 굽고 있는 것 — 같은 것을 또 청하면 그대로 둔다. 판은 그림마다 청하는데(유리가 도는 ERD 는 매 프레임),
     /// 그때마다 새로 시작하면 끝나기 전에 버려져 그림이 끝내 안 나온다
     pending: Option<Want>,
-    /// 트리가 바뀌었다 — 전체부터 다시
+    /// 트리가 바뀌었다 — 전체를 다시 굽는다(retree 가 표시한다)
     pub stale: bool,
+    /// 트리가 바뀐 횟수, 선명 층을 구운 트리의 차례 — 선명 층이 낡았는지 본다
+    tree_gen: u64,
+    sharp_gen: u64,
     /// 밀려난 그림 — 그림판(atlas)에서 내려야 메모리가 돌아온다. 창을 고치는 도중이 아닌 굽기 끝에서 내린다
     retired: Vec<Arc<RenderImage>>,
 }
@@ -82,6 +95,13 @@ impl Raster {
             retired,
             ..Raster::default()
         };
+    }
+
+    /// 트리가 바뀌었다(칠하기, 흐리기, 카드 옮기기). 크게 보고 있으면 선명 층을 걷지 않고 보이는 곳부터 바로 다시
+    /// 굽는다 — 전체부터 구우면 그사이 흐린 전체가 드러난다(카드를 끄는 동안은 내내)
+    pub fn retree(&mut self) {
+        self.stale = true;
+        self.tree_gen += 1;
     }
 
     /// 판 위의 그림 층(전체, 그 위에 선명한 곳). 선명한 층이 보이는 곳을 다 덮으면 그것만 — 투명한 그림(ERD)은
@@ -137,22 +157,26 @@ pub fn schedule(
 ) {
     let dpr = g.dpr.max(1.);
     let want = g.scale * dpr;
-    let need_full = raster.full.is_none() || raster.stale;
     // 전체 해상도로 충분하면 선명 층은 필요 없다
-    let need_sharp = !need_full
-        && want > raster.full_scale * 1.05
-        && match &raster.sharp {
-            None => true,
-            Some((region, scale, _)) => {
-                let vis = visible_region(g.view, g.pan, g.scale, g.size);
-                let inside = vis.0 >= region.0 - 0.5
-                    && vis.1 >= region.1 - 0.5
-                    && vis.0 + vis.2 <= region.0 + region.2 + 0.5
-                    && vis.1 + vis.3 <= region.1 + region.3 + 0.5;
-                // 보이는 곳이 구운 곳을 벗어났거나 배율이 크게 달라졌다
-                (*scale - want).abs() / want > 0.2 || !inside
-            }
-        };
+    let zoomed = raster.full.is_some() && want > raster.full_scale * 1.05;
+    // 트리만 바뀌었다 — 낡은 선명 층을 보이는 곳만 바로 다시 굽고, 전체는 그 뒤에
+    let renew = zoomed && raster.sharp.is_some() && raster.sharp_gen < raster.tree_gen;
+    let need_full = !renew && (raster.full.is_none() || raster.stale);
+    let need_sharp = renew
+        || (!need_full
+            && zoomed
+            && match &raster.sharp {
+                None => true,
+                Some((region, scale, _)) => {
+                    let vis = visible_region(g.view, g.pan, g.scale, g.size);
+                    let inside = vis.0 >= region.0 - 0.5
+                        && vis.1 >= region.1 - 0.5
+                        && vis.0 + vis.2 <= region.0 + region.2 + 0.5
+                        && vis.1 + vis.3 <= region.1 + region.3 + 0.5;
+                    // 보이는 곳이 구운 곳을 벗어났거나 배율이 크게 달라졌다
+                    (*scale - want).abs() / want > 0.2 || !inside
+                }
+            });
     if !need_full && !need_sharp {
         return;
     }
@@ -160,8 +184,15 @@ pub fn schedule(
     let full_scale = (g.full_base * dpr)
         .min(FULL_MAX_PX / size.0.max(size.1))
         .max(0.05);
-    let region = visible_region(g.view, g.pan, g.scale, size);
+    let region = region_around(
+        g.view,
+        g.pan,
+        g.scale,
+        size,
+        if renew { 0. } else { MARGIN },
+    );
     let paper = g.paper;
+    let tree_gen = raster.tree_gen;
     let ask = Want {
         full: need_full,
         tree: Arc::as_ptr(&tree),
@@ -180,7 +211,11 @@ pub fn schedule(
     let generation = raster.generation;
     let task = cx.spawn(async move |this, cx| {
         cx.background_executor()
-            .timer(Duration::from_millis(if need_full { 0 } else { 120 }))
+            .timer(Duration::from_millis(if need_full || renew {
+                0
+            } else {
+                120
+            }))
             .await;
         let ex = cx.background_executor().clone();
         let out = ex
@@ -206,14 +241,17 @@ pub fn schedule(
                     gone.extend(r.full.replace(img));
                     r.full_scale = scale;
                     r.full_size = (whole.2, whole.3);
-                    // 낡은 선명 층이 새 그림을 덮지 않게
-                    if r.stale {
+                    if tree_gen == r.tree_gen {
                         r.stale = false;
+                    }
+                    // 낡은 선명 층이 새 그림을 덮지 않게
+                    if r.sharp_gen < tree_gen {
                         gone.extend(r.sharp.take().map(|s| s.2));
                     }
                 }
                 Ok((false, region, scale, img)) => {
                     gone.extend(r.sharp.replace((region, scale, img)).map(|s| s.2));
+                    r.sharp_gen = tree_gen;
                 }
                 Err(e) => eprintln!("그림 굽기: {e}"),
             }

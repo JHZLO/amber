@@ -1057,7 +1057,7 @@ impl Spike {
                         c.tree = Some(m.tree);
                         c.drawn = Some(m.drawn);
                         c.size = m.size;
-                        c.raster.stale = true;
+                        c.raster.retree();
                     }
                     Err(e) => eprintln!("ERD 카드 옮기기: {e}"),
                 }
@@ -1152,7 +1152,7 @@ impl Spike {
         {
             c.focus_task = None;
             c.tree = Some(p);
-            c.raster.stale = true;
+            c.raster.retree();
             return;
         }
         // 칠하지 않은 그림이 없으면(카드를 옮긴 뒤) 그것도 뒤에서 읽는다
@@ -1177,7 +1177,7 @@ impl Spike {
                             c.plain = Some(t.clone());
                         }
                         c.tree = Some(t);
-                        c.raster.stale = true;
+                        c.raster.retree();
                     }
                     Err(e) => eprintln!("ERD 칠하기: {e}"),
                 }

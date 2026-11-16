@@ -1145,6 +1145,48 @@ fn erd(s: &mut Shots) {
     s.wait(200);
     s.wait(400);
     s.shot("erd-zoom-sharp");
+    // 크게 본 채로 카드를 끈다 — 흐린 전체로 내려가지 않고 보이는 곳이 선명한 채로 바뀐다
+    let (table, at) = s
+        .window
+        .update(&mut s.cx, |sp, _, _| {
+            let c = &sp.erd.canvas;
+            let b = c.viewport.get();
+            let (x, y, k) = c.shown();
+            let mid = (
+                ((f32::from(b.size.width) / 2. - x) / k) as f64,
+                ((f32::from(b.size.height) / 2. - y) / k) as f64,
+            );
+            let card = c
+                .drawn
+                .as_ref()
+                .unwrap()
+                .cards
+                .iter()
+                .min_by(|a, b| {
+                    let d = |c: &&amber_gpui::resin::viewer::Card| {
+                        (c.x + c.w / 2. - mid.0).hypot(c.y + c.h / 2. - mid.1)
+                    };
+                    d(a).total_cmp(&d(b))
+                })
+                .unwrap()
+                .clone();
+            (card.table, (card.x + 30., card.y + 50.))
+        })
+        .unwrap();
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.erd_shot_move(&table, at, true, cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("erd-zoom-moving");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.erd_drop();
+            cx.notify();
+        })
+        .unwrap();
     s.window
         .update(&mut s.cx, |sp, _, cx| {
             sp.erd.canvas.fit(false);

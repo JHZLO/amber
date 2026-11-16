@@ -3485,6 +3485,43 @@ fn dragging_an_erd_header_moves_the_card_and_its_body_pans(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
+fn moving_an_erd_card_while_zoomed_keeps_the_view_sharp(cx: &mut TestAppContext) {
+    let db = seeded("erd-move-sharp", &[]);
+    seed_erd(&db);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.erd");
+    click(&mut ui, "erd-c1/svc_shop");
+    assert!(erd_canvas(&mut ui).0, "그렸다");
+    // 크게 보고 멈추면 보이는 곳을 선명하게 다시 굽는다
+    ui.update(|_, cx| spike().update(cx, |s, _| s.erd.canvas.zoom_by(3., None, false)));
+    erd_canvas(&mut ui);
+    ui.executor()
+        .advance_clock(std::time::Duration::from_millis(200));
+    erd_canvas(&mut ui);
+    let sharp = |ui: &mut VisualTestContext| {
+        ui.update(|_, cx| spike().read(cx).erd.canvas.raster.sharp.is_some())
+    };
+    assert!(sharp(&mut ui), "선명 층");
+    // 카드를 끄는 동안 선명 층을 걷지 않는다 — 걷으면 흐린 전체가 드러난다
+    let from = erd_spot(&mut ui, "orders", None);
+    ui.simulate_mouse_move(from, None, Modifiers::none());
+    ui.simulate_mouse_down(from, MouseButton::Left, Modifiers::none());
+    for i in 1..=4 {
+        let p = point(from.x + px(10. * i as f32), from.y + px(20. * i as f32));
+        ui.simulate_mouse_move(p, MouseButton::Left, Modifiers::none());
+        erd_canvas(&mut ui);
+        assert!(sharp(&mut ui), "끄는 중 {i}");
+    }
+    ui.simulate_mouse_up(
+        point(from.x + px(40.), from.y + px(80.)),
+        MouseButton::Left,
+        Modifiers::none(),
+    );
+    erd_canvas(&mut ui);
+    assert!(sharp(&mut ui), "놓은 뒤");
+}
+
+#[gpui_kit::test]
 fn tapping_the_erd_opens_the_table_panel_and_column_popover(cx: &mut TestAppContext) {
     let db = seeded("erd-tap", &[]);
     seed_erd(&db);

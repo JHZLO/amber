@@ -408,7 +408,7 @@ impl Canvas {
             Ok(tree) => {
                 self.tree = Some(Arc::new(tree));
                 self.styled = styled;
-                self.raster.stale = true;
+                self.raster.retree();
             }
             Err(e) => eprintln!("다이어그램 칠하기: {e}"),
         }
