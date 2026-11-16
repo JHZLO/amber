@@ -3424,6 +3424,67 @@ fn the_erd_tab_lists_schemas_and_draws_the_snapshot(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn dragging_an_erd_header_moves_the_card_and_its_body_pans(cx: &mut TestAppContext) {
+    let db = seeded("erd-move", &[]);
+    seed_erd(&db);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.erd");
+    click(&mut ui, "erd-c1/svc_shop");
+    let (baked, scale, pan) = erd_canvas(&mut ui);
+    assert!(baked, "그렸다");
+    let card = |ui: &mut VisualTestContext, t: &str| {
+        ui.update(|_, cx| {
+            let c = spike()
+                .read(cx)
+                .erd
+                .canvas
+                .drawn
+                .as_ref()
+                .unwrap()
+                .card(t)
+                .unwrap()
+                .clone();
+            (c.x, c.y)
+        })
+    };
+    let (x0, y0) = card(&mut ui, "orders");
+    let other = card(&mut ui, "users");
+    // 머리글을 끌면 그 카드가 포인터를 따라간다 — 판은 그대로, 패널도 열리지 않는다
+    let from = erd_spot(&mut ui, "orders", None);
+    drag_points(
+        &mut ui,
+        from,
+        point(from.x, from.y + px(120.)),
+        Modifiers::none(),
+    );
+    let (_, _, after) = erd_canvas(&mut ui);
+    let (x1, y1) = card(&mut ui, "orders");
+    assert!((x1 - x0).abs() < 0.5, "{x0} -> {x1}");
+    assert!((y1 - y0 - 120. / scale as f64).abs() < 0.5, "{y0} -> {y1}");
+    assert_eq!(card(&mut ui, "users"), other, "다른 카드는 그대로");
+    assert_eq!(after, pan, "판은 그대로");
+    assert_eq!(erd_state(&mut ui).0, None, "끌기는 패널을 열지 않는다");
+    // 행(몸통)을 끌면 판이 움직이고 카드는 그 자리
+    let row = erd_spot(&mut ui, "orders", Some("id"));
+    drag_points(
+        &mut ui,
+        row,
+        point(row.x + px(60.), row.y),
+        Modifiers::none(),
+    );
+    let (_, _, panned) = erd_canvas(&mut ui);
+    assert!(
+        (panned.0 - pan.0 - 60.).abs() < 0.5,
+        "{pan:?} -> {panned:?}"
+    );
+    assert_eq!(card(&mut ui, "orders"), (x1, y1));
+    // 다시 그리면(보기를 바꾸면) 처음 배치로
+    click(&mut ui, "erd-stage-silk");
+    erd_canvas(&mut ui);
+    assert_eq!(card(&mut ui, "orders"), (x0, y0));
+}
+
+#[gpui_kit::test]
 fn tapping_the_erd_opens_the_table_panel_and_column_popover(cx: &mut TestAppContext) {
     let db = seeded("erd-tap", &[]);
     seed_erd(&db);

@@ -1132,7 +1132,7 @@ impl Render for Spike {
             }))
             .on_drag_move::<erd_view::ErdGrab>(cx.listener(
                 |this, e: &DragMoveEvent<erd_view::ErdGrab>, _, cx| {
-                    if this.erd_pan_to(e.event.position) {
+                    if this.erd_pan_to(e.event.position, cx) {
                         cx.notify();
                     }
                 },

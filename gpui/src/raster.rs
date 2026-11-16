@@ -36,6 +36,8 @@ pub struct Raster {
     /// 전체(낮은 해상도)와 그 배율
     pub full: Option<Arc<RenderImage>>,
     full_scale: f32,
+    /// 전체를 구운 그림의 크기 — 그림이 커져도(카드를 옮겨) 새로 굽기 전까지 옛 그림을 늘리지 않는다
+    full_size: (f32, f32),
     /// 보이는 곳(선명하게): 구간, 배율, 그림
     pub sharp: Option<((f32, f32, f32, f32), f32, Arc<RenderImage>)>,
     generation: u64,
@@ -104,13 +106,12 @@ impl Raster {
         if let Some(full) = &self.full
             && !covered
         {
-            out.push(layer(
-                full.clone(),
-                pan.0,
-                pan.1,
-                size.0 * scale,
-                size.1 * scale,
-            ));
+            let (w, h) = if self.full_size.0 > 0. {
+                self.full_size
+            } else {
+                size
+            };
+            out.push(layer(full.clone(), pan.0, pan.1, w * scale, h * scale));
         }
         if let Some(((rx, ry, rw, rh), _, sharp)) = &self.sharp {
             out.push(layer(
@@ -186,7 +187,7 @@ pub fn schedule(
             .spawn(async move {
                 if need_full {
                     crate::figure::raster(&tree, (0., 0., size.0, size.1), full_scale, paper)
-                        .map(|i| (true, region, full_scale, i))
+                        .map(|i| (true, (0., 0., size.0, size.1), full_scale, i))
                 } else {
                     crate::figure::raster(&tree, region, want, paper)
                         .map(|i| (false, region, want, i))
@@ -201,9 +202,10 @@ pub fn schedule(
             r.pending = None;
             let mut gone = std::mem::take(&mut r.retired);
             match out {
-                Ok((true, _, scale, img)) => {
+                Ok((true, whole, scale, img)) => {
                     gone.extend(r.full.replace(img));
                     r.full_scale = scale;
+                    r.full_size = (whole.2, whole.3);
                     // 낡은 선명 층이 새 그림을 덮지 않게
                     if r.stale {
                         r.stale = false;

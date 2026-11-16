@@ -193,6 +193,17 @@ struct Drawing {
     background: Option<String>,
     drawn: Arc<Drawn>,
     model: Arc<Model>,
+    /// ELK 가 낸 배치와 그린 옵션 — 카드를 옮기면 배치는 그대로 두고 다시 그린다
+    layout: Arc<String>,
+    options: SvgOptions,
+}
+
+/// 카드를 옮긴 그림 — 지금 칠한 초점, 찾기를 얹어 한 번만 읽는다(읽기가 굽기보다 오래 걸린다)
+struct Moved {
+    tree: Arc<usvg::Tree>,
+    styled: bool,
+    size: (f32, f32),
+    drawn: Arc<Drawn>,
 }
 
 /// 그린 뒤에 할 일 — 다른 스키마의 표를 트리에서 골랐거나, 숨은 컬럼을 패널에서 골랐다
@@ -276,6 +287,16 @@ pub struct ErdCanvas {
     press: Option<(Point<Pixels>, (f32, f32))>,
     /// 끄는 중 — 누른 자리, 그때의 x, y, 문턱을 넘었나
     grab: Option<(Point<Pixels>, (f32, f32), bool)>,
+    /// 머리글을 잡고 끄는 카드와 누를 때의 자리 — 판 대신 카드가 움직인다(resin 의 캔버스)
+    lifting: Option<(String, (f64, f64))>,
+    /// 옮긴 카드의 자리 — 다른 그림이 올라오면 버린다(보는 동안만)
+    moved: HashMap<String, (f64, f64)>,
+    /// 지금 그림의 배치와 옵션(옮겨 다시 그릴 때), 다시 그리는 중인가, 그동안 또 옮겼나
+    layout: Option<(Arc<String>, SvgOptions)>,
+    move_task: Option<Task<()>>,
+    move_dirty: bool,
+    /// 마지막으로 끈 카드 — 다시 그린 그림이 따라올 때까지 놓일 자리를 테로 먼저 보인다(큰 그림은 읽고 굽는 데 0.5초쯤)
+    ghost: Option<String>,
     pub raster: crate::raster::Raster,
     task: Option<Task<()>>,
     /// 다른 스키마이거나 방향이 바뀌면 맞춘다 — 같은 그림의 보기만 바뀌면 보던 자리를 지킨다
@@ -873,7 +894,12 @@ impl Spike {
                             .unwrap_or_default();
                         return Err(e);
                     };
-                    let svg = amber_gpui::resin::svg::to_svg(&model, &options)?;
+                    let layout = std::cell::RefCell::new(String::new());
+                    let svg = amber_gpui::resin::svg::to_svg_with(&model, &options, &|g| {
+                        let out = amber_gpui::elk::layout(g)?;
+                        layout.replace(out.clone());
+                        Ok(out)
+                    })?;
                     let drawn = Drawn::read(&svg.svg, &svg.boxes)?;
                     let tree = crate::figure::parse(&drawn.svg, "#333333")?;
                     Ok(Drawing {
@@ -882,6 +908,8 @@ impl Spike {
                         background: svg.background,
                         drawn: Arc::new(drawn),
                         model: Arc::new(model),
+                        layout: Arc::new(layout.into_inner()),
+                        options,
                     })
                 })
                 .await;
@@ -907,6 +935,12 @@ impl Spike {
                         c.background = d.background;
                         c.error = None;
                         c.raster.reset();
+                        c.layout = Some((d.layout, d.options));
+                        c.moved.clear();
+                        c.lifting = None;
+                        c.move_task = None;
+                        c.move_dirty = false;
+                        c.ghost = None;
                         c.shown_id = drawing_id;
                         c.shown_direction = Some(direction);
                         if fit || c.scale <= 0. {
@@ -923,7 +957,7 @@ impl Spike {
         self.erd.canvas.task = Some(task);
     }
 
-    pub(crate) fn erd_pan_to(&mut self, pos: Point<Pixels>) -> bool {
+    pub(crate) fn erd_pan_to(&mut self, pos: Point<Pixels>, cx: &mut Context<Self>) -> bool {
         let c = &mut self.erd.canvas;
         let Some((start, (x0, y0), dragged)) = c.grab else {
             return false;
@@ -934,6 +968,15 @@ impl Spike {
             return false;
         }
         c.grab = Some((start, (x0, y0), true));
+        c.over = None;
+        // 머리글을 잡았으면 카드가 포인터를 따라간다 — 누른 뒤 간 만큼, 그림 단위로
+        if let Some((table, (bx, by))) = c.lifting.clone() {
+            let s = c.shown().2;
+            c.moved
+                .insert(table, (bx + (dx / s) as f64, by + (dy / s) as f64));
+            self.erd_draw_moved(cx);
+            return true;
+        }
         c.auto = false;
         c.anim = None;
         if let Some(l) = c.live.as_mut() {
@@ -947,6 +990,83 @@ impl Spike {
 
     pub(crate) fn erd_drop(&mut self) {
         self.erd.canvas.grab = None;
+        self.erd.canvas.lifting = None;
+    }
+
+    /// 찍기 — 카드를 그 자리로 끈 것처럼(held = 아직 손을 떼지 않았다)
+    #[cfg(feature = "shots")]
+    pub(crate) fn erd_shot_move(
+        &mut self,
+        table: &str,
+        at: (f64, f64),
+        held: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let c = &mut self.erd.canvas;
+        c.moved.insert(table.to_string(), at);
+        c.ghost = Some(table.to_string());
+        c.lifting = held.then(|| (table.to_string(), at));
+        self.erd_draw_moved(cx);
+    }
+
+    /// 옮긴 카드 자리로 다시 그린다 — 배치는 그대로(ELK 없이). 하나씩만 돌리고, 도는 동안 또 옮겼으면 끝나고 한 번 더
+    fn erd_draw_moved(&mut self, cx: &mut Context<Self>) {
+        let c = &mut self.erd.canvas;
+        let (Some((layout, options)), Some(model)) = (c.layout.clone(), c.model.clone()) else {
+            return;
+        };
+        if c.move_task.is_some() {
+            c.move_dirty = true;
+            return;
+        }
+        let options = SvgOptions {
+            moved: c.moved.clone(),
+            ..options
+        };
+        let css = (!c.css.is_empty()).then(|| c.css.clone());
+        let key = c.key.clone();
+        c.move_task = Some(cx.spawn(async move |this, cx| {
+            let out = cx
+                .background_executor()
+                .spawn(async move {
+                    let svg = amber_gpui::resin::svg::to_svg_with(&model, &options, &|_| {
+                        Ok(layout.to_string())
+                    })?;
+                    let drawn = Drawn::read(&svg.svg, &svg.boxes)?;
+                    let styled = css.is_some();
+                    let tree = crate::figure::parse_styled(&drawn.svg, "#333333", css)?;
+                    Ok::<_, String>(Moved {
+                        tree: Arc::new(tree),
+                        styled,
+                        size: (svg.width as f32, svg.height as f32),
+                        drawn: Arc::new(drawn),
+                    })
+                })
+                .await;
+            let _ = this.update(cx, |s, cx| {
+                let c = &mut s.erd.canvas;
+                // 그사이 다른 그림이 올라왔다
+                if c.key != key {
+                    return;
+                }
+                c.move_task = None;
+                match out {
+                    Ok(m) => {
+                        // 칠한 채로 읽었으면 칠하지 않은 그림은 초점을 걷을 때 읽는다
+                        c.plain = (!m.styled).then(|| m.tree.clone());
+                        c.tree = Some(m.tree);
+                        c.drawn = Some(m.drawn);
+                        c.size = m.size;
+                        c.raster.stale = true;
+                    }
+                    Err(e) => eprintln!("ERD 카드 옮기기: {e}"),
+                }
+                if std::mem::take(&mut c.move_dirty) {
+                    s.erd_draw_moved(cx);
+                }
+                cx.notify();
+            });
+        }));
     }
 
     /// 패널 왼쪽 가장자리를 끈다 — 캔버스 오른쪽 끝에서 마우스까지가 폭, 캔버스는 120px 은 남는다
@@ -1027,18 +1147,23 @@ impl Spike {
         c.css = css.clone();
         c.focus_gen += 1;
         let generation = c.focus_gen;
-        if css.is_empty() {
+        if css.is_empty()
+            && let Some(p) = c.plain.clone()
+        {
             c.focus_task = None;
-            if let Some(p) = c.plain.clone() {
-                c.tree = Some(p);
-                c.raster.stale = true;
-            }
+            c.tree = Some(p);
+            c.raster.stale = true;
             return;
         }
+        // 칠하지 않은 그림이 없으면(카드를 옮긴 뒤) 그것도 뒤에서 읽는다
+        let css = (!css.is_empty()).then_some(css);
         c.focus_task = Some(cx.spawn(async move |this, cx| {
             let tree = cx
                 .background_executor()
-                .spawn(async move { crate::figure::parse_styled(&drawn.svg, "#333333", Some(css)) })
+                .spawn(async move {
+                    let plain = css.is_none();
+                    crate::figure::parse_styled(&drawn.svg, "#333333", css).map(|t| (t, plain))
+                })
                 .await;
             let _ = this.update(cx, |s, cx| {
                 let c = &mut s.erd.canvas;
@@ -1046,8 +1171,12 @@ impl Spike {
                     return;
                 }
                 match tree {
-                    Ok(t) => {
-                        c.tree = Some(Arc::new(t));
+                    Ok((t, plain)) => {
+                        let t = Arc::new(t);
+                        if plain {
+                            c.plain = Some(t.clone());
+                        }
+                        c.tree = Some(t);
                         c.raster.stale = true;
                     }
                     Err(e) => eprintln!("ERD 칠하기: {e}"),
@@ -2360,7 +2489,8 @@ impl Spike {
         });
         let surface = c.live.as_ref().and_then(|l| l.buffer.clone());
         let (sx, sy, ss) = c.shown();
-        let over_card = matches!(c.over, Some(Over::Head(_) | Over::Row(..) | Over::Body(_)));
+        // 머리글은 잡아서 옮긴다(resin 의 grab), 행과 몸통은 누른다
+        let over_card = matches!(c.over, Some(Over::Row(..) | Over::Body(_)));
         let mut stage = div()
             .id("erd-canvas")
             .tag("erd-canvas")
@@ -2441,6 +2571,25 @@ impl Spike {
                     Over::Body(_) => {}
                 }
             }
+            // 끄는 카드가 놓일 자리 — 포인터를 바로 따라가고, 다시 그린 그림이 올라오면 그 카드와 겹친다
+            if let Some(t) = &c.ghost
+                && (c.lifting.is_some() || c.move_task.is_some() || c.raster.stale)
+                && let (Some(&(gx, gy)), Some(card)) =
+                    (c.moved.get(t), c.drawn.as_ref().and_then(|d| d.card(t)))
+            {
+                stage = stage.child(
+                    div()
+                        .absolute()
+                        .left(px(sx + gx.max(0.) as f32 * ss))
+                        .top(px(sy + gy.max(0.) as f32 * ss))
+                        .w(px(card.w as f32 * ss))
+                        .h(px(card.h as f32 * ss))
+                        .rounded(px(CARD_RADIUS as f32 * ss))
+                        .border_1()
+                        .border_color(k.text.opacity(0.45))
+                        .bg(k.text.opacity(0.04)),
+                );
+            }
         }
         let stage = stage
             .on_scroll(cx.listener(|this, e: &ScrollEvent, _, cx| {
@@ -2493,6 +2642,21 @@ impl Spike {
                     let _ = this.update(cx, |s, _| {
                         let c = &mut s.erd.canvas;
                         c.grab = c.press.take().map(|(p, xy)| (p, xy, false));
+                        // 머리글에서 시작한 끌기는 그 카드를 옮긴다
+                        let o = c.viewport.get().origin;
+                        c.lifting = c
+                            .grab
+                            .and_then(|(p, ..)| {
+                                c.over_at((f32::from(p.x - o.x), f32::from(p.y - o.y)))
+                            })
+                            .and_then(|over| match over {
+                                Over::Head(i) => c.drawn.as_ref()?.cards.get(i),
+                                _ => None,
+                            })
+                            .map(|card| (card.table.clone(), (card.x, card.y)));
+                        if let Some((t, _)) = &c.lifting {
+                            c.ghost = Some(t.clone());
+                        }
                     });
                     cx.new(|_| ErdDrag)
                 }

@@ -1152,6 +1152,39 @@ fn erd(s: &mut Shots) {
         })
         .unwrap();
     s.settle();
+    // 머리글을 잡아 카드를 옮긴다 — 끄는 동안은 놓일 자리에 테, 놓으면 선이 새 자리로
+    let at = s
+        .window
+        .update(&mut s.cx, |sp, _, _| {
+            let card = sp
+                .erd
+                .canvas
+                .drawn
+                .as_ref()
+                .unwrap()
+                .card("products")
+                .unwrap()
+                .clone();
+            (card.x - 280., card.y - 330.)
+        })
+        .unwrap();
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.erd_shot_move("products", at, true, cx);
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.shot("erd-moving");
+    s.window
+        .update(&mut s.cx, |sp, _, cx| {
+            sp.erd_drop();
+            cx.notify();
+        })
+        .unwrap();
+    s.settle();
+    s.settle();
+    s.shot("erd-moved");
     // 표 이름 = 오른쪽 패널(초점), 컬럼 = 정보창
     s.window
         .update(&mut s.cx, |sp, window, cx| {

@@ -79,6 +79,8 @@ pub struct SvgOptions {
     pub direction: Direction,
     pub hide: Vec<CardPart>,
     pub id_prefix: Option<String>,
+    /// 끌어 옮긴 카드의 왼쪽 위(amber) — 배치는 그대로 두고 resin 의 moveCard 규칙으로 다시 그린다
+    pub moved: HashMap<String, (f64, f64)>,
 }
 
 impl Default for SvgOptions {
@@ -93,6 +95,7 @@ impl Default for SvgOptions {
             direction: Direction::Right,
             hide: Vec::new(),
             id_prefix: None,
+            moved: HashMap::new(),
         }
     }
 }
@@ -1023,66 +1026,57 @@ fn path_d(pts: &[Pt], r: f64) -> String {
     format!("{d} L{},{}", js(f(last.x)), js(f(last.y)))
 }
 
-/// 곡선 연결선 — 사이에 카드가 없으면 끝이 수평인 S자(세로면 수직), 있으면 ELK 길에 넓은 꺾임
-fn curved(route: &[Pt], others: &[&SvgBox], down: bool) -> String {
+/// 곡선 연결선 — 사이에 카드가 없으면 끝이 수평인 S자(세로면 수직), 있으면 ELK 길에 넓은 꺾임.
+/// out 은 첫 끝에서 카드 바깥쪽, back 은 마지막 끝에서 카드 바깥쪽
+fn curved(route: &[Pt], others: &[&SvgBox], out: Pt, back: Pt) -> String {
     let (a, z) = (route[0], route[route.len() - 1]);
-    let s = if down {
-        pt(a.x, a.y + LEAD)
-    } else {
-        pt(a.x + LEAD, a.y)
-    };
-    let e = if down {
-        pt(z.x, z.y - LEAD)
-    } else {
-        pt(z.x - LEAD, z.y)
-    };
-    let gap = if down { e.y - s.y } else { e.x - s.x };
-    if gap > 24. {
-        let k = 32f64.max(180f64.min(gap * 0.5));
-        let c1 = if down {
-            pt(s.x, s.y + k)
-        } else {
-            pt(s.x + k, s.y)
-        };
-        let c2 = if down {
-            pt(e.x, e.y - k)
-        } else {
-            pt(e.x - k, e.y)
-        };
-        let blocked = others.iter().any(|b| {
-            (1..24).any(|i| {
-                let t = i as f64 / 24.;
-                let u = 1. - t;
-                let x = u * u * u * s.x
-                    + 3. * u * u * t * c1.x
-                    + 3. * u * t * t * c2.x
-                    + t * t * t * e.x;
-                let y = u * u * u * s.y
-                    + 3. * u * u * t * c1.y
-                    + 3. * u * t * t * c2.y
-                    + t * t * t * e.y;
-                x > b.x - 6. && x < b.x + b.w + 6. && y > b.y - 6. && y < b.y + b.h + 6.
-            })
-        });
-        if !blocked {
-            return format!(
-                "M{},{} L{},{} C{},{} {},{} {},{} L{},{}",
-                js(f(a.x)),
-                js(f(a.y)),
-                js(f(s.x)),
-                js(f(s.y)),
-                js(f(c1.x)),
-                js(f(c1.y)),
-                js(f(c2.x)),
-                js(f(c2.y)),
-                js(f(e.x)),
-                js(f(e.y)),
-                js(f(z.x)),
-                js(f(z.y))
-            );
+    let s = pt(a.x + out.x * LEAD, a.y + out.y * LEAD);
+    let e = pt(z.x + back.x * LEAD, z.y + back.y * LEAD);
+    let dot = |p: Pt, u: Pt| p.x * u.x + p.y * u.y;
+    let (k1, k2) = if out.x == -back.x && out.y == -back.y {
+        let gap = (e.x - s.x) * out.x + (e.y - s.y) * out.y;
+        if gap <= 24. {
+            return path_d(route, 40.);
         }
+        let k = 32f64.max(180f64.min(gap * 0.5));
+        (k, k)
+    } else {
+        // 두 끝이 같은 쪽으로 나간다(옮겨 겹친 카드) — 먼 끝 너머로 도는 고리
+        let reach = dot(s, out).max(dot(e, out));
+        let k = 32f64.max(180f64.min((e.x - s.x).hypot(e.y - s.y) * 0.5));
+        (reach - dot(s, out) + k, reach - dot(e, out) + k)
+    };
+    let c1 = pt(s.x + out.x * k1, s.y + out.y * k1);
+    let c2 = pt(e.x + back.x * k2, e.y + back.y * k2);
+    let blocked = others.iter().any(|b| {
+        (1..24).any(|i| {
+            let t = i as f64 / 24.;
+            let u = 1. - t;
+            let x =
+                u * u * u * s.x + 3. * u * u * t * c1.x + 3. * u * t * t * c2.x + t * t * t * e.x;
+            let y =
+                u * u * u * s.y + 3. * u * u * t * c1.y + 3. * u * t * t * c2.y + t * t * t * e.y;
+            x > b.x - 6. && x < b.x + b.w + 6. && y > b.y - 6. && y < b.y + b.h + 6.
+        })
+    });
+    if blocked {
+        return path_d(route, 40.);
     }
-    path_d(route, 40.)
+    format!(
+        "M{},{} L{},{} C{},{} {},{} {},{} L{},{}",
+        js(f(a.x)),
+        js(f(a.y)),
+        js(f(s.x)),
+        js(f(s.y)),
+        js(f(c1.x)),
+        js(f(c1.y)),
+        js(f(c2.x)),
+        js(f(c2.y)),
+        js(f(e.x)),
+        js(f(e.y)),
+        js(f(z.x)),
+        js(f(z.y))
+    )
 }
 
 /// 겹친 점과 곧은 길 중간의 점을 뺀다 — 선 한가운데가 둥글려지지 않게
@@ -1106,6 +1100,171 @@ fn clean(pts: &[Pt]) -> Vec<Pt> {
         i -= 1;
     }
     out
+}
+
+const RIGHT: Pt = Pt { x: 1., y: 0. };
+const LEFT: Pt = Pt { x: -1., y: 0. };
+const DOWN: Pt = Pt { x: 0., y: 1. };
+const UP: Pt = Pt { x: 0., y: -1. };
+
+/// 연결선 하나 — 끝 표시와 수를 정하는 것
+struct Link {
+    optional: bool,
+    one: bool,
+    logical: bool,
+    /// 첫 구간을 행 가운데에서 벌린 만큼
+    apart: f64,
+}
+
+/// 연결선의 선, 끝 표시와 그 수(svg.ts 의 linkSvg). path 는 부모 끝에서 자식 끝으로, out 은 부모 카드 바깥쪽, back 은 자식 카드 바깥쪽
+fn link_svg(
+    k: &Link,
+    path: &[Pt],
+    out: Pt,
+    back: Pt,
+    ink: Ink,
+    edges: Edges,
+    others: &[&SvgBox],
+) -> String {
+    let (start, end) = (path[0], path[path.len() - 1]);
+    let along = |p: Pt, u: Pt, d: f64, side: f64| {
+        pt(p.x + u.x * d - u.y * side, p.y + u.y * d + u.x * side)
+    };
+    let xy = |p: Pt| format!("{},{}", js(f(p.x)), js(f(p.y)));
+    let bar = |p: Pt, u: Pt, d: f64| {
+        format!("M{} L{}", xy(along(p, u, d, 4.5)), xy(along(p, u, d, -4.5)))
+    };
+    // 널이 되는 컬럼의 고리는 선 위에 앉는다 — 자리가 있으면 선이 고리 둘레에서 끊긴다
+    let gap =
+        k.optional && path.len() > 1 && (path[1].x - start.x).hypot(path[1].y - start.y) > 22.;
+    let rest: Vec<Pt> = if gap {
+        [vec![along(start, out, 15.5, 0.)], path[1..].to_vec()].concat()
+    } else {
+        path.to_vec()
+    };
+    let line = if edges == Edges::Curved {
+        curved(&rest, others, out, back)
+    } else {
+        path_d(&rest, 3.)
+    };
+    let d = if gap {
+        format!("M{} L{} {line}", xy(start), xy(along(start, out, 8.5, 0.)))
+    } else {
+        line
+    };
+    let dash = if k.logical {
+        " stroke-dasharray=\"4 3\""
+    } else {
+        ""
+    };
+    let mut s = vec![format!(
+        "<path d=\"{d}\" fill=\"none\" {} stroke-width=\"1.2\"{dash}/>",
+        stroke(ink)
+    )];
+    // 까마귀 발과 곁의 수 — 기본 키 끝: 하나면 막대 둘, 없을 수 있으면 막대와 고리. FK 끝: 여럿이면 발, 하나면 막대
+    let mark = format!("fill=\"none\" {} stroke-width=\"1.3\"", stroke(ink));
+    let number = |p: Pt, text: &str, anchor: &str| {
+        format!(
+            "<text x=\"{}\" y=\"{}\" text-anchor=\"{anchor}\" font-family=\"{MONO}\" font-size=\"9.5\" font-weight=\"500\" {}>{text}</text>",
+            js(f(p.x)),
+            js(f(p.y)),
+            fill(ink)
+        )
+    };
+    s.push(format!(
+        "<path d=\"{}{}\" {mark}/>",
+        bar(start, out, 5.),
+        if k.optional {
+            String::new()
+        } else {
+            format!(" {}", bar(start, out, 9.))
+        }
+    ));
+    if k.optional {
+        let c = along(start, out, 12., 0.);
+        s.push(format!(
+            "<circle cx=\"{}\" cy=\"{}\" r=\"3.5\" {mark}/>",
+            js(f(c.x)),
+            js(f(c.y))
+        ));
+    }
+    // 수평인 끝은 수를 선 위에(행의 두 첫 구간 중 아래 것은 아래에), 수직인 끝은 곁에
+    let first = if out.x != 0. {
+        pt(
+            start.x + 6. * out.x,
+            start.y + if k.apart > 0. { 15. } else { -8. },
+        )
+    } else {
+        pt(start.x + 7., start.y + if out.y > 0. { 16. } else { -9. })
+    };
+    s.push(number(
+        first,
+        if k.optional { "0..1" } else { "1" },
+        if out.x < 0. { "end" } else { "start" },
+    ));
+    s.push(format!(
+        "<path d=\"{}\" {mark}/>",
+        if k.one {
+            bar(end, back, 7.)
+        } else {
+            format!(
+                "M{} L{} L{}",
+                xy(along(end, back, 0., 6.)),
+                xy(along(end, back, 12., 0.)),
+                xy(along(end, back, 0., -6.))
+            )
+        }
+    ));
+    let last = if back.x != 0. {
+        pt(end.x + 6. * back.x, end.y - 8.)
+    } else {
+        pt(end.x + 8., end.y + if back.y < 0. { -9. } else { 16. })
+    };
+    s.push(number(
+        last,
+        if k.one { "1" } else { "N" },
+        if back.x < 0. { "end" } else { "start" },
+    ));
+    s.concat()
+}
+
+/// 두 카드 사이, 끝 표시가 들어갈 자리 — 이보다 좁으면 마주 보는 옆면을 쓰지 않는다
+const ROOM: f64 = 36.;
+
+/// 옮긴 카드의 연결선을 단순하게(svg.ts 의 reroute) — 두 카드가 마주 보는 옆면 사이를 가운데에서 한 번 꺾어, 나란하면 같은 옆면으로
+/// 나가 돌아온다. 가로는 끝이 제 행에 남고, 세로는 가장자리의 제 자리를 지키거나 곁의 카드와는 머리글 높이에서 만난다
+fn reroute(from: Pt, to: Pt, a: &SvgBox, b: &SvgBox, down: bool) -> (Vec<Pt>, Pt, Pt) {
+    if down && (b.y >= a.y + a.h + ROOM || b.y + b.h <= a.y - ROOM) {
+        let below = b.y > a.y;
+        let s = pt(a.x + from.x, if below { a.y + a.h } else { a.y });
+        let e = pt(b.x + to.x, if below { b.y } else { b.y + b.h });
+        let mid = (s.y + e.y) / 2.;
+        return (
+            clean(&[s, pt(s.x, mid), pt(e.x, mid), e]),
+            if below { DOWN } else { UP },
+            if below { UP } else { DOWN },
+        );
+    }
+    let after = b.x >= a.x + a.w + ROOM;
+    let before = b.x + b.w <= a.x - ROOM;
+    let s = pt(
+        if before { a.x } else { a.x + a.w },
+        a.y + if down { HEAD / 2. } else { from.y },
+    );
+    let e = pt(
+        if after { b.x } else { b.x + b.w },
+        b.y + if down { HEAD / 2. } else { to.y },
+    );
+    let turn = if after || before {
+        (s.x + e.x) / 2.
+    } else {
+        s.x.max(e.x) + 24.
+    };
+    (
+        clean(&[s, pt(turn, s.y), pt(turn, e.y), e]),
+        if before { LEFT } else { RIGHT },
+        if after { LEFT } else { RIGHT },
+    )
 }
 
 // ---- 모으기 ----
@@ -1578,6 +1737,8 @@ struct Area<'a> {
     y: f64,
     w: f64,
     h: f64,
+    /// 영역 안의 카드
+    tables: Vec<String>,
 }
 
 /// 카드 밑의 영역 — 옅은 칠, 고른 테, 왼쪽 위 이름. 칠은 카드 자리를 도려낸다(라이브 캔버스는 유리를 이 SVG 아래에 칠한다)
@@ -1905,6 +2066,12 @@ pub fn to_svg_with(
             y: f(at.y),
             w: f(n64(n, "width")),
             h: f(n64(n, "height")),
+            tables: n["children"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|c| c["id"].as_str().unwrap_or_default().to_string())
+                .collect(),
         });
         for c in n["children"].as_array().into_iter().flatten() {
             pos.insert(
@@ -1927,9 +2094,9 @@ pub fn to_svg_with(
             (e.get("sections").and_then(|s| s.get(0)).cloned(), offset),
         );
     }
-    let w_ = n64(&g, "width").ceil();
-    let h_ = n64(&g, "height").ceil();
-    let boxes: Vec<SvgBox> = vs
+    let mut w_ = n64(&g, "width").ceil();
+    let mut h_ = n64(&g, "height").ceil();
+    let mut boxes: Vec<SvgBox> = vs
         .iter()
         .map(|v| {
             let p = pos[&v.table.name];
@@ -1942,6 +2109,45 @@ pub fn to_svg_with(
             }
         })
         .collect();
+    // 끌어 옮긴 카드(svg.ts 의 moveCard) — 위와 왼쪽 끝, 서비스 안이면 영역의 테와 이름에서 떨어져 있고, 영역은 제 카드를 따라간다
+    let laid = boxes.clone();
+    if !options.moved.is_empty() {
+        for b in boxes.iter_mut() {
+            if let Some(&(x, y)) = options.moved.get(&b.table) {
+                let inside = areas.iter().any(|a| a.tables.contains(&b.table));
+                b.x = f(x.max(if inside { SERVICE_PAD } else { 0. }));
+                b.y = f(y.max(if inside { SERVICE_HEAD } else { 0. }));
+            }
+        }
+        for a in areas.iter_mut() {
+            let cards: Vec<&SvgBox> = boxes
+                .iter()
+                .filter(|b| a.tables.contains(&b.table))
+                .collect();
+            if cards.iter().all(|b| {
+                laid.iter()
+                    .any(|o| o.table == b.table && o.x == b.x && o.y == b.y)
+            }) {
+                continue;
+            }
+            let x0 = cards.iter().map(|b| b.x).fold(f64::INFINITY, f64::min) - SERVICE_PAD;
+            let y0 = cards.iter().map(|b| b.y).fold(f64::INFINITY, f64::min) - SERVICE_HEAD;
+            let x1 = (cards
+                .iter()
+                .map(|b| b.x + b.w)
+                .fold(f64::NEG_INFINITY, f64::max)
+                + SERVICE_PAD)
+                .max(x0 + (service_label_w(a.service) + SERVICE_PAD * 2.).ceil());
+            let y1 = cards
+                .iter()
+                .map(|b| b.y + b.h)
+                .fold(f64::NEG_INFINITY, f64::max)
+                + SERVICE_PAD;
+            (a.x, a.y, a.w, a.h) = (f(x0), f(y0), f(x1 - x0), f(y1 - y0));
+        }
+        w_ = w_.max(max_of(boxes.iter().map(|b| b.x + b.w + 40.), 0.).ceil());
+        h_ = h_.max(max_of(boxes.iter().map(|b| b.y + b.h + 40.), 0.).ceil());
+    }
     // 라이브 캔버스는 무대와 판을 제가 칠한다 — SVG 엔 그 위의 것만
     let painted = !(l.stage.is_some() && options.stage == Some(false));
     let card_rects: String = boxes
@@ -2057,43 +2263,43 @@ pub fn to_svg_with(
                 [pt(start.x + 24., start.y), pt(start.x + 24., start.y - dy)],
             );
         }
-        let out = if down { pt(0., 1.) } else { pt(1., 0.) };
-        let back = pt(-out.x, -out.y);
-        let along = |p: Pt, u: Pt, k: f64, side: f64| {
-            pt(p.x + u.x * k - u.y * side, p.y + u.y * k + u.x * side)
-        };
-        let xy = |p: Pt| format!("{},{}", js(f(p.x)), js(f(p.y)));
-        let bar = |p: Pt, u: Pt, k: f64| {
-            format!("M{} L{}", xy(along(p, u, k, 4.5)), xy(along(p, u, k, -4.5)))
-        };
-        // 널이 되는 컬럼의 고리는 선 위에 앉는다 — 자리가 있으면 선이 고리 둘레에서 끊긴다
-        let gap =
-            r.optional && path.len() > 1 && (path[1].x - start.x).hypot(path[1].y - start.y) > 22.;
-        let rest: Vec<Pt> = if gap {
-            [vec![along(start, out, 15.5, 0.)], path[1..].to_vec()].concat()
+        // 옮긴 카드의 선 — 함께 같은 만큼 옮겼으면 길을 그대로 옮기고, 아니면 단순하게 다시 낸다
+        let (pi, ci) = (by_name[r.parent.as_str()], by_name[r.child.as_str()]);
+        let shift = |i: usize| (boxes[i].x - laid[i].x, boxes[i].y - laid[i].y);
+        let (da, db) = (shift(pi), shift(ci));
+        let (path, out, back) = if da == (0., 0.) && db == (0., 0.) {
+            (
+                path,
+                if down { DOWN } else { RIGHT },
+                if down { UP } else { LEFT },
+            )
+        } else if da == db {
+            (
+                path.iter().map(|p| pt(p.x + da.0, p.y + da.1)).collect(),
+                if down { DOWN } else { RIGHT },
+                if down { UP } else { LEFT },
+            )
         } else {
-            path.clone()
+            let from = pt(start.x - laid[pi].x, start.y - laid[pi].y);
+            let to = pt(end.x - laid[ci].x, end.y - laid[ci].y);
+            reroute(from, to, &boxes[pi], &boxes[ci], down)
         };
-        let line = if edges == Edges::Curved {
-            let others: Vec<&SvgBox> = boxes
+        let link = Link {
+            optional: r.optional,
+            one: r.one,
+            logical: r.kind == RefKind::Logical,
+            apart: dy,
+        };
+        // 안 옮긴 선은 배치한 그대로 그린다(resin 의 캔버스는 옮긴 카드의 선만 다시 그린다)
+        let still = da == (0., 0.) && db == (0., 0.);
+        let others: Vec<&SvgBox> = if edges == Edges::Curved {
+            (if still { &laid } else { &boxes })
                 .iter()
                 .filter(|b| b.table != r.parent && b.table != r.child)
-                .collect();
-            curved(&rest, &others, down)
+                .collect()
         } else {
-            path_d(&rest, 3.)
+            Vec::new()
         };
-        let d = if gap {
-            format!("M{} L{} {line}", xy(start), xy(along(start, out, 8.5, 0.)))
-        } else {
-            line
-        };
-        let dash = if r.kind == RefKind::Logical {
-            " stroke-dasharray=\"4 3\""
-        } else {
-            ""
-        };
-        let ink = l.ink.line;
         let composite = match (&r.parent_columns, &r.child_columns) {
             (Some(pc), Some(cc)) => format!(
                 " data-acs=\"{}\" data-bcs=\"{}\"",
@@ -2109,69 +2315,8 @@ pub fn to_svg_with(
             esc(&r.child),
             esc(&r.child_column)
         ));
-        s.push(format!(
-            "<path d=\"{d}\" fill=\"none\" {} stroke-width=\"1.2\"{dash}/>",
-            stroke(ink)
-        ));
-        // 까마귀 발과 곁의 수 — 기본 키 끝: 하나면 막대 둘, 없을 수 있으면 막대와 고리. FK 끝: 여럿이면 발, 하나면 막대
-        let mark = format!("fill=\"none\" {} stroke-width=\"1.3\"", stroke(ink));
-        let number = |p: Pt, text: &str, anchor: &str| {
-            format!(
-                "<text x=\"{}\" y=\"{}\" text-anchor=\"{anchor}\" font-family=\"{MONO}\" font-size=\"9.5\" font-weight=\"500\" {}>{text}</text>",
-                js(f(p.x)),
-                js(f(p.y)),
-                fill(ink)
-            )
-        };
-        s.push(format!(
-            "<path d=\"{}{}\" {mark}/>",
-            bar(start, out, 5.),
-            if r.optional {
-                String::new()
-            } else {
-                format!(" {}", bar(start, out, 9.))
-            }
-        ));
-        if r.optional {
-            let c = along(start, out, 12., 0.);
-            s.push(format!(
-                "<circle cx=\"{}\" cy=\"{}\" r=\"3.5\" {mark}/>",
-                js(f(c.x)),
-                js(f(c.y))
-            ));
-        }
-        // 행의 두 첫 구간 중 아래 것은 수를 선 아래에 — 위 것과 겹치지 않게
-        let under = dy > 0.;
-        s.push(number(
-            if down {
-                pt(start.x + 7., start.y + 16.)
-            } else {
-                pt(start.x + 6., start.y + if under { 15. } else { -8. })
-            },
-            if r.optional { "0..1" } else { "1" },
-            "start",
-        ));
-        s.push(format!(
-            "<path d=\"{}\" {mark}/>",
-            if r.one {
-                bar(end, back, 7.)
-            } else {
-                format!(
-                    "M{} L{} L{}",
-                    xy(along(end, back, 0., 6.)),
-                    xy(along(end, back, 12., 0.)),
-                    xy(along(end, back, 0., -6.))
-                )
-            }
-        ));
-        s.push(number(
-            if down {
-                pt(end.x + 8., end.y - 9.)
-            } else {
-                pt(end.x - 6., end.y - 8.)
-            },
-            if r.one { "1" } else { "N" },
-            if down { "start" } else { "end" },
+        s.push(link_svg(
+            &link, &path, out, back, l.ink.line, edges, &others,
         ));
         s.push("</g>".into());
     }
@@ -2259,6 +2404,71 @@ mod tests {
                 .map(|b| (b.table.clone(), b.x, b.y, b.w, b.h))
                 .collect();
             assert_eq!(got, want, "{}", c["name"]);
+        }
+    }
+
+    /// 끌어 옮긴 카드 — resin 의 moveCard 로 옮긴 결과(tools/resin-moved-fixture.mjs)와 선, 영역, 자리, 크기가 같다
+    #[test]
+    fn draws_moved_cards_like_resin() {
+        let cases: Value =
+            serde_json::from_str(include_str!("../../tests/resin_moved.json")).unwrap();
+        for c in cases.as_array().unwrap() {
+            let name = c["name"].as_str().unwrap();
+            let model = crate::resin::compile(c["source"].as_str().unwrap())
+                .model
+                .expect("예제는 오류가 없다");
+            let options: SvgOptions = serde_json::from_value(c["options"].clone()).unwrap();
+            assert!(!options.moved.is_empty(), "{name}");
+            let r = to_svg(&model, &options).unwrap();
+            let links: Vec<&str> = r
+                .svg
+                .split("<g class=\"rz-r\"")
+                .skip(1)
+                .map(|g| {
+                    let body = &g[g.find('>').unwrap() + 1..];
+                    &body[..body.find("</g>").unwrap()]
+                })
+                .collect();
+            let want = c["links"].as_array().unwrap();
+            assert_eq!(links.len(), want.len(), "{name}");
+            for (i, (w, got)) in want.iter().zip(&links).enumerate() {
+                if let Some(d) = first_diff(w.as_str().unwrap(), got) {
+                    panic!("{name} 선 {i}: {d}");
+                }
+            }
+            if let Some(areas) = c["areas"].as_str() {
+                let at = r
+                    .svg
+                    .find(&areas[..areas.find('>').unwrap()])
+                    .expect("영역");
+                let got = &r.svg[at..(at + areas.len()).min(r.svg.len())];
+                if let Some(d) = first_diff(areas, got) {
+                    panic!("{name} 영역: {d}");
+                }
+            }
+            assert_eq!(
+                (r.width, r.height),
+                (c["width"].as_f64().unwrap(), c["height"].as_f64().unwrap()),
+                "{name}"
+            );
+            let want: Vec<(String, f64, f64)> = c["boxes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|b| {
+                    (
+                        b["table"].as_str().unwrap().to_string(),
+                        b["x"].as_f64().unwrap(),
+                        b["y"].as_f64().unwrap(),
+                    )
+                })
+                .collect();
+            let got: Vec<(String, f64, f64)> = r
+                .boxes
+                .iter()
+                .map(|b| (b.table.clone(), b.x, b.y))
+                .collect();
+            assert_eq!(got, want, "{name}");
         }
     }
 
