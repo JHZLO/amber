@@ -118,6 +118,87 @@ pub struct SvgResult {
     /// 무대 바탕색, graphite 면 None
     pub background: Option<String>,
     pub boxes: Vec<SvgBox>,
+    /// 연결선마다 배치한 자리(.rz-r 차례) — 카드를 끄는 동안 화면이 선을 바로 그린다(amber)
+    #[serde(skip)]
+    pub links: Vec<LinkGeom>,
+}
+
+/// 연결선 하나의 배치 — 두 카드, 카드 왼쪽 위에서 잰 두 끝, 배치한 길과 그때의 두 카드 자리
+#[derive(Debug, Clone, PartialEq)]
+pub struct LinkGeom {
+    pub parent: String,
+    pub child: String,
+    pub from: (f64, f64),
+    pub to: (f64, f64),
+    pub route: Vec<(f64, f64)>,
+    pub laid: ((f64, f64), (f64, f64)),
+    pub logical: bool,
+}
+
+/// 끄는 카드의 연결선 — 지금 두 카드 자리(a = 부모, b = 자식)로 낸 길. 그림과 같은 규칙(moved_route)이고,
+/// 곡선이면 같은 S자를 점으로 늘어놓는다. 끝 표시와 수는 없다(놓으면 그림이 다시 그린다)
+pub fn drag_route(
+    g: &LinkGeom,
+    a: &SvgBox,
+    b: &SvgBox,
+    down: bool,
+    edges: Edges,
+) -> Vec<(f64, f64)> {
+    let route: Vec<Pt> = g.route.iter().map(|&(x, y)| pt(x, y)).collect();
+    let (path, out, back) = moved_route(
+        &route,
+        pt(g.from.0, g.from.1),
+        pt(g.to.0, g.to.1),
+        (g.laid.0, g.laid.1),
+        a,
+        b,
+        down,
+    );
+    if edges == Edges::Curved && path.len() > 1 {
+        let (s0, z) = (path[0], path[path.len() - 1]);
+        let s = pt(s0.x + out.x * LEAD, s0.y + out.y * LEAD);
+        let e = pt(z.x + back.x * LEAD, z.y + back.y * LEAD);
+        let gap = (e.x - s.x) * out.x + (e.y - s.y) * out.y;
+        let opposite = out.x == -back.x && out.y == -back.y;
+        if !opposite || gap > 24. {
+            let dot = |p: Pt, u: Pt| p.x * u.x + p.y * u.y;
+            let (k1, k2) = if opposite {
+                let k = 32f64.max(180f64.min(gap * 0.5));
+                (k, k)
+            } else {
+                let reach = dot(s, out).max(dot(e, out));
+                let k = 32f64.max(180f64.min((e.x - s.x).hypot(e.y - s.y) * 0.5));
+                (reach - dot(s, out) + k, reach - dot(e, out) + k)
+            };
+            let (c1, c2) = (
+                pt(s.x + out.x * k1, s.y + out.y * k1),
+                pt(e.x + back.x * k2, e.y + back.y * k2),
+            );
+            let mut out = vec![(s0.x, s0.y)];
+            for i in 0..=24 {
+                let t = i as f64 / 24.;
+                let u = 1. - t;
+                out.push((
+                    u * u * u * s.x
+                        + 3. * u * u * t * c1.x
+                        + 3. * u * t * t * c2.x
+                        + t * t * t * e.x,
+                    u * u * u * s.y
+                        + 3. * u * u * t * c1.y
+                        + 3. * u * t * t * c2.y
+                        + t * t * t * e.y,
+                ));
+            }
+            out.push((z.x, z.y));
+            return out;
+        }
+    }
+    path.iter().map(|p| (p.x, p.y)).collect()
+}
+
+/// 연결선 색과 진하기(룩의 ink.line) — 끄는 동안 화면이 그리는 선
+pub fn line_ink(look: &str) -> (&'static str, f64) {
+    look_of(look).ink.line
 }
 
 // ---- JS 숫자 ----
@@ -1228,6 +1309,28 @@ fn link_svg(
     s.concat()
 }
 
+/// 카드를 옮긴 뒤의 선 — 두 카드를 같은 만큼 옮겼으면(안 옮겼으면) 배치한 길을 그만큼 옮기고, 아니면 다시 낸다
+fn moved_route(
+    route: &[Pt],
+    from: Pt,
+    to: Pt,
+    laid: ((f64, f64), (f64, f64)),
+    a: &SvgBox,
+    b: &SvgBox,
+    down: bool,
+) -> (Vec<Pt>, Pt, Pt) {
+    let da = (a.x - laid.0.0, a.y - laid.0.1);
+    let db = (b.x - laid.1.0, b.y - laid.1.1);
+    if da == db {
+        return (
+            route.iter().map(|p| pt(p.x + da.0, p.y + da.1)).collect(),
+            if down { DOWN } else { RIGHT },
+            if down { UP } else { LEFT },
+        );
+    }
+    reroute(from, to, a, b, down)
+}
+
 /// 두 카드 사이, 끝 표시가 들어갈 자리 — 이보다 좁으면 마주 보는 옆면을 쓰지 않는다
 const ROOM: f64 = 36.;
 
@@ -2216,6 +2319,7 @@ pub fn to_svg_with(
     } else {
         "<g class=\"rz-rels\">".into()
     });
+    let mut links: Vec<LinkGeom> = Vec::new();
     for (i, r) in relations.iter().enumerate() {
         let (sec, offset) = routes
             .get(&format!("e{i}"))
@@ -2267,23 +2371,25 @@ pub fn to_svg_with(
         let (pi, ci) = (by_name[r.parent.as_str()], by_name[r.child.as_str()]);
         let shift = |i: usize| (boxes[i].x - laid[i].x, boxes[i].y - laid[i].y);
         let (da, db) = (shift(pi), shift(ci));
-        let (path, out, back) = if da == (0., 0.) && db == (0., 0.) {
-            (
-                path,
-                if down { DOWN } else { RIGHT },
-                if down { UP } else { LEFT },
-            )
-        } else if da == db {
-            (
-                path.iter().map(|p| pt(p.x + da.0, p.y + da.1)).collect(),
-                if down { DOWN } else { RIGHT },
-                if down { UP } else { LEFT },
-            )
-        } else {
-            let from = pt(start.x - laid[pi].x, start.y - laid[pi].y);
-            let to = pt(end.x - laid[ci].x, end.y - laid[ci].y);
-            reroute(from, to, &boxes[pi], &boxes[ci], down)
+        let geom = LinkGeom {
+            parent: r.parent.clone(),
+            child: r.child.clone(),
+            from: (start.x - laid[pi].x, start.y - laid[pi].y),
+            to: (end.x - laid[ci].x, end.y - laid[ci].y),
+            route: path.iter().map(|p| (p.x, p.y)).collect(),
+            laid: ((laid[pi].x, laid[pi].y), (laid[ci].x, laid[ci].y)),
+            logical: r.kind == RefKind::Logical,
         };
+        let (path, out, back) = moved_route(
+            &path,
+            pt(geom.from.0, geom.from.1),
+            pt(geom.to.0, geom.to.1),
+            geom.laid,
+            &boxes[pi],
+            &boxes[ci],
+            down,
+        );
+        links.push(geom);
         let link = Link {
             optional: r.optional,
             one: r.one,
@@ -2339,6 +2445,7 @@ pub fn to_svg_with(
         height: h_,
         background: l.stage.as_ref().map(|st| st.base.to_string()),
         boxes,
+        links,
     })
 }
 

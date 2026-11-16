@@ -3502,7 +3502,15 @@ fn moving_an_erd_card_while_zoomed_keeps_the_view_sharp(cx: &mut TestAppContext)
         ui.update(|_, cx| spike().read(cx).erd.canvas.raster.sharp.is_some())
     };
     assert!(sharp(&mut ui), "선명 층");
-    // 카드를 끄는 동안 선명 층을 걷지 않는다 — 걷으면 흐린 전체가 드러난다
+    // 카드를 끄는 동안 선명 층을 걷지 않는다 — 걷으면 흐린 전체가 드러난다. 그림은 다시 그리지 않고(뚝뚝 끊긴다)
+    // 그 카드만 구운 그림을 띄워 옮긴다
+    let card_y = |ui: &mut VisualTestContext| {
+        ui.update(|_, cx| {
+            let c = &spike().read(cx).erd.canvas;
+            c.drawn.as_ref().unwrap().card("orders").unwrap().y
+        })
+    };
+    let y0 = card_y(&mut ui);
     let from = erd_spot(&mut ui, "orders", None);
     ui.simulate_mouse_move(from, None, Modifiers::none());
     ui.simulate_mouse_down(from, MouseButton::Left, Modifiers::none());
@@ -3511,6 +3519,16 @@ fn moving_an_erd_card_while_zoomed_keeps_the_view_sharp(cx: &mut TestAppContext)
         ui.simulate_mouse_move(p, MouseButton::Left, Modifiers::none());
         erd_canvas(&mut ui);
         assert!(sharp(&mut ui), "끄는 중 {i}");
+        assert_eq!(card_y(&mut ui), y0, "끄는 중엔 다시 그리지 않는다 {i}");
+        // 첫 움직임은 끌기를 시작할 뿐이다
+        if i == 1 {
+            continue;
+        }
+        assert_eq!(
+            ui.update(|_, cx| spike().read(cx).erd.canvas.lifted()),
+            Some(("orders".into(), true)),
+            "들어 올린 카드 {i}"
+        );
     }
     ui.simulate_mouse_up(
         point(from.x + px(40.), from.y + px(80.)),
@@ -3519,6 +3537,12 @@ fn moving_an_erd_card_while_zoomed_keeps_the_view_sharp(cx: &mut TestAppContext)
     );
     erd_canvas(&mut ui);
     assert!(sharp(&mut ui), "놓은 뒤");
+    assert!(card_y(&mut ui) > y0, "놓으면 그 자리로 다시 그린다");
+    assert_eq!(
+        ui.update(|_, cx| spike().read(cx).erd.canvas.lifted()),
+        None,
+        "구워지면 띄운 카드를 걷는다"
+    );
 }
 
 #[gpui_kit::test]

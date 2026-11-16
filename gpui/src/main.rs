@@ -1138,7 +1138,7 @@ impl Render for Spike {
                 },
             ))
             .on_drop(cx.listener(|this, _: &erd_view::ErdGrab, _, cx| {
-                this.erd_drop();
+                this.erd_drop(cx);
                 cx.notify();
             }))
             .on_drag_move::<erd_view::ErdPanelGrab>(cx.listener(

@@ -1183,7 +1183,7 @@ fn erd(s: &mut Shots) {
     s.shot("erd-zoom-moving");
     s.window
         .update(&mut s.cx, |sp, _, cx| {
-            sp.erd_drop();
+            sp.erd_drop(cx);
             cx.notify();
         })
         .unwrap();
@@ -1220,7 +1220,7 @@ fn erd(s: &mut Shots) {
     s.shot("erd-moving");
     s.window
         .update(&mut s.cx, |sp, _, cx| {
-            sp.erd_drop();
+            sp.erd_drop(cx);
             cx.notify();
         })
         .unwrap();

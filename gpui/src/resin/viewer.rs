@@ -224,6 +224,73 @@ impl Drawn {
         self.cards.iter().find(|c| c.table == table)
     }
 
+    /// 카드 하나(와 그 그림자, 연결선)를 뺀 그림 — 그 카드를 끄는 동안 밑에 깐다. id 는 그대로라 초점 CSS 가 맞는다
+    pub fn without(&self, table: &str) -> String {
+        let Some(i) = self.cards.iter().position(|c| c.table == table) else {
+            return self.svg.clone();
+        };
+        let mut ids = vec![table_id(i), shadow_id(i)];
+        for (j, r) in self.rels.iter().enumerate() {
+            if r.a == table || r.b == table {
+                ids.push(rel_id(j));
+            }
+        }
+        let mut cut = self.ranges(&ids);
+        cut.sort_by_key(|r| r.start);
+        let mut out = String::with_capacity(self.svg.len());
+        let mut last = 0;
+        for r in cut {
+            out.push_str(&self.svg[last..r.start]);
+            last = r.end;
+        }
+        out.push_str(&self.svg[last..]);
+        out
+    }
+
+    /// 카드 하나만(정의와 그림자, 카드) — 끄는 동안 이것을 한 번 구워 포인터를 따라 옮긴다
+    pub fn only(&self, table: &str) -> String {
+        let Some(i) = self.cards.iter().position(|c| c.table == table) else {
+            return String::new();
+        };
+        let open = self.svg.find('>').map_or(0, |e| e + 1);
+        let mut keep = self.ranges(&[shadow_id(i), table_id(i)]);
+        keep.sort_by_key(|r| r.start);
+        let defs = self.svg.find("<defs>").and_then(|s| {
+            self.svg[s..]
+                .find("</defs>")
+                .map(|e| s..s + e + "</defs>".len())
+        });
+        let mut out = String::from(&self.svg[..open]);
+        if let Some(d) = defs {
+            out.push_str(&self.svg[d]);
+        }
+        for r in keep {
+            out.push_str(&self.svg[r]);
+        }
+        out.push_str("</svg>");
+        out
+    }
+
+    /// 그 id 를 단 요소들이 SVG 의 어디부터 어디까지인가
+    fn ranges(&self, ids: &[String]) -> Vec<std::ops::Range<usize>> {
+        let Ok(doc) = roxmltree::Document::parse_with_options(
+            &self.svg,
+            roxmltree::ParsingOptions {
+                allow_dtd: true,
+                ..Default::default()
+            },
+        ) else {
+            return Vec::new();
+        };
+        doc.descendants()
+            .filter(|n| {
+                n.attribute("id")
+                    .is_some_and(|id| ids.iter().any(|x| x == id))
+            })
+            .map(|n| n.range())
+            .collect()
+    }
+
     /// 그림 좌표의 한 점에 무엇이 있나 — 위에 그린 카드부터. 카드 밖(선, 빈 곳)은 빈 Hit
     pub fn hit(&self, x: f64, y: f64) -> Hit {
         let Some(c) = self
@@ -391,6 +458,31 @@ table items {\n  id bigint pk\n  order_id bigint -> orders.id\n}\n";
         )
         .unwrap();
         Drawn::read(&svg.svg, &svg.boxes).unwrap()
+    }
+
+    #[test]
+    fn cuts_one_card_out_and_keeps_it_alone() {
+        let d = drawn();
+        let i = d.cards.iter().position(|c| c.table == "orders").unwrap();
+        let base = d.without("orders");
+        // 카드, 그림자, 그 카드의 두 선이 빠지고 나머지 id 는 그대로
+        assert!(!base.contains(&format!("id=\"rzx-t{i}\"")));
+        assert!(!base.contains(&format!("id=\"rzx-s{i}\"")));
+        assert!(!base.contains("id=\"rzx-r0\"") && !base.contains("id=\"rzx-r1\""));
+        assert_eq!(base.matches("class=\"rz-t\"").count(), 2);
+        let alone = d.only("orders");
+        assert_eq!(alone.matches("class=\"rz-t\"").count(), 1);
+        assert!(alone.contains(&format!("id=\"rzx-t{i}\"")) && alone.contains("<defs>"));
+        for svg in [&base, &alone] {
+            roxmltree::Document::parse_with_options(
+                svg,
+                roxmltree::ParsingOptions {
+                    allow_dtd: true,
+                    ..Default::default()
+                },
+            )
+            .expect("읽히는 SVG");
+        }
     }
 
     #[test]
