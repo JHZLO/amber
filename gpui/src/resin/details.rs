@@ -5,12 +5,13 @@
 
 use super::{ConstraintKind, Model, ModelColumn, ModelTable, RefKind, Relation, TableOrigin};
 
-/// 누르면 할 일 — 웹의 open(name), pick(table, column), openService(name)
+/// 누르면 할 일 — 웹의 open(name), pick(table, column), openService(name), 그리고 컬럼 이름 복사(.d-copy)
 #[derive(Debug, Clone, PartialEq)]
 pub enum Act {
     Open(String),
     Pick(String, String),
     Service(String),
+    Copy(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -80,6 +81,14 @@ impl El {
 }
 
 /// 웹의 h(tag, cls, ...children) — 빈 자식(null)은 넘기지 않는다. 빈 글자("")는 마디로 남는다
+/// 컬럼 이름을 복사하는 단추(viewer 의 copyButton) — 아이콘은 화면이 그린다
+fn copy_button(name: &str) -> El {
+    let mut b = h("button", Some("d-copy"), vec![]);
+    b.title = Some("Copy column name".into());
+    b.act = Some(Act::Copy(name.to_string()));
+    b
+}
+
 fn h(tag: &'static str, class: Option<&str>, kids: Vec<Option<Node>>) -> El {
     El {
         tag,
@@ -376,7 +385,11 @@ pub fn table_details(model: &Model, name: &str) -> Option<El> {
                 None,
                 vec![
                     e(h("td", Some("t-key"), vec![e(key(key_of(c, refs, tb)))])),
-                    e(h("td", Some("t-name"), vec![e(name_button)])),
+                    e(h(
+                        "td",
+                        Some("t-name"),
+                        vec![e(name_button), e(copy_button(&c.name))],
+                    )),
                     e(h("td", Some("t-type"), vec![t(c.ty.clone())])),
                     e(h("td", None, vec![e(nullity(c))])),
                     e(h("td", Some("t-desc"), desc)),
@@ -687,6 +700,7 @@ pub fn column_details(model: &Model, table: &str, column: &str) -> Option<El> {
                     e(key(key_of(c, outgoing.len(), tb))),
                     e(h("span", Some("d-pop-name"), vec![t(c.name.clone())])),
                     e(h("span", Some("d-type"), vec![t(c.ty.clone())])),
+                    e(copy_button(&c.name)),
                 ],
             )),
             non_empty(&c.description).map(|d| Node::El(h("p", Some("d-desc"), vec![t(d)]))),

@@ -297,6 +297,8 @@ pub struct ErdCanvas {
     move_dirty: bool,
     /// 마지막으로 끈 카드 — 다시 그린 그림이 따라올 때까지 놓일 자리를 테로 먼저 보인다(큰 그림은 읽고 굽는 데 0.5초쯤)
     ghost: Option<String>,
+    /// 방금 이름을 복사한 컬럼 — 그 복사 단추가 잠깐 체크를 보인다
+    copied: Option<String>,
     pub raster: crate::raster::Raster,
     task: Option<Task<()>>,
     /// 다른 스키마이거나 방향이 바뀌면 맞춘다 — 같은 그림의 보기만 바뀌면 보던 자리를 지킨다
@@ -1300,6 +1302,23 @@ impl Spike {
             Act::Pick(t, col) => self.erd_pick(t, col, cx),
             // amber 의 ERD 엔 서비스가 없다
             Act::Service(_) => {}
+            Act::Copy(name) => {
+                cx.write_to_clipboard(ClipboardItem::new_string(name.clone()));
+                self.erd.canvas.copied = Some(name.clone());
+                let name = name.clone();
+                cx.spawn(async move |this, cx| {
+                    cx.background_executor()
+                        .timer(Duration::from_millis(1200))
+                        .await;
+                    let _ = this.update(cx, |s, cx| {
+                        if s.erd.canvas.copied.as_ref() == Some(&name) {
+                            s.erd.canvas.copied = None;
+                            cx.notify();
+                        }
+                    });
+                })
+                .detach();
+            }
         }
     }
 
@@ -3368,6 +3387,8 @@ impl Spike {
             ink: crate::erd_details::Ink::of(k),
             on: None,
             id: "erd-pop",
+            copied: c.copied.as_deref(),
+            row: None,
         };
         let max_w = 320_f32.min(vw - 16.);
         Some(
@@ -3440,6 +3461,8 @@ impl Spike {
             ink: crate::erd_details::Ink::of(k),
             on,
             id: "erd-panel",
+            copied: self.erd.canvas.copied.as_deref(),
+            row: None,
         };
         let (hov, t1) = (k.text_mix(0.07), k.text);
         Some(

@@ -3522,6 +3522,33 @@ fn moving_an_erd_card_while_zoomed_keeps_the_view_sharp(cx: &mut TestAppContext)
 }
 
 #[gpui_kit::test]
+fn copying_a_column_name_from_the_erd_popover_and_panel(cx: &mut TestAppContext) {
+    let db = seeded("erd-copy", &[]);
+    seed_erd(&db);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "app.rail.erd");
+    click(&mut ui, "erd-c1/svc_shop");
+    assert!(erd_canvas(&mut ui).0, "그렸다");
+    let clipboard = |ui: &mut VisualTestContext| ui.read_from_clipboard().and_then(|c| c.text());
+    // 컬럼 정보창의 복사 단추 — 정보창은 그대로
+    let p = erd_spot(&mut ui, "users", Some("email"));
+    ui.simulate_click(p, Modifiers::none());
+    erd_state(&mut ui);
+    click(&mut ui, "erd-copy-email");
+    assert_eq!(clipboard(&mut ui).as_deref(), Some("email"));
+    assert_eq!(erd_state(&mut ui).1, Some(("users".into(), "email".into())));
+    // 표 패널의 컬럼 행 — 복사만 하고 그 컬럼을 고르지 않는다(정보창은 닫고)
+    ui.simulate_keystrokes("escape");
+    assert_eq!(erd_state(&mut ui).1, None);
+    let head = erd_spot(&mut ui, "orders", None);
+    ui.simulate_click(head, Modifiers::none());
+    assert_eq!(erd_state(&mut ui).0.as_deref(), Some("orders"));
+    click(&mut ui, "erd-copy-user_id");
+    assert_eq!(clipboard(&mut ui).as_deref(), Some("user_id"));
+    assert_eq!(erd_state(&mut ui).1, None, "행을 고르지 않았다");
+}
+
+#[gpui_kit::test]
 fn tapping_the_erd_opens_the_table_panel_and_column_popover(cx: &mut TestAppContext) {
     let db = seeded("erd-tap", &[]);
     seed_erd(&db);

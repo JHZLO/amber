@@ -169,6 +169,7 @@ fn width(node: &Node, p: Txt, ink: &Ink, window: &Window) -> f32 {
                     .width,
             )
         }
+        Node::El(el) if el.has("d-copy") => 28.,
         Node::El(el) => {
             let t = restyle(el, p, ink);
             let pad = if el.tag == "i" { 8. } else { 0. };
@@ -188,13 +189,21 @@ pub struct Ctx<'a> {
     pub on: Option<&'a str>,
     /// 누를 것에 붙일 id 의 머리
     pub id: &'a str,
+    /// 방금 복사한 컬럼 이름 — 그 단추는 잠깐 체크를 보인다
+    pub copied: Option<&'a str>,
+    /// 패널의 컬럼 행 안이다 — 복사 단추는 손이 올라간 행과 고른 행(true)에서만 보인다
+    pub row: Option<bool>,
 }
+
+/// 패널의 컬럼 행 하나(.t-cols tr) — 복사 단추를 드러낼 묶음
+const COLS_ROW: &str = "erd-cols-row";
 
 fn act_id(ctx: &Ctx, act: &Act) -> ElementId {
     let s = match act {
         Act::Open(n) => format!("{}-open-{n}", ctx.id),
         Act::Pick(t, c) => format!("{}-pick-{t}.{c}", ctx.id),
         Act::Service(n) => format!("{}-svc-{n}", ctx.id),
+        Act::Copy(n) => format!("{}-copy-{n}", ctx.id),
     };
     ElementId::Name(s.into())
 }
@@ -204,6 +213,7 @@ fn act_tag(act: &Act) -> String {
         Act::Open(n) => format!("erd-link-{n}"),
         Act::Pick(t, c) => format!("erd-col-{t}.{c}"),
         Act::Service(n) => format!("erd-svc-{n}"),
+        Act::Copy(n) => format!("erd-copy-{n}"),
     }
 }
 
@@ -230,6 +240,7 @@ fn piece(node: &Node, p: Txt, ctx: &Ctx, cx: &mut Context<Spike>) -> AnyElement 
             .whitespace_nowrap()
             .child(s.clone())
             .into_any_element(),
+        Node::El(el) if el.has("d-copy") => copy_button(el, ctx, cx),
         Node::El(el) => {
             let t = restyle(el, p, &ctx.ink);
             let mut d = inline(&el.kids, t, ctx, cx);
@@ -274,6 +285,48 @@ fn piece(node: &Node, p: Txt, ctx: &Ctx, cx: &mut Context<Spike>) -> AnyElement 
             }
         }
     }
+}
+
+/// 컬럼 이름 복사(.d-copy) — 누르면 잠깐 체크. 행 안에선 행을 고르지 않는다
+fn copy_button(el: &El, ctx: &Ctx, cx: &mut Context<Spike>) -> AnyElement {
+    let Some(act @ Act::Copy(name)) = &el.act else {
+        return div().into_any_element();
+    };
+    let done = ctx.copied == Some(name.as_str());
+    let a = act.clone();
+    let (hover, ink) = (ctx.ink.active_line, ctx.ink);
+    div()
+        .id(act_id(ctx, act))
+        .tag(&act_tag(act))
+        .flex_none()
+        .size(px(22.))
+        .ml(px(6.))
+        .my(px(-3.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(5.))
+        .cursor_pointer()
+        .hover(move |s| s.bg(hover))
+        .when(ctx.id.ends_with("pop"), |d| d.ml_auto().mr(px(-4.)))
+        // 행 안에선 손이 올라간 행과 고른 행에서만
+        .when(ctx.row == Some(false) && !done, |d| {
+            d.opacity(0.).group_hover(COLS_ROW, |s| s.opacity(1.))
+        })
+        .child(
+            crate::assets::icon(if done { "check" } else { "copy" }, 13.).text_color(if done {
+                ink.ink
+            } else {
+                ink.faint
+            }),
+        )
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_click(cx.listener(move |this, _, window, cx| {
+            cx.stop_propagation();
+            this.erd_act(&a, window, cx);
+            cx.notify();
+        }))
+        .into_any_element()
 }
 
 /// 표 이름 모양(머리말) — 대문자로
@@ -386,8 +439,14 @@ fn table(
     let pickable = t.has("t-cols");
     for (i, tr) in rows.iter().enumerate() {
         let on = pickable && tr.c.is_some() && tr.c.as_deref() == ctx.on;
+        let row_ctx = Ctx {
+            row: pickable.then_some(on),
+            ..*ctx
+        };
+        let ctx = &row_ctx;
         let mut row = div()
             .flex()
+            .when(pickable, |d| d.group(COLS_ROW))
             .when(i < last, |d| {
                 d.border_b_1().border_color(ink.rule.opacity(0.55))
             })
