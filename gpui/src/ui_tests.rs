@@ -248,6 +248,18 @@ fn clicking_the_text_edits_it_and_enter_saves(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn clicking_a_group_header_renames_it(cx: &mut TestAppContext) {
+    let db = seeded("edit-group", &[("old group", None), ("child", Some(0))]);
+    let mut ui = open(cx, &db);
+    click(&mut ui, "txt-1-false");
+    ui.simulate_keystrokes("cmd-a");
+    ui.simulate_input("new group");
+    ui.simulate_keystrokes("enter");
+    ui.run_until_parked();
+    assert_eq!(text(&row(&db, 1).unwrap(), "content"), "new group");
+}
+
+#[gpui_kit::test]
 fn deleting_asks_first_and_cancel_keeps_the_row(cx: &mut TestAppContext) {
     let db = seeded(
         "delete",

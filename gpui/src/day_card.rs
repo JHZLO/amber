@@ -679,33 +679,6 @@ impl Spike {
 
         let actions = self.row_actions(todo, overdue, carried, gone, k, cx);
         let read_only = overdue || carried;
-        if group {
-            let header = div()
-                .group("todo-row")
-                .flex()
-                .items_center()
-                .gap(px(10.))
-                .px(px(8.))
-                .py(px(4.))
-                .mb(px(2.))
-                .child(
-                    div()
-                        .flex_shrink(1.)
-                        .overflow_hidden()
-                        .whitespace_nowrap()
-                        .text_ellipsis()
-                        .text_size(px(11.5))
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(k.text_3)
-                        .child(content.to_uppercase()),
-                )
-                .child(div().flex_1().min_w(px(12.)).h(px(1.)).bg(k.border))
-                .children(progress)
-                .children(actions);
-            return self.drag_frame(header, id, !read_only, k, cx);
-        }
-
-        let row_id = SharedString::from(format!("row-{id}-{overdue}"));
         let editing = self
             .editing
             .as_ref()
@@ -724,6 +697,46 @@ impl Spike {
                 cx.notify();
             })
         };
+        if group {
+            // 이름 고치기는 글자에만 — 머리글 줄 전체는 누르는 물건이 아니다
+            let title = match editing {
+                Some(state) => self.edit_field(state, k, cx),
+                None => div()
+                    .id(SharedString::from(format!("txt-{id}-{overdue}")))
+                    .tag(format!("txt-{id}-{overdue}"))
+                    .flex_shrink(1.)
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_ellipsis()
+                    .cursor(if read_only {
+                        CursorStyle::PointingHand
+                    } else {
+                        CursorStyle::IBeam
+                    })
+                    .on_click(text_click)
+                    .text_size(px(11.5))
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(k.text_3)
+                    .group_hover("todo-row", move |s| s.text_color(k.text_2))
+                    .child(content.to_uppercase())
+                    .into_any_element(),
+            };
+            let header = div()
+                .group("todo-row")
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .px(px(8.))
+                .py(px(4.))
+                .mb(px(2.))
+                .child(title)
+                .child(div().flex_1().min_w(px(12.)).h(px(1.)).bg(k.border))
+                .children(progress)
+                .children(actions);
+            return self.drag_frame(header, id, !read_only, k, cx);
+        }
+
+        let row_id = SharedString::from(format!("row-{id}-{overdue}"));
         let el = div()
             .group("todo-row")
             .flex()
@@ -751,29 +764,7 @@ impl Spike {
                         )
                         .when(!gone, |d| d.on_click(toggle)),
                     )
-                    .when_some(editing, |d, state| {
-                        d.child(
-                            edit_box(self.todo_focus == TodoFocus::Edit, k)
-                                .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
-                                    if e.keystroke.key == "escape" {
-                                        this.editing = None;
-                                        cx.notify();
-                                    }
-                                }))
-                                // 바깥 클릭 저장 — 포커스 없는 곳을 누르면 GPUI 는 blur 를 내지 않는다
-                                .on_mouse_down_out(cx.listener(|this, _, _, cx| {
-                                    this.save_edit(cx);
-                                    cx.notify();
-                                }))
-                                .child(
-                                    Textarea::new(&state)
-                                        .appearance(false)
-                                        .small()
-                                        .text_size(px(13.5))
-                                        .line_height(relative(1.5)),
-                                ),
-                        )
-                    })
+                    .when_some(editing, |d, state| d.child(self.edit_field(state, k, cx)))
                     .when(
                         self.editing
                             .as_ref()
@@ -1037,6 +1028,34 @@ impl Spike {
                     )))
             }
         })
+    }
+
+    fn edit_field(
+        &self,
+        state: Entity<TextareaState>,
+        k: &Tokens,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        edit_box(self.todo_focus == TodoFocus::Edit, k)
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+                if e.keystroke.key == "escape" {
+                    this.editing = None;
+                    cx.notify();
+                }
+            }))
+            // 바깥 클릭 저장 — 포커스 없는 곳을 누르면 GPUI 는 blur 를 내지 않는다
+            .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                this.save_edit(cx);
+                cx.notify();
+            }))
+            .child(
+                Textarea::new(&state)
+                    .appearance(false)
+                    .small()
+                    .text_size(px(13.5))
+                    .line_height(relative(1.5)),
+            )
+            .into_any_element()
     }
 
     /// 글자를 누르면 그 자리에서 고친다 — Enter 저장, Shift+Enter 줄바꿈, Esc 취소, 바깥을 누르면 저장
