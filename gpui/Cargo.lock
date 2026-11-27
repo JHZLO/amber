@@ -203,6 +203,7 @@ dependencies = [
  "icu_collator",
  "icu_locale_core",
  "image",
+ "libc",
  "markdown",
  "merman",
  "notify",

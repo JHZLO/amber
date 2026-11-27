@@ -13,6 +13,8 @@ serde_json = { version = "1", features = ["preserve_order"] }
 chrono = "0.4"
 ulid = "1.2"
 sha2 = "0.10"
+# CLI 소켓 건너편 프로세스(LOCAL_PEERPID) — 요청한 프로그램을 앱이 직접 알아낸다
+libc = "0.2"
 # 노트 트리 정렬 — 지금 앱의 localeCompare(…, "ko") 와 같은 ICU 한국어 규칙(한글, 한자가 라틴보다 앞)
 icu_collator = "2"
 icu_locale_core = "2"

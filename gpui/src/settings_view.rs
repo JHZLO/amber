@@ -76,8 +76,13 @@ pub struct SettingsUi {
     pub db_delete: Option<amber_gpui::dbconn::DbConnection>,
     pub db_password: Option<crate::settings_db::DbPassword>,
     pub db_error: Option<String>,
-    /// CLI — 허용 창이 떠 있는 연결 요청(설정과 무관하게 앱 위에 뜬다), 방금 복사한 안내
+    /// CLI 칸 — [기기 추가] 판이 열려 요청을 기다리는 중인가, 판에 들어온 요청(seq 로 구별), 방금 연결해 밝혀 둘 기기,
+    /// 명령 설치 오류, 연결 명령을 복사했나
+    pub cli_adding: bool,
     pub cli_request: Option<crate::cli::PairRequest>,
+    pub cli_seq: u64,
+    pub cli_fresh: Option<String>,
+    pub cli_error: Option<String>,
     pub cli_copied: bool,
     /// 바닥 줄 — 백업 중, 결과(성공?, 글). 결과는 칸과 무관하게 판 맨 위에 남는다
     pub backing_up: bool,
@@ -107,7 +112,11 @@ impl Default for SettingsUi {
             db_delete: None,
             db_password: None,
             db_error: None,
+            cli_adding: false,
             cli_request: None,
+            cli_seq: 0,
+            cli_fresh: None,
+            cli_error: None,
             cli_copied: false,
             backing_up: false,
             backup_result: None,
@@ -125,6 +134,7 @@ impl Spike {
         self.settings.ai = None;
         self.settings.backup_result = None;
         self.settings.cli_copied = false;
+        self.settings.cli_error = None;
         cx.notify();
     }
 
@@ -137,6 +147,8 @@ impl Spike {
         self.settings.db_delete = None;
         self.settings.db_password = None;
         self.settings.db_error = None;
+        // 설정을 닫으면 기다리기도 끝난다 — 판이 안 보이는데 요청을 받지 않게
+        self.cli_stop_adding();
         cx.notify();
     }
 

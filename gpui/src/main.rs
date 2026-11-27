@@ -744,7 +744,6 @@ impl Render for Spike {
         let auth = self.auth_modal(&k, cx);
         let db_modals = [self.db_delete_modal(&k, cx), self.db_password_modal(&k, cx)];
         let settings_unsaved = self.settings_unsaved_modal(&k, cx);
-        let cli_request = self.cli_request_modal(&k, cx);
         let search_modal = self.search_modal(&k, cx);
         let concept_sort = self.concept_sort_menu(&k, cx);
         let concept_modals = [
@@ -1234,7 +1233,6 @@ impl Render for Spike {
             .children(erd_conn_over)
             .children(onboarding)
             .children(auth)
-            .children(cli_request)
             .children(search_modal)
             .children(concept_sort)
             .children(concept_modals.into_iter().flatten())
@@ -1557,7 +1555,7 @@ fn main() {
                 cx.new(|cx| Spike::new(db, date, note, jump, started, window, cx))
             })
             .expect("창을 못 열었다");
-            cli::serve(main_window, spike.clone(), cx);
+            cli::serve(spike.clone(), cx);
             shell::install(main_window, spike, cx);
             cx.activate(true);
         });

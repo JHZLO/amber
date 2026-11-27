@@ -3947,20 +3947,23 @@ fn cli(ui: &mut VisualTestContext, token: &str, req: serde_json::Value) -> serde
     cli_start(ui, token, req).take().expect("CLI 답")
 }
 
-fn pair_req(code: &str, name: &str) -> serde_json::Value {
-    serde_json::json!({ "cmd": "pair", "code": code, "name": name })
+fn pair_req(machine: &str) -> serde_json::Value {
+    serde_json::json!({ "cmd": "pair", "machine": machine, "peer": { "kind": "claude", "program": "Claude Code" } })
 }
 
-/// amber connect → 허용 창의 [허용] → 토큰
-fn connect_cli(ui: &mut VisualTestContext, name: &str) -> String {
-    let out = cli_start(ui, "", pair_req("K7QM-2XPF", name));
-    click(ui, "cli-request-allow");
+/// 설정 › CLI › [기기 추가] → amber connect → 판 안의 [허용] → 토큰
+fn connect_cli(ui: &mut VisualTestContext, machine: &str) -> String {
+    click(ui, "app.rail.settings");
+    click(ui, "set-tab-cli");
+    click(ui, "set-cli-add");
+    let out = cli_start(ui, "", pair_req(machine));
+    click(ui, "set-cli-allow");
     let out = out.take().expect("허용한 답");
     out["token"].as_str().expect("토큰").to_string()
 }
 
 #[gpui_kit::test]
-fn the_cli_only_answers_devices_a_person_allowed(cx: &mut TestAppContext) {
+fn the_cli_connects_only_while_add_device_waits_and_a_person_allows(cx: &mut TestAppContext) {
     let db = seeded("cli-pair", &[]);
     let mut ui = open(cx, &db);
     let list = serde_json::json!({ "cmd": "erd.list" });
@@ -3971,45 +3974,66 @@ fn the_cli_only_answers_devices_a_person_allowed(cx: &mut TestAppContext) {
         "모르는 토큰"
     );
     assert_eq!(
-        cli(&mut ui, "", pair_req("short", "x"))["ok"],
+        cli(&mut ui, "", pair_req("work mac"))["ok"],
         false,
-        "꼴이 틀린 확인 코드"
+        "[기기 추가] 를 누르기 전엔 요청을 받지 않는다"
     );
-    // 요청이 오면 허용 창이 뜨고, 답은 사람이 고를 때까지 기다린다. 그동안 다른 요청은 받지 않는다
-    let denied = cli_start(&mut ui, "", pair_req("k7qm2xpf", "work mac"));
-    assert!(ui.debug_bounds("cli-request").is_some(), "허용 창");
-    let shown = ui.update(|_, cx| {
-        let s = spike().read(cx);
-        let r = s.settings.cli_request.as_ref().unwrap();
-        (r.code.clone(), r.name.clone())
-    });
-    assert_eq!(shown, ("K7QM-2XPF".to_string(), "work mac".to_string()));
+    click(&mut ui, "app.rail.settings");
+    click(&mut ui, "set-tab-cli");
+    assert!(ui.debug_bounds("set-cli-none").is_some(), "빈 목록");
+    click(&mut ui, "set-cli-add");
+    assert!(ui.debug_bounds("set-cli-steps").is_some(), "단계 판");
+    assert!(ui.debug_bounds("set-cli-waiting").is_some(), "기다리는 중");
+    // 요청이 오면 같은 판 안에 뜨고, 답은 사람이 고를 때까지 기다린다. 그동안 다른 요청은 받지 않는다
+    let denied = cli_start(&mut ui, "", pair_req("work mac"));
+    assert!(ui.debug_bounds("set-cli-request").is_some(), "판 안의 요청");
     assert!(denied.borrow().is_none(), "고를 때까지 기다린다");
     assert_eq!(
-        cli(&mut ui, "", pair_req("AAAA-BBBB", "other"))["ok"],
+        cli(&mut ui, "", pair_req("other"))["ok"],
         false,
         "한 번에 하나"
     );
-    click(&mut ui, "cli-request-deny");
+    click(&mut ui, "set-cli-deny");
     assert_eq!(denied.take().unwrap()["ok"], false);
-    assert!(ui.debug_bounds("cli-request").is_none());
-    // 허용하면 토큰을 한 번 돌려주고 지문만 남긴다
-    let token = connect_cli(&mut ui, "work mac");
+    assert!(
+        ui.debug_bounds("set-cli-waiting").is_some(),
+        "거절하면 다시 기다린다"
+    );
+    // 허용하면 토큰을 한 번 돌려주고 판을 닫는다 — 앱은 지문만 남긴다
+    let out = cli_start(&mut ui, "", pair_req("work mac"));
+    click(&mut ui, "set-cli-allow");
+    let out = out.take().unwrap();
+    assert_eq!(out["ok"], true, "{out}");
+    assert_eq!(out["program"], "Claude Code");
+    let token = out["token"].as_str().unwrap().to_string();
+    assert!(ui.debug_bounds("set-cli-steps").is_none(), "판이 닫힌다");
+    let device = ui.update(|_, cx| crate::cli::devices(&spike().read(cx).db)[0].clone());
+    assert_eq!(
+        (device.program.as_str(), device.name.as_str()),
+        ("Claude Code", "work mac")
+    );
     let stored = ui
         .update(|_, cx| amber_gpui::prefs::get(&spike().read(cx).db, "amber.cli.devices").unwrap());
-    assert!(stored.contains("work mac") && !stored.contains(&token));
+    assert!(!stored.contains(&token), "토큰은 남기지 않는다");
     assert_eq!(cli(&mut ui, &token, list.clone())["ok"], true);
-    let device = ui.update(|_, cx| crate::cli::devices(&spike().read(cx).db)[0].clone());
-    assert!(device.last_used.is_some(), "마지막 사용");
-    // 설정 › CLI 목록에서 연결 해제하면 그 토큰은 더 못 쓴다
-    click(&mut ui, "app.rail.settings");
-    click(&mut ui, "set-tab-cli");
+    assert!(
+        ui.update(|_, cx| crate::cli::devices(&spike().read(cx).db)[0]
+            .last_used
+            .is_some()),
+        "마지막 사용"
+    );
+    // 연결 해제하면 그 토큰은 더 못 쓴다
     click(
         &mut ui,
         Box::leak(format!("set-cli-revoke-{}", device.id).into_boxed_str()),
     );
-    assert!(ui.debug_bounds("set-cli-none").is_some(), "빈 목록");
+    assert!(ui.debug_bounds("set-cli-none").is_some());
     assert_eq!(cli(&mut ui, &token, list)["ok"], false);
+    // 기다리는 중에 설정을 닫으면 요청은 거절로 끝난다
+    click(&mut ui, "set-cli-add");
+    let closed = cli_start(&mut ui, "", pair_req("work mac"));
+    click(&mut ui, "set-close");
+    assert_eq!(closed.take().unwrap()["ok"], false);
 }
 
 #[gpui_kit::test]
