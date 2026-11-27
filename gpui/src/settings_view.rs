@@ -1,5 +1,5 @@
 // 설정 모달 — 지금 앱 SettingsModal.tsx 의 틀. 넓게(980) 열고 왼쪽에 칸 목록(AI, 프롬프트, 데일리 리포트,
-// 데이터베이스, 모양), 오른쪽 판이 제 안에서 구른다. 열 때마다 AI 칸으로 돌아간다(지금 앱과 같다).
+// 데이터베이스, CLI, 모양), 오른쪽 판이 제 안에서 구른다. 열 때마다 AI 칸으로 돌아간다(지금 앱과 같다).
 // 칸 내용은 하나씩 옮긴다 — 리포트(D5d)가 먼저, 나머지는 D7.
 
 use std::rc::Rc;
@@ -21,10 +21,11 @@ pub enum Tab {
     Prompts,
     Report,
     Databases,
+    Cli,
     Appearance,
 }
 
-const TABS: [(Tab, &str, &str, &str); 5] = [
+const TABS: [(Tab, &str, &str, &str); 6] = [
     (Tab::Ai, "set-tab-ai", "settings.tab.ai", "sparkles"),
     (
         Tab::Prompts,
@@ -44,6 +45,7 @@ const TABS: [(Tab, &str, &str, &str); 5] = [
         "settings.tab.databases",
         "database",
     ),
+    (Tab::Cli, "set-tab-cli", "settings.tab.cli", "key"),
     (
         Tab::Appearance,
         "set-tab-appearance",
@@ -74,6 +76,9 @@ pub struct SettingsUi {
     pub db_delete: Option<amber_gpui::dbconn::DbConnection>,
     pub db_password: Option<crate::settings_db::DbPassword>,
     pub db_error: Option<String>,
+    /// CLI 칸 — 열어 둔 기기 연결(설정을 닫으면 버린다), 방금 복사한 것("command" | "usage")
+    pub cli_pair: Option<crate::cli::Pairing>,
+    pub cli_copied: Option<&'static str>,
     /// 바닥 줄 — 백업 중, 결과(성공?, 글). 결과는 칸과 무관하게 판 맨 위에 남는다
     pub backing_up: bool,
     pub backup_result: Option<(bool, String)>,
@@ -102,6 +107,8 @@ impl Default for SettingsUi {
             db_delete: None,
             db_password: None,
             db_error: None,
+            cli_pair: None,
+            cli_copied: None,
             backing_up: false,
             backup_result: None,
             theme_anchor: Default::default(),
@@ -117,6 +124,7 @@ impl Spike {
         self.settings.rep = None;
         self.settings.ai = None;
         self.settings.backup_result = None;
+        self.settings.cli_copied = None;
         cx.notify();
     }
 
@@ -129,6 +137,7 @@ impl Spike {
         self.settings.db_delete = None;
         self.settings.db_password = None;
         self.settings.db_error = None;
+        self.settings.cli_pair = None;
         cx.notify();
     }
 
@@ -230,6 +239,7 @@ impl Spike {
             .when(cur == Tab::Databases, |d| {
                 d.child(self.databases_tab(k, cx))
             })
+            .when(cur == Tab::Cli, |d| d.child(self.cli_tab(k, cx)))
             .when(cur == Tab::Report, |d| d.child(self.report_settings(k, cx)))
             .when(cur == Tab::Appearance, |d| {
                 d.child(self.appearance_tab(k, cx))

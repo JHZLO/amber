@@ -151,8 +151,6 @@ pub struct AiTab {
     lang_anchor: Rc<Cell<Bounds<Pixels>>>,
     /// 저장 안 한 변경을 안고 닫으려 했다
     pub confirm_close: bool,
-    /// Amber CLI 연결 정보를 복사했다(다시 열면 지운다)
-    pub cli_copied: bool,
 }
 
 impl AiTab {
@@ -241,7 +239,6 @@ impl Spike {
             lang_open: false,
             lang_anchor: Rc::default(),
             confirm_close: false,
-            cli_copied: false,
         });
         let codex = self.settings.probe.codex_models();
         cx.spawn(async move |this, cx| {
@@ -556,56 +553,7 @@ impl Spike {
                     .child(self.ai_behavior(a, &p, k, cx)),
             );
         }
-        out.child(self.cli_section(a, k, cx))
-    }
-
-    /// Amber CLI — 에이전트 지침에 붙여 넣을 연결 정보(이 설치본의 실행 파일 경로)를 보여 주고 복사한다
-    fn cli_section(&self, a: &AiTab, k: &Tokens, cx: &mut Context<Self>) -> Div {
-        let text = crate::cli::setup_text();
-        let copied = a.cli_copied;
-        let copy = button("set-cli-copy", k, false, false)
-            .child(icon(if copied { "check" } else { "copy" }, 13.).text_color(k.text_2))
-            .child(t(if copied {
-                "settings.cli.copied"
-            } else {
-                "settings.cli.copy"
-            }))
-            .on_click(cx.listener(|this, _, _, cx| {
-                cx.write_to_clipboard(ClipboardItem::new_string(crate::cli::setup_text()));
-                if let Some(a) = this.settings.ai.as_mut() {
-                    a.cli_copied = true;
-                }
-                cx.notify();
-            }));
-        set_section(
-            k,
-            t("settings.cli.title"),
-            Some(t("settings.cli.desc")),
-            Some(copy.into_any_element()),
-        )
-        .tag("set-cli")
-        .mt(px(20.))
-        .pt(px(20.))
-        .border_t_1()
-        .border_color(k.border)
-        .child(
-            div()
-                .tag("set-cli-text")
-                .max_w(px(560.))
-                .rounded(px(6.))
-                .border_1()
-                .border_color(k.border_strong)
-                .bg(k.surface)
-                .px(px(11.))
-                .py(px(8.))
-                .flex()
-                .flex_col()
-                .gap(px(2.))
-                .font_family(crate::markdown::MONO)
-                .text_size(px(12.))
-                .text_color(k.text_2)
-                .children(text.lines().map(|l| div().child(l.to_string()))),
-        )
+        out
     }
 
     fn ai_cards(&self, a: &AiTab, k: &Tokens, cx: &mut Context<Self>) -> Div {

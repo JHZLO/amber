@@ -3922,8 +3922,11 @@ fn syncing_an_erd_schema_writes_the_snapshot_and_shows_what_changed(cx: &mut Tes
     assert_eq!(order, ["svc_empty", "svc_shop"], "별표가 둘 다면 이름순");
 }
 
-/// CLI 요청 하나를 앱에 넘기고 답을 받는다(소켓 대신 바로)
-fn cli(ui: &mut VisualTestContext, req: serde_json::Value) -> serde_json::Value {
+/// CLI 요청 하나를 앱에 넘기고 답을 받는다(소켓 대신 바로). 토큰이 비면 싣지 않는다
+fn cli(ui: &mut VisualTestContext, token: &str, mut req: serde_json::Value) -> serde_json::Value {
+    if !token.is_empty() {
+        req["token"] = serde_json::json!(token);
+    }
     let out = std::rc::Rc::new(std::cell::RefCell::new(None));
     ui.update(|_, cx| {
         let task = spike().update(cx, |s, cx| s.cli_run(&req, cx));
@@ -3933,6 +3936,94 @@ fn cli(ui: &mut VisualTestContext, req: serde_json::Value) -> serde_json::Value 
     });
     ui.run_until_parked();
     out.take().expect("CLI 답")
+}
+
+/// 설정 › CLI 에서 연결 창을 연 동안 지금 코드
+fn cli_code(ui: &mut VisualTestContext) -> Option<String> {
+    ui.update(|_, cx| {
+        spike()
+            .read(cx)
+            .settings
+            .cli_pair
+            .as_ref()
+            .map(|p| p.code.clone())
+    })
+}
+
+/// 설정 › CLI › [기기 연결] → 코드로 연결하고 토큰을 받는다
+fn connect_cli(ui: &mut VisualTestContext, name: &str) -> String {
+    click(ui, "app.rail.settings");
+    click(ui, "set-tab-cli");
+    click(ui, "set-cli-pair");
+    let code = cli_code(ui).expect("연결 코드");
+    let out = cli(
+        ui,
+        "",
+        serde_json::json!({ "cmd": "pair", "code": code, "name": name }),
+    );
+    out["token"].as_str().expect("토큰").to_string()
+}
+
+#[gpui_kit::test]
+fn the_cli_only_answers_devices_connected_in_settings(cx: &mut TestAppContext) {
+    let db = seeded("cli-pair", &[]);
+    let mut ui = open(cx, &db);
+    let list = serde_json::json!({ "cmd": "erd.list" });
+    let pair = |code: &str| serde_json::json!({ "cmd": "pair", "code": code, "name": "work mac" });
+    assert_eq!(cli(&mut ui, "", list.clone())["ok"], false, "토큰 없이");
+    assert_eq!(
+        cli(&mut ui, "nope", list.clone())["ok"],
+        false,
+        "모르는 토큰"
+    );
+    assert_eq!(
+        cli(&mut ui, "", pair("AAAA-AAAA"))["ok"],
+        false,
+        "연결 창을 열지 않았으면 코드도 받지 않는다"
+    );
+    click(&mut ui, "app.rail.settings");
+    click(&mut ui, "set-tab-cli");
+    assert!(ui.debug_bounds("set-cli-none").is_some(), "빈 목록");
+    click(&mut ui, "set-cli-pair");
+    assert!(ui.debug_bounds("set-cli-pairing").is_some(), "코드와 명령");
+    let code = cli_code(&mut ui).unwrap();
+    let wrong = format!(
+        "{}{}",
+        if code.starts_with('A') { 'B' } else { 'A' },
+        &code[1..]
+    );
+    assert_eq!(cli(&mut ui, "", pair(&wrong))["ok"], false);
+    // 대시와 대소문자는 가리지 않는다 — 토큰은 한 번 돌려주고 지문만 남긴다
+    let ok = cli(&mut ui, "", pair(&code.replace('-', "").to_lowercase()));
+    assert_eq!(ok["ok"], true, "{ok}");
+    assert_eq!(ok["name"], "work mac");
+    let token = ok["token"].as_str().unwrap().to_string();
+    assert!(cli_code(&mut ui).is_none(), "코드는 한 번만");
+    assert_eq!(cli(&mut ui, "", pair(&code))["ok"], false);
+    let stored = ui
+        .update(|_, cx| amber_gpui::prefs::get(&spike().read(cx).db, "amber.cli.devices").unwrap());
+    assert!(stored.contains("work mac") && !stored.contains(&token));
+    assert_eq!(cli(&mut ui, &token, list.clone())["ok"], true);
+    let device = ui.update(|_, cx| crate::cli::devices(&spike().read(cx).db)[0].clone());
+    assert!(device.last_used.is_some(), "마지막 사용");
+    // 연결 해제하면 그 토큰은 더 못 쓴다
+    click(
+        &mut ui,
+        Box::leak(format!("set-cli-revoke-{}", device.id).into_boxed_str()),
+    );
+    assert_eq!(cli(&mut ui, &token, list)["ok"], false);
+    // 다섯 번 틀리면 연결 창이 닫힌다
+    click(&mut ui, "set-cli-pair");
+    let code = cli_code(&mut ui).unwrap();
+    let wrong = format!(
+        "{}{}",
+        if code.starts_with('A') { 'B' } else { 'A' },
+        &code[1..]
+    );
+    for _ in 0..5 {
+        assert_eq!(cli(&mut ui, "", pair(&wrong))["ok"], false);
+    }
+    assert!(cli_code(&mut ui).is_none());
 }
 
 #[gpui_kit::test]
@@ -3954,7 +4045,8 @@ fn the_cli_lists_and_syncs_erd_schemas_through_the_app(cx: &mut TestAppContext) 
             .unwrap())
         }),
     );
-    let list = cli(&mut ui, serde_json::json!({ "cmd": "erd.list" }));
+    let token = connect_cli(&mut ui, "test");
+    let list = cli(&mut ui, &token, serde_json::json!({ "cmd": "erd.list" }));
     assert_eq!(list["ok"], true);
     assert_eq!(list["connections"][0]["name"], "Local DB");
     assert_eq!(
@@ -3965,6 +4057,7 @@ fn the_cli_lists_and_syncs_erd_schemas_through_the_app(cx: &mut TestAppContext) 
     // 이름은 대소문자를 가리지 않는다 — 고른 스키마만 읽고 파일을 쓴다
     let one = cli(
         &mut ui,
+        &token,
         serde_json::json!({ "cmd": "erd.sync", "connection": "local db", "schemas": ["svc_shop"] }),
     );
     assert_eq!(one["ok"], true, "{one}");
@@ -3980,6 +4073,7 @@ fn the_cli_lists_and_syncs_erd_schemas_through_the_app(cx: &mut TestAppContext) 
     // 스키마를 안 주면 켜 둔 전부 — 실패한 것은 not_synced 와 오류로
     let all = cli(
         &mut ui,
+        &token,
         serde_json::json!({ "cmd": "erd.sync", "connection": "Local DB", "schemas": [] }),
     );
     assert_eq!(all["ok"], false);
@@ -3988,12 +4082,14 @@ fn the_cli_lists_and_syncs_erd_schemas_through_the_app(cx: &mut TestAppContext) 
     // 잘못 부르면 아무것도 읽지 않고 이유를 돌려준다
     let off = cli(
         &mut ui,
+        &token,
         serde_json::json!({ "cmd": "erd.sync", "connection": "Local DB", "schemas": ["svc_off"] }),
     );
     assert_eq!(off["ok"], false);
     assert!(off["error"].as_str().unwrap().contains("svc_off"));
     let none = cli(
         &mut ui,
+        &token,
         serde_json::json!({ "cmd": "erd.sync", "connection": "nope", "schemas": [] }),
     );
     assert_eq!(none["ok"], false);

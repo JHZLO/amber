@@ -52,6 +52,7 @@ mod root_picker;
 mod row_drag;
 mod search_view;
 mod settings_ai;
+mod settings_cli;
 mod settings_db;
 mod settings_prompts;
 mod settings_view;

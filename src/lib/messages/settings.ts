@@ -21,14 +21,24 @@ const ko = {
   "settings.backup.done": "백업 완료 — {path}",
   "settings.backup.fail": "백업 실패 — {err}",
 
-  // Amber CLI (설정 › AI 칸 아래)
-  "settings.cli.title": "Amber CLI",
+  // CLI (설정 › CLI) — 연결한 기기만 터미널에서 앱을 다룬다
+  "settings.tab.cli": "CLI",
+  "settings.cli.title": "연결된 기기",
   "settings.cli.desc":
-    "터미널이나 AI 에이전트가 켜져 있는 Amber 를 명령으로 다뤄요. 아래 연결 정보를 복사해 에이전트 지침(CLAUDE.md 등)에 붙여 넣으세요.",
+    "연결한 기기만 터미널에서 켜져 있는 Amber 를 다룰 수 있어요. 토큰은 그 기기의 키체인에만 저장되고, Amber 는 토큰의 지문만 보관해요.",
+  "settings.cli.pair": "기기 연결",
+  "settings.cli.pairTitle": "연결할 터미널에서 2분 안에 아래 명령을 실행하세요.",
+  "settings.cli.pairHint": "코드는 한 번만 쓸 수 있어요. 설정을 닫거나 다섯 번 틀리면 사라져요.",
+  "settings.cli.none": "연결된 기기가 없어요. 연결하기 전까지 CLI 요청은 모두 거절돼요.",
+  "settings.cli.deviceMeta": "연결 {created}, 마지막 사용 {used}",
+  "settings.cli.never": "없음",
+  "settings.cli.revoke": "연결 해제",
+  "settings.cli.usageTitle": "명령",
+  "settings.cli.usageDesc": "에이전트 지침(CLAUDE.md 등)에 붙여 넣으세요.",
   "settings.cli.copy": "복사",
   "settings.cli.copied": "복사됨",
   "settings.cli.snippet":
-    "Amber CLI: Amber 앱이 켜져 있어야 한다. 결과는 JSON, 성공하면 종료 코드 0\n{cmd} erd list    연결과 켜 둔 스키마, 마지막 동기화\n{cmd} erd sync <연결 이름> [스키마...]    ERD 스냅샷을 DB 에서 다시 읽는다(스키마를 안 주면 켜 둔 전부)\n{cmd} help",
+    "Amber CLI: Amber 앱이 켜져 있고 이 기기가 설정 > CLI 에서 연결돼 있어야 한다. 결과는 JSON, 성공하면 종료 코드 0\n{cmd} connect <코드>    설정 > CLI > 기기 연결에 뜬 코드로 이 기기를 한 번 연결한다\n{cmd} erd list    연결과 켜 둔 스키마, 마지막 동기화\n{cmd} erd sync <연결 이름> [스키마...]    ERD 스냅샷을 DB 에서 다시 읽는다(스키마를 안 주면 켜 둔 전부)\n{cmd} help",
 
   // AI 연결 (설정 탭 + 온보딩 공용)
   "settings.ai.title": "AI 연결",
@@ -177,13 +187,23 @@ const en: Record<keyof typeof ko, string> = {
   "settings.backup.done": "Backup complete — {path}",
   "settings.backup.fail": "Backup failed — {err}",
 
-  "settings.cli.title": "Amber CLI",
+  "settings.tab.cli": "CLI",
+  "settings.cli.title": "Connected devices",
   "settings.cli.desc":
-    "Lets a terminal or an AI agent drive the running Amber. Copy the setup below into your agent's instructions (CLAUDE.md, for example).",
+    "Only connected devices can drive the running Amber from a terminal. The token lives only in that device's Keychain; Amber keeps just its fingerprint.",
+  "settings.cli.pair": "Connect device",
+  "settings.cli.pairTitle": "Run this command in the terminal you want to connect within 2 minutes.",
+  "settings.cli.pairHint": "The code works once. It disappears when you close Settings or after five wrong tries.",
+  "settings.cli.none": "No devices connected. Every CLI request is refused until you connect one.",
+  "settings.cli.deviceMeta": "Connected {created}, last used {used}",
+  "settings.cli.never": "never",
+  "settings.cli.revoke": "Disconnect",
+  "settings.cli.usageTitle": "Commands",
+  "settings.cli.usageDesc": "Paste this into your agent's instructions (CLAUDE.md, for example).",
   "settings.cli.copy": "Copy",
   "settings.cli.copied": "Copied",
   "settings.cli.snippet":
-    "Amber CLI: the Amber app must be running. Output is JSON, exit code 0 on success\n{cmd} erd list    connections, their enabled schemas, last sync\n{cmd} erd sync <connection name> [schema...]    re-read ERD snapshots from the database (all enabled schemas if none given)\n{cmd} help",
+    "Amber CLI: the Amber app must be running and this device connected in Settings > CLI. Output is JSON, exit code 0 on success\n{cmd} connect <code>    connect this device once with the code from Settings > CLI > Connect device\n{cmd} erd list    connections, their enabled schemas, last sync\n{cmd} erd sync <connection name> [schema...]    re-read ERD snapshots from the database (all enabled schemas if none given)\n{cmd} help",
 
   "settings.ai.title": "AI connection",
   "settings.ai.redetect": "Detect again",
