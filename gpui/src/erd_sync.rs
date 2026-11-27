@@ -221,24 +221,27 @@ impl Spike {
         }
     }
 
-    /// 연결 하나의 스키마들을 셋씩 읽는다. 접속, 키체인 실패는 연결 단위의 사고라 하나라도 실패하면 남은 것은 건너뛴다
+    /// 연결 하나의 스키마들을 셋씩 읽는다. 접속, 키체인 실패는 연결 단위의 사고라 하나라도 실패하면 남은 것은 건너뛴다.
+    /// 다 읽은 스키마 이름을 돌려준다(CLI 가 결과로 찍는다)
     pub(crate) fn erd_sync_many(
         &mut self,
         conn: &DbConnection,
         todo: Vec<String>,
         cx: &mut Context<Self>,
-    ) -> Task<()> {
+    ) -> Task<Vec<String>> {
         if todo.is_empty() {
-            return Task::ready(());
+            return Task::ready(Vec::new());
         }
         let folders: Vec<String> = todo.iter().map(|s| schema_folder(conn, s)).collect();
         self.erd.queued.extend(folders.iter().cloned());
         self.erd.expanded.insert(format!("c{}", conn.id));
         let queue = Rc::new(RefCell::new(VecDeque::from(todo)));
         let failed = Rc::new(Cell::new(false));
+        let synced = Rc::new(RefCell::new(Vec::new()));
         let workers: Vec<Task<()>> = (0..SYNC_WORKERS)
             .map(|_| {
-                let (queue, failed, conn) = (queue.clone(), failed.clone(), conn.clone());
+                let (queue, failed, synced, conn) =
+                    (queue.clone(), failed.clone(), synced.clone(), conn.clone());
                 cx.spawn(async move |this, cx| {
                     loop {
                         if failed.get() {
@@ -256,10 +259,12 @@ impl Spike {
                             })
                             .ok()
                             .flatten();
-                        if let Some(task) = task
-                            && !task.await
-                        {
-                            failed.set(true);
+                        if let Some(task) = task {
+                            if task.await {
+                                synced.borrow_mut().push(schema);
+                            } else {
+                                failed.set(true);
+                            }
                         }
                     }
                 })
@@ -273,6 +278,7 @@ impl Spike {
                 }
                 cx.notify();
             });
+            synced.take()
         })
     }
 

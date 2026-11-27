@@ -7,6 +7,7 @@ mod ai;
 mod ai_auth;
 mod assets;
 mod calendar;
+mod cli;
 mod close_dirty;
 mod concept_add;
 mod concept_augment;
@@ -1515,6 +1516,10 @@ fn main() {
     let started = Instant::now();
     // --db 는 사본으로 띄울 때만(개발). 없으면 지금 앱과 같은 데이터 폴더
     let db_path = arg("--db").unwrap_or_else(shell::db_path);
+    // `amber erd sync …` — 창을 띄우지 않고 켜져 있는 앱에 묻는다
+    if let Some(code) = cli::client(&std::env::args().collect::<Vec<_>>(), &db_path) {
+        std::process::exit(code);
+    }
     let note = arg("--note");
     let date = arg("--date").unwrap_or_else(|| chrono::Local::now().format("%Y-%m-%d").to_string());
     let jump = arg("--jump");
@@ -1549,6 +1554,7 @@ fn main() {
                 cx.new(|cx| Spike::new(db, date, note, jump, started, window, cx))
             })
             .expect("창을 못 열었다");
+            cli::serve(spike.clone(), cx);
             shell::install(main_window, spike, cx);
             cx.activate(true);
         });

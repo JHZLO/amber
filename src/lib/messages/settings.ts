@@ -21,6 +21,15 @@ const ko = {
   "settings.backup.done": "백업 완료 — {path}",
   "settings.backup.fail": "백업 실패 — {err}",
 
+  // Amber CLI (설정 › AI 칸 아래)
+  "settings.cli.title": "Amber CLI",
+  "settings.cli.desc":
+    "터미널이나 AI 에이전트가 켜져 있는 Amber 를 명령으로 다뤄요. 아래 연결 정보를 복사해 에이전트 지침(CLAUDE.md 등)에 붙여 넣으세요.",
+  "settings.cli.copy": "복사",
+  "settings.cli.copied": "복사됨",
+  "settings.cli.snippet":
+    "Amber CLI: Amber 앱이 켜져 있어야 한다. 결과는 JSON, 성공하면 종료 코드 0\n{cmd} erd list    연결과 켜 둔 스키마, 마지막 동기화\n{cmd} erd sync <연결 이름> [스키마...]    ERD 스냅샷을 DB 에서 다시 읽는다(스키마를 안 주면 켜 둔 전부)\n{cmd} help",
+
   // AI 연결 (설정 탭 + 온보딩 공용)
   "settings.ai.title": "AI 연결",
   "settings.ai.redetect": "다시 감지",
@@ -167,6 +176,14 @@ const en: Record<keyof typeof ko, string> = {
   "settings.backup.pickTitle": "Choose a folder for the backup",
   "settings.backup.done": "Backup complete — {path}",
   "settings.backup.fail": "Backup failed — {err}",
+
+  "settings.cli.title": "Amber CLI",
+  "settings.cli.desc":
+    "Lets a terminal or an AI agent drive the running Amber. Copy the setup below into your agent's instructions (CLAUDE.md, for example).",
+  "settings.cli.copy": "Copy",
+  "settings.cli.copied": "Copied",
+  "settings.cli.snippet":
+    "Amber CLI: the Amber app must be running. Output is JSON, exit code 0 on success\n{cmd} erd list    connections, their enabled schemas, last sync\n{cmd} erd sync <connection name> [schema...]    re-read ERD snapshots from the database (all enabled schemas if none given)\n{cmd} help",
 
   "settings.ai.title": "AI connection",
   "settings.ai.redetect": "Detect again",

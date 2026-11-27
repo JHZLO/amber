@@ -3922,6 +3922,83 @@ fn syncing_an_erd_schema_writes_the_snapshot_and_shows_what_changed(cx: &mut Tes
     assert_eq!(order, ["svc_empty", "svc_shop"], "별표가 둘 다면 이름순");
 }
 
+/// CLI 요청 하나를 앱에 넘기고 답을 받는다(소켓 대신 바로)
+fn cli(ui: &mut VisualTestContext, req: serde_json::Value) -> serde_json::Value {
+    let out = std::rc::Rc::new(std::cell::RefCell::new(None));
+    ui.update(|_, cx| {
+        let task = spike().update(cx, |s, cx| s.cli_run(&req, cx));
+        let out = out.clone();
+        cx.spawn(async move |_| *out.borrow_mut() = Some(task.await))
+            .detach();
+    });
+    ui.run_until_parked();
+    out.take().expect("CLI 답")
+}
+
+#[gpui_kit::test]
+fn the_cli_lists_and_syncs_erd_schemas_through_the_app(cx: &mut TestAppContext) {
+    let db = seeded("cli-erd", &[]);
+    seed_erd(&db);
+    let mut ui = open(cx, &db);
+    // svc_shop 만 읽힌다, svc_empty 는 비밀번호가 틀렸다
+    plug_db(
+        &mut ui,
+        FakeDb::new(|schema| {
+            if schema != "svc_shop" {
+                return Err(amber_core::ai::AiError::new("DB_AUTH", ""));
+            }
+            Ok(serde_json::from_value(serde_json::json!({
+                "connection": "c", "schema": "svc_shop", "server": "MySQL 8.0.36",
+                "synced_at": 1_800_000_000_000i64, "tables": []
+            }))
+            .unwrap())
+        }),
+    );
+    let list = cli(&mut ui, serde_json::json!({ "cmd": "erd.list" }));
+    assert_eq!(list["ok"], true);
+    assert_eq!(list["connections"][0]["name"], "Local DB");
+    assert_eq!(
+        list["connections"][0]["schemas"],
+        serde_json::json!(["svc_shop", "svc_empty"]),
+        "꺼 둔 스키마는 빠진다"
+    );
+    // 이름은 대소문자를 가리지 않는다 — 고른 스키마만 읽고 파일을 쓴다
+    let one = cli(
+        &mut ui,
+        serde_json::json!({ "cmd": "erd.sync", "connection": "local db", "schemas": ["svc_shop"] }),
+    );
+    assert_eq!(one["ok"], true, "{one}");
+    assert_eq!(one["synced"], serde_json::json!(["svc_shop"]));
+    let file = db
+        .parent()
+        .unwrap()
+        .join("vault/erd/Local DB/svc_shop/schema.json");
+    let snap =
+        amber_gpui::schema_snapshot::parse_snapshot(&std::fs::read_to_string(&file).unwrap())
+            .unwrap();
+    assert_eq!(snap.synced_at, 1_800_000_000_000);
+    // 스키마를 안 주면 켜 둔 전부 — 실패한 것은 not_synced 와 오류로
+    let all = cli(
+        &mut ui,
+        serde_json::json!({ "cmd": "erd.sync", "connection": "Local DB", "schemas": [] }),
+    );
+    assert_eq!(all["ok"], false);
+    assert_eq!(all["not_synced"], serde_json::json!(["svc_empty"]));
+    assert!(all["error"].is_string());
+    // 잘못 부르면 아무것도 읽지 않고 이유를 돌려준다
+    let off = cli(
+        &mut ui,
+        serde_json::json!({ "cmd": "erd.sync", "connection": "Local DB", "schemas": ["svc_off"] }),
+    );
+    assert_eq!(off["ok"], false);
+    assert!(off["error"].as_str().unwrap().contains("svc_off"));
+    let none = cli(
+        &mut ui,
+        serde_json::json!({ "cmd": "erd.sync", "connection": "nope", "schemas": [] }),
+    );
+    assert_eq!(none["ok"], false);
+}
+
 /// 연결 확인의 답 — 스키마 이름과 표 수
 fn probe(schemas: &[(&str, i64)]) -> amber_core::dbconn::DbTestResult {
     amber_core::dbconn::DbTestResult {
