@@ -2,20 +2,22 @@
 // 데이터 폴더의 소켓으로 요청 한 줄(JSON)을 보내고 답 한 줄을 찍는다. 일은 앱이 화면과 같은 길(erd_sync_many)로 한다 —
 // 두 프로세스가 한 DB 를 같이 쓰지 않고, 결과가 화면에도 바로 보이게.
 //
-// 보안: 연결한 기기만 부를 수 있다. 설정 › CLI 에서 [기기 연결]을 눌러 연 동안(2분)만 일회용 코드로 연결을 맺고,
-// 앱은 토큰을 돌려준 뒤 그 지문(SHA-256)만 남긴다. 토큰은 그 기기의 키체인에만 있다. 소켓은 0600.
+// 보안: 연결한 기기만 부를 수 있다. `amber connect` 가 확인 코드와 함께 요청하면 앱이 앞으로 나와 허용 창을 띄우고,
+// 사람이 [허용]을 눌러야 토큰을 돌려준다(2분 안에 안 고르면 거절). 앱은 토큰의 지문(SHA-256)만 남기고, 토큰은 그 기기의
+// 키체인에만 있다. 소켓은 0600.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use amber_gpui::db::Db;
 use amber_gpui::dbconn::{DbConnection, enabled_schemas};
 use futures::StreamExt;
 use futures::channel::mpsc::UnboundedSender;
+use futures::channel::oneshot;
 use gpui_kit::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -29,27 +31,27 @@ const DEVICES: &str = "amber.cli.devices";
 /// 기기 토큰을 두는 키체인 항목. 계정은 데이터 폴더 경로(사본으로 띄운 앱과 섞이지 않게)
 const KEYCHAIN_SERVICE: &str = "dev.jhzlo.amber.cli";
 const SECURITY_BIN: &str = "/usr/bin/security";
-/// 연결 코드가 살아 있는 시간, 틀려도 되는 횟수
+/// 허용 창이 답을 기다리는 시간
 pub const PAIR_TTL: Duration = Duration::from_secs(120);
-const PAIR_MISSES: u8 = 5;
 /// 헷갈리는 글자(0 O 1 I)를 뺀 32자 — 바이트 % 32 가 고르다
 const CODE_CHARS: &[u8; 32] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 pub const USAGE: &str = "usage:
-  amber connect <code> [name]             connect this machine with the code from Settings > CLI > Connect device
+  amber connect [name]                    ask Amber to connect this machine (approve it in the window Amber shows)
   amber erd list                          connections and their enabled schemas
   amber erd sync <connection> [schema...] re-read schemas from the database (all enabled if none given)
 
 Amber must be running and this machine connected. Output is JSON; the exit code is 0 when ok,
 1 when the command failed, 2 for usage errors, Amber not running, or this machine not connected.";
 
-const NOT_CONNECTED: &str = "This machine is not connected. In Amber open Settings > CLI > Connect device and run the command it shows.";
+const NOT_CONNECTED: &str =
+    "This machine is not connected. Run `amber connect` and approve the request in Amber.";
 
 #[derive(Debug, PartialEq)]
 pub enum Call {
     Help,
     Bad,
-    Connect { code: String, name: Option<String> },
+    Connect { name: Option<String> },
     Send(Value),
 }
 
@@ -69,8 +71,7 @@ pub fn parse(args: &[String]) -> Option<Call> {
     }
     Some(match words.as_slice() {
         ["help"] => Call::Help,
-        ["connect", code, name @ ..] => Call::Connect {
-            code: code.to_string(),
+        ["connect", name @ ..] => Call::Connect {
             name: (!name.is_empty()).then(|| name.join(" ")),
         },
         ["erd", "list"] => Call::Send(json!({ "cmd": "erd.list" })),
@@ -179,8 +180,11 @@ pub fn client(args: &[String], db_path: &str) -> Option<i32> {
             eprintln!("{USAGE}");
             2
         }
-        Call::Connect { code, name } => {
+        Call::Connect { name } => {
             let name = name.unwrap_or_else(machine_name);
+            // 같은 코드가 허용 창에도 뜬다 — 이 터미널의 요청인지 사람이 맞춰 본다
+            let code = new_code();
+            eprintln!("Approve the request in Amber. Confirmation code: {code}");
             let req = json!({ "cmd": "pair", "code": code, "name": name });
             match ask(dir, &req) {
                 Err(e) => {
@@ -286,23 +290,20 @@ fn normalize(code: &str) -> String {
         .collect()
 }
 
-/// 설정 › CLI 에서 연 연결 — 코드는 화면에 보이는 꼴(XXXX-XXXX)
-pub struct Pairing {
-    pub code: String,
-    expires: Instant,
-    misses: u8,
-}
-
-pub fn new_pairing() -> Pairing {
+/// 확인 코드 — 터미널과 허용 창에 같은 꼴(XXXX-XXXX)로 뜬다
+pub fn new_code() -> String {
     let raw: String = random::<8>()
         .iter()
         .map(|b| CODE_CHARS[(*b % 32) as usize] as char)
         .collect();
-    Pairing {
-        code: format!("{}-{}", &raw[..4], &raw[4..]),
-        expires: Instant::now() + PAIR_TTL,
-        misses: 0,
-    }
+    format!("{}-{}", &raw[..4], &raw[4..])
+}
+
+/// 허용 창이 떠 있는 연결 요청 — 사람이 고르면 reply 로 답이 간다
+pub struct PairRequest {
+    pub name: String,
+    pub code: String,
+    reply: Option<oneshot::Sender<Value>>,
 }
 
 // ---- 앱 ----
@@ -310,7 +311,7 @@ pub fn new_pairing() -> Pairing {
 type Job = (Value, std::sync::mpsc::Sender<Value>);
 
 /// 앱 — 소켓을 듣는다(실제 앱만, 메인 창이 뜬 뒤). 남은 소켓 파일은 지난 실행의 것이라 지우고 다시 묶는다
-pub(crate) fn serve(spike: Entity<Spike>, cx: &mut App) {
+pub(crate) fn serve(main_window: AnyWindowHandle, spike: Entity<Spike>, cx: &mut App) {
     let path = socket_path(&spike.read(cx).db.data_dir());
     let _ = std::fs::remove_file(&path);
     let Ok(listener) = UnixListener::bind(&path) else {
@@ -331,6 +332,10 @@ pub(crate) fn serve(spike: Entity<Spike>, cx: &mut App) {
     let weak = spike.downgrade();
     cx.spawn(async move |cx| {
         while let Some((req, reply)) = rx.next().await {
+            // 연결 요청이면 허용 창이 보이게 — 트레이로 숨겨 둔 창도 앞으로
+            if req["cmd"] == "pair" {
+                let _ = cx.update(|cx| crate::shell::show_main(main_window, cx));
+            }
             let Ok(task) = weak.update(cx, |s, cx| s.cli_run(&req, cx)) else {
                 return;
             };
@@ -384,7 +389,7 @@ pub fn local_time(ms: i64) -> Option<String> {
 impl Spike {
     pub(crate) fn cli_run(&mut self, req: &Value, cx: &mut Context<Self>) -> Task<Value> {
         if req["cmd"] == "pair" {
-            return Task::ready(self.cli_pair(req, cx));
+            return self.cli_request_pair(req, cx);
         }
         if !self.cli_authorized(req, cx) {
             return Task::ready(fail(NOT_CONNECTED));
@@ -396,45 +401,16 @@ impl Spike {
         }
     }
 
-    /// 설정 › CLI 의 [기기 연결] — 연 동안만 코드를 받는다. 시간이 지나면 저절로 닫힌다
-    pub(crate) fn cli_open_pairing(&mut self, cx: &mut Context<Self>) {
-        let pairing = new_pairing();
-        let code = pairing.code.clone();
-        self.settings.cli_pair = Some(pairing);
-        cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(PAIR_TTL).await;
-            let _ = this.update(cx, |s, cx| {
-                if s.settings.cli_pair.as_ref().is_some_and(|p| p.code == code) {
-                    s.settings.cli_pair = None;
-                    cx.notify();
-                }
-            });
-        })
-        .detach();
-        cx.notify();
-    }
-
-    /// 코드가 맞으면 새 토큰을 한 번 돌려주고 지문만 남긴다. 다섯 번 틀리면 연결 창을 닫는다
-    fn cli_pair(&mut self, req: &Value, cx: &mut Context<Self>) -> Value {
-        let Some(p) = self.settings.cli_pair.as_mut() else {
-            return fail("No connection is open. In Amber open Settings > CLI > Connect device.");
-        };
-        if Instant::now() > p.expires {
-            self.settings.cli_pair = None;
-            cx.notify();
-            return fail("The code expired. Press Connect device again.");
+    /// 연결 요청 — 허용 창을 띄우고 사람이 고를 때까지(최대 2분) 기다린다. 한 번에 하나만
+    fn cli_request_pair(&mut self, req: &Value, cx: &mut Context<Self>) -> Task<Value> {
+        if self.settings.cli_request.is_some() {
+            return Task::ready(fail("Another connection request is waiting in Amber."));
         }
-        let given = normalize(req["code"].as_str().unwrap_or_default());
-        if !same(given.as_bytes(), normalize(&p.code).as_bytes()) {
-            p.misses += 1;
-            if p.misses >= PAIR_MISSES {
-                self.settings.cli_pair = None;
-                cx.notify();
-            }
-            return fail("Wrong code.");
+        let raw = normalize(req["code"].as_str().unwrap_or_default());
+        if raw.len() != 8 || !raw.bytes().all(|b| CODE_CHARS.contains(&b)) {
+            return Task::ready(fail("bad confirmation code"));
         }
-        self.settings.cli_pair = None;
-        let token = hex(&random::<32>());
+        let code = format!("{}-{}", &raw[..4], &raw[4..]);
         let name: String = req["name"]
             .as_str()
             .map(str::trim)
@@ -443,17 +419,59 @@ impl Spike {
             .chars()
             .take(60)
             .collect();
-        let mut list = devices(&self.db);
-        list.push(Device {
-            id: ulid::Ulid::new().to_string(),
-            name: name.clone(),
-            hash: digest(&token),
-            created_at: now_ms(),
-            last_used: None,
+        let (tx, rx) = oneshot::channel();
+        self.settings.cli_request = Some(PairRequest {
+            name,
+            code: code.clone(),
+            reply: Some(tx),
         });
-        save_devices(&self.db, &list);
         cx.notify();
-        json!({ "ok": true, "token": token, "name": name })
+        cx.spawn(async move |this, cx| {
+            let timer = Box::pin(cx.background_executor().timer(PAIR_TTL));
+            match futures::future::select(rx, timer).await {
+                futures::future::Either::Left((Ok(out), _)) => out,
+                futures::future::Either::Left((Err(_), _)) => fail("Denied in Amber."),
+                futures::future::Either::Right(_) => {
+                    let _ = this.update(cx, |s, cx| {
+                        if s.settings
+                            .cli_request
+                            .as_ref()
+                            .is_some_and(|r| r.code == code)
+                        {
+                            s.settings.cli_request = None;
+                            cx.notify();
+                        }
+                    });
+                    fail("Not approved within 2 minutes.")
+                }
+            }
+        })
+    }
+
+    /// 허용 창의 [허용]/[거절] — 허용이면 새 토큰을 한 번 돌려주고 지문만 남긴다
+    pub(crate) fn cli_decide(&mut self, allow: bool, cx: &mut Context<Self>) {
+        let Some(mut r) = self.settings.cli_request.take() else {
+            return;
+        };
+        let out = if allow {
+            let token = hex(&random::<32>());
+            let mut list = devices(&self.db);
+            list.push(Device {
+                id: ulid::Ulid::new().to_string(),
+                name: r.name.clone(),
+                hash: digest(&token),
+                created_at: now_ms(),
+                last_used: None,
+            });
+            save_devices(&self.db, &list);
+            json!({ "ok": true, "token": token, "name": r.name })
+        } else {
+            fail("Denied in Amber.")
+        };
+        if let Some(tx) = r.reply.take() {
+            let _ = tx.send(out);
+        }
+        cx.notify();
     }
 
     /// 토큰의 지문이 연결된 기기 중 하나와 같은가 — 맞으면 마지막 사용을 남긴다
@@ -537,7 +555,7 @@ impl Spike {
 #[cfg(test)]
 mod tests {
     // super::* 는 gpui_kit 의 test 매크로까지 끌어와 #[test] 를 가린다
-    use super::{CODE_CHARS, Call, new_pairing, normalize, parse, same};
+    use super::{CODE_CHARS, Call, new_code, normalize, parse, same};
     use serde_json::json;
 
     fn args(s: &str) -> Vec<String> {
@@ -571,22 +589,21 @@ mod tests {
             })))
         );
         assert_eq!(
-            parse(&args("connect ab12-cd34 work laptop")),
+            parse(&args("connect work laptop")),
             Some(Call::Connect {
-                code: "ab12-cd34".into(),
                 name: Some("work laptop".into()),
             })
         );
+        assert_eq!(parse(&args("connect")), Some(Call::Connect { name: None }));
     }
 
     #[test]
-    fn pairing_codes_are_readable_and_compared_whole() {
-        let p = new_pairing();
-        assert_eq!(p.code.len(), 9);
-        assert_eq!(&p.code[4..5], "-");
+    fn confirmation_codes_are_readable_and_tokens_compared_whole() {
+        let code = new_code();
+        assert_eq!(code.len(), 9);
+        assert_eq!(&code[4..5], "-");
         assert!(
-            p.code
-                .bytes()
+            code.bytes()
                 .filter(|b| *b != b'-')
                 .all(|b| CODE_CHARS.contains(&b))
         );

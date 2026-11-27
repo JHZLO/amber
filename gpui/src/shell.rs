@@ -179,7 +179,7 @@ fn hide_main(dir: &Path, window: &mut Window) {
     order_out(window);
 }
 
-fn show_main(main_window: AnyWindowHandle, cx: &mut App) {
+pub(crate) fn show_main(main_window: AnyWindowHandle, cx: &mut App) {
     let _ = main_window.update(cx, |_, window, _| window.activate_window());
     cx.activate(true);
 }
